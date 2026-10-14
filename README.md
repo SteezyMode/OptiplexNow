@@ -1,4 +1,4 @@
-[README.md](https://github.com/user-attachments/files/33434058/README.md)# OptiPlex Now
+[README.md](https://github.com/user-attachments/files/33439121/README.md)[Uploading README.md…# OptiPlex Now
 
 A compact, unofficial Linux GTK launcher for a personal remote PC, with cross-desktop tray quick actions. Games, Videos, Music, Files, Downloads, SSH, power, storage, and live hardware info.
 
@@ -6,10 +6,10 @@ A compact, unofficial Linux GTK launcher for a personal remote PC, with cross-de
 
 ## Install
 
-Download `OptiPlex-Now_1.11.1_amd64.deb` from the **Releases** section, then double-click it in Linux Mint or install with:
+Download `OptiPlex-Now_1.11.3_amd64.deb` from the **Releases** section, then double-click it in Linux Mint or install with:
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.11.1_amd64.deb
+sudo apt install ./OptiPlex-Now_1.11.3_amd64.deb
 ```
 
 This upgrades earlier `optiplex-desk` installations and keeps existing local settings.
@@ -43,6 +43,8 @@ system tray integration must be enabled by the desktop.
 
 Run **OptiPlex Now**, connect to Tailscale, then complete the setup wizard. SSH and Wolf/Moonlight pairing happen once per computer. **Games** connects straight to the `Steam` application advertised by Wolf if Moonlight is paired. Existing AppImage and Flatpak Moonlight installations are supported.
 
+The setup wizard fills Videos, Music and Downloads from a preset and checks each configured service automatically on the Services screen. It checks Wolf reachability without blocking setup. The **Files** shortcut uses the installed file manager for SFTP. On COSMIC, it mounts the share using GVFS before opening its local mount path, requiring working GVFS SFTP support. Videos and other web services open through the desktop default browser.
+
 Settings include **Export My OptiPlex** for a connection-only preset and **Export Full Backup** for an encrypted archive of your personal SSH key and supported Moonlight configuration. Never upload a full backup or SSH keys to GitHub. Imported full backups belong only on computers you control. Tailscale must be authenticated separately.
 
 ## Build from source
@@ -54,7 +56,7 @@ make
 make package
 ```
 
-`make` downloads **Inter** and **Limelight** from the upstream Google Fonts repository on the **build machine only**, compiles the GTK app and encrypted-backup helper, and generates `dist/OptiPlex-Now_1.11.1_amd64.deb`. End users of the `.deb` do **not** need Python or the build tools.
+`make` downloads **Inter** and **Limelight** from the upstream Google Fonts repository on the **build machine only**, compiles the GTK app and encrypted-backup helper, and generates `dist/OptiPlex-Now_1.11.3_amd64.deb`. End users of the `.deb` do **not** need Python or the build tools.
 
 The binary includes embedded font data under the SIL Open Font License 1.1. See `FONT-NOTICES.md` and `OFL-1.1.txt`.
 
@@ -69,4 +71,4 @@ The binary includes embedded font data under the SIL Open Font License 1.1. See 
 ## Source code and licensing
 
 The application's source is provided for reference and personal modification. No software license has been selected for the application code yet. Add one before accepting outside contributions or claiming that the project is open source.
-
+]()

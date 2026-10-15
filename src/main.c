@@ -198,7 +198,7 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[6],*powers[4];
+static GtkWidget *tiles[8],*powers[4];
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
 #define CONFIG_COUNT 13
@@ -225,18 +225,18 @@ static const char *CSS =
 "#detail {font-size:10px;color:#aaa79e;}"
 "#rule {background:#555e58;min-height:1px;}"
 "#section {font-weight:800;color:#b8b4ac;font-size:11px;letter-spacing:1px;}"
-"#metric {background:#171918;border:1px solid #444b46;color:#ece8e0;padding:12px 12px;font-size:12px;font-weight:700;}"
+"#metric {background:#171918;border:1px solid #444b46;color:#ece8e0;padding:8px 9px;font-size:12px;font-weight:700;}"
 "#drivemetric {background:#171918;border:1px solid #444b46;padding:8px 10px;}"
 "#storagehead {font-size:10px;font-weight:800;color:#b8b4ac;}"
 "#drivefree {font-size:11px;font-weight:700;color:#ece8e0;}"
 "#drivefree.warn {color:#e7aa82;}"
 "#drivecombo button {background:#1e211f;color:#ece8e0;border:1px solid #4d5650;border-radius:2px;padding:3px 7px;min-height:25px;font-size:11px;}"
 "#drivecombo button:hover {border-color:#2a9d8f;}"
-"#tile {background:#1e211f;color:#ece8e0;border:1px solid #48534d;border-radius:2px;padding:9px 12px;font-weight:800;font-size:15px;min-height:64px;border-bottom:2px solid #2a9d8f;}"
+"#tile {background:#1e211f;color:#ece8e0;border:1px solid #48534d;border-radius:2px;padding:6px 8px;font-weight:800;font-size:12px;min-height:43px;border-bottom:2px solid #2a9d8f;}"
 "#tile:hover {background:#2a9d8f;color:#101111;} #tile:active {background:#86bfb5;}"
-"#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:10px 6px;font-weight:800;font-size:10px;min-height:39px;}"
+"#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
 "#power:hover {background:#2a9d8f;color:#101111;}"
-"#danger {background:#171918;color:#ddaba5;border:1px solid #9c6b69;border-radius:2px;padding:10px 6px;font-weight:800;font-size:10px;min-height:39px;}"
+"#danger {background:#171918;color:#ddaba5;border:1px solid #9c6b69;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
 "#danger:hover {background:#9d3543;color:#fafaf8;}"
 "#footer {font-size:11px;color:#b8b4ac;}"
 "dialog {background:#151716;} dialog label {color:#ece8e0;font-size:12px;}"
@@ -855,14 +855,21 @@ static void open_moonlight(void){
 /* Directly connect the selected Moonlight client to the Steam application on Wolf.
  * Moonlight Qt supports: moonlight stream HOST APP. Preferences and pairing
  * are read from its own existing profile, preserving hardware decoding. */
-static void launch_steam(void){
+static void launch_wolf_app(const char *app){
  if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
  if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
  int mode=moonlight_mode();
- if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],"Steam",NULL};launch(args);}
- else if(mode==2){char *args[]={"moonlight","stream",cfg[0],"Steam",NULL};launch(args);}
- else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],"Steam",NULL};launch(args);}
- say("CONNECTING TO STEAM");
+ if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};launch(args);}
+ else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
+ else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
+ say("CONNECTING TO WOLF");
+}
+static void launch_steam(void){launch_wolf_app("Steam");}
+static void launch_desktop(void){launch_wolf_app("XFCE");}
+static void launch_torrents(void){
+ if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
+ char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
+ browser_open(url);
 }
 static void install_moonlight(void){
  if(!exists_program("flatpak")){
@@ -981,10 +988,12 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
  }else if(n==1||n==2||n==4){int ix=n==1?5:n==2?6:7;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
  else if(n==3)open_remote_files();
- else launch_ssh(0);
+ else if(n==5)launch_ssh(0);
+ else if(n==6)launch_desktop();
+ else if(n==7)launch_torrents();
 }
 static void reflow(int width) {
- int cols=width>=720?3:2;
+ int cols=width>=600?4:2;
  int pcols=width>=560?4:2;
  if(cols==last_columns && pcols==last_power_columns)return;
  extern void gtk_container_remove(void*,void*);
@@ -992,8 +1001,8 @@ static void reflow(int width) {
  extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
-   for(int i=0;i<6;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
-   for(int i=0;i<6;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
+   for(int i=0;i<8;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
+   for(int i=0;i<8;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
    gtk_widget_show_all(grid);
  }
  if(pcols!=last_power_columns){
@@ -1559,6 +1568,8 @@ static void tray_initialize(void){
  tray_menu=gtk_menu_new();
  tray_menu_item("Open OptiPlex Now",10);tray_separator();
  tray_menu_item("Games  |  Steam",0);
+ tray_menu_item("Desktop  |  XFCE",6);
+ tray_menu_item("Torrents  |  VueTorrent",7);
  tray_menu_item("Videos",1);
  tray_menu_item("Music",2);
  tray_menu_item("Files",3);
@@ -1621,7 +1632,7 @@ int main(int argc,char**argv) {
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(cp,CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),cp,GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
- win=gtk_window_new(0);gtk_window_set_title(win,"OptiPlex Now");gtk_window_set_default_size(win,690,605);
+ win=gtk_window_new(0);gtk_window_set_title(win,"OptiPlex Now");gtk_window_set_default_size(win,660,505);
  gtk_window_set_icon_name(win,"optiplex-now");gtk_window_set_position(win,1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
@@ -1629,7 +1640,7 @@ int main(int argc,char**argv) {
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
  GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(sc,1,1);gtk_container_add(win,sc);
  GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");gtk_container_add(sc,shell);
- GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(body,20);add(shell,body,1);
+ GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(body,14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
  model_heading=label(current_model(),"title");
@@ -1654,17 +1665,17 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(metrics,diskbox,2,0,1,1);
- grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,10);gtk_grid_set_column_spacing(grid,10);
+ grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL"};
- for(int i=0;i<6;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","TORRENTS"};
+ for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
- power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,9);gtk_grid_set_row_spacing(power_grid,9);
+ power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);
  const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);
- reflow(690);
+ reflow(660);
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();
  if(!start_in_tray || first_run)gtk_widget_show_all(win);

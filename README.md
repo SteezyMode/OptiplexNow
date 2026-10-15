@@ -1,74 +1,73 @@
-[README.md](https://github.com/user-attachments/files/33439121/README.md)[Uploading README.md…# OptiPlex Now
+# OptiPlex Now
 
-A compact, unofficial Linux GTK launcher for a personal remote PC, with cross-desktop tray quick actions. Games, Videos, Music, Files, Downloads, SSH, power, storage, and live hardware info.
+A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
-![OptiPlex Now icon](assets/optiplex-now.png)
+**Current version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Install
 
-Download `OptiPlex-Now_1.11.3_amd64.deb` from the **Releases** section, then double-click it in Linux Mint or install with:
+[Download OptiPlex Now 1.11.9](https://github.com/SteezyMode/OptiplexNow/raw/refs/heads/main/downloads/OptiPlex-Now_1.11.9_amd64.deb)
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.11.3_amd64.deb
+sudo apt install ./OptiPlex-Now_1.11.9_amd64.deb
 ```
 
-This upgrades earlier `optiplex-desk` installations and keeps existing local settings.
+Quit and reopen the app after updating. Existing settings are retained. Older installers remain in Releases; the link above is the current build. A checksum is in [`downloads/SHA256SUMS`](downloads/SHA256SUMS).
 
-## Tray quick actions (XFCE, KDE Plasma, COSMIC)
-
-OptiPlex Now prefers the modern StatusNotifierItem (SNI) tray protocol through
-Ayatana AppIndicator when the desktop hosts a status notifier. It falls back to
-GTK3 legacy status icons on desktops using the XFCE Notification Area.
-
-In the tray menu: Open Window, Games (Steam), Videos, Music, Files, Downloads,
-Terminal, System Info, Settings, Quit. Modern SNI trays generally use **left
-click to open the menu**, while the legacy XFCE icon uses **left click to toggle
-the window**. Closing or minimizing hides the window if a functional tray exists.
-A desktop without tray support exits when closed.
-
-The tray uses a **borderless pixel-art sunset icon** at 16, 22, 24, 32, 48, and 64 pixels.
-The framed red sunset artwork remains the desktop launcher/window icon. Both
-assets use genuine transparent RGBA backgrounds. The build preserves the alpha
-channel at every icon size, avoiding the black rectangular matte in earlier builds. XFCE groups
-all notification icons in its panel item; you cannot individually drag them.
-To position OptiPlex Now independently, pin the app to an XFCE Launcher panel
-item rather than trying to move the notification-area icon.
-
-If you have no SNI host installed, ensure your desktop provides a notification
-area. For Mint/XFCE, the **Status Notifier Plugin** is preferred; the older
-**Notification Area** is supported as a fallback. For other desktops the
-system tray integration must be enabled by the desktop.
+Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installations on Apple hardware. Native Windows and macOS builds are not included.
 
 ## Connect
 
-Run **OptiPlex Now**, connect to Tailscale, then complete the setup wizard. SSH and Wolf/Moonlight pairing happen once per computer. **Games** connects straight to the `Steam` application advertised by Wolf if Moonlight is paired. Existing AppImage and Flatpak Moonlight installations are supported.
+1. Sign into Tailscale on the server and client.
+2. Open **Settings → Setup Wizard**. Choose **Find server on Tailscale**, then confirm the server and SSH username.
+3. Authorize SSH, verifying the server fingerprint when prompted.
+4. Install or select Moonlight and pair it with Wolf.
+5. Set the video, music and download service URLs.
 
-The setup wizard fills Videos, Music and Downloads from a preset and checks each configured service automatically on the Services screen. It checks Wolf reachability without blocking setup. The **Files** shortcut uses the installed file manager for SFTP. On COSMIC, it mounts the share using GVFS before opening its local mount path, requiring working GVFS SFTP support. Videos and other web services open through the desktop default browser.
+The Tailscale picker lists devices; it does not install services or grant access. Manual addresses also work. Both ends need to remain connected to Tailscale for remote access.
 
-Settings include **Export My OptiPlex** for a connection-only preset and **Export Full Backup** for an encrypted archive of your personal SSH key and supported Moonlight configuration. Never upload a full backup or SSH keys to GitHub. Imported full backups belong only on computers you control. Tailscale must be authenticated separately.
+## Features
 
-## Build from source
+- Launch the Steam application advertised by Wolf through Moonlight.
+- Open video, music and download services in the browser.
+- Browse server files over SFTP and open an SSH terminal.
+- View server hardware and status; wake, sleep, restart or shut down the host when configured.
+- Use tray shortcuts and restart the streaming service.
+- Export connection presets or encrypted client backups containing SSH keys and supported Moonlight settings.
+- Export the supported music server profile, including its configuration, credentials and database; verify and stage an imported profile in a new folder.
 
-Build host: x86-64 Linux, GCC, `make`, `binutils`, `curl`, GTK 3 and Gio runtime libraries, fontconfig, and OpenSSL development library (for backup helper).
+**Restart streaming service** interrupts active streams. It requires Docker, a `wolf` container, sudo access and `/usr/local/sbin/wolf-prepare-devices` on the host. A running container does not by itself confirm successful playback.
+
+Music-profile export runs on the server itself and temporarily stops the music/download stack. Its archive is private but unencrypted. Import does not remap paths, configure networking or deploy containers. Keep profiles and credentials out of GitHub.
+
+## Server setup
+
+[Server configuration, VPN, backups and planned installer](docs/server-setup.md)
+
+Those notes document the working AirVPN/Gluetun, slskd, qBittorrent and Dropped Needle arrangement, including the database and encryption key needed to preserve account integrations. They also describe Jellyfin/ErsatzTV and the remaining fresh-server work.
+
+Installing this client does not install Wolf, Jellyfin, a VPN stack, ErsatzTV or scheduled server backups.
+
+## Startup and troubleshooting
+
+Add `optiplex-now --start-in-tray` to desktop startup. Edit an existing entry instead of adding a duplicate. The older `optiplex-desk` command remains as a compatibility alias.
+
+- **Offline / Pair SSH:** check the address, Tailscale sign-in and SSH authorization.
+- **Games do not open:** check Moonlight, pairing and Wolf's advertised Steam application.
+- **No tray icon:** enable a StatusNotifier host or supported notification area. Without tray support, the app opens a window instead.
+- **Files fails on COSMIC:** check GVFS SFTP and FUSE support.
+
+## Build
+
+Requires x86-64 Linux, GCC, make, binutils, curl, Python 3, GTK 3/Gio runtime libraries, fontconfig and OpenSSL development files. Pillow is optional for generating icon sizes. The profile helper requires Python 3.11 or newer.
 
 ```sh
-make
 make package
+python3 -m unittest discover -s tests -v
 ```
 
-`make` downloads **Inter** and **Limelight** from the upstream Google Fonts repository on the **build machine only**, compiles the GTK app and encrypted-backup helper, and generates `dist/OptiPlex-Now_1.11.3_amd64.deb`. End users of the `.deb` do **not** need Python or the build tools.
+The build downloads Inter and Limelight fonts and writes the installer to `dist/`. Fonts are embedded; end users do not fetch them at runtime. See [font notices](FONT-NOTICES.md).
 
-The binary includes embedded font data under the SIL Open Font License 1.1. See `FONT-NOTICES.md` and `OFL-1.1.txt`.
+`src/` contains the application and helpers; `tests/` contains profile-tool tests; `assets/` contains icons. `downloads/` holds the current prebuilt installer. Generated build folders and personal credentials are excluded.
 
-## Notes
-
-- Only 64-bit Debian/Ubuntu-based Linux is packaged. Windows support is not included.
-- The app uses Tailscale and SSH for remote management, plus Moonlight/Wolf for game streaming. It does not install or configure Wolf on the server.
-- Wolf abandoned-session cleanup is **not** implemented by this client.
-- Avoid installing private keys on borrowed computers; use the connection-only preset instead.
-- The launcher is an independent project, **not affiliated with or endorsed by Dell**.
-
-## Source code and licensing
-
-The application's source is provided for reference and personal modification. No software license has been selected for the application code yet. Add one before accepting outside contributions or claiming that the project is open source.
-]()
+The build and profile-tool tests pass. The new music-profile workflow has not yet been tested against the live reference server. No application-code license has been selected. This project is not affiliated with Dell.

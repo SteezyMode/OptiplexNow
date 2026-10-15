@@ -1,0 +1,18 @@
+name: Build Linux package
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc binutils make curl libgtk-3-0t64 libgdk-pixbuf-2.0-0 libfontconfig1 libssl-dev libssl3t64 python3 python3-pil
+      - name: Build package
+        run: make package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: optiplex-now-linux-deb
+          path: dist/*.deb

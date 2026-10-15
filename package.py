@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+from pathlib import Path
+import shutil, subprocess
+root=Path(__file__).resolve().parent
+out=root/'dist'; out.mkdir(exist_ok=True)
+pkg=root/'build/pkg/optiplex-now_1.11.9_amd64'
+if pkg.exists(): shutil.rmtree(pkg)
+for sub in ('DEBIAN','usr/bin','usr/lib/optiplex-now','usr/share/applications','usr/share/doc/optiplex-now'):
+ (pkg/sub).mkdir(parents=True,exist_ok=True)
+(pkg/'DEBIAN').chmod(0o755)
+shutil.copy2(root/'build/optiplex-desk',pkg/'usr/bin/optiplex-now')
+shutil.copy2(root/'build/optiplex-now-backup',pkg/'usr/lib/optiplex-now/optiplex-now-backup')
+shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remote-files')
+(pkg/'usr/lib/optiplex-now/open-remote-files').chmod(0o755)
+shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
+shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
+shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
+(pkg/'usr/lib/optiplex-now/restart-streaming').chmod(0o755)
+(pkg/'usr/bin/optiplex-desk').symlink_to('optiplex-now')
+for f in (pkg/'usr/bin/optiplex-now',pkg/'usr/lib/optiplex-now/optiplex-now-backup'): f.chmod(0o755)
+try:
+ from PIL import Image
+ icon=Image.open(root/'assets/optiplex-now.png').convert('RGBA')
+ for n in (16,22,24,32,48,64,128,256):
+  dest=pkg/f'usr/share/icons/hicolor/{n}x{n}/apps'; dest.mkdir(parents=True,exist_ok=True)
+  icon.resize((n,n),Image.Resampling.NEAREST).save(dest/'optiplex-now.png')
+ # Tray art is borderless with a genuine alpha channel and enlarged silhouette.
+ small=Image.open(root/'assets/optiplex-now-tray.png').convert('RGBA')
+ for n in (16,22,24,32,48,64):
+  dest=pkg/f'usr/share/icons/hicolor/{n}x{n}/apps'; dest.mkdir(parents=True,exist_ok=True)
+  small.resize((n,n),Image.Resampling.NEAREST).save(dest/'optiplex-now-tray.png')
+except ImportError:
+ # Pillow optional: install python3-pil if multiple resolutions are wanted.
+ dest=pkg/'usr/share/icons/hicolor/256x256/apps';dest.mkdir(parents=True,exist_ok=True)
+ shutil.copy2(root/'assets/optiplex-now.png',dest/'optiplex-now.png')
+ shutil.copy2(root/'assets/optiplex-now-tray.png',dest/'optiplex-now-tray.png')
+(pkg/'usr/share/applications/optiplex-now.desktop').write_text('''[Desktop Entry]
+Type=Application
+Name=OptiPlex Now
+GenericName=Remote server launcher
+Comment=Games, video, music and remote control
+Exec=/usr/bin/optiplex-now
+Icon=optiplex-now
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true
+''')
+(pkg/'usr/share/applications/optiplex-desk.desktop').write_text((pkg/'usr/share/applications/optiplex-now.desktop').read_text()+'NoDisplay=true\n')
+shutil.copy2(root/'OFL-1.1.txt',pkg/'usr/share/doc/optiplex-now/OFL-1.1.txt')
+(pkg/'DEBIAN/control').write_text('''Package: optiplex-now
+Replaces: optiplex-desk
+Conflicts: optiplex-desk
+Provides: optiplex-desk
+Version: 1.11.9
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: OptiPlex Now <local@localhost>
+Depends: python3, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
+Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends
+Description: OptiPlex Now remote server launcher
+ Native GTK client with native tray quick actions, direct Steam streaming, live hardware info and encrypted backup.
+''')
+subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.11.9_amd64.deb')],check=True)

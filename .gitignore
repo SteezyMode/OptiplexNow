@@ -1,0 +1,17 @@
+/build/
+/dist/
+*.deb
+*.onb
+*.onp
+*.pem
+*.key
+id_ed25519*
+config.ini
+*.log
+.env*
+__pycache__/
+!downloads/*.deb
+*.tar.gz
+*.sqlite*
+*.db*
+vpn.env

@@ -1,0 +1,37 @@
+name: Build and publish OptiPlex Now 1.12.0
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-1-12-0.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/wolf-driver-maintenance
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc make binutils curl python3 python3-pil libgtk-3-0 libfontconfig1 libssl-dev libgio-2.0-dev
+      - name: Build package and test
+        run: |
+          make package
+          python3 -m unittest discover -s tests -v
+          dpkg-deb -f dist/OptiPlex-Now_1.12.0_amd64.deb Version | grep -qx 1.12.0
+          grep -Fq 'https://games.monumentrisk.com/?launch=steam' src/main.c
+          sha256sum dist/OptiPlex-Now_1.12.0_amd64.deb > dist/SHA256SUMS
+      - name: Publish v1.12.0
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test ! "$(gh release view v1.12.0 --json tagName -q .tagName 2>/dev/null || true)" = v1.12.0
+          cp dist/OptiPlex-Now_1.12.0_amd64.deb dist/OptiPlex-Now_amd64.deb
+          cd dist
+          sha256sum OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb > SHA256SUMS
+          gh release create v1.12.0 OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb SHA256SUMS --target "$(git rev-parse HEAD)" --title "OptiPlex Now 1.12.0" --notes "Adds Web Gaming via Wolf UI, configurable tray shortcuts for eight buttons, and hardware-info fixes. Requires an existing configured server." --latest

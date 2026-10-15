@@ -198,7 +198,7 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[7],*powers[4];
+static GtkWidget *tiles[8],*powers[4];
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
 #define CONFIG_COUNT 13
@@ -617,7 +617,7 @@ static gboolean finish_on_main(void *arg) {
  }else if(r->type==6){
     if(spec_status)gtk_label_set_text(spec_status,r->success?"LIVE HARDWARE INVENTORY":"SERVER UNAVAILABLE. CHECK SSH / TAILSCALE");
     if(r->success){
-      for(int i=0;i<7;i++)if(spec_values[i])gtk_label_set_text(spec_values[i],*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
+      for(int i=0;i<8;i++)if(spec_values[i])gtk_label_set_text(spec_values[i],*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
     }
     specs_inflight=0;
  }else if(r->type==5){
@@ -775,7 +775,7 @@ static void *worker(void*arg){
      char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
      if(run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
        const char *keys[]={"MODEL=","CPU_MODEL=","GPU_MODEL=","VRAM=","RAM=","OS=","DRIVER="};
-       for(int i=0;i<7;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
+       for(int i=0;i<8;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
        r->success=1;
      }
    }
@@ -983,6 +983,8 @@ static void open_remote_files(void){
  if(exists_program("gio")){char*args[]={"gio","open",url,NULL};launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
+static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+static void on_web_gaming_admin(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/admin");}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
@@ -991,6 +993,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
+ else if(n==7)browser_open("https://games.monumentrisk.com");
  
 }
 static void reflow(int width) {
@@ -1002,8 +1005,8 @@ static void reflow(int width) {
  extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
-   for(int i=0;i<7;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
-   for(int i=0;i<7;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
+   for(int i=0;i<8;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
+   for(int i=0;i<8;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
    gtk_widget_show_all(grid);
  }
  if(pcols!=last_power_columns){
@@ -1111,13 +1114,13 @@ static void on_system_info(void*w,void*p){
  spec_status=label("READING HARDWARE...","helper");add(box,spec_status,0);
  GtkWidget*rows=gtk_grid_new();gtk_grid_set_row_spacing(rows,13);gtk_grid_set_column_spacing(rows,18);add(box,rows,1);
  const char*names[]={"MODEL","PROCESSOR","GRAPHICS","VIDEO MEMORY","SYSTEM RAM","OPERATING SYSTEM","NVIDIA DRIVER"};
- for(int i=0;i<7;i++){
+ for(int i=0;i<8;i++){
    GtkWidget*name=label(names[i],"specname");gtk_widget_set_size_request(name,135,-1);gtk_grid_attach(rows,name,0,i,1,1);
    spec_values[i]=label("...","specvalue");gtk_label_set_ellipsize(spec_values[i],3);gtk_widget_set_hexpand(spec_values[i],1);
    gtk_grid_attach(rows,spec_values[i],1,i,1,1);
  }
  gtk_widget_show_all(d);begin_job(6);gtk_dialog_run(d);
- for(int i=0;i<7;i++)spec_values[i]=NULL;
+ for(int i=0;i<8;i++)spec_values[i]=NULL;
  spec_status=NULL;gtk_widget_destroy(d);
 }
 
@@ -1250,6 +1253,10 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,actions,0);
  GtkWidget*games=button("GAMES SETUP","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
+ GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
+ g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
+ g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  add(col,advanced,0);
  PresetExportContext export_context={.parent=d,.disk=diskentry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
@@ -1570,6 +1577,7 @@ static void tray_initialize(void){
  tray_menu_item("Open OptiPlex Now",10);tray_separator();
  tray_menu_item("Games  |  Steam",0);
  tray_menu_item("Desktop  |  XFCE",6);
+ tray_menu_item("Web Gaming  |  Browser",7);
  
  tray_menu_item("Videos",1);
  tray_menu_item("Music",2);
@@ -1668,8 +1676,8 @@ int main(int argc,char**argv) {
  gtk_grid_attach(metrics,diskbox,2,0,1,1);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP"};
- for(int i=0;i<7;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING"};
+ for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);

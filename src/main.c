@@ -185,7 +185,7 @@ static int tray_restoring = 0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
 static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_free,*drive_combo;
-static GtkWidget *spec_values[7]={0},*spec_status=NULL;
+static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
 static char wolf_probe_host[512];
@@ -788,7 +788,7 @@ static void *worker(void*arg){
      char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
      if(run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
        const char *keys[]={"MODEL=","CPU_MODEL=","GPU_MODEL=","VRAM=","RAM=","OS=","DRIVER="};
-       for(int i=0;i<8;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
+       for(int i=0;i<7;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
        r->success=1;
      }
    }
@@ -1006,7 +1006,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)browser_open("https://games.monumentrisk.com");
+ else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
  
 }
 static void reflow(int width) {
@@ -1127,13 +1127,13 @@ static void on_system_info(void*w,void*p){
  spec_status=label("READING HARDWARE...","helper");add(box,spec_status,0);
  GtkWidget*rows=gtk_grid_new();gtk_grid_set_row_spacing(rows,13);gtk_grid_set_column_spacing(rows,18);add(box,rows,1);
  const char*names[]={"MODEL","PROCESSOR","GRAPHICS","VIDEO MEMORY","SYSTEM RAM","OPERATING SYSTEM","NVIDIA DRIVER"};
- for(int i=0;i<8;i++){
+ for(int i=0;i<7;i++){
    GtkWidget*name=label(names[i],"specname");gtk_widget_set_size_request(name,135,-1);gtk_grid_attach(rows,name,0,i,1,1);
    spec_values[i]=label("...","specvalue");gtk_label_set_ellipsize(spec_values[i],3);gtk_widget_set_hexpand(spec_values[i],1);
    gtk_grid_attach(rows,spec_values[i],1,i,1,1);
  }
  gtk_widget_show_all(d);begin_job(6);gtk_dialog_run(d);
- for(int i=0;i<8;i++)spec_values[i]=NULL;
+ for(int i=0;i<7;i++)spec_values[i]=NULL;
  spec_status=NULL;gtk_widget_destroy(d);
 }
 

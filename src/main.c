@@ -47,6 +47,9 @@ extern gboolean gtk_status_icon_is_embedded(void*);
 extern void gtk_status_icon_position_menu(void*,int*,int*,gboolean*,void*);
 extern GtkWidget* gtk_menu_new(void);
 extern GtkWidget* gtk_menu_item_new_with_label(const char*);
+extern GtkWidget* gtk_check_button_new_with_label(const char*);
+extern void gtk_toggle_button_set_active(void*,gboolean);
+extern gboolean gtk_toggle_button_get_active(void*);
 extern GtkWidget* gtk_separator_menu_item_new(void);
 extern void gtk_menu_shell_append(void*,void*);
 extern void gtk_menu_popup(void*,void*,void*,void*,void*,guint,guint);
@@ -194,6 +197,7 @@ static Drive visible_drives[MAX_DRIVES];
 static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
 static char appimage_found[PATH_MAX];
+static void tray_build_menu(void);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
@@ -201,9 +205,11 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[8],*powers[4];
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 13
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","",""};
+#define CONFIG_COUNT 14
+#define TRAY_MASK_SETTING 13
+#define TRAY_ALL_BUTTONS 255u
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255"};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -275,6 +281,13 @@ static void config_load(void) {
    line[strcspn(line,"\r\n")]=0;char *eq=strchr(line,'=');if(!eq)continue;*eq++=0;
    for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])) safe_copy(cfg[i],512,eq);
  }fclose(f);
+}
+/* Only tray shortcuts are affected; all main-window tiles remain available. */
+static unsigned tray_button_mask(void) {
+ char *end=NULL;errno=0;
+ unsigned long value=strtoul(cfg[TRAY_MASK_SETTING],&end,10);
+ if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_ALL_BUTTONS;
+ return (unsigned)value;
 }
 static void config_save(void) {
  update_model_heading();
@@ -1257,6 +1270,18 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ add(col,label("TRAY MENU SHORTCUTS","modalheading"),0);
+ add(col,label("Choose which main buttons appear in the tray. The main window is unchanged.","helper"),0);
+ GtkWidget*tray_checks[8];GtkWidget*tray_choices=gtk_grid_new();
+ gtk_grid_set_row_spacing(tray_choices,8);gtk_grid_set_column_spacing(tray_choices,18);
+ const char*tray_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
+ unsigned tray_mask=tray_button_mask();
+ for(int i=0;i<8;i++){
+  tray_checks[i]=gtk_check_button_new_with_label(tray_names[i]);
+  gtk_toggle_button_set_active(tray_checks[i],(tray_mask & (1u<<i))!=0);
+  gtk_grid_attach(tray_choices,tray_checks[i],i/4,i%4,1,1);
+ }
+ add(col,tray_choices,0);
  add(col,advanced,0);
  PresetExportContext export_context={.parent=d,.disk=diskentry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
@@ -1276,7 +1301,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(combo);
    const char*disk=gtk_entry_get_text(diskentry);
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);config_save();say("SETTINGS SAVED");refresh();
+   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
+    unsigned selected=0;
+    for(int i=0;i<8;i++)if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
+    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
+    config_save();tray_build_menu();say("SETTINGS SAVED");refresh();
  }
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
@@ -1572,18 +1601,19 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(tray_menu,NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
-static void tray_initialize(void){
+static void tray_build_menu(void){
+ GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
- tray_menu_item("Open OptiPlex Now",10);tray_separator();
- tray_menu_item("Games  |  Steam",0);
- tray_menu_item("Desktop  |  XFCE",6);
- tray_menu_item("Web Gaming  |  Browser",7);
- 
- tray_menu_item("Videos",1);
- tray_menu_item("Music",2);
- tray_menu_item("Files",3);
- tray_menu_item("Downloads  |  VueTorrent",4);
- tray_menu_item("Terminal",5);
+ tray_menu_item("Open OptiPlex Now",10);
+ unsigned mask=tray_button_mask();
+ if(mask){
+  tray_separator();
+  static const char*captions[]={
+   "Games  |  Steam","Videos","Music","Files",
+   "Downloads  |  VueTorrent","Terminal","Desktop  |  XFCE","Web Gaming  |  Browser"
+  };
+  for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+ }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);
  tray_separator();
@@ -1591,7 +1621,11 @@ static void tray_initialize(void){
  tray_menu_item("Settings",11);
  tray_separator();tray_menu_item("Quit",13);
  gtk_widget_show_all(tray_menu);
-
+ if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
+ if(old)gtk_widget_destroy(old);
+}
+static void tray_initialize(void){
+ tray_build_menu();
  /* Only publish an SNI icon when a desktop is actually listening for it. */
  if(status_notifier_watcher_present()){
    indicator_library=dlopen("libayatana-appindicator3.so.1",RTLD_LAZY|RTLD_LOCAL);

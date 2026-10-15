@@ -1609,8 +1609,8 @@ static void tray_build_menu(void){
  if(mask){
   tray_separator();
   static const char*captions[]={
-   "Games  |  Steam","Videos","Music","Files",
-   "Downloads  |  VueTorrent","Terminal","Desktop  |  XFCE","Web Gaming  |  Browser"
+   "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
+   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI"
   };
   for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
  }

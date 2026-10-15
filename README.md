@@ -6,13 +6,13 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 ## Install
 
-[Download OptiPlex Now 1.11.9](https://github.com/SteezyMode/OptiplexNow/raw/refs/heads/main/downloads/OptiPlex-Now_1.11.9_amd64.deb)
+[Download OptiPlex Now 1.11.9](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.11.9_amd64.deb
+sudo apt install ./OptiPlex-Now_amd64.deb
 ```
 
-Quit and reopen the app after updating. Existing settings are retained. Older installers remain in Releases; the link above is the current build. A checksum is in [`downloads/SHA256SUMS`](downloads/SHA256SUMS).
+Quit and reopen the app after updating. Existing settings are retained. The link above downloads the latest release directly. Versioned installers and checksums are available on the [Releases page](https://github.com/SteezyMode/OptiplexNow/releases).
 
 Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installations on Apple hardware. Native Windows and macOS builds are not included.
 
@@ -22,7 +22,7 @@ Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installati
 2. Open **Settings → Setup Wizard**. Choose **Find server on Tailscale**, then confirm the server and SSH username.
 3. Authorize SSH, verifying the server fingerprint when prompted.
 4. Install or select Moonlight and pair it with Wolf.
-5. Set the video, music and download service URLs.
+5. Set the video, music and download service URLs. For Dropped Needle, leave Music URL blank to use `http://SERVER:8688`, or enter its existing address. The Music button opens its controls in your browser; sign in there.
 
 The Tailscale picker lists devices; it does not install services or grant access. Manual addresses also work. Both ends need to remain connected to Tailscale for remote access.
 

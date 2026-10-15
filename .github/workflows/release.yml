@@ -1,0 +1,52 @@
+name: Publish client installer
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'downloads/**'
+      - '.github/workflows/release.yml'
+permissions:
+  contents: write
+concurrency:
+  group: publish-client-installer
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify and publish installer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd downloads
+          sha256sum -c SHA256SUMS
+          mapfile -t packages < <(find . -maxdepth 1 -name 'OptiPlex-Now_*_amd64.deb' -print)
+          test "${#packages[@]}" -eq 1
+          package="${packages[0]}"
+          version=$(dpkg-deb -f "$package" Version)
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving its assets unchanged."
+            exit 0
+          fi
+          cp "$package" OptiPlex-Now_amd64.deb
+          sha256sum "$package" OptiPlex-Now_amd64.deb > SHA256SUMS
+          cat > release-notes.md <<'NOTES'
+          Linux client for an existing home server. Download OptiPlex-Now_amd64.deb and install it with your package manager.
+
+          Music opens Dropped Needle. In Setup Wizard, leave Music URL blank to use http://SERVER:8688, or supply your existing URL. Sign in to Dropped Needle in the browser.
+
+          Includes Tailscale server selection, hardware heading, streaming restart and music-profile export/staging import. Profile export temporarily stops the music stack and includes unencrypted credentials.
+
+          Fresh-server installation is not implemented. This release does not install Wolf, Jellyfin, the VPN/music stack or scheduled server backups. Music-profile import stages files only; it does not deploy a server.
+
+          Build and profile unit tests passed. The new profile workflow still needs live-server testing.
+          NOTES
+          gh release create "$tag" "$package" OptiPlex-Now_amd64.deb SHA256SUMS \
+            --target "$GITHUB_SHA" --title "OptiPlex Now $version" \
+            --notes-file release-notes.md --latest

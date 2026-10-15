@@ -198,7 +198,7 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[8],*powers[4];
+static GtkWidget *tiles[7],*powers[4];
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
 #define CONFIG_COUNT 13
@@ -986,11 +986,12 @@ static void open_remote_files(void){
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
- }else if(n==1||n==2||n==4){int ix=n==1?5:n==2?6:7;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ }else if(n==1||n==2){int ix=n==1?5:6;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)launch_torrents();
+ 
 }
 static void reflow(int width) {
  int cols=width>=600?4:2;
@@ -1001,8 +1002,8 @@ static void reflow(int width) {
  extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
-   for(int i=0;i<8;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
-   for(int i=0;i<8;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
+   for(int i=0;i<7;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
+   for(int i=0;i<7;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
    gtk_widget_show_all(grid);
  }
  if(pcols!=last_power_columns){
@@ -1222,7 +1223,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(gt,10);gtk_grid_set_row_spacing(gt,7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(advanced_grid,10);gtk_grid_set_row_spacing(advanced_grid,7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(advanced,advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads URL"};
+ const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Legacy Downloads URL (unused)"};
  GtkWidget*fields[8];
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
@@ -1569,11 +1570,11 @@ static void tray_initialize(void){
  tray_menu_item("Open OptiPlex Now",10);tray_separator();
  tray_menu_item("Games  |  Steam",0);
  tray_menu_item("Desktop  |  XFCE",6);
- tray_menu_item("Torrents  |  VueTorrent",7);
+ 
  tray_menu_item("Videos",1);
  tray_menu_item("Music",2);
  tray_menu_item("Files",3);
- tray_menu_item("Downloads",4);
+ tray_menu_item("Downloads  |  VueTorrent",4);
  tray_menu_item("Terminal",5);
  tray_separator();
  tray_menu_item("Restart streaming service…",14);
@@ -1667,8 +1668,8 @@ int main(int argc,char**argv) {
  gtk_grid_attach(metrics,diskbox,2,0,1,1);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","TORRENTS"};
- for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP"};
+ for(int i=0;i<7;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);

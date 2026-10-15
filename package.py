@@ -31,11 +31,8 @@ try:
  for n in (16,22,24,32,48,64):
   dest=pkg/f'usr/share/icons/hicolor/{n}x{n}/apps'; dest.mkdir(parents=True,exist_ok=True)
   small.resize((n,n),Image.Resampling.NEAREST).save(dest/'optiplex-now-tray.png')
-except ImportError:
- # Pillow optional: install python3-pil if multiple resolutions are wanted.
- dest=pkg/'usr/share/icons/hicolor/256x256/apps';dest.mkdir(parents=True,exist_ok=True)
- shutil.copy2(root/'assets/optiplex-now.png',dest/'optiplex-now.png')
- shutil.copy2(root/'assets/optiplex-now-tray.png',dest/'optiplex-now-tray.png')
+except ImportError as exc:
+ raise SystemExit('ERROR: Pillow is required to package all tray icon sizes. Install python3-pil or pip install Pillow.') from exc
 (pkg/'usr/share/applications/optiplex-now.desktop').write_text('''[Desktop Entry]
 Type=Application
 Name=OptiPlex Now

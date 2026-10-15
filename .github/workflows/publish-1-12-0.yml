@@ -30,8 +30,12 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          test ! "$(gh release view v1.12.0 --json tagName -q .tagName 2>/dev/null || true)" = v1.12.0
           cp dist/OptiPlex-Now_1.12.0_amd64.deb dist/OptiPlex-Now_amd64.deb
           cd dist
           sha256sum OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb > SHA256SUMS
-          gh release create v1.12.0 OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb SHA256SUMS --target "$(git rev-parse HEAD)" --title "OptiPlex Now 1.12.0" --notes "Adds Web Gaming via Wolf UI, configurable tray shortcuts for eight buttons, and hardware-info fixes. Requires an existing configured server." --latest
+          if gh release view v1.12.0 >/dev/null 2>&1; then
+            gh release upload v1.12.0 OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb SHA256SUMS --clobber
+            gh release edit v1.12.0 --latest --notes "Adds Web Gaming via Wolf UI, configurable tray shortcuts with descriptive service names, and hardware-info fixes. Requires an existing configured server."
+          else
+            gh release create v1.12.0 OptiPlex-Now_1.12.0_amd64.deb OptiPlex-Now_amd64.deb SHA256SUMS --target "$(git rev-parse HEAD)" --title "OptiPlex Now 1.12.0" --notes "Adds Web Gaming via Wolf UI, configurable tray shortcuts with descriptive service names, and hardware-info fixes. Requires an existing configured server." --latest
+          fi

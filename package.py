@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil, subprocess
 root=Path(__file__).resolve().parent
 out=root/'dist'; out.mkdir(exist_ok=True)
-pkg=root/'build/pkg/optiplex-now_1.11.9_amd64'
+pkg=root/'build/pkg/optiplex-now_1.12.0_amd64'
 if pkg.exists(): shutil.rmtree(pkg)
 for sub in ('DEBIAN','usr/bin','usr/lib/optiplex-now','usr/share/applications','usr/share/doc/optiplex-now'):
  (pkg/sub).mkdir(parents=True,exist_ok=True)
@@ -15,6 +15,8 @@ shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remo
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
+shutil.copy2(root/'server/wolf-driver-maintenance.py',pkg/'usr/lib/optiplex-now/wolf-driver-maintenance')
+(pkg/'usr/lib/optiplex-now/wolf-driver-maintenance').chmod(0o755)
 (pkg/'usr/lib/optiplex-now/restart-streaming').chmod(0o755)
 (pkg/'usr/bin/optiplex-desk').symlink_to('optiplex-now')
 for f in (pkg/'usr/bin/optiplex-now',pkg/'usr/lib/optiplex-now/optiplex-now-backup'): f.chmod(0o755)
@@ -51,7 +53,7 @@ shutil.copy2(root/'OFL-1.1.txt',pkg/'usr/share/doc/optiplex-now/OFL-1.1.txt')
 Replaces: optiplex-desk
 Conflicts: optiplex-desk
 Provides: optiplex-desk
-Version: 1.11.9
+Version: 1.12.0
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -61,4 +63,4 @@ Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, direct Steam streaming, live hardware info and encrypted backup.
 ''')
-subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.11.9_amd64.deb')],check=True)
+subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.12.0_amd64.deb')],check=True)

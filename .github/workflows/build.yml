@@ -2,6 +2,7 @@ name: Build Linux package
 on:
   workflow_dispatch:
   push:
+    branches: ['feature/wolf-driver-maintenance']
     tags: ['v*']
 jobs:
   build:

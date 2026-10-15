@@ -2,7 +2,11 @@
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
-**Current version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+**Current released version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+
+## Development
+
+The 1.12.0 draft branch adds an opt-in server maintenance utility and a compact client layout with a direct Desktop action. The Downloads tile is reused for VueTorrent; no additional Torrents tile is created. These changes have not been built and released as a downloadable `.deb` yet.
 
 ## Install
 
@@ -28,7 +32,8 @@ The Tailscale picker lists devices; it does not install services or grant access
 
 ## Features
 
-- Launch the Steam application advertised by Wolf through Moonlight.
+- Launch Steam or XFCE directly through Moonlight; the Desktop shortcut uses Wolf's XFCE application.
+- Open the existing Downloads shortcut in VueTorrent using the configured server host on port 8085 (requires qBittorrent/VueTorrent installed on that server).
 - Open video, music and download services in the browser.
 - Browse server files over SFTP and open an SSH terminal.
 - View server hardware and status; wake, sleep, restart or shut down the host when configured.

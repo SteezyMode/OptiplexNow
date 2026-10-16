@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily OptiPlex Studio project snapshots
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+Unit=optiplex-studio-backup.service
+
+[Install]
+WantedBy=timers.target

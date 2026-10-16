@@ -1591,9 +1591,12 @@ static void tray_initialize(void){
      void*(*new_indicator)(const char*,const char*,int)=dlsym(indicator_library,"app_indicator_new");
      app_indicator_set_status_fn=dlsym(indicator_library,"app_indicator_set_status");
      app_indicator_set_menu_fn=dlsym(indicator_library,"app_indicator_set_menu");
+     void (*set_indicator_title)(void*,const char*)=dlsym(indicator_library,"app_indicator_set_title");
      if(new_indicator && app_indicator_set_status_fn && app_indicator_set_menu_fn){
        app_indicator=new_indicator("optiplex-now","optiplex-now-tray",0);
        if(app_indicator){
+         /* Keep the stable application ID; set a human-readable tray title when supported. */
+         if(set_indicator_title)set_indicator_title(app_indicator,"OptiPlex Now");
          app_indicator_set_menu_fn(app_indicator,tray_menu);
          app_indicator_set_status_fn(app_indicator,1); /* ACTIVE */
          using_status_notifier=1;

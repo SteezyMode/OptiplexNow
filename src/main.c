@@ -1290,7 +1290,7 @@ static int full_backup_ui(void*parent,int restore){
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
  int rc=backup_execute(restore,path,pw);explicit_bzero(pw,sizeof pw);
  if(rc==0){
-  if(restore){config_load();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
+  if(restore){config_load();last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);reflow(dimensions[2]>0?dimensions[2]:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
   else preset_alert(parent,"Backup saved","Encrypted backup saved. Keep your password safe and only restore on a trusted computer.");
  }else preset_alert(parent,"Backup failed",rc==-2?"Backup helper is missing. Reinstall OptiPlex Now.":
        "Backup failed. Check file, password, and permissions. No settings were intentionally reset.");
@@ -1347,18 +1347,25 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
  g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
- add(col,label("TRAY MENU SHORTCUTS","modalheading"),0);
- add(col,label("Choose which shortcuts appear in the tray. Optional services are off by default.","helper"),0);
- GtkWidget*tray_checks[9];GtkWidget*tray_choices=gtk_grid_new();
- gtk_grid_set_row_spacing(tray_choices,8);gtk_grid_set_column_spacing(tray_choices,18);
- const char*tray_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
- unsigned tray_mask=tray_button_mask();
+ add(col,label("SHORTCUTS","modalheading"),0);
+ add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
+ GtkWidget*featured_checks[9],*tray_checks[9],*choices=gtk_grid_new();
+ gtk_grid_set_row_spacing(choices,5);gtk_grid_set_column_spacing(choices,18);
+ gtk_grid_attach(choices,label("SERVICE","storagehead"),0,0,1,1);
+ gtk_grid_attach(choices,label("PRIMARY","storagehead"),1,0,1,1);
+ gtk_grid_attach(choices,label("TRAY","storagehead"),2,0,1,1);
+ const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
+ unsigned fm=featured_mask(),tm=tray_button_mask();
  for(int i=0;i<9;i++){
-  tray_checks[i]=gtk_check_button_new_with_label(tray_names[i]);
-  gtk_toggle_button_set_active(tray_checks[i],(tray_mask & (1u<<i))!=0);
-  gtk_grid_attach(tray_choices,tray_checks[i],i/4,i%4,1,1);
+   gtk_grid_attach(choices,label(service_names[i],NULL),0,i+1,1,1);
+   featured_checks[i]=gtk_check_button_new_with_label("");
+   tray_checks[i]=gtk_check_button_new_with_label("");
+   gtk_toggle_button_set_active(featured_checks[i],(fm&(1u<<i))!=0);
+   gtk_toggle_button_set_active(tray_checks[i],(tm&(1u<<i))!=0);
+   gtk_grid_attach(choices,featured_checks[i],1,i+1,1,1);
+   gtk_grid_attach(choices,tray_checks[i],2,i+1,1,1);
  }
- add(col,tray_choices,0);
+ add(col,choices,0);
  add(col,advanced,0);
  PresetExportContext export_context={.parent=d,.disk=diskentry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
@@ -1382,10 +1389,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     const char*ai=gtk_entry_get_text(ai_entry);
     if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
     else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
-    unsigned selected=0;
-    for(int i=0;i<9;i++)if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
+    unsigned selected=0,featured=0;
+    for(int i=0;i<9;i++){
+      if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
+      if(gtk_toggle_button_get_active(featured_checks[i]))featured|=1u<<i;
+    }
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
-    config_save();tray_build_menu();say("SETTINGS SAVED");refresh();
+    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+    config_save();tray_build_menu();
+    last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);
+    reflow(dimensions[2]>0?dimensions[2]:660);
+    say("SETTINGS SAVED");refresh();
  }
  tailscale_label=NULL;gtk_widget_destroy(d);
 }

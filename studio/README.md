@@ -10,7 +10,7 @@ remain attributed. Its original synth engine and piano roll are not replaced.
 ## First version
 
 - The complete UltraBox synthesis and piano-roll experience.
-- STUDIO / STEPS & PERFORMANCE expander, with 8, 16, 24, or 32 16th-note
+- Optional, collapsed EXPERIMENTAL / STEP GRID & XY PAD panel **below the UltraBox editor**, with 8, 16, 24, or 32 16th-note
   steps. The grid directly edits notes on the selected UltraBox channel/bar.
   The grid extends across adjacent bars for steps longer than a single bar.
   It is intentionally conservative around complex or held notes.
@@ -18,7 +18,7 @@ remain attributed. Its original synth engine and piano roll are not replaced.
 - XY performance controller for the current instrument's filter cutoff and
   echo level. Use UltraBox's effect controls to enable these effects.
   By default changes are momentary; Keep persists one finished gesture.
-- Central song library with name, manual Save, Save As, Load, revision checks
+- Discreet Studio project-library footer underneath the full UltraBox editor with name, manual Save, Save As, Load, revision checks
   and SQLite storage; a bearer token is required. The token stays in
   browser sessionStorage (not in the URL or repository).
 

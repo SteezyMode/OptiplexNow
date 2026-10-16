@@ -49,8 +49,8 @@ export function mountStudio(doc: SongDocument, editor: SongEditor): void {
     const container = document.getElementById("beepboxEditorContainer");
     if (!container) return;
     const outer = el("details", "studio-panel");
-    outer.open = true;
-    const heading = el("summary", "studio-heading", "STUDIO  /  STEPS & PERFORMANCE");
+    outer.open = false;
+    const heading = el("summary", "studio-heading", "EXPERIMENTAL / STEP GRID & XY PAD");
     const content = el("div", "studio-content");
     const intro = el("p", "studio-hint", "An additional instrument surface. The original UltraBox piano roll, sounds, and undo history still work.");
     const toolbar = el("div", "studio-toolbar");
@@ -92,9 +92,13 @@ export function mountStudio(doc: SongDocument, editor: SongEditor): void {
     const load=el("button","studio-action","LOAD PROJECT");
     const clearToken=el("button","studio-action studio-quiet","CHANGE TOKEN");
     library.append(save,saveAs,load,clearToken);
-    content.append(intro,toolbar,steps,perfTitle,perfRow,hint,library,notice);
+    // Keep the actual UltraBox instrument first. Song-management remains visible
+    // under the editor; experimental live controls are collapsed below it.
+    const projectBar = el("div", "studio-projectbar");
+    projectBar.append(el("span", "studio-projectbar-label", "STUDIO / SAVED PROJECTS"), library, notice);
+    content.append(intro,toolbar,steps,perfTitle,perfRow,hint);
     outer.append(heading,content);
-    container.insertBefore(outer,editor.mainLayer);
+    container.append(projectBar,outer);
 
     let currentProject: Project | null=null;
     try {

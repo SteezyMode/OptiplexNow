@@ -1,52 +1,65 @@
-name: Publish client installer
+name: Build and publish OptiPlex Now
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'downloads/**'
+      - 'src/**'
+      - 'assets/**'
+      - 'package.py'
+      - 'Makefile'
+      - 'tests/**'
+      - 'README.md'
       - '.github/workflows/release.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 concurrency:
-  group: publish-client-installer
+  group: publish-optiplex-now
   cancel-in-progress: false
 jobs:
   release:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Verify and publish installer
+      - name: Install build and test requirements
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends
+      - name: Test and build from the checked-out source
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -v
+          make package
+          test -x build/optiplex-desk
+          mapfile -t pkgs < <(find dist -maxdepth 1 -name 'OptiPlex-Now_*_amd64.deb' -type f)
+          test "${#pkgs[@]}" -eq 1
+          package="${pkgs[0]}"
+          version="$(dpkg-deb -f "$package" Version)"
+          test "$version" = "1.11.10"
+          dpkg-deb --contents "$package" | grep -q '/usr/bin/optiplex-now'
+          cp "$package" dist/OptiPlex-Now_amd64.deb
+          (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)
+      - name: Publish one latest production release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        shell: bash
         run: |
           set -euo pipefail
-          cd downloads
-          sha256sum -c SHA256SUMS
-          mapfile -t packages < <(find . -maxdepth 1 -name 'OptiPlex-Now_*_amd64.deb' -print)
-          test "${#packages[@]}" -eq 1
-          package="${packages[0]}"
-          version=$(dpkg-deb -f "$package" Version)
+          version="1.11.10"
           tag="v${version}"
           if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release $tag already exists; leaving its assets unchanged."
-            exit 0
+            echo "Release ${tag} exists; refusing to rewrite an existing published version" >&2
+            exit 1
           fi
-          cp "$package" OptiPlex-Now_amd64.deb
-          sha256sum "$package" OptiPlex-Now_amd64.deb > SHA256SUMS
           cat > release-notes.md <<'NOTES'
-          Linux client for an existing home server. Download OptiPlex-Now_amd64.deb and install it with your package manager.
+          OptiPlex Now 1.11.10 maintenance release.
 
-          Music opens Dropped Needle. In Setup Wizard, leave Music URL blank to use http://SERVER:8688, or supply your existing URL. Sign in to Dropped Needle in the browser.
+          - Desktop tile launches the existing Wolf OptiPlex Studio Desktop through Moonlight.
+          - AppIndicator uses the readable “OptiPlex Now” display title, where supported.
+          - Steam continues to launch Wolf's existing Steam application.
+          - Installer is rebuilt and validated from the release source commit.
 
-          Includes Tailscale server selection, hardware heading, streaming restart and music-profile export/staging import. Profile export temporarily stops the music stack and includes unencrypted credentials.
-
-          Fresh-server installation is not implemented. This release does not install Wolf, Jellyfin, the VPN/music stack or scheduled server backups. Music-profile import stages files only; it does not deploy a server.
-
-          Build and profile unit tests passed. The new profile workflow still needs live-server testing.
+          Requires your existing Tailscale, Wolf, and remote services. It does not install or modify those services.
           NOTES
-          gh release create "$tag" "$package" OptiPlex-Now_amd64.deb SHA256SUMS \
-            --target "$GITHUB_SHA" --title "OptiPlex Now $version" \
-            --notes-file release-notes.md --latest
+          gh release create "$tag"             dist/OptiPlex-Now_1.11.10_amd64.deb             dist/OptiPlex-Now_amd64.deb             dist/SHA256SUMS             --target "$GITHUB_SHA"             --title "OptiPlex Now 1.11.10"             --notes-file release-notes.md             --latest

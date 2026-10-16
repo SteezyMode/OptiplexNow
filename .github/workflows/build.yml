@@ -2,7 +2,7 @@ name: Build Linux package
 on:
   workflow_dispatch:
   push:
-    branches: ['feature/wolf-driver-maintenance']
+    branches: ['feature/wolf-driver-maintenance', 'feature/studio-launcher']
     tags: ['v*']
 permissions:
   contents: write

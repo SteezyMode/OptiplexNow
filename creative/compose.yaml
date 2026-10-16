@@ -1,0 +1,22 @@
+name: creative-suite
+services:
+  recorder:
+    build:
+      context: .
+      dockerfile: audiomass.Dockerfile
+    image: optiplex-creative-recorder:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18766:8080"
+    security_opt:
+      - no-new-privileges:true
+  pixel:
+    build:
+      context: .
+      dockerfile: piskel.Dockerfile
+    image: optiplex-creative-pixel:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18767:8080"
+    security_opt:
+      - no-new-privileges:true

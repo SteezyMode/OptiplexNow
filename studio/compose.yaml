@@ -1,0 +1,20 @@
+services:
+  studio:
+    build:
+      context: .
+      args:
+        ULTRABOX_COMMIT: "0ba53c39b086231ebd92bb055cb1edb5d2630b60"
+    image: optiplex-studio:dev
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      STUDIO_DB: /data/studio.sqlite3
+      STUDIO_SITE: /app/site
+    ports:
+      - "127.0.0.1:18765:8080"
+    volumes:
+      - studio-data:/data
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  studio-data:

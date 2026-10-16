@@ -1,0 +1,38 @@
+/* Compact instrument control deck, not a redesign of UltraBox. */
+.studio-panel{box-sizing:border-box;background:#20242a;color:#e9e4d8;border:1px solid #42464d;border-radius:5px;margin:10px 0;font-family:system-ui,sans-serif;font-size:12px;letter-spacing:.01em}
+.studio-heading{cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.14em;padding:12px 14px;color:#e5c6a5;user-select:none}
+.studio-heading::marker{color:#cd816c}
+.studio-content{padding:0 12px 12px}
+.studio-toolbar,.studio-library{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:10px 0}
+.studio-subtitle,.studio-row-label,.studio-step-number,.studio-status{font-size:10px;color:#b5b5ae;font-variant-numeric:tabular-nums;letter-spacing:.06em}
+.studio-base,.studio-select,.studio-action{background:#333941;color:#efeae0;border:1px solid #62656c;border-radius:3px;font:inherit;min-height:27px;padding:4px 7px}
+.studio-base{width:47px}
+.studio-quiet{opacity:.7}
+.studio-action{cursor:pointer}.studio-action:hover{border-color:#df9b7b}
+.studio-hint{color:#afb2b6;line-height:1.35;margin:7px 0;font-size:11px}
+.studio-steps{max-width:100%;overflow-x:auto;padding-bottom:3px}
+.studio-grid{display:grid;grid-template-columns:45px repeat(var(--studio-cols),minmax(19px,1fr));gap:3px;min-width:max-content}
+.studio-corner{min-width:45px}
+.studio-row-label{display:flex;align-items:center;min-width:45px}
+.studio-step-number{text-align:center;font-size:9px}
+.studio-step-number.studio-beat{color:#d7bdac}
+.studio-step{min-width:19px;height:22px;background:#3b4148;border:1px solid #62666c;border-radius:2px;cursor:pointer}
+.studio-step.studio-beat{border-left-color:#b3aca3}
+.studio-step.active{background:#df9579;border-color:#f0c1a0}
+.studio-step:disabled{opacity:.25;cursor:default}
+.studio-step:focus-visible,.studio-action:focus-visible,.studio-xy:focus-visible{outline:2px solid #efca9b;outline-offset:2px}
+.studio-section{font-size:11px;font-weight:700;letter-spacing:.12em;color:#e5c6a5;margin:16px 0 8px}
+.studio-performance{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px}
+.studio-xy{position:relative;width:175px;max-width:100%;height:120px;touch-action:none;cursor:crosshair;border:1px solid #9f8e82;border-radius:3px;background:linear-gradient(90deg,transparent 49.5%,#555a60 50%,transparent 50.5%),linear-gradient(0deg,transparent 49.5%,#555a60 50%,transparent 50.5%),#343a41}
+.studio-xy-dot{position:absolute;left:50%;top:50%;width:11px;height:11px;border:2px solid #efba99;background:#25292e;border-radius:50%;transform:translate(-50%,-50%);pointer-events:none}
+.studio-pad-info{display:flex;flex-direction:column;gap:10px;font-size:10px;color:#d6cabd}
+.studio-latch{display:flex;gap:7px;align-items:center;color:#d6cabd;cursor:pointer}
+.studio-status{display:block;min-height:16px;margin-top:8px;overflow-wrap:anywhere}
+@media(max-width:620px){.studio-panel{margin:5px 0}.studio-grid{grid-template-columns:40px repeat(var(--studio-cols),minmax(22px,1fr))}}
+
+/* Studio project saves are a discreet footer, not an instrument takeover. */
+.studio-projectbar{box-sizing:border-box;margin:12px 0 5px;padding:9px 11px;border:1px solid #42464d;border-radius:4px;background:#20242a;color:#e9e4d8;font-family:system-ui,sans-serif;font-size:12px}
+.studio-projectbar-label{display:block;color:#e5c6a5;font-size:10px;font-weight:700;letter-spacing:.11em}
+.studio-projectbar .studio-library{margin:6px 0}
+.studio-projectbar .studio-status{margin-top:2px}
+.studio-panel:not([open]) .studio-heading{padding:9px 11px;color:#a8a9a9}

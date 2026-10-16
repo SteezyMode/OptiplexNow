@@ -1,5 +1,15 @@
 name: creative-suite
 services:
+  models:
+    build:
+      context: .
+      dockerfile: blockbench.Dockerfile
+    image: optiplex-creative-models:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18770:8080"
+    security_opt:
+      - no-new-privileges:true
   previs:
     build:
       context: .

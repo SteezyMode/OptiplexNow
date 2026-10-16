@@ -8,7 +8,7 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 ## Development
 
-The 1.12.0 draft branch adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an **optional Bruiser AI URL** under a collapsed Additional Services section. The main dashboard remains at eight buttons; Downloads launches VueTorrent. The branch has CI builds, but production installation and end-to-end tests are still pending. See [application structure](docs/application-design.md).
+The 1.12.0 draft branch adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an optional Bruiser AI shortcut under Additional Services, automatically opening Open WebUI on the configured server's port 3000 unless overridden. Settings contains a separate Bruiser AI Admin shortcut. The main dashboard remains at eight buttons; Downloads launches VueTorrent. The branch has CI builds, but production installation and end-to-end tests are still pending. See [application structure](docs/application-design.md).
 
 ## Install
 

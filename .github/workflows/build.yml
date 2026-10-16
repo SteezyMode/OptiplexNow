@@ -3,9 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: ['feature/wolf-driver-maintenance']
-    tags: ['v*']
 permissions:
-  contents: write
+  contents: read
 # A fresh branch push must supersede prior builds; all CI runs publish the same RC asset.
 concurrency:
   group: optiplex-now-rc-${{ github.ref }}
@@ -22,20 +21,9 @@ jobs:
       - name: Verify package contents and tests
         run: |
           set -e
-          dpkg-deb --contents dist/OptiPlex-Now_1.12.0_amd64.deb | grep -q 'hicolor/24x24/apps/optiplex-now-tray.png'
-          dpkg-deb --contents dist/OptiPlex-Now_1.12.0_amd64.deb | grep -q 'hicolor/16x16/apps/optiplex-now-tray.png'
+          dpkg-deb --contents dist/OptiPlex-Now_1.13.0_amd64.deb | grep -q 'hicolor/24x24/apps/optiplex-now-tray.png'
+          dpkg-deb --contents dist/OptiPlex-Now_1.13.0_amd64.deb | grep -q 'hicolor/16x16/apps/optiplex-now-tray.png'
           python3 -m unittest discover -s tests -v
-      - name: Publish test release
-        if: github.ref == 'refs/heads/feature/wolf-driver-maintenance'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=v1.12.0-rc.1
-          if gh release view "$tag" >/dev/null 2>&1; then
-            gh release upload "$tag" dist/OptiPlex-Now_1.12.0_amd64.deb --clobber
-          else
-            gh release create "$tag" dist/OptiPlex-Now_1.12.0_amd64.deb --prerelease --target "$GITHUB_SHA" --title "OptiPlex Now 1.12.0 RC1" --notes "Test build: compact launcher, Desktop (Wolf XFCE), VueTorrent Downloads, sunset accents and all tray icon sizes. Please test COSMIC tray behavior before stable release."
-          fi
       - uses: actions/upload-artifact@v4
         with:
           name: optiplex-now-linux-deb

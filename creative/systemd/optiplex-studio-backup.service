@@ -1,0 +1,16 @@
+[Unit]
+Description=OptiPlex Studio projects snapshot backup
+Documentation=https://github.com/SteezyMode/OptiplexNow/blob/feature/creative-suite/creative/scripts/backup-studio.sh
+RequiresMountsFor=/mnt/2TB
+ConditionPathIsMountPoint=/mnt/2TB
+
+[Service]
+Type=oneshot
+User=optiplex
+Group=optiplex
+ExecStart=/usr/local/bin/optiplex-studio-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+NoNewPrivileges=yes
+TimeoutStartSec=4h

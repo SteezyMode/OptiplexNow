@@ -6,6 +6,10 @@ on:
     tags: ['v*']
 permissions:
   contents: write
+# A fresh branch push must supersede prior builds; all CI runs publish the same RC asset.
+concurrency:
+  group: optiplex-now-rc-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-24.04

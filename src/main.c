@@ -898,7 +898,7 @@ static void launch_wolf_app(const char *app){
  say("CONNECTING TO WOLF");
 }
 static void launch_steam(void){launch_wolf_app("Steam");}
-static void launch_desktop(void){launch_wolf_app("XFCE");}
+static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
  if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
  char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
@@ -1730,9 +1730,11 @@ static void tray_initialize(void){
      void*(*new_indicator)(const char*,const char*,int)=dlsym(indicator_library,"app_indicator_new");
      app_indicator_set_status_fn=dlsym(indicator_library,"app_indicator_set_status");
      app_indicator_set_menu_fn=dlsym(indicator_library,"app_indicator_set_menu");
+     void (*set_indicator_title)(void*,const char*)=dlsym(indicator_library,"app_indicator_set_title");
      if(new_indicator && app_indicator_set_status_fn && app_indicator_set_menu_fn){
        app_indicator=new_indicator("optiplex-now","optiplex-now-tray",0);
        if(app_indicator){
+         if(set_indicator_title)set_indicator_title(app_indicator,"OptiPlex Now");
          app_indicator_set_menu_fn(app_indicator,tray_menu);
          app_indicator_set_status_fn(app_indicator,1); /* ACTIVE */
          using_status_notifier=1;

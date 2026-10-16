@@ -864,6 +864,16 @@ static void launch_steam(void){
  else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],"Steam",NULL};launch(args);}
  say("CONNECTING TO STEAM");
 }
+/* Connect the Desktop tile to Wolf's Studio desktop instead of SSH. */
+static void launch_studio_desktop(void){
+ if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
+ if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
+ int mode=moonlight_mode();
+ if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
+ else if(mode==2){char *args[]={"moonlight","stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
+ else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
+ say("CONNECTING TO STUDIO DESKTOP");
+}
 static void install_moonlight(void){
  if(!exists_program("flatpak")){
    say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
@@ -981,6 +991,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
  }else if(n==1||n==2||n==4){int ix=n==1?5:n==2?6:7;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
  else if(n==3)open_remote_files();
+ else if(n==5)launch_studio_desktop();
  else launch_ssh(0);
 }
 static void reflow(int width) {

@@ -31,8 +31,12 @@ class OptionalServiceTests(unittest.TestCase):
 
     def test_ai_url_is_optional_and_configured_not_hardcoded(self):
         self.assertIn('"tray_buttons","ai_url"', SOURCE)
-        self.assertIn("if(!safe_preset_url(cfg[14])||!*cfg[14])", SOURCE)
-        self.assertIn("browser_open(cfg[14]);", SOURCE)
+        self.assertIn("if(*cfg[14]){", SOURCE)
+        self.assertIn("if(!safe_preset_url(cfg[14]))return 0;", SOURCE)
+        self.assertIn('snprintf(base,sizeof base,"http://%s:3000",cfg[0]);', SOURCE)
+        self.assertIn('snprintf(out,cap,"%s/admin/settings",base);', SOURCE)
+        self.assertIn("browser_open(url);", SOURCE)
+        self.assertIn('button("BRUISER AI ADMIN","setupaction")', SOURCE)
         self.assertNotIn("bruiser.monumentrisk.com", SOURCE)
 
     def test_preset_v1_can_be_imported_and_v2_contains_ai(self):

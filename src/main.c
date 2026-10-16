@@ -202,15 +202,19 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[8],*powers[4];
+static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 15
+#define CONFIG_COUNT 16
+#define FEATURED_MASK_SETTING 15
+#define ALL_SERVICES_MASK 511u
+#define NEW_INSTALL_FEATURED_MASK 207u
+#define EXISTING_INSTALL_FEATURED_MASK 255u
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 511u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255",""};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -278,16 +282,30 @@ static void config_location(void) {
 static void config_load(void) {
  config_location();for(int i=0;i<CONFIG_COUNT;i++)safe_copy(cfg[i],512,defaults[i]);
  FILE*f=fopen(config_path,"r");if(!f){first_run=1;return;}
+ int has_featured=0;
  char line[1024]; while(fgets(line,sizeof line,f)){
    line[strcspn(line,"\r\n")]=0;char *eq=strchr(line,'=');if(!eq)continue;*eq++=0;
-   for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])) safe_copy(cfg[i],512,eq);
+   for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])){
+     safe_copy(cfg[i],512,eq);
+     if(i==FEATURED_MASK_SETTING)has_featured=1;
+   }
  }fclose(f);
+ /* Keep all eight prior dashboard buttons for upgrades, while fresh installs
+  * start with a six-button selection. Never lose a user's existing layout. */
+ if(!has_featured)snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",EXISTING_INSTALL_FEATURED_MASK);
 }
-/* Only tray shortcuts are affected; all main-window tiles remain available. */
+/* Tray and featured selection are independent bitmasks. */
 static unsigned tray_button_mask(void) {
  char *end=NULL;errno=0;
  unsigned long value=strtoul(cfg[TRAY_MASK_SETTING],&end,10);
  if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_DEFAULT_BUTTONS;
+ return (unsigned)value;
+}
+static unsigned featured_mask(void){
+ char *end=NULL;errno=0;
+ unsigned long value=strtoul(cfg[FEATURED_MASK_SETTING],&end,10);
+ if(errno||end==cfg[FEATURED_MASK_SETTING]||*end||value>ALL_SERVICES_MASK)
+   return EXISTING_INSTALL_FEATURED_MASK;
  return (unsigned)value;
 }
 static void config_save(void) {
@@ -1047,6 +1065,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
  else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==8)on_bruiser_ai(NULL,NULL);
  
 }
 static void reflow(int width) {

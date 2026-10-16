@@ -54,11 +54,17 @@ ssh -f -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18443:127.0.0.1:8443 optiplex
 
 Then open `https://127.0.0.1:18443/admin`. This uses SSH authorization rather than making public internet visitors eligible for admin privilege.
 
+**Manual SSH admin verification (2026-10-16):** The owner confirmed that the SSH local-forward test opened the admin page. This verifies the direct loopback path on the tested MacBook; it does **not** prove that the packaged shortcut works or that the same procedure has been tested from outside the home LAN.
+
 **Native Moonlight:** It has a separate client certificate and Wolf pairing flow. The MoonlightWeb `.txt` token is unrelated and cannot replace native pairing. A client's first pairing to a new Wolf instance may still be required.
+
+## Optional Bruiser AI
+
+The owner confirms **Bruiser AI is operational** on the reference OptiPlex. Open WebUI and SearXNG containers were observed as running; the exact browser URL and inference service/model were not captured in this session. The draft 1.12.0 client adds `ai_url` as an optional setting and a collapsed Additional Services shortcut. This is a browser launcher only and is not an AI deployment or GPU scheduler. A possible Studio MIDI sequencer with shared save slots is a **design proposal only**, documented in [application-design.md](application-design.md).
 
 ## Client identity backup
 
-- **Preset `.onp`:** server settings only; no SSH keys or Moonlight pairing.
+- **Preset `.onp`:** server settings only; no SSH keys or Moonlight pairing. Draft 1.12.0 writes a v2 preset that includes the optional `ai_url`; old v1 presets remain importable. Existing 1.11.9 clients may reject the newer preset key.
 - **Full `.onb`:** encrypted snapshot of five predefined locations: launcher config, SSH Ed25519 private/public keys, native/AppImage Moonlight config, and Flatpak Moonlight config (when present).
 - **Not presently included in `.onb`:** MoonlightWeb certificate-token file, browser cookies, Tailscale account enrollment, the entire server stack, or media and game files.
 - Local token destination discussed: `~/.config/optiplex-desk/moonlightweb-certificate.txt` (permissions `0600`); actual placement has not been re-verified by remote inspection.
@@ -89,7 +95,7 @@ If login fails: check Tailscale or LAN routing before changing Wolf. If Web Gami
 
 ## Next work in priority order
 
-1. **Prove SSH admin helper on MacBook:** with Tailscale active and outside LAN, use draft Settings → Web Gaming Admin; verify unlock and tunnel reuse. Fix failures and test before marking ready.
+1. **Prove packaged SSH admin helper on MacBook:** manual SSH-loopback admin worked. Install the draft client with rollback available; test Settings → Web Gaming Admin, tunnel reuse and remote unlock over Tailscale **from outside the LAN** before marking ready.
 2. **Preserve MoonlightWeb token in encrypted client backup:** use a new versioned record/compatibility strategy. Import once on trusted hardware. Preserve existing `.onb` restore behavior and test corrupted/old backups.
 3. **Automatic Web Gaming login:** requires a deliberate browser integration; `browser=auto` only preserves browser sessions, it does **not** automatically submit a certificate after expiry. Do not pass the token in URLs or copy it into public JS.
 4. **Read-only server drift monitor:** inventory container image IDs, names, health, Compose labels and selected systemd states; compare snapshots locally. Redact env, configs, volume contents, cookies and network secrets. Add alert/review before any GitHub PR. No automatic repo writes are deployed.

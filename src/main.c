@@ -1077,9 +1077,21 @@ static void reflow(int width) {
  extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
-   for(int i=0;i<8;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
-   for(int i=0;i<8;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
+   /* Move each action to exactly one section without destroying its widget. */
+   for(int i=0;i<9;i++){
+     g_object_ref(tiles[i]);
+     void*parent=gtk_widget_get_parent(tiles[i]);
+     if(parent)gtk_container_remove(parent,tiles[i]);
+   }
+   unsigned featured=featured_mask();int primary=0,other=0;
+   for(int i=0;i<9;i++){
+     int chosen=(featured&(1u<<i))!=0;
+     int pos=chosen?primary++:other++;
+     gtk_grid_attach(chosen?grid:extras_grid,tiles[i],pos%cols,pos/cols,1,1);
+     g_object_unref(tiles[i]);
+   }
    gtk_widget_show_all(grid);
+   gtk_widget_show_all(extras_grid);
  }
  if(pcols!=last_power_columns){
    last_power_columns=pcols;
@@ -1778,17 +1790,15 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(metrics,diskbox,2,0,1,1);
+ add(body,label("PRIMARY ACTIONS","section"),0);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING"};
- for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
- /* Optional applications must not displace primary dashboard actions. */
  GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
- GtkWidget*extras_col=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);gtk_container_set_border_width(extras_col,8);
- gtk_container_add(extras,extras_col);
- GtkWidget*ai_button=button("BRUISER AI","setupaction");
- g_signal_connect_data(ai_button,"clicked",(GCallback)on_bruiser_ai,NULL,NULL,0);add(extras_col,ai_button,0);
- add(extras_col,label("Optional shortcut. Configure its URL in Settings; AI containers are managed separately.","helper"),0);
+ extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(extras_grid,1);
+ gtk_grid_set_row_spacing(extras_grid,7);gtk_grid_set_column_spacing(extras_grid,7);
+ gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(extras,extras_grid);
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI"};
+ for(int i=0;i<9;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);

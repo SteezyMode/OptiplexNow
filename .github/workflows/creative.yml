@@ -1,4 +1,4 @@
-name: Build creative web tools
+name: Build OptiPlex Studio web tools
 on:
   workflow_dispatch:
   push:
@@ -13,14 +13,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Build both upstream applications
+      - name: Build recorder, pixel editor and Studio hub
         run: docker compose -f creative/compose.yaml build
       - name: Run and smoke-check static frontend
         run: |
           set -euo pipefail
           docker compose -f creative/compose.yaml up -d
           trap 'docker compose -f creative/compose.yaml logs --tail 25; docker compose -f creative/compose.yaml down' EXIT
-          for port in 18766 18767; do
+          for port in 18766 18767 18768; do
             for i in $(seq 1 25); do
               if curl --fail --silent http://127.0.0.1:$port/ > /tmp/creative-$port; then break; fi
               sleep 1
@@ -29,4 +29,7 @@ jobs:
           done
           curl -fsSI http://127.0.0.1:18766/main.css
           curl -fsSI http://127.0.0.1:18767/
+          curl -fsSI http://127.0.0.1:18768/style.css
+          grep -q 'OPTIPLEX' /tmp/creative-18768
+          grep -q 'STUDIO' /tmp/creative-18768
           echo 'Creative static service smoke checks passed'

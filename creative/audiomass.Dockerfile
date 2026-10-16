@@ -7,3 +7,5 @@ RUN git clone --no-checkout https://github.com/pkalogiros/AudioMass.git . \
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 COPY --from=source /source/src/ /usr/share/nginx/html/
 COPY --from=source /source/LICENSE /usr/share/nginx/html/UPSTREAM-LICENSE
+
+COPY --from=source /source/THIRD_PARTY_NOTICES.md /usr/share/nginx/html/THIRD_PARTY_NOTICES.md

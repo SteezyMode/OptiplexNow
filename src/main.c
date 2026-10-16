@@ -202,19 +202,19 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[9],*powers[4],*extras_grid;
+static GtkWidget *tiles[10],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 16
+#define CONFIG_COUNT 17
 #define FEATURED_MASK_SETTING 15
-#define ALL_SERVICES_MASK 511u
+#define ALL_SERVICES_MASK 1023u
 #define NEW_INSTALL_FEATURED_MASK 207u
 #define EXISTING_INSTALL_FEATURED_MASK 255u
 #define TRAY_MASK_SETTING 13
-#define TRAY_ALL_BUTTONS 511u
+#define TRAY_ALL_BUTTONS 1023u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","studio_url"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207","https://studio.monumentrisk.com"};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -1056,6 +1056,23 @@ static void on_bruiser_admin(void*w,void*p){
  browser_open(url);
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
+/* Studio remains a website and is independent of the GTK launcher. */
+static void on_studio(void*w,void*p){
+ (void)w;(void)p;
+ const char*url=cfg[16];
+ if(!*url||!safe_preset_url(url)){say("SET A VALID STUDIO URL IN SETTINGS");return;}
+ char appurl[768];snprintf(appurl,sizeof appurl,"--app=%s",url);
+ if(!strcmp(cfg[8],"chrome-flatpak")&&flatpak_has("com.google.Chrome")){
+   char*args[]={"flatpak","run","com.google.Chrome",appurl,NULL};launch(args);return;
+ }
+ if(strcmp(cfg[8],"system")&&strcmp(cfg[8],"chrome-flatpak")){
+   const char*clients[]={"google-chrome-stable","google-chrome","chromium","chromium-browser"};
+   for(unsigned i=0;i<sizeof clients/sizeof clients[0];i++)if(exists_program(clients[i])){
+     char*args[]={(char*)clients[i],appurl,NULL};launch(args);return;
+   }
+ }
+ browser_open(url);
+}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
@@ -1066,6 +1083,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==6)launch_desktop();
  else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
  else if(n==8)on_bruiser_ai(NULL,NULL);
+ else if(n==9)on_studio(NULL,NULL);
  
 }
 static void reflow(int width) {
@@ -1078,13 +1096,13 @@ static void reflow(int width) {
  if(cols!=last_columns){
    last_columns=cols;
    /* Move each action to exactly one section without destroying its widget. */
-   for(int i=0;i<9;i++){
+   for(int i=0;i<10;i++){
      g_object_ref(tiles[i]);
      void*parent=gtk_widget_get_parent(tiles[i]);
      if(parent)gtk_container_remove(parent,tiles[i]);
    }
    unsigned featured=featured_mask();int primary=0,other=0;
-   for(int i=0;i<9;i++){
+   for(int i=0;i<10;i++){
      int chosen=(featured&(1u<<i))!=0;
      int pos=chosen?primary++:other++;
      gtk_grid_attach(chosen?grid:extras_grid,tiles[i],pos%cols,pos/cols,1,1);
@@ -1347,16 +1365,20 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
  g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
+ add(col,label("STUDIO","modalheading"),0);
+ GtkWidget*studio_entry=gtk_entry_new();gtk_entry_set_placeholder_text(studio_entry,"https://studio.monumentrisk.com");
+ gtk_entry_set_text(studio_entry,cfg[16]);add(col,studio_entry,0);
+ add(col,label("Standalone browser instrument; Chromium opens a dedicated app window.","helper"),0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[9],*tray_checks[9],*choices=gtk_grid_new();
+ GtkWidget*featured_checks[10],*tray_checks[10],*choices=gtk_grid_new();
  gtk_grid_set_row_spacing(choices,5);gtk_grid_set_column_spacing(choices,18);
  gtk_grid_attach(choices,label("SERVICE","storagehead"),0,0,1,1);
  gtk_grid_attach(choices,label("PRIMARY","storagehead"),1,0,1,1);
  gtk_grid_attach(choices,label("TRAY","storagehead"),2,0,1,1);
- const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
+ const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI","Studio"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
- for(int i=0;i<9;i++){
+ for(int i=0;i<10;i++){
    gtk_grid_attach(choices,label(service_names[i],NULL),0,i+1,1,1);
    featured_checks[i]=gtk_check_button_new_with_label("");
    tray_checks[i]=gtk_check_button_new_with_label("");
@@ -1389,8 +1411,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     const char*ai=gtk_entry_get_text(ai_entry);
     if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
     else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
+    const char*studio=gtk_entry_get_text(studio_entry);
+    if(*studio&&safe_preset_url(studio))safe_copy(cfg[16],512,studio);
+    else preset_alert(d,"Invalid Studio URL","Enter an http(s) URL without credentials, query or fragment. The old URL was kept.");
     unsigned selected=0,featured=0;
-    for(int i=0;i<9;i++){
+    for(int i=0;i<10;i++){
       if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
       if(gtk_toggle_button_get_active(featured_checks[i]))featured|=1u<<i;
     }
@@ -1679,6 +1704,7 @@ static void tray_action(void *widget,void *data){
  else if(action==13)tray_quit(NULL,NULL);
  else if(action==14)on_restart_streaming(NULL,NULL);
  else if(action==8)on_bruiser_ai(NULL,NULL);
+ else if(action==15)on_studio(NULL,NULL);
  else {
    if(action==0 && !has_moonlight())tray_show_window();
    on_tile(NULL,(void*)(long)action);
@@ -1706,9 +1732,9 @@ static void tray_build_menu(void){
   static const char*captions[]={
    "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
    "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI",
-    "Bruiser AI  |  Optional"
+    "Bruiser AI  |  Optional","Studio  |  Music"
   };
-  for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+  for(int i=0;i<10;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i==9?15:i);
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);
@@ -1811,8 +1837,8 @@ int main(int argc,char**argv) {
  extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(extras_grid,1);
  gtk_grid_set_row_spacing(extras_grid,7);gtk_grid_set_column_spacing(extras_grid,7);
  gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(extras,extras_grid);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI"};
- for(int i=0;i<9;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI","STUDIO"};
+ for(int i=0;i<10;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);

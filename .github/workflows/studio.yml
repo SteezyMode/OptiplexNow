@@ -1,0 +1,59 @@
+name: Studio development build
+on:
+  push:
+    branches: [feature/studio-ultrabox]
+    paths:
+      - "studio/**"
+      - ".github/workflows/studio.yml"
+  workflow_dispatch:
+
+jobs:
+  build-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Python sources
+        run: python3 -m py_compile studio/server.py studio/inject.py
+      - name: Build pinned UltraBox and Studio container
+        run: docker build --progress=plain -t studio-ci ./studio
+      - name: HTTP and frontend smoke tests
+        run: |
+          set -euo pipefail
+          TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+          docker run -d --name studio-ci -p 127.0.0.1:18765:8080 -e STUDIO_API_TOKEN="$TOKEN" studio-ci
+          trap 'docker logs studio-ci; docker stop studio-ci' EXIT
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18765/api/health > /tmp/health; then break; fi
+            sleep 2
+          done
+          grep -q '"ok":true' /tmp/health
+          curl -fsS http://127.0.0.1:18765/ > /tmp/studio-index
+          grep -q '/studio.css' /tmp/studio-index
+          curl -fsS http://127.0.0.1:18765/beepbox_editor.min.js > /tmp/ultrabox-bundle
+          grep -q 'STUDIO  /  STEPS' /tmp/ultrabox-bundle
+          CODE=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:18765/api/projects)
+          test "$CODE" = "401"
+          export STUDIO_TOKEN="$TOKEN"
+          python3 - <<'PY'
+          import json,os,urllib.request,urllib.error
+          root="http://127.0.0.1:18765/api/projects"
+          headers={"Authorization":"Bearer "+os.environ["STUDIO_TOKEN"]}
+          def call(url,data=None):
+              h=dict(headers)
+              if data is not None: h["Content-Type"]="application/json"
+              req=urllib.request.Request(url,headers=h,data=json.dumps(data).encode() if data is not None else None)
+              with urllib.request.urlopen(req) as resp:return json.load(resp)
+          a=call(root,{"name":"Test beat","song":"ABC123","revision":0})
+          assert a["revision"]==1
+          b=call(root+"/"+str(a["id"]))
+          assert b["song"]=="ABC123"
+          c=call(root,{"id":a["id"],"name":"Test beat","song":"ABC124","revision":1})
+          assert c["revision"]==2
+          try:
+              call(root,{"id":a["id"],"name":"Test beat","song":"OLD","revision":1})
+              raise AssertionError("Expected conflict")
+          except urllib.error.HTTPError as exc:
+              assert exc.code==409
+          print("Studio API smoke checks passed")
+          PY

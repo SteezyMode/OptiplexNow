@@ -205,11 +205,11 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[8],*powers[4];
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 14
+#define CONFIG_COUNT 15
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255",""};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -305,8 +305,8 @@ static int valid_user(const char*s) {
 
 /* A portable connection preset deliberately excludes auth material and local paths.
    Never import/export SSH keys, browser preferences, or Moonlight pairing. */
-#define PRESET_COUNT 9
-static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10};
+#define PRESET_COUNT 10
+static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14};
 static int safe_wake_path(const char*s){
  if(!s||!*s)return 1;
  if(*s!='/'||strlen(s)>350)return 0;
@@ -327,6 +327,7 @@ static int safe_preset_values(char v[CONFIG_COUNT][512]){
  if(*v[3]&&!valid_user(v[3]))return 0;
  if(!safe_wake_path(v[4]))return 0;
  for(int i=5;i<=7;i++)if(!safe_preset_url(v[i]))return 0;
+ if(!safe_preset_url(v[14]))return 0;
  if(*v[10]&&v[10][0]!='/')return 0;
  for(int i=0;i<PRESET_COUNT;i++){
    const char*value=v[preset_indices[i]];
@@ -336,7 +337,7 @@ static int safe_preset_values(char v[CONFIG_COUNT][512]){
 }
 static int preset_read(const char*path,char v[CONFIG_COUNT][512]){
  FILE*f=fopen(path,"r");if(!f)return 0;
- char header[128]; if(!fgets(header,sizeof header,f)||strcmp(header,"# OptiPlex Now server preset v1\n")){fclose(f);return 0;}
+ char header[128]; if(!fgets(header,sizeof header,f)||strcmp(header,"# OptiPlex Now server preset v2 (v1 imports supported)\n")){fclose(f);return 0;}
  /* Never accept absolute AppImage/browser paths or unrecognized settings. */
  char line[1024];int found_host=0;
  while(fgets(line,sizeof line,f)){
@@ -1006,6 +1007,11 @@ static void on_web_gaming_admin(void*w,void*p){
  launch(args);
  say("OPENING WEB GAMING ADMIN VIA SSH");
 }
+static void on_bruiser_ai(void*w,void*p){
+ (void)w;(void)p;
+ if(!safe_preset_url(cfg[14])||!*cfg[14]){say("SET BRUISER AI URL IN SETTINGS");return;}
+ browser_open(cfg[14]);
+}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
@@ -1272,6 +1278,10 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
+ add(col,label("OPTIONAL SERVICES","modalheading"),0);
+ add(col,label("Bruiser AI runs independently. Set its existing browser URL here.","helper"),0);
+ GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(ai_entry,"Bruiser AI URL (http(s)://...)");
+ gtk_entry_set_text(ai_entry,cfg[14]);add(col,ai_entry,0);
  GtkWidget*games=button("GAMES SETUP","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
@@ -1310,6 +1320,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    const char*disk=gtk_entry_get_text(diskentry);
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
    safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
+    const char*ai=gtk_entry_get_text(ai_entry);
+    if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
+    else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
     unsigned selected=0;
     for(int i=0;i<8;i++)if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
@@ -1335,7 +1348,7 @@ static void wizard_save(Wizard*c){
    if(strchr(values[i],'\n')||strchr(values[i],'\r'))return;
    safe_copy(cfg[i],512,values[i]);
  }
- if(c->preset_loaded)safe_copy(cfg[10],512,c->staged[10]);
+ if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(c->service_inputs[i]);
    if(safe_preset_url(url))safe_copy(cfg[5+i],512,url);
@@ -1720,6 +1733,13 @@ int main(int argc,char**argv) {
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
  const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING"};
  for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ /* Optional applications must not displace primary dashboard actions. */
+ GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
+ GtkWidget*extras_col=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);gtk_container_set_border_width(extras_col,8);
+ gtk_container_add(extras,extras_col);
+ GtkWidget*ai_button=button("BRUISER AI","setupaction");
+ g_signal_connect_data(ai_button,"clicked",(GCallback)on_bruiser_ai,NULL,NULL,0);add(extras_col,ai_button,0);
+ add(extras_col,label("Optional shortcut. Configure its URL in Settings; AI containers are managed separately.","helper"),0);
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);

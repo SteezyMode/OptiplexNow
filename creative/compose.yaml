@@ -1,5 +1,15 @@
 name: creative-suite
 services:
+  previs:
+    build:
+      context: .
+      dockerfile: cozyclay.Dockerfile
+    image: optiplex-creative-previs:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18769:8080"
+    security_opt:
+      - no-new-privileges:true
   hub:
     image: nginxinc/nginx-unprivileged:1.27-alpine
     restart: unless-stopped

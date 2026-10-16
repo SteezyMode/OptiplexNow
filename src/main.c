@@ -1008,10 +1008,35 @@ static void on_web_gaming_admin(void*w,void*p){
  launch(args);
  say("OPENING WEB GAMING ADMIN VIA SSH");
 }
+/* Open WebUI is the Bruiser front end; Ollama and SearXNG remain separate.
+ * Default to the user's configured host, not a machine-specific fixed IP. */
+static int bruiser_url(char *out,size_t cap,int admin){
+ char base[640];
+ if(*cfg[14]){
+   if(!safe_preset_url(cfg[14]))return 0;
+   safe_copy(base,sizeof base,cfg[14]);
+ }else{
+   if(!valid_host(cfg[0]))return 0;
+   snprintf(base,sizeof base,"http://%s:3000",cfg[0]);
+ }
+ size_t n=strlen(base);
+ while(n>0&&base[n-1]=='/')base[--n]=0;
+ if(admin)snprintf(out,cap,"%s/admin/settings",base);
+ else safe_copy(out,cap,base);
+ return 1;
+}
 static void on_bruiser_ai(void*w,void*p){
  (void)w;(void)p;
- if(!safe_preset_url(cfg[14])||!*cfg[14]){say("SET BRUISER AI URL IN SETTINGS");return;}
- browser_open(cfg[14]);
+ char url[720];
+ if(!bruiser_url(url,sizeof url,0)){say("SET SERVER OR BRUISER URL IN SETTINGS");return;}
+ browser_open(url);
+}
+static void on_bruiser_admin(void*w,void*p){
+ (void)w;(void)p;
+ char url[720];
+ if(!bruiser_url(url,sizeof url,1)){say("SET SERVER OR BRUISER URL IN SETTINGS");return;}
+ browser_open(url);
+ say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
@@ -1280,7 +1305,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
  add(col,label("OPTIONAL SERVICES","modalheading"),0);
- add(col,label("Bruiser AI runs independently. Set its existing browser URL here.","helper"),0);
+ add(col,label("Bruiser uses Open WebUI on SERVER:3000 by default. Override only if needed.","helper"),0);
  GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(ai_entry,"Bruiser AI URL (http(s)://...)");
  gtk_entry_set_text(ai_entry,cfg[14]);add(col,ai_entry,0);
  GtkWidget*games=button("GAMES SETUP","setupaction");
@@ -1289,6 +1314,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
+ g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
  add(col,label("TRAY MENU SHORTCUTS","modalheading"),0);
  add(col,label("Choose which shortcuts appear in the tray. Optional services are off by default.","helper"),0);
  GtkWidget*tray_checks[9];GtkWidget*tray_choices=gtk_grid_new();

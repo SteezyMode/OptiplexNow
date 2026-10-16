@@ -207,7 +207,8 @@ static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflig
 static char config_path[PATH_MAX];
 #define CONFIG_COUNT 15
 #define TRAY_MASK_SETTING 13
-#define TRAY_ALL_BUTTONS 255u
+#define TRAY_ALL_BUTTONS 511u
+#define TRAY_DEFAULT_BUTTONS 255u
 static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url"};
 static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255",""};
 static char cfg[CONFIG_COUNT][512];
@@ -286,7 +287,7 @@ static void config_load(void) {
 static unsigned tray_button_mask(void) {
  char *end=NULL;errno=0;
  unsigned long value=strtoul(cfg[TRAY_MASK_SETTING],&end,10);
- if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_ALL_BUTTONS;
+ if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_DEFAULT_BUTTONS;
  return (unsigned)value;
 }
 static void config_save(void) {
@@ -1289,12 +1290,12 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  add(col,label("TRAY MENU SHORTCUTS","modalheading"),0);
- add(col,label("Choose which main buttons appear in the tray. The main window is unchanged.","helper"),0);
- GtkWidget*tray_checks[8];GtkWidget*tray_choices=gtk_grid_new();
+ add(col,label("Choose which shortcuts appear in the tray. Optional services are off by default.","helper"),0);
+ GtkWidget*tray_checks[9];GtkWidget*tray_choices=gtk_grid_new();
  gtk_grid_set_row_spacing(tray_choices,8);gtk_grid_set_column_spacing(tray_choices,18);
- const char*tray_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
+ const char*tray_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
  unsigned tray_mask=tray_button_mask();
- for(int i=0;i<8;i++){
+ for(int i=0;i<9;i++){
   tray_checks[i]=gtk_check_button_new_with_label(tray_names[i]);
   gtk_toggle_button_set_active(tray_checks[i],(tray_mask & (1u<<i))!=0);
   gtk_grid_attach(tray_choices,tray_checks[i],i/4,i%4,1,1);
@@ -1324,7 +1325,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
     else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
     unsigned selected=0;
-    for(int i=0;i<8;i++)if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
+    for(int i=0;i<9;i++)if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
     config_save();tray_build_menu();say("SETTINGS SAVED");refresh();
  }
@@ -1605,6 +1606,7 @@ static void tray_action(void *widget,void *data){
  else if(action==12){tray_show_window();on_system_info(NULL,NULL);}
  else if(action==13)tray_quit(NULL,NULL);
  else if(action==14)on_restart_streaming(NULL,NULL);
+ else if(action==8)on_bruiser_ai(NULL,NULL);
  else {
    if(action==0 && !has_moonlight())tray_show_window();
    on_tile(NULL,(void*)(long)action);
@@ -1631,9 +1633,10 @@ static void tray_build_menu(void){
   tray_separator();
   static const char*captions[]={
    "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
-   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI"
+   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI",
+    "Bruiser AI  |  Optional"
   };
-  for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+  for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);

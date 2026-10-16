@@ -1,5 +1,14 @@
 name: creative-suite
 services:
+  hub:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18768:8080"
+    volumes:
+      - ./hub:/usr/share/nginx/html:ro
+    security_opt:
+      - no-new-privileges:true
   recorder:
     build:
       context: .

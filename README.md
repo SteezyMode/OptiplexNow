@@ -1,5 +1,7 @@
 # OptiPlex Now
 
+**Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.12.0 work. The handoff separates verified observations from planned features.
+
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
 **Current released version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.

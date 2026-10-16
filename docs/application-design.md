@@ -6,16 +6,16 @@ Status: design baseline for draft 1.12.0, 2026-10-16. This document distinguishe
 
 OptiPlex Now is a personal Linux client to launch, access and maintain services on a home server. It is not a Docker control panel and does not need an icon for every running container.
 
-**Primary actions** stay visible and fast: Games (native Moonlight), Videos, Music, Files, Downloads, Terminal, Desktop and Web Gaming (MoonlightWeb). Service maintenance, SSH pairing, Web Gaming Admin, backup and machine diagnostics belong in Settings or dedicated setup dialogs. The app must not silently change the server just because a client connects.
+**Primary Actions are user-selected**, not a fixed list. The same nine available actions can be featured on the dashboard or moved into a collapsed Additional Services section. Each action exists once. Fresh installs feature Games, Videos, Music, Files, Desktop and Web Gaming (six); existing installs without the `featured_actions` setting keep their previous eight featured actions, avoiding an unexpected layout change. This preference is in `config.ini` and therefore the encrypted full client backup; portable server presets intentionally do not change a device's dashboard/tray preferences. Service maintenance, SSH pairing, Web Gaming Admin, backup and machine diagnostics belong in Settings or dedicated setup dialogs. The app must not silently change the server just because a client connects.
 
-**Optional applications** go inside the collapsed Additional Services section, not a ninth primary tile. Removing one server component must not break the launcher or the core streaming flow. Store per-service URLs as configuration, not compiled host/IP constants. Browsers handle their own sessions. Exported non-secret connection presets may carry clean URLs, but never tokens/passwords.
+**Additional Services are the unfeatured actions**, including Bruiser AI when not selected as a primary shortcut. Removing one server component must not break the launcher or the core streaming flow. Store per-service URLs as configuration, not compiled host/IP constants. Browsers handle their own sessions. Exported non-secret connection presets may carry clean URLs, but never tokens/passwords.
 
 ## Tray and dashboard rules
 
 - Every optional **Additional Services** entry must have its own Settings → Tray Menu Shortcuts checkbox. Turning one on adds its direct shortcut; turning it off removes that entry without affecting other options.
-- The existing eight main actions keep their established tray selection behavior. The draft 1.12.0 adds a ninth **Bruiser AI** checkbox, off by default; existing `tray_buttons=255` remains valid.
+- Settings now shows separate **Primary** and **Tray** columns for all nine actions, without coupling them. `featured_actions` and `tray_buttons` are independent 9-bit masks. The Bruiser tray checkbox remains off by default; existing `tray_buttons=255` remains valid.
 - New optional services such as Studio must implement the same opt-in tray behavior before being added. No optional service should be automatically pinned to the tray just because it is installed server-side.
-- Proposed later dashboard cleanup, **not implemented**: preserve one-click routes to native Moonlight and Web Gaming as a paired Play/Games group; keep Videos, Music, Files and Desktop prominent. Move lower-frequency Downloads into configurable Additional Services; keep Terminal, pairing, power actions and recovery under Manage Server. Let a user pin favorite optional services to the main dashboard rather than growing a fixed set of tiles.
+- Do **not** force a new six-tile dashboard on existing users; keep their current choice until edited. The app remains visually simple: compact text buttons, legible status and a restrained warm accent. Avoid ornamental art, icon-heavy cards, multiple decorative borders or a new theme framework.
 - Don't remove existing direct actions in a patch release without a migration and live usability tests, particularly on 1024×768 projector output.
 
 ## Studio references and microphone sampling
@@ -54,7 +54,7 @@ Consider an optional browser-hosted MIDI step sequencer and synthesizer:
 - Playback: generate audio **on the playing client** to avoid geographical network latency. The server stores musical data, not a live audio stream.
 - Hardware MIDI: optional extension dependent on browser and OS Web MIDI availability; never required for the first version.
 - Security: private/Tailscale access or another authenticated endpoint, no unauthenticated public write endpoint, no GitHub-backed pattern data.
-- Packaging: treat Studio as a separate service exposed under Additional Services, not part of the GTK executable. The launcher only opens it.
+- Packaging: Studio is a **standalone browser page**, like Jellyfin or MoonlightWeb. The launcher is a link and optional shortcut, not a wrapper around Studio's UI. There is **no need to match the application's skin to OPTIPLEX NOW**. Choose an established synth UI first; modify styling only where usability improves. Do not build it into the GTK executable.
 - Release separately with tests covering metronome timing, save/restore, schema migration, concurrent edits and fresh-client access.
 
 No Studio server, database, authentication, pattern sync, browser UI or synthesizer has been implemented in the current release candidate.

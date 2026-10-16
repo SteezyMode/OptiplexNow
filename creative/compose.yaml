@@ -1,0 +1,61 @@
+name: creative-suite
+services:
+  animation:
+    build:
+      context: .
+      dockerfile: onionskyn.Dockerfile
+    image: optiplex-creative-animation:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18771:8080"
+    security_opt:
+      - no-new-privileges:true
+  models:
+    build:
+      context: .
+      dockerfile: blockbench.Dockerfile
+    image: optiplex-creative-models:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18770:8080"
+    security_opt:
+      - no-new-privileges:true
+  previs:
+    build:
+      context: .
+      dockerfile: cozyclay.Dockerfile
+    image: optiplex-creative-previs:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18769:8080"
+    security_opt:
+      - no-new-privileges:true
+  hub:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18768:8080"
+    volumes:
+      - ./hub:/usr/share/nginx/html:ro
+    security_opt:
+      - no-new-privileges:true
+  recorder:
+    build:
+      context: .
+      dockerfile: audiomass.Dockerfile
+    image: optiplex-creative-recorder:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18766:8080"
+    security_opt:
+      - no-new-privileges:true
+  pixel:
+    build:
+      context: .
+      dockerfile: piskel.Dockerfile
+    image: optiplex-creative-pixel:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18767:8080"
+    security_opt:
+      - no-new-privileges:true

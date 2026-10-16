@@ -1,0 +1,38 @@
+name: Build OptiPlex Studio web tools
+on:
+  workflow_dispatch:
+  push:
+    branches: ['feature/creative-suite']
+    paths:
+      - 'creative/**'
+      - '.github/workflows/creative.yml'
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Studio hub, recorder, pixel editor, and 3D previs and 3D modeling
+        run: docker compose -f creative/compose.yaml build
+      - name: Run and smoke-check static frontend
+        run: |
+          set -euo pipefail
+          docker compose -f creative/compose.yaml up -d
+          trap 'docker compose -f creative/compose.yaml logs --tail 25; docker compose -f creative/compose.yaml down' EXIT
+          for port in 18766 18767 18768 18769 18770 18771; do
+            for i in $(seq 1 25); do
+              if curl --fail --silent http://127.0.0.1:$port/ > /tmp/creative-$port; then break; fi
+              sleep 1
+            done
+            grep -qi '<html' /tmp/creative-$port
+          done
+          curl -fsSI http://127.0.0.1:18766/main.css
+          curl -fsSI http://127.0.0.1:18767/
+          curl -fsSI http://127.0.0.1:18768/style.css
+          grep -q 'OPTIPLEX' /tmp/creative-18768
+          grep -q 'STUDIO' /tmp/creative-18768
+          curl -fsSI http://127.0.0.1:18769/app/
+          curl -fsSI http://127.0.0.1:18770/dist/bundle.js
+          grep -q '<title>Onionskyn' /tmp/creative-18771
+          echo 'Creative static service smoke checks passed'

@@ -29,15 +29,15 @@ jobs:
       - name: Test and build from the checked-out source
         run: |
           set -euo pipefail
-          python3 -m unittest discover -s tests -v
           make package
+          python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk
           mapfile -t pkgs < <(find dist -maxdepth 1 -name 'OptiPlex-Now_*_amd64.deb' -type f)
           test "${#pkgs[@]}" -eq 1
           package="${pkgs[0]}"
           version="$(dpkg-deb -f "$package" Version)"
           test "$version" = "1.13.0"
-          dpkg-deb --contents "$package" | grep -q '/usr/bin/optiplex-now'
+          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now'
           cp "$package" dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)
       - name: Publish one latest production release

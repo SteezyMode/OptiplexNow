@@ -47,6 +47,9 @@ extern gboolean gtk_status_icon_is_embedded(void*);
 extern void gtk_status_icon_position_menu(void*,int*,int*,gboolean*,void*);
 extern GtkWidget* gtk_menu_new(void);
 extern GtkWidget* gtk_menu_item_new_with_label(const char*);
+extern GtkWidget* gtk_check_button_new_with_label(const char*);
+extern void gtk_toggle_button_set_active(void*,gboolean);
+extern gboolean gtk_toggle_button_get_active(void*);
 extern GtkWidget* gtk_separator_menu_item_new(void);
 extern void gtk_menu_shell_append(void*,void*);
 extern void gtk_menu_popup(void*,void*,void*,void*,void*,guint,guint);
@@ -182,7 +185,7 @@ static int tray_restoring = 0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
 static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_free,*drive_combo;
-static GtkWidget *spec_values[7]={0},*spec_status=NULL;
+static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
 static char wolf_probe_host[512];
@@ -194,16 +197,24 @@ static Drive visible_drives[MAX_DRIVES];
 static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
 static char appimage_found[PATH_MAX];
+static void tray_build_menu(void);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
-static GtkWidget *tiles[6],*powers[4];
+static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 13
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","",""};
+#define CONFIG_COUNT 16
+#define FEATURED_MASK_SETTING 15
+#define ALL_SERVICES_MASK 511u
+#define NEW_INSTALL_FEATURED_MASK 207u
+#define EXISTING_INSTALL_FEATURED_MASK 255u
+#define TRAY_MASK_SETTING 13
+#define TRAY_ALL_BUTTONS 511u
+#define TRAY_DEFAULT_BUTTONS 255u
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -218,25 +229,25 @@ static const char *CSS =
 "window,dialog,assistant,scrolledwindow {background:#101111; color:#ece8e0;}"
 "#shell {background:#101111;}"
 "#setting {background:#1d201f; border:1px solid #414743;color:#ece8e0;padding:5px 11px;font-size:10px;font-weight:700;min-height:24px;border-radius:2px;}"
-"#setting:hover {background:#2a9d8f;color:#101111;border-color:#2a9d8f;}"
+"#setting:hover {background:#c47d65;color:#101111;border-color:#c47d65;}"
 "#title {font-family:'Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-1.4px;color:#ece8e0;}"
 "#state {color:#bcb8af;background:#202523;border:1px solid #515b56;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;}"
-"#state.online {color:#a1e2d7;border-color:#2a9d8f;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
+"#state.online {color:#e8c28f;border-color:#c47d65;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
 "#detail {font-size:10px;color:#aaa79e;}"
-"#rule {background:#555e58;min-height:1px;}"
+"#rule {background:#75534b;min-height:1px;}"
 "#section {font-weight:800;color:#b8b4ac;font-size:11px;letter-spacing:1px;}"
-"#metric {background:#171918;border:1px solid #444b46;color:#ece8e0;padding:12px 12px;font-size:12px;font-weight:700;}"
+"#metric {background:#171918;border:1px solid #444b46;color:#ece8e0;padding:8px 9px;font-size:12px;font-weight:700;}"
 "#drivemetric {background:#171918;border:1px solid #444b46;padding:8px 10px;}"
 "#storagehead {font-size:10px;font-weight:800;color:#b8b4ac;}"
 "#drivefree {font-size:11px;font-weight:700;color:#ece8e0;}"
 "#drivefree.warn {color:#e7aa82;}"
 "#drivecombo button {background:#1e211f;color:#ece8e0;border:1px solid #4d5650;border-radius:2px;padding:3px 7px;min-height:25px;font-size:11px;}"
-"#drivecombo button:hover {border-color:#2a9d8f;}"
-"#tile {background:#1e211f;color:#ece8e0;border:1px solid #48534d;border-radius:2px;padding:9px 12px;font-weight:800;font-size:15px;min-height:64px;border-bottom:2px solid #2a9d8f;}"
-"#tile:hover {background:#2a9d8f;color:#101111;} #tile:active {background:#86bfb5;}"
-"#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:10px 6px;font-weight:800;font-size:10px;min-height:39px;}"
-"#power:hover {background:#2a9d8f;color:#101111;}"
-"#danger {background:#171918;color:#ddaba5;border:1px solid #9c6b69;border-radius:2px;padding:10px 6px;font-weight:800;font-size:10px;min-height:39px;}"
+"#drivecombo button:hover {border-color:#c47d65;}"
+"#tile {background:#1e211f;color:#ece8e0;border:1px solid #554840;border-radius:2px;padding:6px 8px;font-weight:800;font-size:12px;min-height:43px;border-bottom:2px solid #c47d65;}"
+"#tile:hover {background:#b96b5e;color:#101111;} #tile:active {background:#e6aa77;}"
+"#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
+"#power:hover {background:#c47d65;color:#101111;}"
+"#danger {background:#171918;color:#ddaba5;border:1px solid #9c6b69;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
 "#danger:hover {background:#9d3543;color:#fafaf8;}"
 "#footer {font-size:11px;color:#b8b4ac;}"
 "dialog {background:#151716;} dialog label {color:#ece8e0;font-size:12px;}"
@@ -271,10 +282,31 @@ static void config_location(void) {
 static void config_load(void) {
  config_location();for(int i=0;i<CONFIG_COUNT;i++)safe_copy(cfg[i],512,defaults[i]);
  FILE*f=fopen(config_path,"r");if(!f){first_run=1;return;}
+ int has_featured=0;
  char line[1024]; while(fgets(line,sizeof line,f)){
    line[strcspn(line,"\r\n")]=0;char *eq=strchr(line,'=');if(!eq)continue;*eq++=0;
-   for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])) safe_copy(cfg[i],512,eq);
+   for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])){
+     safe_copy(cfg[i],512,eq);
+     if(i==FEATURED_MASK_SETTING)has_featured=1;
+   }
  }fclose(f);
+ /* Keep all eight prior dashboard buttons for upgrades, while fresh installs
+  * start with a six-button selection. Never lose a user's existing layout. */
+ if(!has_featured)snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",EXISTING_INSTALL_FEATURED_MASK);
+}
+/* Tray and featured selection are independent bitmasks. */
+static unsigned tray_button_mask(void) {
+ char *end=NULL;errno=0;
+ unsigned long value=strtoul(cfg[TRAY_MASK_SETTING],&end,10);
+ if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_DEFAULT_BUTTONS;
+ return (unsigned)value;
+}
+static unsigned featured_mask(void){
+ char *end=NULL;errno=0;
+ unsigned long value=strtoul(cfg[FEATURED_MASK_SETTING],&end,10);
+ if(errno||end==cfg[FEATURED_MASK_SETTING]||*end||value>ALL_SERVICES_MASK)
+   return EXISTING_INSTALL_FEATURED_MASK;
+ return (unsigned)value;
 }
 static void config_save(void) {
  update_model_heading();
@@ -292,8 +324,8 @@ static int valid_user(const char*s) {
 
 /* A portable connection preset deliberately excludes auth material and local paths.
    Never import/export SSH keys, browser preferences, or Moonlight pairing. */
-#define PRESET_COUNT 9
-static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10};
+#define PRESET_COUNT 10
+static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14};
 static int safe_wake_path(const char*s){
  if(!s||!*s)return 1;
  if(*s!='/'||strlen(s)>350)return 0;
@@ -314,6 +346,7 @@ static int safe_preset_values(char v[CONFIG_COUNT][512]){
  if(*v[3]&&!valid_user(v[3]))return 0;
  if(!safe_wake_path(v[4]))return 0;
  for(int i=5;i<=7;i++)if(!safe_preset_url(v[i]))return 0;
+ if(!safe_preset_url(v[14]))return 0;
  if(*v[10]&&v[10][0]!='/')return 0;
  for(int i=0;i<PRESET_COUNT;i++){
    const char*value=v[preset_indices[i]];
@@ -323,7 +356,7 @@ static int safe_preset_values(char v[CONFIG_COUNT][512]){
 }
 static int preset_read(const char*path,char v[CONFIG_COUNT][512]){
  FILE*f=fopen(path,"r");if(!f)return 0;
- char header[128]; if(!fgets(header,sizeof header,f)||strcmp(header,"# OptiPlex Now server preset v1\n")){fclose(f);return 0;}
+ char header[128]; if(!fgets(header,sizeof header,f)||strcmp(header,"# OptiPlex Now server preset v2 (v1 imports supported)\n")){fclose(f);return 0;}
  /* Never accept absolute AppImage/browser paths or unrecognized settings. */
  char line[1024];int found_host=0;
  while(fgets(line,sizeof line,f)){
@@ -617,7 +650,7 @@ static gboolean finish_on_main(void *arg) {
  }else if(r->type==6){
     if(spec_status)gtk_label_set_text(spec_status,r->success?"LIVE HARDWARE INVENTORY":"SERVER UNAVAILABLE. CHECK SSH / TAILSCALE");
     if(r->success){
-      for(int i=0;i<7;i++)if(spec_values[i])gtk_label_set_text(spec_values[i],*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
+      for(int i=0;i<8;i++)if(spec_values[i])gtk_label_set_text(spec_values[i],*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
     }
     specs_inflight=0;
  }else if(r->type==5){
@@ -855,24 +888,21 @@ static void open_moonlight(void){
 /* Directly connect the selected Moonlight client to the Steam application on Wolf.
  * Moonlight Qt supports: moonlight stream HOST APP. Preferences and pairing
  * are read from its own existing profile, preserving hardware decoding. */
-static void launch_steam(void){
+static void launch_wolf_app(const char *app){
  if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
  if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
  int mode=moonlight_mode();
- if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],"Steam",NULL};launch(args);}
- else if(mode==2){char *args[]={"moonlight","stream",cfg[0],"Steam",NULL};launch(args);}
- else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],"Steam",NULL};launch(args);}
- say("CONNECTING TO STEAM");
+ if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};launch(args);}
+ else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
+ else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
+ say("CONNECTING TO WOLF");
 }
-/* Connect the Desktop tile to Wolf's Studio desktop instead of SSH. */
-static void launch_studio_desktop(void){
- if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
- if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
- int mode=moonlight_mode();
- if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
- else if(mode==2){char *args[]={"moonlight","stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
- else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],"OptiPlex Studio Desktop",NULL};launch(args);}
- say("CONNECTING TO STUDIO DESKTOP");
+static void launch_steam(void){launch_wolf_app("Steam");}
+static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
+static void launch_torrents(void){
+ if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
+ char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
+ browser_open(url);
 }
 static void install_moonlight(void){
  if(!exists_program("flatpak")){
@@ -986,16 +1016,60 @@ static void open_remote_files(void){
  if(exists_program("gio")){char*args[]={"gio","open",url,NULL};launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
+static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+static void on_web_gaming_admin(void*w,void*p){
+ (void)w;(void)p;
+ if(!valid_host(cfg[0])||!valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
+ if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
+ char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
+ launch(args);
+ say("OPENING WEB GAMING ADMIN VIA SSH");
+}
+/* Open WebUI is the Bruiser front end; Ollama and SearXNG remain separate.
+ * Default to the user's configured host, not a machine-specific fixed IP. */
+static int bruiser_url(char *out,size_t cap,int admin){
+ char base[640];
+ if(*cfg[14]){
+   if(!safe_preset_url(cfg[14]))return 0;
+   safe_copy(base,sizeof base,cfg[14]);
+ }else{
+   if(!valid_host(cfg[0]))return 0;
+   snprintf(base,sizeof base,"http://%s:3000",cfg[0]);
+ }
+ size_t n=strlen(base);
+ while(n>0&&base[n-1]=='/')base[--n]=0;
+ if(admin)snprintf(out,cap,"%s/admin/settings",base);
+ else safe_copy(out,cap,base);
+ return 1;
+}
+static void on_bruiser_ai(void*w,void*p){
+ (void)w;(void)p;
+ char url[720];
+ if(!bruiser_url(url,sizeof url,0)){say("SET SERVER OR BRUISER URL IN SETTINGS");return;}
+ browser_open(url);
+}
+static void on_bruiser_admin(void*w,void*p){
+ (void)w;(void)p;
+ char url[720];
+ if(!bruiser_url(url,sizeof url,1)){say("SET SERVER OR BRUISER URL IN SETTINGS");return;}
+ browser_open(url);
+ say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
+}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
- }else if(n==1||n==2||n==4){int ix=n==1?5:n==2?6:7;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ }else if(n==1||n==2){int ix=n==1?5:6;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
- else if(n==5)launch_studio_desktop();
- else launch_ssh(0);
+ else if(n==5)launch_ssh(0);
+ else if(n==6)launch_desktop();
+ else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==8)on_bruiser_ai(NULL,NULL);
+ 
 }
 static void reflow(int width) {
- int cols=width>=720?3:2;
+ int cols=width>=600?4:2;
  int pcols=width>=560?4:2;
  if(cols==last_columns && pcols==last_power_columns)return;
  extern void gtk_container_remove(void*,void*);
@@ -1003,9 +1077,21 @@ static void reflow(int width) {
  extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
-   for(int i=0;i<6;i++){g_object_ref(tiles[i]);if(gtk_widget_get_parent(tiles[i]))gtk_container_remove(grid,tiles[i]);}
-   for(int i=0;i<6;i++){gtk_grid_attach(grid,tiles[i],i%cols,i/cols,1,1);g_object_unref(tiles[i]);}
+   /* Move each action to exactly one section without destroying its widget. */
+   for(int i=0;i<9;i++){
+     g_object_ref(tiles[i]);
+     void*parent=gtk_widget_get_parent(tiles[i]);
+     if(parent)gtk_container_remove(parent,tiles[i]);
+   }
+   unsigned featured=featured_mask();int primary=0,other=0;
+   for(int i=0;i<9;i++){
+     int chosen=(featured&(1u<<i))!=0;
+     int pos=chosen?primary++:other++;
+     gtk_grid_attach(chosen?grid:extras_grid,tiles[i],pos%cols,pos/cols,1,1);
+     g_object_unref(tiles[i]);
+   }
    gtk_widget_show_all(grid);
+   gtk_widget_show_all(extras_grid);
  }
  if(pcols!=last_power_columns){
    last_power_columns=pcols;
@@ -1204,7 +1290,7 @@ static int full_backup_ui(void*parent,int restore){
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
  int rc=backup_execute(restore,path,pw);explicit_bzero(pw,sizeof pw);
  if(rc==0){
-  if(restore){config_load();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
+  if(restore){config_load();last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);reflow(dimensions[2]>0?dimensions[2]:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
   else preset_alert(parent,"Backup saved","Encrypted backup saved. Keep your password safe and only restore on a trusted computer.");
  }else preset_alert(parent,"Backup failed",rc==-2?"Backup helper is missing. Reinstall OptiPlex Now.":
        "Backup failed. Check file, password, and permissions. No settings were intentionally reset.");
@@ -1224,7 +1310,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(gt,10);gtk_grid_set_row_spacing(gt,7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(advanced_grid,10);gtk_grid_set_row_spacing(advanced_grid,7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(advanced,advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads URL"};
+ const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Legacy Downloads URL (unused)"};
  GtkWidget*fields[8];
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
@@ -1249,8 +1335,37 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
+ add(col,label("OPTIONAL SERVICES","modalheading"),0);
+ add(col,label("Bruiser uses Open WebUI on SERVER:3000 by default. Override only if needed.","helper"),0);
+ GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(ai_entry,"Bruiser AI URL (http(s)://...)");
+ gtk_entry_set_text(ai_entry,cfg[14]);add(col,ai_entry,0);
  GtkWidget*games=button("GAMES SETUP","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
+ GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
+ g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
+ g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
+ g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
+ add(col,label("SHORTCUTS","modalheading"),0);
+ add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
+ GtkWidget*featured_checks[9],*tray_checks[9],*choices=gtk_grid_new();
+ gtk_grid_set_row_spacing(choices,5);gtk_grid_set_column_spacing(choices,18);
+ gtk_grid_attach(choices,label("SERVICE","storagehead"),0,0,1,1);
+ gtk_grid_attach(choices,label("PRIMARY","storagehead"),1,0,1,1);
+ gtk_grid_attach(choices,label("TRAY","storagehead"),2,0,1,1);
+ const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
+ unsigned fm=featured_mask(),tm=tray_button_mask();
+ for(int i=0;i<9;i++){
+   gtk_grid_attach(choices,label(service_names[i],NULL),0,i+1,1,1);
+   featured_checks[i]=gtk_check_button_new_with_label("");
+   tray_checks[i]=gtk_check_button_new_with_label("");
+   gtk_toggle_button_set_active(featured_checks[i],(fm&(1u<<i))!=0);
+   gtk_toggle_button_set_active(tray_checks[i],(tm&(1u<<i))!=0);
+   gtk_grid_attach(choices,featured_checks[i],1,i+1,1,1);
+   gtk_grid_attach(choices,tray_checks[i],2,i+1,1,1);
+ }
+ add(col,choices,0);
  add(col,advanced,0);
  PresetExportContext export_context={.parent=d,.disk=diskentry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
@@ -1270,7 +1385,21 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(combo);
    const char*disk=gtk_entry_get_text(diskentry);
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);config_save();say("SETTINGS SAVED");refresh();
+   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
+    const char*ai=gtk_entry_get_text(ai_entry);
+    if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
+    else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
+    unsigned selected=0,featured=0;
+    for(int i=0;i<9;i++){
+      if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
+      if(gtk_toggle_button_get_active(featured_checks[i]))featured|=1u<<i;
+    }
+    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
+    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+    config_save();tray_build_menu();
+    last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);
+    reflow(dimensions[2]>0?dimensions[2]:660);
+    say("SETTINGS SAVED");refresh();
  }
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
@@ -1292,7 +1421,7 @@ static void wizard_save(Wizard*c){
    if(strchr(values[i],'\n')||strchr(values[i],'\r'))return;
    safe_copy(cfg[i],512,values[i]);
  }
- if(c->preset_loaded)safe_copy(cfg[10],512,c->staged[10]);
+ if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(c->service_inputs[i]);
    if(safe_preset_url(url))safe_copy(cfg[5+i],512,url);
@@ -1549,6 +1678,7 @@ static void tray_action(void *widget,void *data){
  else if(action==12){tray_show_window();on_system_info(NULL,NULL);}
  else if(action==13)tray_quit(NULL,NULL);
  else if(action==14)on_restart_streaming(NULL,NULL);
+ else if(action==8)on_bruiser_ai(NULL,NULL);
  else {
    if(action==0 && !has_moonlight())tray_show_window();
    on_tile(NULL,(void*)(long)action);
@@ -1566,15 +1696,20 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(tray_menu,NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
-static void tray_initialize(void){
+static void tray_build_menu(void){
+ GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
- tray_menu_item("Open OptiPlex Now",10);tray_separator();
- tray_menu_item("Games  |  Steam",0);
- tray_menu_item("Videos",1);
- tray_menu_item("Music",2);
- tray_menu_item("Files",3);
- tray_menu_item("Downloads",4);
- tray_menu_item("Terminal",5);
+ tray_menu_item("Open OptiPlex Now",10);
+ unsigned mask=tray_button_mask();
+ if(mask){
+  tray_separator();
+  static const char*captions[]={
+   "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
+   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI",
+    "Bruiser AI  |  Optional"
+  };
+  for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+ }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);
  tray_separator();
@@ -1582,7 +1717,11 @@ static void tray_initialize(void){
  tray_menu_item("Settings",11);
  tray_separator();tray_menu_item("Quit",13);
  gtk_widget_show_all(tray_menu);
-
+ if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
+ if(old)gtk_widget_destroy(old);
+}
+static void tray_initialize(void){
+ tray_build_menu();
  /* Only publish an SNI icon when a desktop is actually listening for it. */
  if(status_notifier_watcher_present()){
    indicator_library=dlopen("libayatana-appindicator3.so.1",RTLD_LAZY|RTLD_LOCAL);
@@ -1595,7 +1734,6 @@ static void tray_initialize(void){
      if(new_indicator && app_indicator_set_status_fn && app_indicator_set_menu_fn){
        app_indicator=new_indicator("optiplex-now","optiplex-now-tray",0);
        if(app_indicator){
-         /* Keep the stable application ID; set a human-readable tray title when supported. */
          if(set_indicator_title)set_indicator_title(app_indicator,"OptiPlex Now");
          app_indicator_set_menu_fn(app_indicator,tray_menu);
          app_indicator_set_status_fn(app_indicator,1); /* ACTIVE */
@@ -1635,7 +1773,7 @@ int main(int argc,char**argv) {
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(cp,CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),cp,GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
- win=gtk_window_new(0);gtk_window_set_title(win,"OptiPlex Now");gtk_window_set_default_size(win,690,605);
+ win=gtk_window_new(0);gtk_window_set_title(win,"OptiPlex Now");gtk_window_set_default_size(win,660,505);
  gtk_window_set_icon_name(win,"optiplex-now");gtk_window_set_position(win,1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
@@ -1643,7 +1781,7 @@ int main(int argc,char**argv) {
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
  GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(sc,1,1);gtk_container_add(win,sc);
  GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");gtk_container_add(sc,shell);
- GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(body,20);add(shell,body,1);
+ GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(body,14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
  model_heading=label(current_model(),"title");
@@ -1668,17 +1806,22 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(metrics,diskbox,2,0,1,1);
- grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,10);gtk_grid_set_column_spacing(grid,10);
+ add(body,label("PRIMARY ACTIONS","section"),0);
+ grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL"};
- for(int i=0;i<6;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
+ extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(extras_grid,1);
+ gtk_grid_set_row_spacing(extras_grid,7);gtk_grid_set_column_spacing(extras_grid,7);
+ gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(extras,extras_grid);
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI"};
+ for(int i=0;i<9;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
- power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,9);gtk_grid_set_row_spacing(power_grid,9);
+ power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
  gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);
  const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);
- reflow(690);
+ reflow(660);
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();
  if(!start_in_tray || first_run)gtk_widget_show_all(win);

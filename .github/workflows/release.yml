@@ -36,7 +36,7 @@ jobs:
           test "${#pkgs[@]}" -eq 1
           package="${pkgs[0]}"
           version="$(dpkg-deb -f "$package" Version)"
-          test "$version" = "1.11.10"
+          test "$version" = "1.13.0"
           dpkg-deb --contents "$package" | grep -q '/usr/bin/optiplex-now'
           cp "$package" dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)
@@ -46,20 +46,21 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          version="1.11.10"
+          version="1.13.0"
           tag="v${version}"
           if gh release view "$tag" >/dev/null 2>&1; then
             echo "Release ${tag} exists; refusing to rewrite an existing published version" >&2
             exit 1
           fi
           cat > release-notes.md <<'NOTES'
-          OptiPlex Now 1.11.10 maintenance release.
+          OptiPlex Now 1.13.0 release.
 
-          - Desktop tile launches the existing Wolf OptiPlex Studio Desktop through Moonlight.
-          - AppIndicator uses the readable “OptiPlex Now” display title, where supported.
+          - The Desktop tile launches Wolf's existing OptiPlex Studio Desktop application.
+          - AppIndicator uses the readable 'OptiPlex Now' display title where supported.
+          - Includes configurable shortcuts, web gaming access, and optional server utilities from 1.12 development.
           - Steam continues to launch Wolf's existing Steam application.
           - Installer is rebuilt and validated from the release source commit.
 
           Requires your existing Tailscale, Wolf, and remote services. It does not install or modify those services.
           NOTES
-          gh release create "$tag"             dist/OptiPlex-Now_1.11.10_amd64.deb             dist/OptiPlex-Now_amd64.deb             dist/SHA256SUMS             --target "$GITHUB_SHA"             --title "OptiPlex Now 1.11.10"             --notes-file release-notes.md             --latest
+          gh release create "$tag"             dist/OptiPlex-Now_1.13.0_amd64.deb             dist/OptiPlex-Now_amd64.deb             dist/SHA256SUMS             --target "$GITHUB_SHA"             --title "OptiPlex Now 1.13.0"             --notes-file release-notes.md             --latest

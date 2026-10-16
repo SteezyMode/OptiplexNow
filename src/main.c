@@ -997,7 +997,15 @@ static void open_remote_files(void){
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
-static void on_web_gaming_admin(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/admin");}
+static void on_web_gaming_admin(void*w,void*p){
+ (void)w;(void)p;
+ if(!valid_host(cfg[0])||!valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
+ if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
+ char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
+ launch(args);
+ say("OPENING WEB GAMING ADMIN VIA SSH");
+}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);

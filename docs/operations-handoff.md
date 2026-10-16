@@ -60,7 +60,7 @@ Then open `https://127.0.0.1:18443/admin`. This uses SSH authorization rather th
 
 ## Optional Bruiser AI
 
-The owner confirms **Bruiser AI is operational** on the reference OptiPlex. Open WebUI and SearXNG containers were observed as running; the exact browser URL and inference service/model were not captured in this session. The draft 1.12.0 client adds `ai_url` as an optional setting and a collapsed Additional Services shortcut. This is a browser launcher only and is not an AI deployment or GPU scheduler. A possible Studio MIDI sequencer with shared save slots is a **design proposal only**, documented in [application-design.md](application-design.md).
+The owner confirms **Bruiser AI is operational** on the reference OptiPlex. Prior setup: Open WebUI `SERVER:3000`, host Ollama `:11434`, Docker SearXNG `:8080`. Container health was observed on 2026-10-16; port exposure and active model were not rechecked. Draft 1.12.0 derives the default Bruiser URL from the configured server host as `http://SERVER:3000`, with an optional `ai_url` override; Settings → Bruiser AI Admin opens Open WebUI `/admin/settings` and requires the existing admin login. This does not bypass authorization or maintain the AI containers. Validate LAN/Tailscale browser access on the actual client before release. A possible Studio synth/step sequencer with shared save slots is a **design proposal only**, documented in [application-design.md](application-design.md).
 
 ## Client identity backup
 

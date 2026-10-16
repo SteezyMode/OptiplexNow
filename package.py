@@ -3,7 +3,7 @@ from pathlib import Path
 import shutil, subprocess
 root=Path(__file__).resolve().parent
 out=root/'dist'; out.mkdir(exist_ok=True)
-pkg=root/'build/pkg/optiplex-now_1.11.9_amd64'
+pkg=root/'build/pkg/optiplex-now_1.11.10_amd64'
 if pkg.exists(): shutil.rmtree(pkg)
 for sub in ('DEBIAN','usr/bin','usr/lib/optiplex-now','usr/share/applications','usr/share/doc/optiplex-now'):
  (pkg/sub).mkdir(parents=True,exist_ok=True)
@@ -51,7 +51,7 @@ shutil.copy2(root/'OFL-1.1.txt',pkg/'usr/share/doc/optiplex-now/OFL-1.1.txt')
 Replaces: optiplex-desk
 Conflicts: optiplex-desk
 Provides: optiplex-desk
-Version: 1.11.9
+Version: 1.11.10
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -61,4 +61,4 @@ Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, direct Steam streaming, live hardware info and encrypted backup.
 ''')
-subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.11.9_amd64.deb')],check=True)
+subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.11.10_amd64.deb')],check=True)

@@ -12,7 +12,7 @@ KEEP=14
 
 [[ "$(id -un)" == "optiplex" ]] || { echo "ERROR: run as optiplex, not root" >&2; exit 1; }
 [[ -d "$SOURCE" && ! -L "$SOURCE" ]] || { echo "ERROR: StudioProjects missing or symlinked" >&2; exit 1; }
-[[ "$(findmnt --mountpoint "$DRIVE" --no FSTYPE 2>/dev/null)" == "ext4" ]] || {
+[[ "$(findmnt --mountpoint "$DRIVE" -n -o FSTYPE 2>/dev/null)" == "ext4" ]] || {
   echo "ERROR: /mnt/2TB is not an ext4 mount; refusing to write to system disk" >&2
   exit 1
 }

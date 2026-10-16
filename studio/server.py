@@ -1,5 +1,6 @@
 """Self-hosted Studio: static UltraBox + authenticated, revisioned song saves."""
 import hmac, json, os, re, sqlite3, threading, time
+from contextlib import closing
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -49,20 +50,17 @@ class Handler(SimpleHTTPRequestHandler):
         if path.startswith("/api/"):
             if not self.guard(): return
             if path=="/api/projects":
-                with database() as db:
+                with closing(database()) as db:
                     rows=db.execute("SELECT id,name,revision,updated FROM projects ORDER BY updated DESC").fetchall()
                 return self.send_json(200,{"projects":[dict(id=r[0],name=r[1],revision=r[2],updated=r[3]) for r in rows]})
             match=re.fullmatch(r"/api/projects/([1-9][0-9]{0,10})",path)
             if match:
-                with database() as db:
+                with closing(database()) as db:
                     row=db.execute("SELECT id,name,song,revision,updated FROM projects WHERE id=?",(int(match[1]),)).fetchone()
                 if row: return self.send_json(200,dict(id=row[0],name=row[1],song=row[2],revision=row[3],updated=row[4]))
             return self.send_json(404,{"error":"Project not found"})
         if path.endswith((".env",".sqlite3",".py",".ts")):
             return self.send_error(404)
-        if path in ("/","/index.html","/service_worker.js"):
-            self.path=path
-            self.send_response(200) if False else None
         return super().do_GET()
 
     def do_POST(self):
@@ -80,7 +78,7 @@ class Handler(SimpleHTTPRequestHandler):
             if pid is not None and (not isinstance(pid,int) or isinstance(pid,bool) or pid<1): raise ValueError("Invalid ID")
         except (ValueError,TypeError,KeyError,json.JSONDecodeError) as e:
             return self.send_json(400,{"error":str(e)})
-        with LOCK, database() as db:
+        with LOCK, closing(database()) as db:
             stamp=int(time.time())
             if pid is None:
                 if rev!=0:return self.send_json(409,{"error":"New projects need revision 0"})

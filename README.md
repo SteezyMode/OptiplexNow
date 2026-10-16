@@ -2,11 +2,11 @@
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
-**Current version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+**Current version: 1.11.10. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Install
 
-[Download OptiPlex Now 1.11.9](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+[Download OptiPlex Now 1.11.10](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
 
 ```sh
 sudo apt install ./OptiPlex-Now_amd64.deb
@@ -29,6 +29,8 @@ The Tailscale picker lists devices; it does not install services or grant access
 ## Features
 
 - Launch the Steam application advertised by Wolf through Moonlight.
+- Open the Wolf OptiPlex Studio Desktop from the Desktop tile.
+- Show the readable OptiPlex Now name in supporting system trays.
 - Open video, music and download services in the browser.
 - Browse server files over SFTP and open an SSH terminal.
 - View server hardware and status; wake, sleep, restart or shut down the host when configured.

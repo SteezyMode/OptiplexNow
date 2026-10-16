@@ -49,7 +49,7 @@ class AdminTunnelTests(unittest.TestCase):
                 self.assertEqual(cmd[0], "ssh")
                 self.assertIn("-L", cmd)
                 forward = cmd[cmd.index("-L") + 1]
-                self.assertRegex(forward, r"^127\\.0\\.0\\.1:\\d+:127\\.0\\.0\\.1:8443$")
+                self.assertRegex(forward, r"^127\.0\.0\.1:\d+:127\.0\.0\.1:8443$")
 
     def test_no_browser_when_ssh_fails(self):
         with tempfile.TemporaryDirectory() as tmp:

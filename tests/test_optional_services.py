@@ -17,6 +17,18 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn('gtk_expander_new("ADDITIONAL SERVICES")', SOURCE)
         self.assertIn('button("BRUISER AI","setupaction")', SOURCE)
 
+    def test_optional_tray_entry_is_individually_opt_in(self):
+        self.assertIn("#define TRAY_ALL_BUTTONS 511u", SOURCE)
+        self.assertIn("#define TRAY_DEFAULT_BUTTONS 255u", SOURCE)
+        self.assertIn('"tray_buttons","ai_url"', SOURCE)
+        self.assertIn('"Web Gaming","Bruiser AI"', SOURCE)
+        self.assertIn("GtkWidget*tray_checks[9]", SOURCE)
+        self.assertIn("for(int i=0;i<9;i++)if(gtk_toggle_button_get_active(tray_checks[i]))", SOURCE)
+        self.assertIn("for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);", SOURCE)
+        self.assertIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
+        # Existing installations start with eight enabled shortcuts and Bruiser off.
+        self.assertIn('"255",""', SOURCE)
+
     def test_ai_url_is_optional_and_configured_not_hardcoded(self):
         self.assertIn('"tray_buttons","ai_url"', SOURCE)
         self.assertIn("if(!safe_preset_url(cfg[14])||!*cfg[14])", SOURCE)

@@ -10,6 +10,20 @@ OptiPlex Now is a personal Linux client to launch, access and maintain services 
 
 **Optional applications** go inside the collapsed Additional Services section, not a ninth primary tile. Removing one server component must not break the launcher or the core streaming flow. Store per-service URLs as configuration, not compiled host/IP constants. Browsers handle their own sessions. Exported non-secret connection presets may carry clean URLs, but never tokens/passwords.
 
+## Tray and dashboard rules
+
+- Every optional **Additional Services** entry must have its own Settings → Tray Menu Shortcuts checkbox. Turning one on adds its direct shortcut; turning it off removes that entry without affecting other options.
+- The existing eight main actions keep their established tray selection behavior. The draft 1.12.0 adds a ninth **Bruiser AI** checkbox, off by default; existing `tray_buttons=255` remains valid.
+- New optional services such as Studio must implement the same opt-in tray behavior before being added. No optional service should be automatically pinned to the tray just because it is installed server-side.
+- Proposed later dashboard cleanup, **not implemented**: preserve one-click routes to native Moonlight and Web Gaming as a paired Play/Games group; keep Videos, Music, Files and Desktop prominent. Move lower-frequency Downloads into configurable Additional Services; keep Terminal, pairing, power actions and recovery under Manage Server. Let a user pin favorite optional services to the main dashboard rather than growing a fixed set of tiles.
+- Don't remove existing direct actions in a patch release without a migration and live usability tests, particularly on 1024×768 projector output.
+
+## Studio references and microphone sampling
+
+Possible implementation references (not audited or integrated): [VAST G1-J8](https://github.com/status201/vast-websynth) offers a synth, melodic/drum sequencers, microphone-to-sampler recording, stutter and tape stop; [mloop](https://github.com/gdamdam/mloop) offers mic/line-in loop recording, pads, step sequencing, reverse and tape degradation; BeepBox/JummBox are mature examples of low-friction pattern composition but lack the same direct recorded-sample workflow.
+
+Pick-up-and-play goal: preset or demo song plays immediately; 16-step hardware-style flow; record a sound from local mic in one deliberate action, trim and assign it to a pad/step, add retrigger/stutter and tape delay/stop. Avoid opening a DAW-sized panel on launch. Sample playback and Web Audio synthesis run locally in the client browser; server persistence must separately sync patterns **and the referenced audio samples**, with authentication, versioning and backup. Browser mic permission requires a secure origin (e.g., HTTPS with trusted certificate, or localhost), not an insecure remote LAN URL.
+
 ## Bruiser AI
 
 Operational on the reference OptiPlex according to the owner. Open WebUI and SearXNG containers were observed, but the exact browser endpoint and inference backend were not inventoried.

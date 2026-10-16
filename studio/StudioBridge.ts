@@ -4,8 +4,8 @@ import { Config } from "../synth/SynthConfig";
 import { Note, Pattern } from "../synth/synth";
 import { SongDocument } from "./SongDocument";
 import { SongEditor } from "./SongEditor";
-import { ChangeSequence } from "./Change";
-import { ChangeEnsurePatternExists, ChangeNoteAdded } from "./changes";
+import { ChangeGroup, ChangeSequence } from "./Change";
+import { ChangeEnsurePatternExists, ChangeNoteAdded, ChangeEQFilterSimpleCut, ChangeEchoSustain } from "./changes";
 
 type Project = { id: number; name: string; revision: number; song: string };
 const SESSION_PROJECT = "studio.currentProject";
@@ -228,10 +228,14 @@ export function mountStudio(doc: SongDocument, editor: SongEditor): void {
                 inst.eqFilterSimpleCut=original.cut;
                 inst.echoSustain=original.echo;
             }else{
-                // Commit the current instrument state to UltraBox's URL-based undo history.
-                doc.record(new ChangeSequence()); // A no-op change doesn't serialize.
-                // Trigger history update with actual UltraBox change objects on release.
-                // See future Studio milestone for touch gesture recording into modulation lanes.
+                // Commit one browser-history entry for the complete XY gesture.
+                // UltraBox's native changes update its instrument, notifier and URL.
+                if(doc.channel===original.channel && doc.getCurrentInstrument()===original.instrument){
+                    const both=new ChangeGroup();
+                    both.append(new ChangeEQFilterSimpleCut(doc,original.cut,inst.eqFilterSimpleCut));
+                    both.append(new ChangeEchoSustain(doc,original.echo,inst.echoSustain));
+                    doc.record(both);
+                }
             }
             doc.notifier.changed();
         }

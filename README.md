@@ -1,18 +1,18 @@
 # OptiPlex Now
 
-**Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.12.0 work. The handoff separates verified observations from planned features.
+**Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.13.0 work. The handoff separates verified observations from planned features.
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
-**Current released version: 1.11.9. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+**Current version: 1.13.0. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Development
 
-The 1.12.0 draft branch adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an optional Bruiser AI shortcut under Additional Services, automatically opening Open WebUI on the configured server's port 3000 unless overridden. Settings contains a separate Bruiser AI Admin shortcut. Settings now lets you choose any of the nine service actions as Primary Actions or move them into Additional Services, independently of tray shortcuts. Existing installs keep their previous eight featured actions; fresh installs start with six. Downloads still launches VueTorrent. The branch has CI builds, but production installation and end-to-end tests are still pending. See [application structure](docs/application-design.md).
+Version 1.13.0 adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an optional Bruiser AI shortcut under Additional Services, automatically opening Open WebUI on the configured server's port 3000 unless overridden. Settings contains a separate Bruiser AI Admin shortcut. Settings now lets you choose any of the nine service actions as Primary Actions or move them into Additional Services, independently of tray shortcuts. Existing installs keep their previous eight featured actions; fresh installs start with six. Downloads still launches VueTorrent. Automated build checks do not replace on-device end-to-end tests. See [application structure](docs/application-design.md).
 
 ## Install
 
-[Download OptiPlex Now 1.11.9](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+[Download OptiPlex Now 1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
 
 ```sh
 sudo apt install ./OptiPlex-Now_amd64.deb
@@ -34,7 +34,7 @@ The Tailscale picker lists devices; it does not install services or grant access
 
 ## Features
 
-- Launch Steam or XFCE directly through Moonlight; the Desktop shortcut uses Wolf's XFCE application.
+- Launch Steam or OptiPlex Studio Desktop directly through Moonlight; the Desktop shortcut uses Wolf's OptiPlex Studio Desktop application.
 - Open the existing Downloads shortcut in VueTorrent using the configured server host on port 8085 (requires qBittorrent/VueTorrent installed on that server).
 - Open video, music and download services in the browser.
 - Browse server files over SFTP and open an SSH terminal.

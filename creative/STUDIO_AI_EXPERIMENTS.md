@@ -4,7 +4,15 @@
 
 ## Goal
 
-Give Bruiser an opt-in, project-aware assistant role across the Studio suite (especially native Godot), and enable optional Suno-like local audio generation without breaking gaming/video encoding or overloading the RTX 3050 LP 6 GB, power-capped to 55 W.
+Design **optional** AI support. Prefer ChatGPT Plus–authenticated **Codex CLI** for serious game development in Godot and procedural models in Blender. Bruiser remains independent, primarily a private/offline fallback. Explore Suno-like local audio generation later when hardware or inference efficiency makes it worthwhile. There is only one user, who explicitly **will not game and run Bruiser or generation concurrently**; no simultaneous gaming+AI load budget is necessary.
+
+## Agreed architecture (optional, not v1 release blocker)
+
+- **Codex CLI**: first-choice development agent. Authenticate via the existing ChatGPT Plus account; normal OpenAI API usage is separately billed, so don't embed arbitrary API usage behind a Studio website and assume it is included. Limit filesystem access to a dedicated Godot/Blender project workspace, with Git backups and approval for writes. Codex does not require a local LLM.
+- **Godot integration**: test MCP bridge with exact Godot editor build and an expendable project first; verify running/editing/headless checks in isolated Studio desktop.
+- **Blender integration**: use Blender Python for reliable deterministic parametric geometry and GLB export first. Evaluate a Blender MCP editor bridge only after testing it; do not assume every model or prompt yields production-quality meshes. Generated assets stay editable and exportable to Godot.
+- **Bruiser**: separate optional local assistant. Do not route Codex through Bruiser or require it for Studio launch.
+- **Local music / AI graphics**: long-term experiments rather than requirements. No purchase or auto-install mandated. Disable auto-start for models; start only when wanted; unload after use.
 
 ## Existing Bruiser architecture
 
@@ -27,14 +35,14 @@ Prior testing used Ollama/Open WebUI and Qwen3.5 9B IQ4_XS / 8K context. Verify 
 
 ## Local music generation: priority 2 / opt-in GPU worker
 
-**Preferred candidate:** https://github.com/ace-step/ACE-Step-1.5 (MIT; verify model weight restrictions). Source docs:
+**Deferred candidate, not approved for installation:** https://github.com/ace-step/ACE-Step-1.5 (MIT; verify model weight restrictions). Source docs:
 - https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/GPU_COMPATIBILITY.md
 - https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/API.md
 - https://github.com/ace-step/ACE-Step-1.5/blob/main/docs/en/ace_step_musicians_guide.md
 
 Features reported upstream: text-to-music with vocals/lyrics, instrumentals, remix, reference audio, repaint specific region, extended layering and extraction in non-turbo variants. API has queue/task IDs, async polling, and WAV/MP3/FLAC output. Do not call every advanced feature available in low-memory turbo mode without testing.
 
-Memory: documented low-VRAM modes using INT8/CPU and DiT offloading. RTX 3050 LP has nominal 6GB VRAM but only 55 W cap and is also Wolf/NVENC server GPU. Do not extrapolate RTX3090 benchmark speed to this machine. At <=6GB docs recommend DiT-only model (LM disabled); Bruiser can generate **text prompts and lyric structures** separately rather than loading ACE's own LM. Disable GPU generation while interactive streaming is active; serialize queue max 1, with idle unload, timeouts, resource and storage quotas. Protect local API with auth; do not expose raw Gradio/API externally. Budget ~10GB+ for core model downloads plus generation artifacts; storage files on StudioProjects and backups.
+Memory: documented low-VRAM modes using INT8/CPU and DiT offloading. RTX 3050 LP has nominal 6GB VRAM but only 55 W cap and is also Wolf/NVENC server GPU. Do not extrapolate RTX3090 benchmark speed to this machine. At <=6GB docs recommend DiT-only model (LM disabled); Bruiser can generate **text prompts and lyric structures** separately rather than loading ACE's own LM. Since the sole user will not run Bruiser/music generation and games concurrently, support a simple stop/start workflow rather than complex concurrent scheduling. Still serialize jobs, set timeouts/quotas and unload GPU memory before gaming. Protect local API with auth; do not expose raw Gradio/API externally. Budget ~10GB+ for core model downloads plus generation artifacts; storage files on StudioProjects and backups.
 
 Alternatives / rationale:
 - https://github.com/facebookresearch/audiocraft MusicGen-small: accessible short instrumentals; less Suno-like. Larger MusicGen models recommend 16GB VRAM.
@@ -45,8 +53,8 @@ Alternatives / rationale:
 
 ## Intended workflow
 
-1. User prompts Studio Music AI (e.g. '90s-style survival horror save-room theme, low strings, 72 BPM, instrumental, 30s').
-2. Bruiser (or a thin deterministic app endpoint) formats captions / lyrics / duration.
+1. User prompts an optional Studio Music AI (e.g. '90s-style survival horror save-room theme, low strings, 72 BPM, instrumental, 30s').
+2. A plain deterministic form or opt-in AI service formats caption / lyrics / duration; Bruiser is not required.
 3. A **single optional** ACE-Step job is enqueued when server has GPU capacity.
 4. Job emits one or more real audio files, metadata, model version, settings and seed to `/home/optiplex/StudioProjects/Exports/`.
 5. Studio provides playback, download and import into AudioMass / openDAW. A WAV is **not** automatically editable MIDI or synth notes: instrument separation and note transcription are separate tasks with imperfect fidelity.
@@ -56,7 +64,8 @@ Alternatives / rationale:
 
 - Browser/SSH/game streaming all stay functional when AI is stopped or crashes.
 - Image retains editable Godot/Krita after a session disconnect; project save/load roundtrip with correct file ownership and backup restore.
-- Bruiser can correctly inspect and diagnose a sample Godot project using local docs and read-only tools.
+- Codex can inspect and diagnose a sample Godot project using local docs and read-only tools; test a Blender Python-created GLB imported by Godot.
+- Bruiser can optionally do read-only checks, but is not required for release.
 - One reversible code/scene edit passes Godot headless validation, review and rollback.
 - ACE-Step starts **on demand**, outputs a valid audio file, records generation time/peak VRAM/RAM/GPU power, saves to persistent location, stops/unloads fully, does not crash Wolf or stall NVENC during gaming.
 - No unprotected public endpoints, no raw full server access, no unauthorized file edits.

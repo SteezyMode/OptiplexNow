@@ -10,7 +10,7 @@ Immediate steps:
 3. Verify the web admin shortcut uses the current configured server host, not `games.monumentrisk.com/admin`, and that old tunnels are not confused with changed server identities.
 4. Verify the build on the actual MacBook/mac mini and test rollback before merging/releasing.
 5. Add private MoonlightWeb token to **versioned encrypted** client backup and implement browser reauthentication after expiry; neither is currently implemented.
-6. Create and test a read-only, secret-free server configuration drift monitor. Do not auto-push snapshots containing credentials to GitHub.
+6. Test Bruiser URL from default SERVER:3000, the optional ai_url override, and Settings → Bruiser AI Admin (/admin/settings) with an authorized admin user. Confirm Ollama and SearXNG separately if troubleshooting AI. Create and test a read-only, secret-free server drift monitor; never auto-push credentials to GitHub.
 7. Later: stable server discovery, fresh-server provisioning, modular service installation, recovery checks. Studio MIDI sequencer/synth with centrally stored cross-client save slots is only a proposal; do not confuse it with shipped features.
 
 Production safety: preserve Docker volumes, `/etc/wolf`, music stack and browser auth state. Never commit token files, SSH/Moonlight keys, `.onb` backups, VPN env files or passwords. Give one Linux command at a time when troubleshooting.

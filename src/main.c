@@ -883,7 +883,7 @@ static void open_moonlight(void){
  if(mode==1){char*args[]={(char*)find_appimage(),NULL};launch(args);say("MOONLIGHT APPIMAGE OPENED");}
  else if(mode==2){char*args[]={"moonlight",NULL};launch(args);say("MOONLIGHT OPENED");}
  else if(mode==3){char*args[]={"flatpak","run","com.moonlight_stream.Moonlight",NULL};launch(args);say("MOONLIGHT OPENED");}
- else say("CHOOSE AN APPIMAGE OR INSTALL MOONLIGHT IN GAMES SETUP");
+ else say("CHOOSE AN APPIMAGE OR INSTALL MOONLIGHT IN STREAMING SETTINGS");
 }
 /* Directly connect the selected Moonlight client to the Steam application on Wolf.
  * Moonlight Qt supports: moonlight stream HOST APP. Preferences and pairing
@@ -959,7 +959,7 @@ static void on_restart_streaming(void *w, void *parent) {
  extern void gtk_dialog_set_default_response(void*,gint);
  gtk_dialog_set_default_response(d,RESPONSE_CANCEL);
  GtkWidget*area=gtk_dialog_get_content_area(d);
- GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The OptiPlex itself will stay on.");
+ GtkWidget*msg=gtk_label_new("This disconnects active streaming sessions.\nSave your work before continuing. The OptiPlex stays on.");
  gtk_container_set_border_width(area,20);gtk_label_set_line_wrap(msg,1);gtk_container_add(area,msg);
  gtk_widget_show_all(d);int response=gtk_dialog_run(d);gtk_widget_destroy(d);
  if(response!=RESPONSE_OK)return;
@@ -969,7 +969,7 @@ static void on_restart_streaming(void *w, void *parent) {
 }
 
 static void on_games_setup(void*w,void*p){(void)w;
- GtkWidget*d=gtk_dialog_new_with_buttons("Games",p?p:win,1,"CLOSE",RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("Streaming Settings",p?p:win,1,"CLOSE",RESPONSE_CANCEL,NULL);
  gtk_window_set_default_size(d,440,290);
  GtkWidget*area=gtk_dialog_get_content_area(d);
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,11);
@@ -977,7 +977,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(address,text);add(col,address,0);
- add(col,label("Games launches Steam directly. Open Moonlight here for setup.","helper"),0);
+ add(col,label("Moonlight streams games and desktops. The Games shortcut launches Steam.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
@@ -1339,7 +1339,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,label("Bruiser uses Open WebUI on SERVER:3000 by default. Override only if needed.","helper"),0);
  GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(ai_entry,"Bruiser AI URL (http(s)://...)");
  gtk_entry_set_text(ai_entry,cfg[14]);add(col,ai_entry,0);
- GtkWidget*games=button("GAMES SETUP","setupaction");
+ GtkWidget*games=button("STREAMING SETTINGS","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
@@ -1705,7 +1705,7 @@ static void tray_build_menu(void){
   tray_separator();
   static const char*captions[]={
    "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
-   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI",
+   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  Studio","Web Gaming  |  Wolf UI",
     "Bruiser AI  |  Optional"
   };
   for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);

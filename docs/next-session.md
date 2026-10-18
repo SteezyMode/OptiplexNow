@@ -1,16 +1,27 @@
-# Next session
+# Next session — OptiPlex NOW
+Updated: **2026-10-19 JST**. This replaces the obsolete Oct 16 assertion that v1.11.9 is current and v1.12.0 is unreleased.
 
-Project: personal OptiPlex Now Linux launcher + home server. Start with [operations-handoff.md](operations-handoff.md) for the as-observed 2026-10-16 service inventory, authentication, backup scope, recovery procedures, and outstanding tests, and [application-design.md](application-design.md) for the core/optional service boundary and Studio proposal. Also see [server-setup.md](server-setup.md).
+## Read first
+- **[Current Status](CURRENT-STATUS.md)** — current published release, active PRs, product boundaries and near-term roadmap.
+- **[Operations Handoff](operations-handoff.md)** — historical Oct 16 server, Docker, auth and recovery inventory. Do not read historical version statements as current.
+- **[Application Design](application-design.md)** — NOW feature architecture and earlier feature proposals, with updated Studio boundary note.
 
-Repository: `SteezyMode/OptiplexNow`. `main` is released 1.11.9. Draft PR #1 / `feature/wolf-driver-maintenance` is an unreleased 1.12.0 candidate. It includes Wolf driver maintenance (not live-tested), Web Gaming and Web Gaming Admin, an SSH loopback admin helper (not packaged-client-tested), and an optional Bruiser AI shortcut/configuration. The client now supports independent Primary and Tray checkboxes for all nine actions; previously installed clients retain eight featured actions until reconfigured, and new installs default to six. Unfeatured actions go under Additional Services. No new decorative theme or UI artwork was added. The owner reports Bruiser operational; only Open WebUI and SearXNG containers were observed. Do not assume the package was installed on any client or server.
+## Release state
+**NOW v1.13.0 is the latest published release** (Oct 16); `main` contains merged release PR #7. **Studio v0.3.0 is a separate app**, not a NOW version. GitHub changes do not update installed Linux clients or the server automatically.
 
-Immediate steps:
-1. Check CI package and unit tests on the draft branch, including `tests/test_web_admin.py` and `tests/test_optional_services.py`. The manual SSH-loopback admin path was reported working on the MacBook.
-2. Test Settings → Web Gaming Admin on a Linux client over Tailscale **from outside the LAN**. It should use an SSH loopback tunnel; MoonlightWeb 0.3.1 will not unlock admin over a direct Tailscale `100.x.x.x` address.
-3. Verify the web admin shortcut uses the current configured server host, not `games.monumentrisk.com/admin`, and that old tunnels are not confused with changed server identities.
-4. Verify the new Settings → Shortcuts Primary/Tray checkboxes on the actual MacBook/mac mini. Confirm nine actions are never duplicated, Additional Services shows unfeatured actions, config persists after restart and the old eight-action layout survives upgrading. Then test rollback before merging/releasing.
-5. Add private MoonlightWeb token to **versioned encrypted** client backup and implement browser reauthentication after expiry; neither is currently implemented.
-6. Test Bruiser URL from default SERVER:3000, the optional ai_url override, and Settings → Bruiser AI Admin (/admin/settings) with an authorized admin user. Confirm Ollama and SearXNG separately if troubleshooting AI. Create and test a read-only, secret-free server drift monitor; never auto-push credentials to GitHub.
-7. Studio is a separate browser app (not themed to match the launcher), currently design only; synth-first with 8/16/24/32 steps, occasional mic sampling, stutter/delay and eventual shared projects. Later: stable server discovery, fresh-server provisioning, modular service installation, recovery checks. Studio MIDI sequencer/synth with centrally stored cross-client save slots is only a proposal; do not confuse it with shipped features.
+## If resuming NOW work
+1. **Do not restart running Wolf/game streams merely to inspect the repo.** Check PR #13 (proposed UI labels **Studio** and **Streaming Settings**) and verify live packaging/UI behavior before merging. The Wolf application target remains **OptiPlex Studio Desktop**.
+2. Review old PR #1 carefully against released v1.13.0 and other merged changes. It is still open despite a 1.12.0 title; it may be stale, but do **not** close/merge it without diff review.
+3. Reproduce unresolved Web Gaming Admin/Tailscale authentication paths on a real outside-LAN Linux client. Do not conflate native Moonlight pairing with MoonlightWeb certificate token.
+4. Maintain working Caddy/public HTTPS `games.monumentrisk.com` alongside Tailscale SSH and optional web admin. Don't disable authentication or broadly reroute existing services.
+5. For actual host maintenance, read service versions and config before changing them. Preserve Docker/Wolf volumes, Jellyfin, music/VPN/download services, backups and credentials.
+6. Keep heavy AI task/session integration in **Studio**, using [ADR-001](https://github.com/SteezyMode/OptiplexStudio/blob/main/docs/ADR-001-LOCAL-FIRST-SHARED-STUDIO-RUNTIME.md). NOW may expose a *connection* to a persistent Studio workspace; it must not create duplicate host Codex sessions.
 
-Production safety: preserve Docker volumes, `/etc/wolf`, music stack and browser auth state. Never commit token files, SSH/Moonlight keys, `.onb` backups, VPN env files or passwords. Give one Linux command at a time when troubleshooting.
+## Current active work
+Owner is focused on a short zombie encounter game in **OptiPlex Studio**, after a functional V3 animation/encounter prototype and a fixed Wolf XFCE X11 demo window. NOW currently requires **no feature or release intervention** to continue that work.
+
+## Unfinished, not automatically shipped
+Fresh-server provisioner, Wolf workspace selection, secure backup/recovery beyond existing client scope, Gluetun and Downloads outage alerts, desktop-session reconnect UX, cross-client launch regression testing. See [issues](https://github.com/SteezyMode/OptiplexNow/issues) and [Current Status](CURRENT-STATUS.md).
+
+## Confidentiality and minimal-risk operations
+No MoonlightWeb tokens, private keys, VPN secrets, full backups or service environment files in the public repo. One terminal command at a time during operator troubleshooting; read-only checks first.

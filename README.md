@@ -1,5 +1,7 @@
 # OptiPlex Now
 
+**Remote development:** [Persistent SSH/Codex sessions with tmux](docs/remote-development-tmux.md) — survive client disconnects (not host reboots).
+
 **Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.13.0 work. The handoff separates verified observations from planned features.
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.

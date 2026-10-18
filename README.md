@@ -1,5 +1,8 @@
 # OptiPlex Now
 
+> **Current project/release status (2026-10-19):** See [Current Status](docs/CURRENT-STATUS.md) for the latest verified v1.13.0 release, unmerged UI PR #13, open reliability work, and the boundary between NOW and the independent OptiPlex Studio. The older [October 16 operations handoff](docs/operations-handoff.md) is a historical server snapshot, not a current release plan.
+
+
 **Remote development:** [Persistent SSH/Codex sessions with tmux](docs/remote-development-tmux.md) — survive client disconnects (not host reboots).
 
 **Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.13.0 work. The handoff separates verified observations from planned features.

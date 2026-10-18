@@ -1,0 +1,21 @@
+name: Verify NOW streaming labels
+
+on:
+  pull_request:
+    paths:
+      - 'src/main.c'
+      - 'tests/test_streaming_labels.py'
+      - '.github/workflows/streaming-labels.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  labels:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate naming and launch targets
+        run: python3 -m unittest discover -s tests -p 'test_streaming_labels.py' -v

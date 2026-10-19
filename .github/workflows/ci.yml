@@ -1,0 +1,36 @@
+name: Validate OptiPlex NOW
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build and test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends
+      - name: Build, test and inspect package
+        shell: bash
+        run: |
+          set -euo pipefail
+          make package
+          python3 -m unittest discover -s tests -v
+          test -x build/optiplex-desk
+          mapfile -t packages < <(find dist -maxdepth 1 -type f -name 'OptiPlex-Now_*_amd64.deb')
+          test "${#packages[@]}" -eq 1
+          package="${packages[0]}"
+          test "$(dpkg-deb -f "$package" Package)" = "optiplex-now"
+          test "$(dpkg-deb -f "$package" Architecture)" = "amd64"
+          test "$(dpkg-deb -f "$package" Version)" != ""
+          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now$'

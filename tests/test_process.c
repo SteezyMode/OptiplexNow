@@ -23,6 +23,21 @@ int main(void) {
     if (now_run(nonzero, NULL, 0, 3) != 7) return fail("nonzero exit code");
     if (now_run(NULL, NULL, 0, 3) != -1) return fail("invalid command");
 
-    puts("Process helpers: exit status, stdout capture, executable search verified.");
+    /* Previously the child deadlocked after the capture filled (or with no
+     * capture at all): stdout was not drained and the pipe filled up.
+     * A 256 KiB output must complete rather than hit the process timeout.
+     */
+    char *const verbose[] = {"/bin/sh", "-c", "yes abc | head -c 262144", NULL};
+    char small[8] = {0};
+    if (now_run(verbose, small, sizeof small, 4) != 0) return fail("verbose output with small capture");
+    if (strcmp(small, "abc\nabc") != 0) return fail("small capture prefix");
+    if (now_run(verbose, NULL, 0, 4) != 0) return fail("verbose output with no capture");
+
+    char *const sleepy[] = {"/bin/sh", "-c", "exec sleep 2", NULL};
+    if (now_run(sleepy, NULL, 0, 1) != -1) return fail("command timeout");
+    if (now_run(ok, NULL, 0, 0) != -1) return fail("invalid zero timeout");
+
+
+    puts("Process helpers: capture, large output, timeout, status and lookup verified.");
     return 0;
 }

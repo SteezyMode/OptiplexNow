@@ -62,6 +62,19 @@ int main(void) {
     memset(imported,0,sizeof imported);
     if(!write_text(path,"# OptiPlex Now server preset v2\nhost=ok.local\nuser=bob\nssh_key=/private/id_ed25519\n"))goto end;
     if(now_preset_read(path,imported,fields))goto end; /* No unknown/secret keys. */
+    /* Failed parse must not partially overwrite caller settings. */
+    memset(imported,0,sizeof imported);
+    strcpy(imported[0],"original.local");
+    strcpy(imported[1],"existing");
+    if(!write_text(path,"# OptiPlex Now server preset v2\nhost=new.local\nuser=alice\nssh_key=/private/id_ed25519\n"))goto end;
+    if(now_preset_read(path,imported,fields))goto end;
+    if(strcmp(imported[0],"original.local")||strcmp(imported[1],"existing"))goto end;
+
+    /* Oversized or broken records must leave the settings untouched. */
+    if(!write_text(path,"# OptiPlex Now server preset v2\nhost=new.local\nuser=an invalid user\n"))goto end;
+    if(now_preset_read(path,imported,fields))goto end;
+    if(strcmp(imported[0],"original.local"))goto end;
+
 
     memset(imported,0,sizeof imported);
     if(!write_text(path,"# OptiPlex Now server preset v2\nhost=bad host\nuser=bob\n"))goto end;

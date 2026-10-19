@@ -15,11 +15,13 @@ int main(void) {
 
     if (!now_program_exists("/bin/sh")) return fail("absolute executable");
     if (!now_program_exists("sh")) return fail("PATH executable");
+    if (now_program_exists(NULL) || now_program_exists("")) return fail("invalid executable name");
     if (now_program_exists("/nonexistent/optiplex-now-test-exec")) return fail("missing executable");
 
     if (now_run(ok, output, sizeof output, 3) != 0) return fail("successful exit code");
     if (strcmp(output, "hello") != 0) return fail("captured stdout");
     if (now_run(nonzero, NULL, 0, 3) != 7) return fail("nonzero exit code");
+    if (now_run(NULL, NULL, 0, 3) != -1) return fail("invalid command");
 
     puts("Process helpers: exit status, stdout capture, executable search verified.");
     return 0;

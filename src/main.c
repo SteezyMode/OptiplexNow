@@ -275,7 +275,7 @@ static void browser_open(const char *url) {
    const char *cmd=now_program_exists("google-chrome-stable")?"google-chrome-stable":"google-chrome";
    char*args[]={(char*)cmd,(char*)url,NULL};now_launch(args);return;
  }
- void *err=NULL;
+ GError *err=NULL;
  if(gtk_show_uri_on_window(GTK_WINDOW(win),url,0,&err))return;
  if(err){g_error_free(err);err=NULL;}
  const char *browsers[]={"brave-browser-nightly","brave-browser","firefox","google-chrome-stable","google-chrome","chromium","chromium-browser"};
@@ -1165,8 +1165,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
     snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
     config_save();tray_build_menu();
-    last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);
-    reflow(dimensions[2]>0?dimensions[2]:660);
+    last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
+    reflow(dimensions.width>0?dimensions.width:660);
     say("SETTINGS SAVED");refresh();
  }
  tailscale_label=NULL;gtk_widget_destroy(d);

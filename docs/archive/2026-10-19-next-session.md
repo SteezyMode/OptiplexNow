@@ -6,9 +6,9 @@
 Updated: **2026-10-19 JST**. This replaces the obsolete Oct 16 assertion that v1.11.9 is current and v1.12.0 is unreleased.
 
 ## Read first
-- **[Current Status](CURRENT-STATUS.md)** — current published release, active PRs, product boundaries and near-term roadmap.
-- **[Operations Handoff](operations-handoff.md)** — historical Oct 16 server, Docker, auth and recovery inventory. Do not read historical version statements as current.
-- **[Application Design](application-design.md)** — NOW feature architecture and earlier feature proposals, with updated Studio boundary note.
+- **[Current Status](../CURRENT-STATUS.md)** — current published release, active PRs, product boundaries and near-term roadmap.
+- **[Operations Handoff](../operations-handoff.md)** — historical Oct 16 server, Docker, auth and recovery inventory. Do not read historical version statements as current.
+- **[Application Design](../application-design.md)** — NOW feature architecture and earlier feature proposals, with updated Studio boundary note.
 
 ## Release state
 **NOW v1.13.0 is the latest published release** (Oct 16); `main` contains merged release PR #7. **Studio v0.3.0 is a separate app**, not a NOW version. GitHub changes do not update installed Linux clients or the server automatically.
@@ -25,7 +25,7 @@ Updated: **2026-10-19 JST**. This replaces the obsolete Oct 16 assertion that v1
 Owner is focused on a short zombie encounter game in **OptiPlex Studio**, after a functional V3 animation/encounter prototype and a fixed Wolf XFCE X11 demo window. NOW currently requires **no feature or release intervention** to continue that work.
 
 ## Unfinished, not automatically shipped
-Fresh-server provisioner, Wolf workspace selection, secure backup/recovery beyond existing client scope, Gluetun and Downloads outage alerts, desktop-session reconnect UX, cross-client launch regression testing. See [issues](https://github.com/SteezyMode/OptiplexNow/issues) and [Current Status](CURRENT-STATUS.md).
+Fresh-server provisioner, Wolf workspace selection, secure backup/recovery beyond existing client scope, Gluetun and Downloads outage alerts, desktop-session reconnect UX, cross-client launch regression testing. See [issues](https://github.com/SteezyMode/OptiplexNow/issues) and [Current Status](../CURRENT-STATUS.md).
 
 ## Confidentiality and minimal-risk operations
 No MoonlightWeb tokens, private keys, VPN secrets, full backups or service environment files in the public repo. One terminal command at a time during operator troubleshooting; read-only checks first.

@@ -1,5 +1,5 @@
 CC ?= gcc
-CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter
+CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter -Werror=incompatible-pointer-types -Werror=implicit-function-declaration
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 fontconfig)
 GTK_LIBS := $(shell pkg-config --libs gtk+-3.0 fontconfig)
 LIBS = $(GTK_LIBS) -ldl -lpthread -lm

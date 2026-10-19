@@ -52,7 +52,7 @@ Build downloads font sources from upstream; internet access is needed and downlo
 
 Only \`.github/workflows/ci.yml\` (read-only main/PR checks) and \`release.yml\` (new version tags only) are active. The old 1.12/1.13 branch publisher workflows were retired. Changing this requires a deliberate security/release review and updates to \`tests/test_repo_contract.py\`. Follow [release process](docs/RELEASE-PROCESS.md): **no existing tag or artifact overwrite**.
 
-Retain current \`optiplex-now\` / \`optiplex-desk\` compatibility and \`~/.config/optiplex-desk/config.ini\` until a tested migration exists. Keep existing .onp headers importable and .onb backups recoverable. A public brand name has not been selected; consult the [shared migration plan](https://github.com/SteezyMode/OptiplexSuite/blob/main/docs/PUBLIC-BRAND-MIGRATION.md) rather than bulk renaming identifiers.
+Retain current \`optiplex-now\` / \`optiplex-desk\` compatibility and \`~/.config/optiplex-desk/config.ini\` until a tested migration exists. Keep existing .onp headers importable and .onb backups recoverable. A public brand name has not been selected; treat display names, Debian package IDs, config paths, GTK identifiers, Moonlight shortcuts and exported file headers as separate compatibility layers. Build explicit old-to-new migration and rollback tests rather than bulk renaming identifiers.
 
 **Licensing is not resolved:** there is no selected application-code license yet. Do not assume public visibility automatically grants redistribution rights; choose an explicit license/contribution policy before outside distribution or accepting substantial third-party contributions.
 

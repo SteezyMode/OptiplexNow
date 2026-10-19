@@ -23,7 +23,7 @@ NOW 1.13.0 **requires a prepared server**. New Server Setup is a placeholder, no
 - Primary and tray actions use **independent masks**, so upgrading must not silently reset a user's layout.
 - Portable .onp files include only a narrowly allowlisted set of non-secret remote settings; never include SSH private keys, passwords or Moonlight pairing.
 - Encrypted .onb backups hold sensitive client data; keep them private and test recovery off-host.
-- Visible brand, installed package ID, config directory and preset/backup format IDs are **not interchangeable**. Read [public brand migration](https://github.com/SteezyMode/OptiplexSuite/blob/main/docs/PUBLIC-BRAND-MIGRATION.md) before any rename.
+- Visible brand, installed package ID, config directory and preset/backup format IDs are **not interchangeable**. A rename needs distinct migration plans for display labels, Debian IDs, client config paths, and the historic .onp/.onb headers. Preserve old data and allow rollback; never use a bulk text replacement.
 
 ## Streaming and identity
 

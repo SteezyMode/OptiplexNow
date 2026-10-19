@@ -27,6 +27,10 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIn('dpkg-deb -f "$package" Version', data)
         self.assertIn('gh release view "$GITHUB_REF_NAME"', data)
 
+    def test_binary_release_assets_not_stored_in_source(self):
+        self.assertFalse((ROOT / "downloads").exists(),
+                         "Historic .deb files belong in GitHub Releases, not source control.")
+
     def test_ci_cannot_publish(self):
         data = (WORKFLOWS / "ci.yml").read_text()
         self.assertIn("contents: read", data)

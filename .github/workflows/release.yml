@@ -44,30 +44,7 @@ jobs:
           test "$(dpkg-deb -f "$package" Package)" = "optiplex-now"
           test "$(dpkg-deb -f "$package" Version)" = "$version"
           test "$(dpkg-deb -f "$package" Architecture)" = "amd64"
-          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now
-          cp "$package" dist/OptiPlex-Now_amd64.deb
-          (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)
-      - name: Publish new immutable versioned artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite published assets" >&2
-            exit 1
-          fi
-          gh release create "$GITHUB_REF_NAME" \
-            "dist/OptiPlex-Now_${version}_amd64.deb" \
-            dist/OptiPlex-Now_amd64.deb \
-            dist/SHA256SUMS \
-            --target "$GITHUB_SHA" \
-            --title "OptiPlex NOW ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --latest
-
+          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now$'
           bash tests/smoke_installed_package.sh
           cp "$package" dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)

@@ -28,6 +28,7 @@ jobs:
           make check-presets
           make package
           bash tests/smoke_gtk.sh
+          bash tests/smoke_instance.sh
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk
           test -x build/optiplex-now-backup

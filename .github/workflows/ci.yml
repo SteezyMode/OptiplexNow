@@ -19,7 +19,7 @@ jobs:
       - name: Install build and test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11
+          sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11 desktop-file-utils
       - name: Build, test and inspect package
         shell: bash
         run: |
@@ -39,4 +39,6 @@ jobs:
           test "$(dpkg-deb -f "$package" Package)" = "optiplex-now"
           test "$(dpkg-deb -f "$package" Architecture)" = "amd64"
           test "$(dpkg-deb -f "$package" Version)" != ""
-          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now$'
+          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now
+
+          bash tests/smoke_installed_package.sh

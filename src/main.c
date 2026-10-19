@@ -41,14 +41,14 @@ static void (*app_indicator_set_menu_fn)(void*,void*) = NULL;
 static int using_status_notifier = 0;
 static int tray_available = 0;
 
-/* Gio's GLib ABI is used only to detect whether a desktop is hosting a
+/* Gio is used only to detect whether a desktop is hosting a
  * StatusNotifierWatcher, avoiding a hidden process with no usable tray. */
 static int status_notifier_watcher_present(void){
- void*error=NULL;
- void*bus=g_bus_get_sync(2,NULL,&error);
+ GError *error=NULL;
+ GDBusConnection *bus=g_bus_get_sync(G_BUS_TYPE_SESSION,NULL,&error);
  if(error){g_error_free(error);error=NULL;}
  if(!bus)return 0;
- void*res=g_dbus_connection_call_sync(bus,"org.freedesktop.DBus","/org/freedesktop/DBus",
+ GVariant *res=g_dbus_connection_call_sync(bus,"org.freedesktop.DBus","/org/freedesktop/DBus",
    "org.freedesktop.DBus","NameHasOwner",g_variant_new("(s)","org.kde.StatusNotifierWatcher"),
    NULL,0,1500,NULL,&error);
  int found=0;
@@ -194,14 +194,14 @@ static void config_save(void) {
  for(int i=0;i<CONFIG_COUNT;i++)fprintf(f,"%s=%s\n",keys[i],cfg[i]);fclose(f);
 }
 static void preset_alert(void*parent,const char*title,const char*msg){
- GtkWidget*d=gtk_dialog_new_with_buttons(title,parent,1,"OK",GTK_RESPONSE_OK,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons(title,GTK_WINDOW(parent),1,"OK",GTK_RESPONSE_OK,NULL);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*b=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
  gtk_container_set_border_width(GTK_CONTAINER(b),16);gtk_container_add(GTK_CONTAINER(area),b);
  GtkWidget*l=gtk_label_new(msg);gtk_label_set_line_wrap(GTK_LABEL(l),1);gtk_container_add(GTK_CONTAINER(b),l);
  gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
 }
 static int preset_pick(char*out,size_t n,void*parent,int save){
- GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export My OptiPlex":"Import My OptiPlex",parent,save?1:0,
+ GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export My OptiPlex":"Import My OptiPlex",GTK_WINDOW(parent),save?1:0,
       "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
  const char*home=getenv("HOME"); if(home&&*home)gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(d),home);
  if(save){
@@ -248,7 +248,7 @@ static const char* moonlight_mode_name(void) {
  return names[moonlight_mode()];
 }
 static void choose_appimage(void) {
- GtkWidget*d=gtk_file_chooser_dialog_new("Choose Moonlight AppImage",win,0,"CANCEL",GTK_RESPONSE_CANCEL,"USE THIS FILE",GTK_RESPONSE_OK,NULL);
+ GtkWidget*d=gtk_file_chooser_dialog_new("Choose Moonlight AppImage",GTK_WINDOW(win),0,"CANCEL",GTK_RESPONSE_CANCEL,"USE THIS FILE",GTK_RESPONSE_OK,NULL);
  if(gtk_dialog_run(GTK_DIALOG(d))==GTK_RESPONSE_OK){
   char *path=gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
   if(path){
@@ -644,7 +644,7 @@ static gboolean periodic(void*unused){(void)unused;begin_job(0);return 1;}
 static void refresh(void){gtk_label_set_text(GTK_LABEL(indicator),"● CHECKING");begin_job(0);}
 static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n>0){const char*names[]={"","Sleep","Restart","Shut down"};
-   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
    GtkWidget*l=label(msg,"modalheading");gtk_widget_set_margin_start(l,22);gtk_widget_set_margin_end(l,22);
    gtk_widget_set_margin_top(l,16);gtk_widget_set_margin_bottom(l,12);add(area,l,0);gtk_widget_show_all(d);
@@ -729,7 +729,7 @@ static void on_restart_streaming(void *w, void *parent) {
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
    preset_alert(owner,"Server settings needed","Set the OptiPlex host and SSH user in Settings first.");return;
  }
- GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",owner,1,
+ GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",GTK_WINDOW(owner),1,
    "Cancel",GTK_RESPONSE_CANCEL,"Restart streaming",GTK_RESPONSE_OK,NULL);
  gtk_dialog_set_default_response(GTK_DIALOG(d),GTK_RESPONSE_CANCEL);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
@@ -743,7 +743,7 @@ static void on_restart_streaming(void *w, void *parent) {
 }
 
 static void on_games_setup(void*w,void*p){(void)w;
- GtkWidget*d=gtk_dialog_new_with_buttons("Games",p?p:win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("Games",GTK_WINDOW(p?p:win),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
  gtk_window_set_default_size(GTK_WINDOW(d),440,290);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,11);
@@ -961,7 +961,7 @@ static void on_games_setup_from_settings(void*w,void*p){
 static void on_tail(void*w,void*p){(void)w;(void)p;setup_tailscale();}
 static void on_system_info(void*w,void*p){
  (void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("System Info",win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("System Info",GTK_WINDOW(win),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
  gtk_window_set_default_size(GTK_WINDOW(d),490,390);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,1);
@@ -995,7 +995,7 @@ static void export_preset(void*w,void*p){
 /* Full trusted-device backup. Passphrase never appears in process arguments. */
 #define BACKUP_BINARY "/usr/lib/optiplex-now/optiplex-now-backup"
 static int backup_pick(char*out,size_t n,void*parent,int save){
- GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export Full Backup":"Restore Full Backup",parent,save?1:0,
+ GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export Full Backup":"Restore Full Backup",GTK_WINDOW(parent),save?1:0,
   "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
  const char*home=getenv("HOME");
  if(home&&*home)gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(d),home);
@@ -1008,7 +1008,7 @@ static int backup_pick(char*out,size_t n,void*parent,int save){
  gtk_widget_destroy(d);return ok;
 }
 static int backup_password(void*parent,int restore,char*out,size_t n){
- GtkWidget*d=gtk_dialog_new_with_buttons(restore?"Unlock Backup":"Encrypt Backup",parent,1,
+ GtkWidget*d=gtk_dialog_new_with_buttons(restore?"Unlock Backup":"Encrypt Backup",GTK_WINDOW(parent),1,
                                       "CANCEL",GTK_RESPONSE_CANCEL,restore?"RESTORE":"ENCRYPT",GTK_RESPONSE_OK,NULL);
  GtkWidget*box=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
  gtk_container_set_border_width(GTK_CONTAINER(col),18);add(box,col,0);
@@ -1048,7 +1048,7 @@ static int backup_execute(int restore,const char*path,const char*password){
 }
 static int full_backup_ui(void*parent,int restore){
  if(restore){
-  GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",parent,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONTINUE",GTK_RESPONSE_OK,NULL);
+  GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",GTK_WINDOW(parent),1,"CANCEL",GTK_RESPONSE_CANCEL,"CONTINUE",GTK_RESPONSE_OK,NULL);
   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
   GtkWidget*n=label("Restore may replace SSH keys, Moonlight settings and OptiPlex preferences.\nOnly restore on a computer you own and trust.","helper");
   gtk_label_set_line_wrap(GTK_LABEL(n),1);gtk_container_set_border_width(GTK_CONTAINER(area),16);add(area,n,0);
@@ -1058,7 +1058,7 @@ static int full_backup_ui(void*parent,int restore){
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
  int rc=backup_execute(restore,path,pw);explicit_bzero(pw,sizeof pw);
  if(rc==0){
-  if(restore){config_load();last_columns=-1;int dimensions[4]={0};gtk_widget_get_allocation(win,dimensions);reflow(dimensions[2]>0?dimensions[2]:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
+  if(restore){config_load();last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);reflow(dimensions.width>0?dimensions.width:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
   else preset_alert(parent,"Backup saved","Encrypted backup saved. Keep your password safe and only restore on a trusted computer.");
  }else preset_alert(parent,"Backup failed",rc==-2?"Backup helper is missing. Reinstall OptiPlex Now.":
        "Backup failed. Check file, password, and permissions. No settings were intentionally reset.");
@@ -1067,7 +1067,7 @@ static int full_backup_ui(void*parent,int restore){
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
 static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);}
 static void on_settings(void*w,void*p){(void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
  gtk_window_set_default_size(GTK_WINDOW(d),510,440);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
@@ -1228,7 +1228,7 @@ static void find_server(Wizard*c){
  if(now_run(args,output,sizeof output,6)!=0){
    preset_alert(c->assistant,"Find server",*output?output:"Could not list devices. Check Tailscale, or enter an address manually.");return;
  }
- GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",c->assistant,1,"Cancel",GTK_RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",GTK_WINDOW(c->assistant),1,"Cancel",GTK_RESPONSE_CANCEL,NULL);
  GtkWidget*accept=gtk_dialog_add_button(GTK_DIALOG(d),"Use this device",GTK_RESPONSE_OK);
  gtk_widget_set_sensitive(accept,0);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));gtk_container_set_border_width(GTK_CONTAINER(area),18);
@@ -1288,7 +1288,7 @@ static void wizard_action(void*w,void*p){
    terminal_launch(args);
  }
  else if(!strcmp(n,"w_future")){
-   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",c->assistant,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
    gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,0);
    add(box,label("NEW SERVER SETUP","modalheading"),0);
@@ -1326,7 +1326,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
  gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
- gtk_window_set_transient_for(GTK_WINDOW(a),win);gtk_window_set_modal(GTK_WINDOW(a),1);
+ gtk_window_set_transient_for(GTK_WINDOW(a),GTK_WINDOW(win));gtk_window_set_modal(GTK_WINDOW(a),1);
  /* Page 1: keep existing device setup. No credentials or pairings are reset. */
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
@@ -1539,7 +1539,7 @@ int main(int argc,char**argv) {
  if(!claim_instance())return 0;
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
- gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),cp,GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+ gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
  win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,505);
  gtk_window_set_icon_name(GTK_WINDOW(win),"optiplex-now");gtk_window_set_position(GTK_WINDOW(win),1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);

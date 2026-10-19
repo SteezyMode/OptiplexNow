@@ -19,6 +19,7 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <poll.h>
+#include "process.h"
 
 /* GTK 3 ABI declarations. The build uses installed runtime libraries only. */
 typedef void GtkWidget;
@@ -408,34 +409,6 @@ static int preset_pick(char*out,size_t n,void*parent,int save){
  }
  gtk_widget_destroy(d);return ok;
 }
-static int run(char *const argv[],char *out,size_t cap,int timeout) {
- if(out&&cap)*out=0; int fd[2];if(pipe(fd))return -1;
- pid_t pid=fork();if(pid<0){close(fd[0]);close(fd[1]);return -1;}
- if(pid==0){close(fd[0]);dup2(fd[1],1);dup2(fd[1],2);close(fd[1]);
-   int nullfd=open("/dev/null",O_RDONLY);if(nullfd>=0){dup2(nullfd,0);close(nullfd);}execvp(argv[0],argv);_exit(127);}
- close(fd[1]); fcntl(fd[0],F_SETFL,fcntl(fd[0],F_GETFL)|O_NONBLOCK);
- int status=0,done=0;size_t used=0;long max_ticks=timeout*10;
- for(long n=0;n<max_ticks;n++){
-   if(out&&used+1<cap){ssize_t k=read(fd[0],out+used,cap-used-1);if(k>0){used+=(size_t)k;out[used]=0;}}
-   pid_t r=waitpid(pid,&status,WNOHANG);if(r==pid){done=1;break;}if(r<0)break;
-   usleep(100000);
- }
- if(!done){kill(pid,SIGKILL);waitpid(pid,&status,0);}
- if(out&&used+1<cap){ssize_t k=read(fd[0],out+used,cap-used-1);if(k>0){used+=(size_t)k;out[used]=0;}}
- close(fd[0]);return done&&WIFEXITED(status)?WEXITSTATUS(status):-1;
-}
-static void launch(char *const argv[]) {
- pid_t pid=fork();if(pid==0){setsid();pid_t nested=fork();if(nested>0)_exit(0);
- int nullfd=open("/dev/null",O_RDWR);if(nullfd>=0){dup2(nullfd,0);dup2(nullfd,1);dup2(nullfd,2);close(nullfd);}
- execvp(argv[0],argv);_exit(127);}if(pid>0)waitpid(pid,NULL,0);
-}
-static int exists_program(const char*n) {
- if(strchr(n,'/'))return access(n,X_OK)==0;
- const char*path=getenv("PATH");if(!path)return 0;char *dup=strdup(path),*save=NULL;int found=0;
- for(char*p=strtok_r(dup,":",&save);p;p=strtok_r(NULL,":",&save)){
-   char file[PATH_MAX];snprintf(file,sizeof file,"%s/%s",p,n);if(access(file,X_OK)==0){found=1;break;}}
- free(dup);return found;
-}
 /* Prefer a user's existing Moonlight AppImage. No installation is needed. */
 static const char *find_appimage(void) {
  if(*cfg[9] && access(cfg[9],X_OK)==0) return cfg[9];
@@ -461,7 +434,7 @@ static const char *find_appimage(void) {
 }
 static int moonlight_mode(void) {
  if(find_appimage())return 1;
- if(exists_program("moonlight"))return 2;
+ if(now_program_exists("moonlight"))return 2;
  if(flatpak_has("com.moonlight_stream.Moonlight"))return 3;
  return 0;
 }
@@ -482,8 +455,8 @@ static void choose_appimage(void) {
  gtk_widget_destroy(d);
 }
 static int flatpak_has(const char *id) {
- if(!exists_program("flatpak"))return 0;
- char out[128];char*args[]={"flatpak","info","--show-ref",(char*)id,NULL};return run(args,out,sizeof(out),3)==0;
+ if(!now_program_exists("flatpak"))return 0;
+ char out[128];char*args[]={"flatpak","info","--show-ref",(char*)id,NULL};return now_run(args,out,sizeof(out),3)==0;
 }
 /* Always use the user's default browser, unless they explicitly selected Chrome.
  * A native GTK URI open works across XFCE, KDE and COSMIC when a browser
@@ -491,23 +464,23 @@ static int flatpak_has(const char *id) {
 static void browser_open(const char *url) {
  if(strncmp(url,"http://",7)&&strncmp(url,"https://",8))return;
  if(!strcmp(cfg[8],"chrome-flatpak") && flatpak_has("com.google.Chrome")){
-   char*args[]={"flatpak","run","com.google.Chrome",(char*)url,NULL};launch(args);return;
+   char*args[]={"flatpak","run","com.google.Chrome",(char*)url,NULL};now_launch(args);return;
  }
- if(!strcmp(cfg[8],"chrome") && (exists_program("google-chrome-stable")||exists_program("google-chrome"))){
-   const char *cmd=exists_program("google-chrome-stable")?"google-chrome-stable":"google-chrome";
-   char*args[]={(char*)cmd,(char*)url,NULL};launch(args);return;
+ if(!strcmp(cfg[8],"chrome") && (now_program_exists("google-chrome-stable")||now_program_exists("google-chrome"))){
+   const char *cmd=now_program_exists("google-chrome-stable")?"google-chrome-stable":"google-chrome";
+   char*args[]={(char*)cmd,(char*)url,NULL};now_launch(args);return;
  }
  void *err=NULL;
  if(gtk_show_uri_on_window(win,url,0,&err))return;
  if(err){g_error_free(err);err=NULL;}
  const char *browsers[]={"brave-browser-nightly","brave-browser","firefox","google-chrome-stable","google-chrome","chromium","chromium-browser"};
  for(unsigned i=0;i<sizeof browsers/sizeof browsers[0];i++){
-   if(exists_program(browsers[i])){char*args[]={(char*)browsers[i],(char*)url,NULL};launch(args);return;}
+   if(now_program_exists(browsers[i])){char*args[]={(char*)browsers[i],(char*)url,NULL};now_launch(args);return;}
  }
  const char *flatpak_browsers[]={"com.brave.Browser","org.mozilla.firefox","com.google.Chrome","org.chromium.Chromium"};
  for(unsigned i=0;i<sizeof flatpak_browsers/sizeof flatpak_browsers[0];i++){
    if(flatpak_has(flatpak_browsers[i])){
-     char*args[]={"flatpak","run",(char*)flatpak_browsers[i],(char*)url,NULL};launch(args);return;
+     char*args[]={"flatpak","run",(char*)flatpak_browsers[i],(char*)url,NULL};now_launch(args);return;
    }
  }
  say("NO WEB BROWSER FOUND. SET A DEFAULT BROWSER IN YOUR DESKTOP SETTINGS");
@@ -524,14 +497,14 @@ static void add(GtkWidget*box,GtkWidget*child,int expand) {gtk_box_pack_start(bo
 static void say(const char *s) {if(footer)set_footer(s);}
 
 static int terminal_launch(char *const args[]) {
- if(exists_program("xfce4-terminal")){char *argv[24];int i=0;argv[i++]="xfce4-terminal";argv[i++]="--disable-server";argv[i++]="-x";
-    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;launch(argv);return 1;}
- if(exists_program("mate-terminal")){char *argv[24];int i=0;argv[i++]="mate-terminal";argv[i++]="--";
-    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;launch(argv);return 1;}
- if(exists_program("gnome-terminal")){char *argv[24];int i=0;argv[i++]="gnome-terminal";argv[i++]="--";
-    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;launch(argv);return 1;}
- if(exists_program("xterm")){char *argv[24];int i=0;argv[i++]="xterm";argv[i++]="-e";
-    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;launch(argv);return 1;}
+ if(now_program_exists("xfce4-terminal")){char *argv[24];int i=0;argv[i++]="xfce4-terminal";argv[i++]="--disable-server";argv[i++]="-x";
+    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;now_launch(argv);return 1;}
+ if(now_program_exists("mate-terminal")){char *argv[24];int i=0;argv[i++]="mate-terminal";argv[i++]="--";
+    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;now_launch(argv);return 1;}
+ if(now_program_exists("gnome-terminal")){char *argv[24];int i=0;argv[i++]="gnome-terminal";argv[i++]="--";
+    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;now_launch(argv);return 1;}
+ if(now_program_exists("xterm")){char *argv[24];int i=0;argv[i++]="xterm";argv[i++]="-e";
+    for(int j=0;args[j]&&i<23;j++)argv[i++]=args[j];argv[i]=NULL;now_launch(argv);return 1;}
  say("No terminal found");return 0;
 }
 static void launch_ssh(int relay) {
@@ -542,14 +515,14 @@ static void launch_ssh(int relay) {
 static void pair(int relay) {
  int h=relay?2:0,u=relay?3:1;
  if(!valid_host(cfg[h])||!valid_user(cfg[u])){say("Check server / relay settings");return;}
- if(!exists_program("ssh-copy-id")||!exists_program("ssh-keygen")){say("Install openssh-client to pair SSH");return;}
+ if(!now_program_exists("ssh-copy-id")||!now_program_exists("ssh-keygen")){say("Install openssh-client to pair SSH");return;}
  char sshdir[PATH_MAX],pub[PATH_MAX],private[PATH_MAX];
  snprintf(sshdir,sizeof sshdir,"%s/.ssh",getenv("HOME")?getenv("HOME"):"/tmp");mkdir_safe(sshdir);
  snprintf(pub,sizeof pub,"%s/id_ed25519.pub",sshdir);snprintf(private,sizeof private,"%s/id_ed25519",sshdir);
  if(access(pub,F_OK)!=0){
    if(access(private,F_OK)==0){say("Existing SSH key needs its .pub file");return;}
    char*gen[]={"ssh-keygen","-q","-t","ed25519","-N","","-f",private,NULL};
-   if(run(gen,NULL,0,8)!=0){say("Couldn't prepare SSH key");return;}
+   if(now_run(gen,NULL,0,8)!=0){say("Couldn't prepare SSH key");return;}
  }
  char dest[400];snprintf(dest,sizeof dest,"%s@%s",cfg[u],cfg[h]);
  /* Provide a terminal for a one-time remote password prompt. */
@@ -557,7 +530,7 @@ static void pair(int relay) {
  if(terminal_launch(args))say(relay?"Authorize the relay in the terminal":"Authorize the server in the terminal");
 }
 static void setup_tailscale(void) {
- if(exists_program("tailscale")){char*args[]={"sudo","tailscale","up",NULL};if(terminal_launch(args))say("Sign in to Tailscale in the opened terminal");}
+ if(now_program_exists("tailscale")){char*args[]={"sudo","tailscale","up",NULL};if(terminal_launch(args))say("Sign in to Tailscale in the opened terminal");}
  else browser_open("https://tailscale.com/download/linux");
 }
 
@@ -728,7 +701,7 @@ static void *worker(void*arg){
  Result*r=arg;char out[512]={0};
  if(r->type==0){
    int tailscale_ok=0;
-   if(exists_program("tailscale")) {char *argv[]={"tailscale","ip","-4",NULL};tailscale_ok=run(argv,out,sizeof out,5)==0 && strstr(out,"100.")!=NULL;}
+   if(now_program_exists("tailscale")) {char *argv[]={"tailscale","ip","-4",NULL};tailscale_ok=now_run(argv,out,sizeof out,5)==0 && strstr(out,"100.")!=NULL;}
    r->tail=tailscale_ok;
    if(!valid_host(r->source_host)||!valid_user(r->source_user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
    else {
@@ -744,7 +717,7 @@ static void *worker(void*arg){
       "printf 'DRIVES_END\n'";
      char stats[8192]={0};
      char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->source_user,r->source_host,cmd,NULL};
-     int code=run(argv,stats,sizeof stats,9);
+     int code=now_run(argv,stats,sizeof stats,9);
      if(code==0&&strstr(stats,"READY")){
        r->success=1;strcpy(r->message,"SERVER REACHABLE");
        get_metric(r->model,sizeof r->model,stats,"MODEL=");
@@ -781,12 +754,12 @@ static void *worker(void*arg){
    for(int i=0;i<3;i++){
       const char*url=r->service_urls[i];
       if(!*url){safe_copy(r->service_state[i],sizeof r->service_state[i],"NOT SET UP");continue;}
-      if((strncmp(url,"https://",8)&&strncmp(url,"http://",7))||!exists_program("curl")){
+      if((strncmp(url,"https://",8)&&strncmp(url,"http://",7))||!now_program_exists("curl")){
         safe_copy(r->service_state[i],sizeof r->service_state[i],"NOT CHECKED");continue;
       }
       char http[128]={0};
       char*argv[]={"curl","--silent","--show-error","--location","--max-time","3","--connect-timeout","2","--output","/dev/null","--write-out","%{http_code}",(char*)url,NULL};
-      int rc=run(argv,http,sizeof http,5);
+      int rc=now_run(argv,http,sizeof http,5);
       int code=atoi(http);
       safe_copy(r->service_state[i],sizeof r->service_state[i],rc==0 && code>=200&&code<500?"RESPONDING":"UNREACHABLE");
    }
@@ -806,7 +779,7 @@ static void *worker(void*arg){
       "printf 'DRIVER='; nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1";
      char stats[8192]={0};
      char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
-     if(run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
+     if(now_run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
        const char *keys[]={"MODEL=","CPU_MODEL=","GPU_MODEL=","VRAM=","RAM=","OS=","DRIVER="};
        for(int i=0;i<7;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
        r->success=1;
@@ -818,7 +791,7 @@ static void *worker(void*arg){
      char *args[]={"ssh","-o","BatchMode=yes","-o","ConnectTimeout=5","-o","StrictHostKeyChecking=accept-new",
          "-l",cfg[1],cfg[0],
          "docker logs --since 10m wolf 2>&1 | grep -oE 'http[^[:space:]]+/pin/#[0-9A-Fa-f]+' | tail -1",NULL};
-     char logline[4096]={0};int c=run(args,logline,sizeof(logline),9);
+     char logline[4096]={0};int c=now_run(args,logline,sizeof(logline),9);
      char *hash=strstr(logline,"/pin/#");
      if(c==0&&hash){
        hash+=6;char token[90];int i=0;
@@ -842,7 +815,7 @@ static void *worker(void*arg){
        snprintf(command,sizeof command,"sudo -n /usr/bin/systemctl %s",actions[kind-1]);
      }
      arg[12]=command;
-     int code=run(arg,out,sizeof out,14);
+     int code=now_run(arg,out,sizeof out,14);
      if(code==0){r->success=1;strcpy(r->message,relay?"WAKE SENT":"POWER COMMAND SENT");}
      else if ((kind==1||kind==2||kind==3) && (strstr(out,"Connection to")||strstr(out,"closed"))) {r->success=1;strcpy(r->message,"POWER COMMAND SENT");}
      else {r->success=0;snprintf(r->message,sizeof r->message,"%s",*out?out:"COMMAND FAILED. CHECK SSH / SUDO");
@@ -880,9 +853,9 @@ static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
 static int has_moonlight(void) {return moonlight_mode()!=0;}
 static void open_moonlight(void){
  int mode=moonlight_mode();
- if(mode==1){char*args[]={(char*)find_appimage(),NULL};launch(args);say("MOONLIGHT APPIMAGE OPENED");}
- else if(mode==2){char*args[]={"moonlight",NULL};launch(args);say("MOONLIGHT OPENED");}
- else if(mode==3){char*args[]={"flatpak","run","com.moonlight_stream.Moonlight",NULL};launch(args);say("MOONLIGHT OPENED");}
+ if(mode==1){char*args[]={(char*)find_appimage(),NULL};now_launch(args);say("MOONLIGHT APPIMAGE OPENED");}
+ else if(mode==2){char*args[]={"moonlight",NULL};now_launch(args);say("MOONLIGHT OPENED");}
+ else if(mode==3){char*args[]={"flatpak","run","com.moonlight_stream.Moonlight",NULL};now_launch(args);say("MOONLIGHT OPENED");}
  else say("CHOOSE AN APPIMAGE OR INSTALL MOONLIGHT IN GAMES SETUP");
 }
 /* Directly connect the selected Moonlight client to the Steam application on Wolf.
@@ -892,9 +865,9 @@ static void launch_wolf_app(const char *app){
  if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
  if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
  int mode=moonlight_mode();
- if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};launch(args);}
- else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
- else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};launch(args);}
+ if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};now_launch(args);}
+ else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
+ else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
  say("CONNECTING TO WOLF");
 }
 static void launch_steam(void){launch_wolf_app("Steam");}
@@ -905,7 +878,7 @@ static void launch_torrents(void){
  browser_open(url);
 }
 static void install_moonlight(void){
- if(!exists_program("flatpak")){
+ if(!now_program_exists("flatpak")){
    say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
    if(games_notice)gtk_label_set_text(games_notice,"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
    return;
@@ -998,22 +971,22 @@ static void on_games_setup(void*w,void*p){(void)w;
  * Traditional GTK and KDE file managers can still accept their SFTP URIs. */
 static void open_remote_files(void){
  if(!valid_host(cfg[0])||!valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
- if(exists_program("cosmic-files")){
+ if(now_program_exists("cosmic-files")){
    const char*helper="/usr/lib/optiplex-now/open-remote-files";
    if(access(helper,X_OK)!=0){
       say("FILES HELPER MISSING. REINSTALL OPTIPLEX NOW");return;
    }
    char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
-   launch(args);say("CONNECTING TO SERVER FILES");return;
+   now_launch(args);say("CONNECTING TO SERVER FILES");return;
  }
  char url[640];snprintf(url,sizeof url,"sftp://%s@%s/",cfg[1],cfg[0]);
  const char*managers[]={"thunar","nemo","nautilus","dolphin","caja","pcmanfm"};
  for(unsigned i=0;i<sizeof managers/sizeof managers[0];i++){
-   if(exists_program(managers[i])){
-      char*args[]={(char*)managers[i],url,NULL};launch(args);say("OPENING SERVER FILES");return;
+   if(now_program_exists(managers[i])){
+      char*args[]={(char*)managers[i],url,NULL};now_launch(args);say("OPENING SERVER FILES");return;
    }
  }
- if(exists_program("gio")){char*args[]={"gio","open",url,NULL};launch(args);say("OPENING SFTP LOCATION");return;}
+ if(now_program_exists("gio")){char*args[]={"gio","open",url,NULL};now_launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
@@ -1023,7 +996,7 @@ static void on_web_gaming_admin(void*w,void*p){
  const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
  if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
  char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
- launch(args);
+ now_launch(args);
  say("OPENING WEB GAMING ADMIN VIA SSH");
 }
 /* Open WebUI is the Bruiser front end; Ollama and SearXNG remain separate.
@@ -1435,9 +1408,9 @@ static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;(void)page;Wizard*c=p;
  char text[160];
- if(exists_program("tailscale")){
+ if(now_program_exists("tailscale")){
    char out[128]={0};char*args[]={"tailscale","ip","-4",NULL};
-   if(run(args,out,sizeof out,4)==0 && strstr(out,"100."))snprintf(text,sizeof text,"TAILSCALE CONNECTED");
+   if(now_run(args,out,sizeof out,4)==0 && strstr(out,"100."))snprintf(text,sizeof text,"TAILSCALE CONNECTED");
    else snprintf(text,sizeof text,"TAILSCALE NOT CONNECTED");
  }else snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");
  gtk_label_set_text(c->ts_state,text);
@@ -1457,7 +1430,7 @@ static void picker_selection_changed(void *combo,void *accept){
 static void find_server(Wizard*c){
  char output[65536]={0};
  char *args[]={"/usr/bin/python3","/usr/lib/optiplex-now/find-servers.py",NULL};
- if(run(args,output,sizeof output,6)!=0){
+ if(now_run(args,output,sizeof output,6)!=0){
    preset_alert(c->assistant,"Find server",*output?output:"Could not list devices. Check Tailscale, or enter an address manually.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",c->assistant,1,"Cancel",RESPONSE_CANCEL,NULL);

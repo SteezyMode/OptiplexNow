@@ -30,6 +30,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           test -n "$version"
           test "$version" != "$GITHUB_REF_NAME"
+          make check-process
           make package
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk

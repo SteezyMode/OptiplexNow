@@ -3,7 +3,10 @@ CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter -Werror=incompatible-pointe
 GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 fontconfig)
 GTK_LIBS := $(shell pkg-config --libs gtk+-3.0 fontconfig)
 LIBS = $(GTK_LIBS) -ldl -lpthread -lm
-FONTBASE = https://raw.githubusercontent.com/google/fonts/main/ofl
+FONT_REV = 47d54ca1ebb14fd864695f1d39dc734f39017c33
+INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
+LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
+FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
 .PHONY: all clean package check-process check-presets
 all: build/optiplex-desk build/optiplex-now-backup
@@ -11,11 +14,18 @@ all: build/optiplex-desk build/optiplex-now-backup
 build:
 	mkdir -p build
 
-build/inter.ttf: | build
-	curl -fsSL "$(FONTBASE)/inter/Inter%5Bopsz%2Cwght%5D.ttf" -o $@
+# Pin exact upstream font source and never leave a partial successful target.
+# Re-fetch when Makefile changes, so an existing build directory cannot silently
+# retain the old unpinned fonts after upgrading this build system.
+build/inter.ttf: Makefile | build
+	@set -eu; tmp="$@.part"; trap 'rm -f "$$tmp"' EXIT; \
+	curl -fsSL --retry 3 --connect-timeout 10 --max-time 90 "$(FONTBASE)/inter/Inter%5Bopsz%2Cwght%5D.ttf" -o "$$tmp"; \
+	python3 tools/verify_font.py "$$tmp" $(INTER_BLOB) 876576; mv "$$tmp" "$@"; trap - EXIT
 
-build/limelight.ttf: | build
-	curl -fsSL "$(FONTBASE)/limelight/Limelight-Regular.ttf" -o $@
+build/limelight.ttf: Makefile | build
+	@set -eu; tmp="$@.part"; trap 'rm -f "$$tmp"' EXIT; \
+	curl -fsSL --retry 3 --connect-timeout 10 --max-time 90 "$(FONTBASE)/limelight/Limelight-Regular.ttf" -o "$$tmp"; \
+	python3 tools/verify_font.py "$$tmp" $(LIMELIGHT_BLOB) 132292; mv "$$tmp" "$@"; trap - EXIT
 
 build/inter.o: build/inter.ttf
 	cd build && ld -r -b binary -o inter.o inter.ttf

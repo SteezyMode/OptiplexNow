@@ -7,6 +7,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text()
+PRESET_SOURCE = (ROOT / "src" / "presets.c").read_text()
 
 
 class OptionalServiceTests(unittest.TestCase):
@@ -42,7 +43,7 @@ class OptionalServiceTests(unittest.TestCase):
 
     def test_ai_url_and_admin_are_optional(self):
         self.assertIn("if(*cfg[14]){", SOURCE)
-        self.assertIn("if(!safe_preset_url(cfg[14]))return 0;", SOURCE)
+        self.assertIn("if(!now_safe_preset_url(cfg[14]))return 0;", SOURCE)
         self.assertIn('snprintf(base,sizeof base,"http://%s:3000",cfg[0]);', SOURCE)
         self.assertIn('snprintf(out,cap,"%s/admin/settings",base);', SOURCE)
         self.assertIn("browser_open(url);", SOURCE)
@@ -50,12 +51,13 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertNotIn("bruiser.monumentrisk.com", SOURCE)
 
     def test_old_connection_preset_remains_importable(self):
-        self.assertIn("#define PRESET_COUNT 10", SOURCE)
-        self.assertIn("7,10,14}", SOURCE)
-        self.assertIn("# OptiPlex Now server preset v2", SOURCE)
+        self.assertIn("#define PRESET_COUNT 10", PRESET_SOURCE)
+        self.assertIn("7,10,14}", PRESET_SOURCE)
+        self.assertIn("PRESET_HEADER_V2", PRESET_SOURCE)
+        self.assertIn("PRESET_HEADER_V1", PRESET_SOURCE)
         self.assertIn("if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}", SOURCE)
-        self.assertIn("if(*line && *line!='#')", SOURCE)
-        self.assertIn("if(!safe_preset_url(v[14]))return 0;", SOURCE)
+        self.assertIn("if(*line && *line!='#')", PRESET_SOURCE)
+        self.assertIn("if(!now_safe_preset_url(v[14]))return 0;", PRESET_SOURCE)
 
 
 if __name__ == "__main__":

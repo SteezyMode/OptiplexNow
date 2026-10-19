@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
 #include "process.h"
 
+#include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdio.h>
@@ -9,19 +11,38 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 
-/* Run a subprocess with bounded output and a timeout. No shell expansion. */
+/* Use monotonic time so clock adjustments cannot extend command timeouts. */
+static long long monotonic_ms(void) {
+    struct timespec now;
+    if (clock_gettime(CLOCK_MONOTONIC, &now) != 0) {
+        return -1;
+    }
+    return (long long)now.tv_sec * 1000 + now.tv_nsec / 1000000;
+}
+
+/* Run a subprocess with bounded captured output and a wall-clock timeout.
+ * Always drain its stdout/stderr pipe, including when the caller does not
+ * request output or the capture buffer is full. Otherwise a verbose child
+ * can block on a full pipe until the timeout.
+ */
 int now_run(char *const argv[], char *out, size_t cap, int timeout) {
     if (out && cap) {
         out[0] = '\0';
     }
-    if (!argv || !argv[0]) {
+    if (!argv || !argv[0] || timeout <= 0) {
         return -1;
     }
 
+    long long started = monotonic_ms();
+    if (started < 0) {
+        return -1;
+    }
+    long long deadline = started + (long long)timeout * 1000;
     int fd[2];
-    if (pipe(fd) != 0) {
+    if (pipe2(fd, O_CLOEXEC) != 0) {
         return -1;
     }
 
@@ -33,8 +54,10 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
     }
     if (pid == 0) {
         close(fd[0]);
-        dup2(fd[1], STDOUT_FILENO);
-        dup2(fd[1], STDERR_FILENO);
+        if (dup2(fd[1], STDOUT_FILENO) < 0 ||
+            dup2(fd[1], STDERR_FILENO) < 0) {
+            _exit(127);
+        }
         close(fd[1]);
         int nullfd = open("/dev/null", O_RDONLY);
         if (nullfd >= 0) {
@@ -46,43 +69,76 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
     }
 
     close(fd[1]);
-    fcntl(fd[0], F_SETFL, fcntl(fd[0], F_GETFL) | O_NONBLOCK);
-    int status = 0, done = 0;
-    size_t used = 0;
-    long max_ticks = (long)timeout * 10;
-
-    for (long n = 0; n < max_ticks; n++) {
-        if (out && used + 1 < cap) {
-            ssize_t k = read(fd[0], out + used, cap - used - 1);
-            if (k > 0) {
-                used += (size_t)k;
-                out[used] = '\0';
-            }
-        }
-        pid_t r = waitpid(pid, &status, WNOHANG);
-        if (r == pid) {
-            done = 1;
-            break;
-        }
-        if (r < 0) {
-            break;
-        }
-        usleep(100000);
+    int flags = fcntl(fd[0], F_GETFL);
+    if (flags < 0 || fcntl(fd[0], F_SETFL, flags | O_NONBLOCK) < 0) {
+        kill(pid, SIGKILL);
+        while (waitpid(pid, NULL, 0) < 0 && errno == EINTR) {}
+        close(fd[0]);
+        return -1;
     }
 
+    int status = 0, done = 0, failed = 0;
+    size_t used = 0;
+    for (;;) {
+        /* Drain everything already available without blocking, even if
+         * the output buffer cannot accept any additional bytes.
+         */
+        for (;;) {
+            char chunk[8192];
+            ssize_t got = read(fd[0], chunk, sizeof chunk);
+            if (got > 0) {
+                if (out && cap && used < cap - 1) {
+                    size_t available = cap - used - 1;
+                    size_t take = (size_t)got < available ? (size_t)got : available;
+                    memcpy(out + used, chunk, take);
+                    used += take;
+                    out[used] = '\0';
+                }
+                if (monotonic_ms() >= deadline) {
+                    break;
+                }
+                continue;
+            }
+            if (got == 0 || (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
+                break;
+            }
+            if (errno == EINTR) {
+                continue;
+            }
+            failed = 1;
+            break;
+        }
+
+        pid_t reaped;
+        do {
+            reaped = waitpid(pid, &status, WNOHANG);
+        } while (reaped < 0 && errno == EINTR);
+        if (reaped == pid) {
+            done = 1;
+        } else if (reaped < 0) {
+            failed = 1;
+        }
+        if (done || failed) {
+            break;
+        }
+
+        long long remaining = deadline - monotonic_ms();
+        if (remaining <= 0) {
+            break;
+        }
+        struct pollfd ready = {.fd = fd[0], .events = POLLIN};
+        int tick = remaining < 100 ? (int)remaining : 100;
+        if (poll(&ready, 1, tick) < 0 && errno != EINTR) {
+            failed = 1;
+            break;
+        }
+    }
     if (!done) {
         kill(pid, SIGKILL);
-        waitpid(pid, &status, 0);
-    }
-    if (out && used + 1 < cap) {
-        ssize_t k = read(fd[0], out + used, cap - used - 1);
-        if (k > 0) {
-            used += (size_t)k;
-            out[used] = '\0';
-        }
+        while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
     }
     close(fd[0]);
-    return done && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return done && !failed && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 /* Double-fork to detach the launch; parent does not block on the program. */

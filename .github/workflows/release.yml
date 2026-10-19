@@ -36,6 +36,7 @@ jobs:
           bash tests/smoke_gtk.sh
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk
+          readelf -W -l build/optiplex-desk | grep 'GNU_STACK' | grep -Eq '[[:space:]]RW[[:space:]]'
           package="dist/OptiPlex-Now_${version}_amd64.deb"
           test -f "$package"
           test "$(dpkg-deb -f "$package" Package)" = "optiplex-now"

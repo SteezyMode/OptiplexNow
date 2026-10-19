@@ -24,7 +24,7 @@ build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
 build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ $(LIBS)
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) src/backup.c -o $@ -lcrypto

@@ -21,132 +21,17 @@
 #include <poll.h>
 #include "process.h"
 #include "presets.h"
+#include <gtk/gtk.h>
+#include <gio/gio.h>
+#include <fontconfig/fontconfig.h>
 
-/* GTK 3 ABI declarations. The build uses installed runtime libraries only. */
-typedef void GtkWidget;
-typedef void GtkStyleContext;
-typedef void GtkCssProvider;
-typedef void* gpointer;
-typedef int gboolean;
-typedef unsigned int guint;
-typedef int gint;
-typedef unsigned long gulong;
-typedef void (*GCallback)(void);
-extern void gtk_init(int*,char***);
-extern void gtk_main(void);
-extern void gtk_main_quit(void);
-extern void gtk_widget_hide(void*);
-extern gboolean gtk_widget_get_visible(void*);
-extern void gtk_window_present(void*);
-extern void gtk_window_deiconify(void*);
 /* Use StatusNotifierItem via Ayatana AppIndicator when the desktop exposes
  * a watcher. Fall back to the XEmbed-compatible GTK3 status icon otherwise.
  * The pinned XFCE panel launcher is separate from the notification area. */
-extern void* gtk_status_icon_new_from_icon_name(const char*);
-extern void gtk_status_icon_set_tooltip_text(void*,const char*);
-extern void gtk_status_icon_set_visible(void*,gboolean);
-extern gboolean gtk_status_icon_is_embedded(void*);
-extern void gtk_status_icon_position_menu(void*,int*,int*,gboolean*,void*);
-extern GtkWidget* gtk_menu_new(void);
-extern GtkWidget* gtk_menu_item_new_with_label(const char*);
-extern GtkWidget* gtk_check_button_new_with_label(const char*);
-extern void gtk_toggle_button_set_active(void*,gboolean);
-extern gboolean gtk_toggle_button_get_active(void*);
-extern GtkWidget* gtk_separator_menu_item_new(void);
-extern void gtk_menu_shell_append(void*,void*);
-extern void gtk_menu_popup(void*,void*,void*,void*,void*,guint,guint);
-extern GtkWidget* gtk_window_new(int);
-extern void gtk_window_set_title(void*,const char*);
-extern gboolean gtk_show_uri_on_window(void*,const char*,guint,void**);
-extern void gtk_window_set_default_size(void*,int,int);
-extern void gtk_window_set_icon_name(void*,const char*);
-extern void gtk_window_set_default_icon_name(const char*);
-extern void gtk_window_set_position(void*,int);
-extern void gtk_window_set_resizable(void*,gboolean);
-extern GtkWidget* gtk_box_new(int,int);
-extern GtkWidget* gtk_separator_new(int);
-extern GtkWidget* gtk_grid_new(void);
-extern GtkWidget* gtk_scrolled_window_new(void*,void*);
-extern void gtk_scrolled_window_set_policy(void*,int,int);
-extern void gtk_container_add(void*,void*);
-extern void gtk_container_set_border_width(void*,guint);
-extern void gtk_box_pack_start(void*,void*,gboolean,gboolean,guint);
-extern void gtk_box_pack_end(void*,void*,gboolean,gboolean,guint);
-extern void gtk_box_reorder_child(void*,void*,gint);
-extern void gtk_grid_attach(void*,void*,gint,gint,gint,gint);
-extern void gtk_grid_set_row_spacing(void*,guint);
-extern void gtk_grid_set_column_spacing(void*,guint);
-extern void gtk_grid_set_column_homogeneous(void*,gboolean);
-extern GtkWidget* gtk_label_new(const char*);
-extern void gtk_label_set_text(void*,const char*);
-extern void gtk_label_set_markup(void*,const char*);
-extern void gtk_label_set_xalign(void*,float);
-extern void gtk_label_set_line_wrap(void*,gboolean);
-extern void gtk_label_set_ellipsize(void*,int);
-extern GtkWidget* gtk_button_new_with_label(const char*);
-extern void gtk_button_set_relief(void*,int);
-extern void gtk_widget_set_name(void*,const char*);
-extern void gtk_widget_set_size_request(void*,int,int);
-extern void gtk_widget_set_hexpand(void*,gboolean);
-extern void gtk_widget_set_vexpand(void*,gboolean);
-extern void gtk_widget_set_halign(void*,int);
-extern void gtk_widget_set_valign(void*,int);
-extern void gtk_widget_set_sensitive(void*,gboolean);
-extern void gtk_widget_set_margin_top(void*,int);
-extern void gtk_widget_set_margin_bottom(void*,int);
-extern void gtk_widget_set_margin_start(void*,int);
-extern void gtk_widget_set_margin_end(void*,int);
-extern void gtk_widget_show_all(void*);
-extern void gtk_widget_destroy(void*);
-extern GtkStyleContext* gtk_widget_get_style_context(void*);
-extern void gtk_style_context_add_class(void*,const char*);
-extern GtkCssProvider* gtk_css_provider_new(void);
-extern void gtk_css_provider_load_from_data(void*,const char*,long,void**);
-extern void gtk_style_context_add_provider_for_screen(void*,void*,guint);
-extern void* gdk_screen_get_default(void);
-extern gulong g_signal_connect_data(void*,const char*,GCallback,void*,void*,int);
-extern guint g_timeout_add(guint,gboolean(*)(void*),void*);
-extern guint g_idle_add(gboolean(*)(void*),void*);
-extern GtkWidget* gtk_dialog_new_with_buttons(const char*,void*,int,const char*,int,...);
-extern GtkWidget* gtk_dialog_get_content_area(void*);
-extern GtkWidget* gtk_dialog_add_button(void*,const char*,gint);
-extern gint gtk_dialog_run(void*);
-extern GtkWidget* gtk_entry_new(void);
-extern void gtk_entry_set_text(void*,const char*);
-extern void gtk_entry_set_visibility(void*,gboolean);
-extern const char* gtk_entry_get_text(void*);
-extern void gtk_entry_set_placeholder_text(void*,const char*);
-extern GtkWidget* gtk_assistant_new(void);
-extern int gtk_assistant_append_page(void*,void*);
-extern void gtk_assistant_set_page_title(void*,void*,const char*);
-extern void gtk_assistant_set_page_type(void*,void*,int);
-extern void gtk_assistant_set_page_complete(void*,void*,gboolean);
-extern void gtk_window_set_transient_for(void*,void*);
-extern void gtk_window_set_modal(void*,gboolean);
-extern void gtk_button_set_label(void*,const char*);
-extern void gtk_combo_box_text_remove_all(void*);
-extern GtkWidget* gtk_expander_new(const char*);
-extern GtkWidget* gtk_combo_box_text_new(void);
-extern void gtk_combo_box_text_append_text(void*,const char*);
-extern void gtk_combo_box_set_active(void*,gint);
-extern gint gtk_combo_box_get_active(void*);
-extern void gtk_widget_get_allocation(void*,void*);
-extern GtkWidget* gtk_file_chooser_dialog_new(const char*,void*,int,const char*,int,...);
-extern char* gtk_file_chooser_get_filename(void*);
-extern void g_free(void*);
-extern int FcConfigAppFontAddFile(void*,const unsigned char*);
-extern void* FcConfigGetCurrent(void);
-extern int FcConfigBuildFonts(void*);
 
 extern const unsigned char _binary_inter_ttf_start[], _binary_inter_ttf_end[];
 extern const unsigned char _binary_limelight_ttf_start[], _binary_limelight_ttf_end[];
 
-#define RESPONSE_CANCEL -6
-#define RESPONSE_OK -5
-#define GTK_ORIENTATION_HORIZONTAL 0
-#define GTK_ORIENTATION_VERTICAL 1
-#define GTK_ALIGN_CENTER 3
-#define GTK_STYLE_PROVIDER_PRIORITY_APPLICATION 600
 #define BASE ""
 
 static void *tray_icon = NULL;
@@ -158,13 +43,6 @@ static int tray_available = 0;
 
 /* Gio's GLib ABI is used only to detect whether a desktop is hosting a
  * StatusNotifierWatcher, avoiding a hidden process with no usable tray. */
-extern void *g_bus_get_sync(int,void*,void**);
-extern void *g_dbus_connection_call_sync(void*,const char*,const char*,const char*,const char*,void*,const void*,int,int,void*,void**);
-extern void *g_variant_new(const char*,...);
-extern void g_variant_get(void*,const char*,...);
-extern void g_variant_unref(void*);
-extern void g_object_unref(void*);
-extern void g_error_free(void*);
 static int status_notifier_watcher_present(void){
  void*error=NULL;
  void*bus=g_bus_get_sync(2,NULL,&error);
@@ -316,7 +194,7 @@ static void config_save(void) {
  for(int i=0;i<CONFIG_COUNT;i++)fprintf(f,"%s=%s\n",keys[i],cfg[i]);fclose(f);
 }
 static void preset_alert(void*parent,const char*title,const char*msg){
- GtkWidget*d=gtk_dialog_new_with_buttons(title,parent,1,"OK",RESPONSE_OK,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons(title,parent,1,"OK",GTK_RESPONSE_OK,NULL);
  GtkWidget*area=gtk_dialog_get_content_area(d);GtkWidget*b=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
  gtk_container_set_border_width(b,16);gtk_container_add(area,b);
  GtkWidget*l=gtk_label_new(msg);gtk_label_set_line_wrap(l,1);gtk_container_add(b,l);
@@ -324,16 +202,13 @@ static void preset_alert(void*parent,const char*title,const char*msg){
 }
 static int preset_pick(char*out,size_t n,void*parent,int save){
  GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export My OptiPlex":"Import My OptiPlex",parent,save?1:0,
-      "CANCEL",RESPONSE_CANCEL,save?"SAVE":"OPEN",RESPONSE_OK,NULL);
- extern gboolean gtk_file_chooser_set_current_folder(void*,const char*);
+      "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
  const char*home=getenv("HOME"); if(home&&*home)gtk_file_chooser_set_current_folder(d,home);
  if(save){
-   extern void gtk_file_chooser_set_current_name(void*,const char*);
-   extern void gtk_file_chooser_set_do_overwrite_confirmation(void*,gboolean);
    gtk_file_chooser_set_current_name(d,"My-OptiPlex.onp");
    gtk_file_chooser_set_do_overwrite_confirmation(d,1);
  }
- int ok=0; if(gtk_dialog_run(d)==RESPONSE_OK){
+ int ok=0; if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
   char*path=gtk_file_chooser_get_filename(d);
   if(path){safe_copy(out,n,path);ok=1;g_free(path);}
  }
@@ -373,8 +248,8 @@ static const char* moonlight_mode_name(void) {
  return names[moonlight_mode()];
 }
 static void choose_appimage(void) {
- GtkWidget*d=gtk_file_chooser_dialog_new("Choose Moonlight AppImage",win,0,"CANCEL",RESPONSE_CANCEL,"USE THIS FILE",RESPONSE_OK,NULL);
- if(gtk_dialog_run(d)==RESPONSE_OK){
+ GtkWidget*d=gtk_file_chooser_dialog_new("Choose Moonlight AppImage",win,0,"CANCEL",GTK_RESPONSE_CANCEL,"USE THIS FILE",GTK_RESPONSE_OK,NULL);
+ if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
   char *path=gtk_file_chooser_get_filename(d);
   if(path){
    if(access(path,X_OK)==0){safe_copy(cfg[9],512,path);appimage_found[0]=0;config_save();say("MOONLIGHT APPIMAGE SELECTED");}
@@ -474,7 +349,6 @@ static void set_drive_readout(void){
   else snprintf(buf,sizeof buf,"NOT MOUNTED");
   gtk_label_set_text(metric_free,buf);
   GtkStyleContext *sty=gtk_widget_get_style_context(metric_free);
-  extern void gtk_style_context_remove_class(void*,const char*);
   gtk_style_context_remove_class(sty,"warn");
   if(atoi(d->used_percent)>=90)gtk_style_context_add_class(sty,"warn");
 }
@@ -504,7 +378,6 @@ static void update_drives(Result*r){
   visible_drive_count=r->drive_count;
   memcpy(visible_drives,r->drives,sizeof visible_drives);
   if(changed){
-    extern void gtk_combo_box_text_remove_all(void*);
     drive_combo_updating=1;
     gtk_combo_box_text_remove_all(drive_combo);
     for(int i=0;i<visible_drive_count;i++){
@@ -535,7 +408,6 @@ static gboolean finish_on_main(void *arg) {
    if(tray_icon){char tip[100];snprintf(tip,sizeof tip,"OptiPlex Now | %s",s+2);gtk_status_icon_set_tooltip_text(tray_icon,tip);}
    GtkStyleContext*sty=gtk_widget_get_style_context(indicator);
    /* Old classes harmless; remove is available but style is reset below. */
-   extern void gtk_style_context_remove_class(void*,const char*);
    gtk_style_context_remove_class(sty,"online");gtk_style_context_remove_class(sty,"offline");gtk_style_context_remove_class(sty,"pair");
    gtk_style_context_add_class(sty,r->success==1?"online":r->success==2?"pair":"offline");
    gtk_label_set_text(status_detail,r->success==1?"":r->message);
@@ -772,11 +644,11 @@ static gboolean periodic(void*unused){(void)unused;begin_job(0);return 1;}
 static void refresh(void){gtk_label_set_text(indicator,"● CHECKING");begin_job(0);}
 static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n>0){const char*names[]={"","Sleep","Restart","Shut down"};
-   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",win,1,"CANCEL",RESPONSE_CANCEL,"CONFIRM",RESPONSE_OK,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(d);char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
    GtkWidget*l=label(msg,"modalheading");gtk_widget_set_margin_start(l,22);gtk_widget_set_margin_end(l,22);
    gtk_widget_set_margin_top(l,16);gtk_widget_set_margin_bottom(l,12);add(area,l,0);gtk_widget_show_all(d);
-   int resp=gtk_dialog_run(d);gtk_widget_destroy(d);if(resp!=RESPONSE_OK)return;
+   int resp=gtk_dialog_run(d);gtk_widget_destroy(d);if(resp!=GTK_RESPONSE_OK)return;
  }
  say("SENDING POWER COMMAND");begin_job(n+1);
 }
@@ -847,7 +719,7 @@ static void on_games_action(void*w,void*arg){(void)w;
    }
  }
  if(games_state)gtk_label_set_text(games_state,moonlight_mode_name());
- if(games_install){extern void gtk_button_set_label(void*,const char*);gtk_button_set_label(games_install,has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT");}
+ if(games_install){gtk_button_set_label(games_install,has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT");}
 }
 /* Only reached after an explicit confirmation. SSH/sudo authenticate in a
  * terminal; credentials never enter launcher configuration or shell arguments. */
@@ -858,21 +730,20 @@ static void on_restart_streaming(void *w, void *parent) {
    preset_alert(owner,"Server settings needed","Set the OptiPlex host and SSH user in Settings first.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",owner,1,
-   "Cancel",RESPONSE_CANCEL,"Restart streaming",RESPONSE_OK,NULL);
- extern void gtk_dialog_set_default_response(void*,gint);
- gtk_dialog_set_default_response(d,RESPONSE_CANCEL);
+   "Cancel",GTK_RESPONSE_CANCEL,"Restart streaming",GTK_RESPONSE_OK,NULL);
+ gtk_dialog_set_default_response(d,GTK_RESPONSE_CANCEL);
  GtkWidget*area=gtk_dialog_get_content_area(d);
  GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The OptiPlex itself will stay on.");
  gtk_container_set_border_width(area,20);gtk_label_set_line_wrap(msg,1);gtk_container_add(area,msg);
  gtk_widget_show_all(d);int response=gtk_dialog_run(d);gtk_widget_destroy(d);
- if(response!=RESPONSE_OK)return;
+ if(response!=GTK_RESPONSE_OK)return;
  char *args[]={"/usr/lib/optiplex-now/restart-streaming",cfg[0],cfg[1],NULL};
  if(terminal_launch(args))say("Streaming restart opened in terminal. Check its result before reconnecting.");
  else preset_alert(owner,"Terminal unavailable","Install a supported terminal to authenticate the streaming restart.");
 }
 
 static void on_games_setup(void*w,void*p){(void)w;
- GtkWidget*d=gtk_dialog_new_with_buttons("Games",p?p:win,1,"CLOSE",RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("Games",p?p:win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
  gtk_window_set_default_size(d,440,290);
  GtkWidget*area=gtk_dialog_get_content_area(d);
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,11);
@@ -975,9 +846,6 @@ static void reflow(int width) {
  int cols=width>=600?4:2;
  int pcols=width>=560?4:2;
  if(cols==last_columns && pcols==last_power_columns)return;
- extern void gtk_container_remove(void*,void*);
- extern void g_object_ref(void*), g_object_unref(void*);
- extern void* gtk_widget_get_parent(void*);
  if(cols!=last_columns){
    last_columns=cols;
    /* Move each action to exactly one section without destroying its widget. */
@@ -1093,7 +961,7 @@ static void on_games_setup_from_settings(void*w,void*p){
 static void on_tail(void*w,void*p){(void)w;(void)p;setup_tailscale();}
 static void on_system_info(void*w,void*p){
  (void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("System Info",win,1,"CLOSE",RESPONSE_CANCEL,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("System Info",win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
  gtk_window_set_default_size(d,490,390);
  GtkWidget*area=gtk_dialog_get_content_area(d);
  GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(box,20);add(area,box,1);
@@ -1128,23 +996,20 @@ static void export_preset(void*w,void*p){
 #define BACKUP_BINARY "/usr/lib/optiplex-now/optiplex-now-backup"
 static int backup_pick(char*out,size_t n,void*parent,int save){
  GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export Full Backup":"Restore Full Backup",parent,save?1:0,
-  "CANCEL",RESPONSE_CANCEL,save?"SAVE":"OPEN",RESPONSE_OK,NULL);
+  "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
  const char*home=getenv("HOME");
- extern gboolean gtk_file_chooser_set_current_folder(void*,const char*);
  if(home&&*home)gtk_file_chooser_set_current_folder(d,home);
  if(save){
-  extern void gtk_file_chooser_set_current_name(void*,const char*);
-  extern void gtk_file_chooser_set_do_overwrite_confirmation(void*,gboolean);
   gtk_file_chooser_set_current_name(d,"My-OptiPlex-full.onb");
   gtk_file_chooser_set_do_overwrite_confirmation(d,1);
  }
  int ok=0;
- if(gtk_dialog_run(d)==RESPONSE_OK){char*path=gtk_file_chooser_get_filename(d);if(path){safe_copy(out,n,path);ok=1;g_free(path);}}
+ if(gtk_dialog_run(d)==GTK_RESPONSE_OK){char*path=gtk_file_chooser_get_filename(d);if(path){safe_copy(out,n,path);ok=1;g_free(path);}}
  gtk_widget_destroy(d);return ok;
 }
 static int backup_password(void*parent,int restore,char*out,size_t n){
  GtkWidget*d=gtk_dialog_new_with_buttons(restore?"Unlock Backup":"Encrypt Backup",parent,1,
-                                      "CANCEL",RESPONSE_CANCEL,restore?"RESTORE":"ENCRYPT",RESPONSE_OK,NULL);
+                                      "CANCEL",GTK_RESPONSE_CANCEL,restore?"RESTORE":"ENCRYPT",GTK_RESPONSE_OK,NULL);
  GtkWidget*box=gtk_dialog_get_content_area(d);GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
  gtk_container_set_border_width(col,18);add(box,col,0);
  GtkWidget*note=label(restore?"Your SSH key and Moonlight pairing may be replaced. Use only on a trusted PC.":
@@ -1156,7 +1021,7 @@ static int backup_password(void*parent,int restore,char*out,size_t n){
  if(!restore){again=gtk_entry_new();gtk_entry_set_visibility(again,0);
   gtk_entry_set_placeholder_text(again,"Confirm password");add(col,again,0);}
  gtk_widget_show_all(d);int ok=0;
- if(gtk_dialog_run(d)==RESPONSE_OK){
+ if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
   const char*pass=gtk_entry_get_text(password);
   const char*confirm=again?gtk_entry_get_text(again):pass;
   size_t z=strlen(pass);
@@ -1183,11 +1048,11 @@ static int backup_execute(int restore,const char*path,const char*password){
 }
 static int full_backup_ui(void*parent,int restore){
  if(restore){
-  GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",parent,1,"CANCEL",RESPONSE_CANCEL,"CONTINUE",RESPONSE_OK,NULL);
+  GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",parent,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONTINUE",GTK_RESPONSE_OK,NULL);
   GtkWidget*area=gtk_dialog_get_content_area(d);
   GtkWidget*n=label("Restore may replace SSH keys, Moonlight settings and OptiPlex preferences.\nOnly restore on a computer you own and trust.","helper");
   gtk_label_set_line_wrap(n,1);gtk_container_set_border_width(area,16);add(area,n,0);
-  gtk_widget_show_all(d);int result=gtk_dialog_run(d);gtk_widget_destroy(d);if(result!=RESPONSE_OK)return 0;
+  gtk_widget_show_all(d);int result=gtk_dialog_run(d);gtk_widget_destroy(d);if(result!=GTK_RESPONSE_OK)return 0;
  }
  char path[PATH_MAX];if(!backup_pick(path,sizeof path,parent,!restore))return 0;
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
@@ -1200,9 +1065,9 @@ static int full_backup_ui(void*parent,int restore){
  return rc==0;
 }
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
-static void restore_full_backup(void*w,void*p){(void)w;extern void gtk_dialog_response(void*,gint);void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(parent,RESPONSE_CANCEL);}
+static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(parent,GTK_RESPONSE_CANCEL);}
 static void on_settings(void*w,void*p){(void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",win,1,"CANCEL",RESPONSE_CANCEL,"SAVE",RESPONSE_OK,NULL);
+ GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
  gtk_window_set_default_size(d,510,440);
  GtkWidget*area=gtk_dialog_get_content_area(d);
  GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(scroll,1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
@@ -1283,7 +1148,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
  gtk_widget_show_all(d);
  int resp=gtk_dialog_run(d);
- if(resp==RESPONSE_OK){
+ if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(fields[i]);if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(combo);
    const char*disk=gtk_entry_get_text(diskentry);
@@ -1363,8 +1228,8 @@ static void find_server(Wizard*c){
  if(now_run(args,output,sizeof output,6)!=0){
    preset_alert(c->assistant,"Find server",*output?output:"Could not list devices. Check Tailscale, or enter an address manually.");return;
  }
- GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",c->assistant,1,"Cancel",RESPONSE_CANCEL,NULL);
- GtkWidget*accept=gtk_dialog_add_button(d,"Use this device",RESPONSE_OK);
+ GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",c->assistant,1,"Cancel",GTK_RESPONSE_CANCEL,NULL);
+ GtkWidget*accept=gtk_dialog_add_button(d,"Use this device",GTK_RESPONSE_OK);
  gtk_widget_set_sensitive(accept,0);
  GtkWidget*area=gtk_dialog_get_content_area(d);gtk_container_set_border_width(area,18);
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);add(area,col,0);
@@ -1380,7 +1245,7 @@ static void find_server(Wizard*c){
  g_signal_connect_data(combo,"changed",(GCallback)picker_selection_changed,accept,NULL,0);
  gtk_widget_show_all(d);
  int response=gtk_dialog_run(d),selected=gtk_combo_box_get_active(combo);
- if(response==RESPONSE_OK && selected>=0 && selected<count){
+ if(response==GTK_RESPONSE_OK && selected>=0 && selected<count){
    gtk_entry_set_text(c->host,addresses[selected]);
    gtk_label_set_text(c->notice,"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
  }
@@ -1388,7 +1253,6 @@ static void find_server(Wizard*c){
 }
 static void wizard_action(void*w,void*p){
  Wizard*c=p;
- extern const char* gtk_widget_get_name(void*);
  const char*n=gtk_widget_get_name(w);if(!n)n="";
  if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->assistant);return;}
  else if(!strcmp(n,"w_restore")){if(full_backup_ui(c->assistant,1))gtk_widget_destroy(c->assistant);return;}
@@ -1424,7 +1288,7 @@ static void wizard_action(void*w,void*p){
    terminal_launch(args);
  }
  else if(!strcmp(n,"w_future")){
-   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",c->assistant,1,"CLOSE",RESPONSE_CANCEL,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",c->assistant,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(d);GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
    gtk_container_set_border_width(box,20);add(area,box,0);
    add(box,label("NEW SERVER SETUP","modalheading"),0);
@@ -1689,7 +1553,6 @@ int main(int argc,char**argv) {
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
  model_heading=label(current_model(),"title");
  gtk_label_set_ellipsize(model_heading,3);
- extern void gtk_label_set_max_width_chars(void*,int);
  gtk_label_set_max_width_chars(model_heading,22);
  add(brandcol,model_heading,0);
  GtkWidget*right=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);gtk_widget_set_valign(right,GTK_ALIGN_CENTER);add(head,right,0);

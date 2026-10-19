@@ -88,6 +88,6 @@ make package
 
 The build downloads Inter and Limelight fonts and writes the installer to `dist/`. Fonts are embedded; end users do not fetch them at runtime. See [font notices](FONT-NOTICES.md).
 
-`src/` contains the application and helpers; `tests/` contains profile-tool tests; `assets/` contains icons. `downloads/` holds the current prebuilt installer. Generated build folders and personal credentials are excluded.
+`src/` contains the application and helpers; `tests/` contains unit and regression tests; `assets/` contains icons. **Prebuilt installers are published only through [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases)**, not stored in the source tree. Generated build folders and personal credentials are excluded.
 
 The build and profile-tool tests pass. The new music-profile workflow has not yet been tested against the live reference server. No application-code license has been selected; clarify licensing before outside contributions or commercial distribution. This project is not affiliated with Dell.

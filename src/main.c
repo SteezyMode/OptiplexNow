@@ -20,6 +20,7 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include "process.h"
+#include "presets.h"
 
 /* GTK 3 ABI declarations. The build uses installed runtime libraries only. */
 typedef void GtkWidget;
@@ -314,77 +315,6 @@ static void config_save(void) {
  FILE*f=fopen(config_path,"w");if(!f)return;fchmod(fileno(f),0600);
  for(int i=0;i<CONFIG_COUNT;i++)fprintf(f,"%s=%s\n",keys[i],cfg[i]);fclose(f);
 }
-static int valid_host(const char*s) {
- if(!s||!*s||strlen(s)>250)return 0;
- for(;*s;s++)if(!(isalnum((unsigned char)*s)||strchr(".-:_",*s)))return 0;return 1;
-}
-static int valid_user(const char*s) {
- if(!s||!*s||strlen(s)>100||*s=='-')return 0;
- for(;*s;s++)if(!(isalnum((unsigned char)*s)||strchr("._-",*s)))return 0;return 1;
-}
-
-/* A portable connection preset deliberately excludes auth material and local paths.
-   Never import/export SSH keys, browser preferences, or Moonlight pairing. */
-#define PRESET_COUNT 10
-static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14};
-static int safe_wake_path(const char*s){
- if(!s||!*s)return 1;
- if(*s!='/'||strlen(s)>350)return 0;
- for(;*s;s++)if(!(isalnum((unsigned char)*s)||strchr("/_.-",*s)))return 0;
- return 1;
-}
-static int safe_preset_url(const char*s){
- if(!s||!*s)return 1;
- if(strncmp(s,"https://",8)&&strncmp(s,"http://",7))return 0;
- const char*start=strstr(s,"://")+3;
- if(!*start||strchr(start,'@')||strchr(s,'?')||strchr(s,'#')||strlen(s)>=500)return 0;
- for(;*s;s++)if((unsigned char)*s<=32||(unsigned char)*s>=127)return 0;
- return 1;
-}
-static int safe_preset_values(char v[CONFIG_COUNT][512]){
- if(!valid_host(v[0])||!valid_user(v[1]))return 0;
- if(*v[2]&&!valid_host(v[2]))return 0;
- if(*v[3]&&!valid_user(v[3]))return 0;
- if(!safe_wake_path(v[4]))return 0;
- for(int i=5;i<=7;i++)if(!safe_preset_url(v[i]))return 0;
- if(!safe_preset_url(v[14]))return 0;
- if(*v[10]&&v[10][0]!='/')return 0;
- for(int i=0;i<PRESET_COUNT;i++){
-   const char*value=v[preset_indices[i]];
-   if(strchr(value,'\n')||strchr(value,'\r')||strlen(value)>=500)return 0;
- }
- return 1;
-}
-static int preset_read(const char*path,char v[CONFIG_COUNT][512]){
- FILE*f=fopen(path,"r");if(!f)return 0;
- char header[128]; if(!fgets(header,sizeof header,f)||strcmp(header,"# OptiPlex Now server preset v2 (v1 imports supported)\n")){fclose(f);return 0;}
- /* Never accept absolute AppImage/browser paths or unrecognized settings. */
- char line[1024];int found_host=0;
- while(fgets(line,sizeof line,f)){
-  if(strlen(line)>900||(!strchr(line,'\n')&&!feof(f))){fclose(f);return 0;}
-  line[strcspn(line,"\r\n")]=0;
-  char *eq=strchr(line,'=');if(!eq){if(*line && *line!='#'){fclose(f);return 0;}continue;}
-  *eq++=0;int match=0;
-  for(int i=0;i<PRESET_COUNT;i++){
-    int j=preset_indices[i];
-    if(!strcmp(line,keys[j])){safe_copy(v[j],512,eq);match=1;if(j==0)found_host=1;break;}
-  }
-  if(!match){fclose(f);return 0;}
- }
- fclose(f);return found_host&&safe_preset_values(v);
-}
-static int preset_write(const char*path,char v[CONFIG_COUNT][512]){
- if(!safe_preset_values(v))return 0;
- int fd=open(path,O_WRONLY|O_CREAT|O_TRUNC,0600);if(fd<0)return 0;
- FILE*f=fdopen(fd,"w");if(!f){close(fd);return 0;}
- int ok=fprintf(f,"# OptiPlex Now server preset v1\n")>0;
- for(int i=0;i<PRESET_COUNT;i++){
-  int j=preset_indices[i];
-  if(fprintf(f,"%s=%s\n",keys[j],v[j])<0)ok=0;
- }
- if(fclose(f)!=0)ok=0;
- return ok;
-}
 static void preset_alert(void*parent,const char*title,const char*msg){
  GtkWidget*d=gtk_dialog_new_with_buttons(title,parent,1,"OK",RESPONSE_OK,NULL);
  GtkWidget*area=gtk_dialog_get_content_area(d);GtkWidget*b=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
@@ -509,12 +439,12 @@ static int terminal_launch(char *const args[]) {
 }
 static void launch_ssh(int relay) {
  int h=relay?2:0,u=relay?3:1;
- if(!valid_host(cfg[h])||!valid_user(cfg[u])){say("Check Settings");return;}
+ if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){say("Check Settings");return;}
  char *args[]={"ssh","-l",cfg[u],cfg[h],NULL};terminal_launch(args);
 }
 static void pair(int relay) {
  int h=relay?2:0,u=relay?3:1;
- if(!valid_host(cfg[h])||!valid_user(cfg[u])){say("Check server / relay settings");return;}
+ if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){say("Check server / relay settings");return;}
  if(!now_program_exists("ssh-copy-id")||!now_program_exists("ssh-keygen")){say("Install openssh-client to pair SSH");return;}
  char sshdir[PATH_MAX],pub[PATH_MAX],private[PATH_MAX];
  snprintf(sshdir,sizeof sshdir,"%s/.ssh",getenv("HOME")?getenv("HOME"):"/tmp");mkdir_safe(sshdir);
@@ -676,7 +606,7 @@ static void get_metric(char *dst,size_t n,const char *output,const char *key){
  dst[j]=0;
 }
 static int tcp_reachable(const char *host,const char *port){
- if(!valid_host(host))return 0;
+ if(!now_valid_host(host))return 0;
  struct addrinfo hints={.ai_family=AF_UNSPEC,.ai_socktype=SOCK_STREAM};
  struct addrinfo *addresses=NULL;
  if(getaddrinfo(host,port,&hints,&addresses))return 0;
@@ -703,7 +633,7 @@ static void *worker(void*arg){
    int tailscale_ok=0;
    if(now_program_exists("tailscale")) {char *argv[]={"tailscale","ip","-4",NULL};tailscale_ok=now_run(argv,out,sizeof out,5)==0 && strstr(out,"100.")!=NULL;}
    r->tail=tailscale_ok;
-   if(!valid_host(r->source_host)||!valid_user(r->source_user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
+   if(!now_valid_host(r->source_host)||!now_valid_user(r->source_user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
    else {
      /* Fixed, read-only remote telemetry. Mounted physical file systems. */
      const char*cmd=
@@ -766,7 +696,7 @@ static void *worker(void*arg){
  }else if(r->type==8){
    r->success=tcp_reachable(r->message,"47989") || tcp_reachable(r->message,"47984");
  }else if(r->type==6){
-   if(valid_host(cfg[0])&&valid_user(cfg[1])){
+   if(now_valid_host(cfg[0])&&now_valid_user(cfg[1])){
      /* Read-only hardware inventory. No root privileges and no hardcoded specifications. */
      const char*cmd=
       "printf 'MODEL='; cat /sys/class/dmi/id/product_name 2>/dev/null | head -1; "
@@ -786,7 +716,7 @@ static void *worker(void*arg){
      }
    }
  }else if(r->type==5){
-   if(!valid_host(cfg[0])||!valid_user(cfg[1])) {strcpy(r->message,"CHECK SERVER SETTINGS");}
+   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])) {strcpy(r->message,"CHECK SERVER SETTINGS");}
    else {
      char *args[]={"ssh","-o","BatchMode=yes","-o","ConnectTimeout=5","-o","StrictHostKeyChecking=accept-new",
          "-l",cfg[1],cfg[0],
@@ -803,12 +733,12 @@ static void *worker(void*arg){
    }
  }else {
    int kind=r->type-1; int relay=kind==0;int h=relay?2:0,u=relay?3:1;
-   if(!valid_host(cfg[h])||!valid_user(cfg[u])){strcpy(r->message,"Invalid host or user. Check Settings.");}
+   if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){strcpy(r->message,"Invalid host or user. Check Settings.");}
    else {
      char*arg[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[u],cfg[h],NULL,NULL};
      char command[1024];
      if(relay) {
-       if(!*cfg[4]||!safe_wake_path(cfg[4])){strcpy(r->message,"Set a valid relay wake script in Settings");goto done;}
+       if(!*cfg[4]||!now_safe_wake_path(cfg[4])){strcpy(r->message,"Set a valid relay wake script in Settings");goto done;}
        snprintf(command,sizeof command,"%s",cfg[4]);
      }else{
        const char*actions[]={"suspend","reboot","poweroff"};
@@ -863,7 +793,7 @@ static void open_moonlight(void){
  * are read from its own existing profile, preserving hardware decoding. */
 static void launch_wolf_app(const char *app){
  if(!has_moonlight()){on_games_setup(NULL,NULL);return;}
- if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
+ if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
  int mode=moonlight_mode();
  if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};now_launch(args);}
  else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
@@ -873,7 +803,7 @@ static void launch_wolf_app(const char *app){
 static void launch_steam(void){launch_wolf_app("Steam");}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
- if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
+ if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
  char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
  browser_open(url);
 }
@@ -892,7 +822,7 @@ static void install_moonlight(void){
 }
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
- if(!valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
+ if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
  char *native[]={"moonlight","pair",cfg[0],NULL};
  char *appimage[]={(char*)find_appimage(),"pair",cfg[0],NULL};
  char *flat[]={"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],NULL};
@@ -909,7 +839,7 @@ static void on_games_action(void*w,void*arg){(void)w;
  else if(resp==105)choose_appimage();
  else if(resp==103)pair_wolf();
  else if(resp==104){
-   if(!valid_host(cfg[0])||!valid_user(cfg[1])){
+   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
      if(games_notice)gtk_label_set_text(games_notice,"CHECK SERVER SETTINGS");
    }else{
      if(games_notice)gtk_label_set_text(games_notice,"LOOKING FOR WOLF PAIRING PAGE");
@@ -924,7 +854,7 @@ static void on_games_action(void*w,void*arg){(void)w;
 static void on_restart_streaming(void *w, void *parent) {
  (void)w;
  void *owner=parent?parent:win;
- if(!valid_host(cfg[0])||!valid_user(cfg[1])){
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
    preset_alert(owner,"Server settings needed","Set the OptiPlex host and SSH user in Settings first.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",owner,1,
@@ -970,7 +900,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  * Mount it through GVFS first, then hand COSMIC an actual local FUSE path.
  * Traditional GTK and KDE file managers can still accept their SFTP URIs. */
 static void open_remote_files(void){
- if(!valid_host(cfg[0])||!valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
  if(now_program_exists("cosmic-files")){
    const char*helper="/usr/lib/optiplex-now/open-remote-files";
    if(access(helper,X_OK)!=0){
@@ -992,7 +922,7 @@ static void open_remote_files(void){
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
- if(!valid_host(cfg[0])||!valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
  const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
  if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
  char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
@@ -1004,10 +934,10 @@ static void on_web_gaming_admin(void*w,void*p){
 static int bruiser_url(char *out,size_t cap,int admin){
  char base[640];
  if(*cfg[14]){
-   if(!safe_preset_url(cfg[14]))return 0;
+   if(!now_safe_preset_url(cfg[14]))return 0;
    safe_copy(base,sizeof base,cfg[14]);
  }else{
-   if(!valid_host(cfg[0]))return 0;
+   if(!now_valid_host(cfg[0]))return 0;
    snprintf(base,sizeof base,"http://%s:3000",cfg[0]);
  }
  size_t n=strlen(base);
@@ -1187,11 +1117,11 @@ static void export_preset(void*w,void*p){
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,cfg[i]);
  for(int i=0;i<8;i++)safe_copy(v[i],512,gtk_entry_get_text(c->fields[i]));
  safe_copy(v[10],512,gtk_entry_get_text(c->disk));
- if(!safe_preset_values(v)){
+ if(!now_preset_values_valid(v)){
   preset_alert(c->parent,"Preset not saved","Check server, relay, URL, and wake script fields. Presets cannot contain URL passwords or tokens.");return;
  }
  char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->parent,1))return;
- if(preset_write(path,v))preset_alert(c->parent,"Preset saved","Share this file only with devices you trust. Pair each device separately.");
+ if(now_preset_write(path,v,keys))preset_alert(c->parent,"Preset saved","Share this file only with devices you trust. Pair each device separately.");
  else preset_alert(c->parent,"Preset not saved","Could not write preset file.");
 }
 /* Full trusted-device backup. Passphrase never appears in process arguments. */
@@ -1360,7 +1290,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
    safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
     const char*ai=gtk_entry_get_text(ai_entry);
-    if(safe_preset_url(ai))safe_copy(cfg[14],512,ai);
+    if(now_safe_preset_url(ai))safe_copy(cfg[14],512,ai);
     else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
     unsigned selected=0,featured=0;
     for(int i=0;i<9;i++){
@@ -1380,14 +1310,14 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=valid_host(gtk_entry_get_text(c->host))&&valid_user(gtk_entry_get_text(c->user));
+ int ok=now_valid_host(gtk_entry_get_text(c->host))&&now_valid_user(gtk_entry_get_text(c->user));
  gtk_assistant_set_page_complete(c->assistant,c->server_page,ok);
  gtk_label_set_text(c->notice,"");
 }
 static void wizard_save(Wizard*c){
  const char*values[]={gtk_entry_get_text(c->host),gtk_entry_get_text(c->user),
                       gtk_entry_get_text(c->relay),gtk_entry_get_text(c->relayuser),gtk_entry_get_text(c->wake)};
- if(!valid_host(values[0])||!valid_user(values[1])){
+ if(!now_valid_host(values[0])||!now_valid_user(values[1])){
    return;
  }
  for(int i=0;i<5;i++){
@@ -1397,7 +1327,7 @@ static void wizard_save(Wizard*c){
  if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(c->service_inputs[i]);
-   if(safe_preset_url(url))safe_copy(cfg[5+i],512,url);
+   if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
  }
  /* For a fresh installation, make basic services follow the selected server. */
  if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
@@ -1444,7 +1374,7 @@ static void find_server(Wizard*c){
  char addresses[200][256];int count=0;char *save=NULL;
  for(char*line=strtok_r(output,"\n",&save);line&&count<200;line=strtok_r(NULL,"\n",&save)){
    char*tab=strchr(line,'\t');if(!tab)continue;*tab++=0;
-   if(!valid_host(line))continue;
+   if(!now_valid_host(line))continue;
    safe_copy(addresses[count++],256,line);gtk_combo_box_text_append_text(combo,tab);
  }
  g_signal_connect_data(combo,"changed",(GCallback)picker_selection_changed,accept,NULL,0);
@@ -1466,7 +1396,7 @@ static void wizard_action(void*w,void*p){
     char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->assistant,0))return;
     char v[CONFIG_COUNT][512];
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,c->staged[i]);
-    if(!preset_read(path,v)){
+    if(!now_preset_read(path,v,keys)){
        gtk_label_set_text(c->preset_notice,"INVALID PRESET. NO CHANGES MADE.");return;
     }
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
@@ -1518,7 +1448,7 @@ static void wizard_service_check(void*w,void*p){
  r->type=7;
  for(int i=0;i<3;i++){
    const char*url=gtk_entry_get_text(c->service_inputs[i]);
-   if(!safe_preset_url(url)){gtk_label_set_text(service_labels[i],"INVALID URL");free(r);return;}
+   if(!now_safe_preset_url(url)){gtk_label_set_text(service_labels[i],"INVALID URL");free(r);return;}
    safe_copy(r->service_urls[i],sizeof r->service_urls[i],url);
    gtk_label_set_text(service_labels[i],"CHECKING...");
  }

@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  # Rebuild and smoke-test even when no commits land (toolchain/apt drift).
+  schedule:
+    - cron: '17 3 * * 1'
 
 permissions:
   contents: read

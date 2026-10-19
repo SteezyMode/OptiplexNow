@@ -3,7 +3,7 @@ CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter
 LIBS = -Wl,-l:libgtk-3.so.0 -Wl,-l:libgdk-3.so.0 -Wl,-l:libgobject-2.0.so.0 -Wl,-l:libglib-2.0.so.0 -Wl,-l:libfontconfig.so.1 -Wl,-l:libgio-2.0.so.0 -ldl -lpthread -lm
 FONTBASE = https://raw.githubusercontent.com/google/fonts/main/ofl
 
-.PHONY: all clean package check-process
+.PHONY: all clean package check-process check-presets
 all: build/optiplex-desk build/optiplex-now-backup
 
 build:
@@ -21,8 +21,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) src/main.c src/process.c build/inter.o build/limelight.o -o $@ $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) src/backup.c -o $@ -lcrypto
@@ -37,3 +37,8 @@ clean:
 check-process: | build
 	$(CC) $(CFLAGS) -Isrc tests/test_process.c src/process.c -o build/test-process
 	./build/test-process
+
+# Round-trip and backwards-compatibility checks for portable client presets.
+check-presets: | build
+	$(CC) $(CFLAGS) -Isrc tests/test_presets.c src/presets.c -o build/test-presets
+	./build/test-presets

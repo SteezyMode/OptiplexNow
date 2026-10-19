@@ -4,6 +4,8 @@ set -euo pipefail
 # Launch the built NOW UI inside disposable X11 and home directories.
 # This is a UI startup smoke test, not a Wolf or Moonlight integration test.
 cd "$(dirname "$0")/.."
+# Set NOW_BINARY to validate a package installed under /usr/bin instead of a build artifact.
+export NOW_BINARY="${NOW_BINARY:-./build/optiplex-desk}"
 tmp="$(mktemp -d -t now-gtk-smoke.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime"
@@ -14,7 +16,7 @@ XDG_CONFIG_HOME="$tmp/config" \
 XDG_RUNTIME_DIR="$tmp/runtime" \
 xvfb-run -a dbus-run-session -- bash -c '
   set -euo pipefail
-  ./build/optiplex-desk > "$1/stdout.log" 2> "$1/stderr.log" &
+  "$NOW_BINARY" > "$1/stdout.log" 2> "$1/stderr.log" &
   pid=$!
   trap "kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true" EXIT
   for ((i=0;i<25;i++)); do

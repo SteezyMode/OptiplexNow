@@ -4,6 +4,8 @@ set -euo pipefail
 # Test actual Gtk launcher instance handoff without touching a real user's lock,
 # home, desktop, or Wolf service.
 cd "$(dirname "$0")/.."
+# Set NOW_BINARY to validate a package installed under /usr/bin instead of a build artifact.
+export NOW_BINARY="${NOW_BINARY:-./build/optiplex-desk}"
 tmp="$(mktemp -d -t now-instance.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime" "$tmp/blocked"
@@ -15,7 +17,7 @@ HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_RUNTIME_DIR="$tmp/runtime" \
 xvfb-run -a dbus-run-session -- bash -c '
   set -euo pipefail
   temp="$1"
-  ./build/optiplex-desk >"$temp/first.log" 2>&1 &
+  "$NOW_BINARY" >"$temp/first.log" 2>&1 &
   pid=$!
   trap "kill $pid 2>/dev/null || true; wait $pid 2>/dev/null || true" EXIT
 
@@ -41,13 +43,13 @@ xvfb-run -a dbus-run-session -- bash -c '
   }
 
   # Second launcher must notify the first, exit quickly, and never replace it.
-  timeout 6s ./build/optiplex-desk >"$temp/second.log" 2>&1
+  timeout 6s "$NOW_BINARY" >"$temp/second.log" 2>&1
   kill -0 "$pid"
   [[ "$(cat "$XDG_RUNTIME_DIR/optiplex-now.lock")" = "$pid" ]]
   [[ "$(stat -c "%a" "$XDG_RUNTIME_DIR/optiplex-now.lock")" = 600 ]]
 
   # A hostile or corrupt lock must stop the app instead of spawning unlocked.
-  if XDG_RUNTIME_DIR="$temp/blocked" timeout 6s ./build/optiplex-desk \
+  if XDG_RUNTIME_DIR="$temp/blocked" timeout 6s "$NOW_BINARY" \
        >"$temp/blocked.log" 2>&1; then
     echo "NOW ran even though its lock path was a symlink" >&2
     exit 1

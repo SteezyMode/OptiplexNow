@@ -77,13 +77,13 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
         return -1;
     }
 
-    int status = 0, done = 0, failed = 0;
+    int status = 0, done = 0, failed = 0, eof = 0, timed_out = 0;
     size_t used = 0;
     for (;;) {
         /* Drain everything already available without blocking, even if
          * the output buffer cannot accept any additional bytes.
          */
-        for (;;) {
+        while (!eof) {
             char chunk[8192];
             ssize_t got = read(fd[0], chunk, sizeof chunk);
             if (got > 0) {
@@ -99,7 +99,11 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
                 }
                 continue;
             }
-            if (got == 0 || (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))) {
+            if (got == 0) {
+                eof = 1;
+                break;
+            }
+            if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 break;
             }
             if (errno == EINTR) {
@@ -124,13 +128,19 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
 
         long long remaining = deadline - monotonic_ms();
         if (remaining <= 0) {
+            timed_out = 1;
             break;
         }
-        struct pollfd ready = {.fd = fd[0], .events = POLLIN};
         int tick = remaining < 100 ? (int)remaining : 100;
-        if (poll(&ready, 1, tick) < 0 && errno != EINTR) {
-            failed = 1;
-            break;
+        if (eof) {
+            struct timespec nap = {.tv_sec = 0, .tv_nsec = tick * 1000000L};
+            nanosleep(&nap, NULL);
+        } else {
+            struct pollfd ready = {.fd = fd[0], .events = POLLIN};
+            if (poll(&ready, 1, tick) < 0 && errno != EINTR) {
+                failed = 1;
+                break;
+            }
         }
     }
     if (!done) {
@@ -138,7 +148,7 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
         while (waitpid(pid, &status, 0) < 0 && errno == EINTR) {}
     }
     close(fd[0]);
-    return done && !failed && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    return done && !failed && !timed_out && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
 /* Double-fork to detach the launch; parent does not block on the program. */

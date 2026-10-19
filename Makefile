@@ -1,6 +1,8 @@
 CC ?= gcc
-CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter
-LIBS = -Wl,-l:libgtk-3.so.0 -Wl,-l:libgdk-3.so.0 -Wl,-l:libgobject-2.0.so.0 -Wl,-l:libglib-2.0.so.0 -Wl,-l:libfontconfig.so.1 -Wl,-l:libgio-2.0.so.0 -ldl -lpthread -lm
+CFLAGS ?= -O2 -std=gnu11 -Wall -Wno-unused-parameter -Werror=incompatible-pointer-types -Werror=implicit-function-declaration
+GTK_CFLAGS := $(shell pkg-config --cflags gtk+-3.0 fontconfig)
+GTK_LIBS := $(shell pkg-config --libs gtk+-3.0 fontconfig)
+LIBS = $(GTK_LIBS) -ldl -lpthread -lm
 FONTBASE = https://raw.githubusercontent.com/google/fonts/main/ofl
 
 .PHONY: all clean package check-process check-presets
@@ -22,7 +24,7 @@ build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
 build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ $(LIBS)
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) src/backup.c -o $@ -lcrypto

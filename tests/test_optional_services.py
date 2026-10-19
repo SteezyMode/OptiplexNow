@@ -14,7 +14,7 @@ class OptionalServiceTests(unittest.TestCase):
     def test_service_tiles_have_a_single_home(self):
         self.assertIn("static GtkWidget *tiles[9]", SOURCE)
         self.assertIn('gtk_expander_new("ADDITIONAL SERVICES")', SOURCE)
-        self.assertIn("gtk_grid_attach(chosen?grid:extras_grid,tiles[i]", SOURCE)
+        self.assertIn("gtk_grid_attach(GTK_GRID(chosen?grid:extras_grid),tiles[i]", SOURCE)
         self.assertIn("unsigned featured=featured_mask();int primary=0,other=0;", SOURCE)
         self.assertIn("for(int i=0;i<9;i++){tiles[i]=button(names[i]", SOURCE)
 
@@ -24,8 +24,8 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("GtkWidget*featured_checks[9],*tray_checks[9]", SOURCE)
         self.assertIn('"PRIMARY","storagehead"', SOURCE)
         self.assertIn('"TRAY","storagehead"', SOURCE)
-        self.assertIn("gtk_toggle_button_get_active(featured_checks[i])", SOURCE)
-        self.assertIn("gtk_toggle_button_get_active(tray_checks[i])", SOURCE)
+        self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
+        self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)
         self.assertIn("snprintf(cfg[FEATURED_MASK_SETTING],512", SOURCE)
         self.assertIn("snprintf(cfg[TRAY_MASK_SETTING],512", SOURCE)
         self.assertIn("for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);", SOURCE)

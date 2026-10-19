@@ -101,7 +101,7 @@ static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "OptiPlex";
 }
 static void update_model_heading(void){
- if(model_heading)gtk_label_set_text(model_heading,current_model());
+ if(model_heading)gtk_label_set_text(GTK_LABEL(model_heading),current_model());
 }
 
 static const char *CSS =
@@ -195,21 +195,21 @@ static void config_save(void) {
 }
 static void preset_alert(void*parent,const char*title,const char*msg){
  GtkWidget*d=gtk_dialog_new_with_buttons(title,parent,1,"OK",GTK_RESPONSE_OK,NULL);
- GtkWidget*area=gtk_dialog_get_content_area(d);GtkWidget*b=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
- gtk_container_set_border_width(b,16);gtk_container_add(area,b);
- GtkWidget*l=gtk_label_new(msg);gtk_label_set_line_wrap(l,1);gtk_container_add(b,l);
- gtk_widget_show_all(d);gtk_dialog_run(d);gtk_widget_destroy(d);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*b=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ gtk_container_set_border_width(GTK_CONTAINER(b),16);gtk_container_add(GTK_CONTAINER(area),b);
+ GtkWidget*l=gtk_label_new(msg);gtk_label_set_line_wrap(GTK_LABEL(l),1);gtk_container_add(GTK_CONTAINER(b),l);
+ gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
 }
 static int preset_pick(char*out,size_t n,void*parent,int save){
  GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export My OptiPlex":"Import My OptiPlex",parent,save?1:0,
       "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
- const char*home=getenv("HOME"); if(home&&*home)gtk_file_chooser_set_current_folder(d,home);
+ const char*home=getenv("HOME"); if(home&&*home)gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(d),home);
  if(save){
-   gtk_file_chooser_set_current_name(d,"My-OptiPlex.onp");
-   gtk_file_chooser_set_do_overwrite_confirmation(d,1);
+   gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d),"My-OptiPlex.onp");
+   gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d),1);
  }
- int ok=0; if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
-  char*path=gtk_file_chooser_get_filename(d);
+ int ok=0; if(gtk_dialog_run(GTK_DIALOG(d))==GTK_RESPONSE_OK){
+  char*path=gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
   if(path){safe_copy(out,n,path);ok=1;g_free(path);}
  }
  gtk_widget_destroy(d);return ok;
@@ -249,8 +249,8 @@ static const char* moonlight_mode_name(void) {
 }
 static void choose_appimage(void) {
  GtkWidget*d=gtk_file_chooser_dialog_new("Choose Moonlight AppImage",win,0,"CANCEL",GTK_RESPONSE_CANCEL,"USE THIS FILE",GTK_RESPONSE_OK,NULL);
- if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
-  char *path=gtk_file_chooser_get_filename(d);
+ if(gtk_dialog_run(GTK_DIALOG(d))==GTK_RESPONSE_OK){
+  char *path=gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));
   if(path){
    if(access(path,X_OK)==0){safe_copy(cfg[9],512,path);appimage_found[0]=0;config_save();say("MOONLIGHT APPIMAGE SELECTED");}
    else say("APPIMAGE NOT EXECUTABLE. ENABLE EXECUTE PERMISSION FIRST");
@@ -276,7 +276,7 @@ static void browser_open(const char *url) {
    char*args[]={(char*)cmd,(char*)url,NULL};now_launch(args);return;
  }
  void *err=NULL;
- if(gtk_show_uri_on_window(win,url,0,&err))return;
+ if(gtk_show_uri_on_window(GTK_WINDOW(win),url,0,&err))return;
  if(err){g_error_free(err);err=NULL;}
  const char *browsers[]={"brave-browser-nightly","brave-browser","firefox","google-chrome-stable","google-chrome","chromium","chromium-browser"};
  for(unsigned i=0;i<sizeof browsers/sizeof browsers[0];i++){
@@ -291,14 +291,14 @@ static void browser_open(const char *url) {
  say("NO WEB BROWSER FOUND. SET A DEFAULT BROWSER IN YOUR DESKTOP SETTINGS");
 }
 
-static void set_footer(const char *text) {gtk_label_set_text(footer,text);}
+static void set_footer(const char *text) {gtk_label_set_text(GTK_LABEL(footer),text);}
 static GtkWidget* label(const char *text,const char *id) {
- GtkWidget*l=gtk_label_new(text);gtk_label_set_xalign(l,0);if(id)gtk_widget_set_name(l,id);return l;
+ GtkWidget*l=gtk_label_new(text);gtk_label_set_xalign(GTK_LABEL(l),0);if(id)gtk_widget_set_name(l,id);return l;
 }
 static GtkWidget* button(const char *text,const char *id) {
  GtkWidget*b=gtk_button_new_with_label(text);if(id)gtk_widget_set_name(b,id);return b;
 }
-static void add(GtkWidget*box,GtkWidget*child,int expand) {gtk_box_pack_start(box,child,expand,expand,0);}
+static void add(GtkWidget*box,GtkWidget*child,int expand) {gtk_box_pack_start(GTK_BOX(box),child,expand,expand,0);}
 static void say(const char *s) {if(footer)set_footer(s);}
 
 static int terminal_launch(char *const args[]) {
@@ -342,27 +342,27 @@ static void setup_tailscale(void) {
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
-  int n=gtk_combo_box_get_active(drive_combo);
-  if(n<0||n>=visible_drive_count){gtk_label_set_text(metric_free,"FREE  --");return;}
+  int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
+  if(n<0||n>=visible_drive_count){gtk_label_set_text(GTK_LABEL(metric_free),"FREE  --");return;}
   Drive*d=&visible_drives[n];char buf[160];
   if(*d->free_space)snprintf(buf,sizeof buf,"FREE  %s   /   %s",d->free_space,d->size);
   else snprintf(buf,sizeof buf,"NOT MOUNTED");
-  gtk_label_set_text(metric_free,buf);
+  gtk_label_set_text(GTK_LABEL(metric_free),buf);
   GtkStyleContext *sty=gtk_widget_get_style_context(metric_free);
-  gtk_style_context_remove_class(sty,"warn");
-  if(atoi(d->used_percent)>=90)gtk_style_context_add_class(sty,"warn");
+  gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"warn");
+  if(atoi(d->used_percent)>=90)gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),"warn");
 }
 static void on_drive_changed(void*w,void*arg){
   (void)w;(void)arg;
   if(drive_combo_updating)return;
-  int n=gtk_combo_box_get_active(drive_combo);
+  int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
   if(n<0||n>=visible_drive_count)return;
   safe_copy(cfg[10],512,visible_drives[n].path);
   config_save();set_drive_readout();
 }
 static void update_drives(Result*r){
   if(!drive_combo)return;
-  if(r->success!=1){gtk_label_set_text(metric_free,"FREE  --");return;}
+  if(r->success!=1){gtk_label_set_text(GTK_LABEL(metric_free),"FREE  --");return;}
   /* Do not reset the selection if only disk space values change. */
   int changed=(visible_drive_count!=r->drive_count);
   if(!changed)for(int i=0;i<visible_drive_count;i++){
@@ -379,15 +379,15 @@ static void update_drives(Result*r){
   memcpy(visible_drives,r->drives,sizeof visible_drives);
   if(changed){
     drive_combo_updating=1;
-    gtk_combo_box_text_remove_all(drive_combo);
+    gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(drive_combo));
     for(int i=0;i<visible_drive_count;i++){
       Drive*d=&visible_drives[i];char choice[256];
       const char*name=!strcmp(d->path,"/")?"SYSTEM":strrchr(d->path,'/');
       name=!strcmp(d->path,"/")?name:(name?name+1:d->path);
       snprintf(choice,sizeof choice,"%s   %s",name,d->size);
-      gtk_combo_box_text_append_text(drive_combo,choice);
+      gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(drive_combo),choice);
     }
-    gtk_combo_box_set_active(drive_combo,visible_drive_count?selected:-1);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(drive_combo),visible_drive_count?selected:-1);
     drive_combo_updating=0;
   }
   set_drive_readout();
@@ -404,36 +404,36 @@ static gboolean finish_on_main(void *arg) {
    }
    update_model_heading();
    const char *s=r->success==1?"● ONLINE":r->success==2?"● PAIR SSH":r->success==3?"● TAILSCALE OFF":"● OFFLINE";
-   gtk_label_set_text(indicator,s);
-   if(tray_icon){char tip[100];snprintf(tip,sizeof tip,"OptiPlex Now | %s",s+2);gtk_status_icon_set_tooltip_text(tray_icon,tip);}
+   gtk_label_set_text(GTK_LABEL(indicator),s);
+   if(tray_icon){char tip[100];snprintf(tip,sizeof tip,"OptiPlex Now | %s",s+2);gtk_status_icon_set_tooltip_text(GTK_STATUS_ICON(tray_icon),tip);}
    GtkStyleContext*sty=gtk_widget_get_style_context(indicator);
    /* Old classes harmless; remove is available but style is reset below. */
-   gtk_style_context_remove_class(sty,"online");gtk_style_context_remove_class(sty,"offline");gtk_style_context_remove_class(sty,"pair");
-   gtk_style_context_add_class(sty,r->success==1?"online":r->success==2?"pair":"offline");
-   gtk_label_set_text(status_detail,r->success==1?"":r->message);
-   if(metric_cpu){char val[70];snprintf(val,sizeof val,"CPU   %s",*r->cpu?r->cpu:"--");gtk_label_set_text(metric_cpu,val);}
-   if(metric_gpu){char val[70];snprintf(val,sizeof val,"GPU   %s",*r->gpu?r->gpu:"--");gtk_label_set_text(metric_gpu,val);}
+   gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"online");gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"offline");gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"pair");
+   gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),r->success==1?"online":r->success==2?"pair":"offline");
+   gtk_label_set_text(GTK_LABEL(status_detail),r->success==1?"":r->message);
+   if(metric_cpu){char val[70];snprintf(val,sizeof val,"CPU   %s",*r->cpu?r->cpu:"--");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
+   if(metric_gpu){char val[70];snprintf(val,sizeof val,"GPU   %s",*r->gpu?r->gpu:"--");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
    update_drives(r);
-   if(tailscale_label)gtk_label_set_text(tailscale_label,r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
+   if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;
  }else if(r->type==7){
-    for(int i=0;i<3;i++)if(service_labels[i])gtk_label_set_text(service_labels[i],r->service_state[i]);
+    for(int i=0;i<3;i++)if(service_labels[i])gtk_label_set_text(GTK_LABEL(service_labels[i]),r->service_state[i]);
     services_inflight=0;
  }else if(r->type==8){
-    if(wizard_wolf_label)gtk_label_set_text(wizard_wolf_label,r->success?"WOLF REACHABLE":"WOLF NOT DETECTED. YOU CAN STILL CONTINUE");
+    if(wizard_wolf_label)gtk_label_set_text(GTK_LABEL(wizard_wolf_label),r->success?"WOLF REACHABLE":"WOLF NOT DETECTED. YOU CAN STILL CONTINUE");
     wolf_inflight=0;
  }else if(r->type==6){
-    if(spec_status)gtk_label_set_text(spec_status,r->success?"LIVE HARDWARE INVENTORY":"SERVER UNAVAILABLE. CHECK SSH / TAILSCALE");
+    if(spec_status)gtk_label_set_text(GTK_LABEL(spec_status),r->success?"LIVE HARDWARE INVENTORY":"SERVER UNAVAILABLE. CHECK SSH / TAILSCALE");
     if(r->success){
-      for(int i=0;i<8;i++)if(spec_values[i])gtk_label_set_text(spec_values[i],*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
+      for(int i=0;i<8;i++)if(spec_values[i])gtk_label_set_text(GTK_LABEL(spec_values[i]),*r->specs[i]?r->specs[i]:"NOT AVAILABLE");
     }
     specs_inflight=0;
  }else if(r->type==5){
     if(r->success==1 && !strncmp(r->message,"http://",7)){
-      if(games_notice)gtk_label_set_text(games_notice,"OPENING WOLF PIN PAGE");
+      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"OPENING WOLF PIN PAGE");
       browser_open(r->message);
     }else{
-      if(games_notice)gtk_label_set_text(games_notice,r->message);
+      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),r->message);
       say(r->message);
     }
     power_inflight=0;
@@ -641,14 +641,14 @@ static void begin_job(int type) {
  pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==7)services_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
 }
 static gboolean periodic(void*unused){(void)unused;begin_job(0);return 1;}
-static void refresh(void){gtk_label_set_text(indicator,"● CHECKING");begin_job(0);}
+static void refresh(void){gtk_label_set_text(GTK_LABEL(indicator),"● CHECKING");begin_job(0);}
 static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n>0){const char*names[]={"","Sleep","Restart","Shut down"};
    GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
-   GtkWidget*area=gtk_dialog_get_content_area(d);char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
+   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
    GtkWidget*l=label(msg,"modalheading");gtk_widget_set_margin_start(l,22);gtk_widget_set_margin_end(l,22);
    gtk_widget_set_margin_top(l,16);gtk_widget_set_margin_bottom(l,12);add(area,l,0);gtk_widget_show_all(d);
-   int resp=gtk_dialog_run(d);gtk_widget_destroy(d);if(resp!=GTK_RESPONSE_OK)return;
+   int resp=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);if(resp!=GTK_RESPONSE_OK)return;
  }
  say("SENDING POWER COMMAND");begin_job(n+1);
 }
@@ -682,14 +682,14 @@ static void launch_torrents(void){
 static void install_moonlight(void){
  if(!now_program_exists("flatpak")){
    say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   if(games_notice)gtk_label_set_text(games_notice,"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
+   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
    return;
  }
  /* The action is explicitly user initiated. Flatpak asks to install the remote and package. */
  char*args[]={"sh","-c","flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install --user flathub com.moonlight_stream.Moonlight; printf '\\nPress Enter to close...'; read _",NULL};
  if(terminal_launch(args)){
    say("COMPLETE INSTALLATION IN THE TERMINAL");
-   if(games_notice)gtk_label_set_text(games_notice,"COMPLETE INSTALLATION IN THE TERMINAL");
+   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"COMPLETE INSTALLATION IN THE TERMINAL");
  }
 }
 static void pair_wolf(void){
@@ -701,7 +701,7 @@ static void pair_wolf(void){
  int mode=moonlight_mode();
  if(terminal_launch(mode==1?appimage:mode==2?native:flat)){
    say("ENTER THE PIN ON WOLF'S PAIRING PAGE");
-   if(games_notice)gtk_label_set_text(games_notice,"AFTER PAIRING STARTS, CLICK OPEN WOLF PIN");
+   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"AFTER PAIRING STARTS, CLICK OPEN WOLF PIN");
  }
 }
 static void on_games_action(void*w,void*arg){(void)w;
@@ -712,14 +712,14 @@ static void on_games_action(void*w,void*arg){(void)w;
  else if(resp==103)pair_wolf();
  else if(resp==104){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-     if(games_notice)gtk_label_set_text(games_notice,"CHECK SERVER SETTINGS");
+     if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHECK SERVER SETTINGS");
    }else{
-     if(games_notice)gtk_label_set_text(games_notice,"LOOKING FOR WOLF PAIRING PAGE");
+     if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"LOOKING FOR WOLF PAIRING PAGE");
      begin_job(5);
    }
  }
- if(games_state)gtk_label_set_text(games_state,moonlight_mode_name());
- if(games_install){gtk_button_set_label(games_install,has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT");}
+ if(games_state)gtk_label_set_text(GTK_LABEL(games_state),moonlight_mode_name());
+ if(games_install){gtk_button_set_label(GTK_BUTTON(games_install),has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT");}
 }
 /* Only reached after an explicit confirmation. SSH/sudo authenticate in a
  * terminal; credentials never enter launcher configuration or shell arguments. */
@@ -731,11 +731,11 @@ static void on_restart_streaming(void *w, void *parent) {
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",owner,1,
    "Cancel",GTK_RESPONSE_CANCEL,"Restart streaming",GTK_RESPONSE_OK,NULL);
- gtk_dialog_set_default_response(d,GTK_RESPONSE_CANCEL);
- GtkWidget*area=gtk_dialog_get_content_area(d);
+ gtk_dialog_set_default_response(GTK_DIALOG(d),GTK_RESPONSE_CANCEL);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The OptiPlex itself will stay on.");
- gtk_container_set_border_width(area,20);gtk_label_set_line_wrap(msg,1);gtk_container_add(area,msg);
- gtk_widget_show_all(d);int response=gtk_dialog_run(d);gtk_widget_destroy(d);
+ gtk_container_set_border_width(GTK_CONTAINER(area),20);gtk_label_set_line_wrap(GTK_LABEL(msg),1);gtk_container_add(GTK_CONTAINER(area),msg);
+ gtk_widget_show_all(d);int response=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  if(response!=GTK_RESPONSE_OK)return;
  char *args[]={"/usr/lib/optiplex-now/restart-streaming",cfg[0],cfg[1],NULL};
  if(terminal_launch(args))say("Streaming restart opened in terminal. Check its result before reconnecting.");
@@ -744,13 +744,13 @@ static void on_restart_streaming(void *w, void *parent) {
 
 static void on_games_setup(void*w,void*p){(void)w;
  GtkWidget*d=gtk_dialog_new_with_buttons("Games",p?p:win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
- gtk_window_set_default_size(d,440,290);
- GtkWidget*area=gtk_dialog_get_content_area(d);
+ gtk_window_set_default_size(GTK_WINDOW(d),440,290);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,11);
- gtk_container_set_border_width(col,20);add(area,col,0);
+ gtk_container_set_border_width(GTK_CONTAINER(col),20);add(area,col,0);
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
- GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(address,text);add(col,address,0);
+ GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
  add(col,label("Games launches Steam directly. Open Moonlight here for setup.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
@@ -764,7 +764,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
  games_notice=label("","gameshint");add(col,games_notice,0);
- gtk_widget_show_all(d);gtk_dialog_run(d);
+ gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));
  games_notice=NULL;games_state=NULL;games_install=NULL;gtk_widget_destroy(d);
 }
 /* COSMIC Files may launch in Home when supplied a remote SFTP URI.
@@ -852,13 +852,13 @@ static void reflow(int width) {
    for(int i=0;i<9;i++){
      g_object_ref(tiles[i]);
      void*parent=gtk_widget_get_parent(tiles[i]);
-     if(parent)gtk_container_remove(parent,tiles[i]);
+     if(parent)gtk_container_remove(GTK_CONTAINER(parent),tiles[i]);
    }
    unsigned featured=featured_mask();int primary=0,other=0;
    for(int i=0;i<9;i++){
      int chosen=(featured&(1u<<i))!=0;
      int pos=chosen?primary++:other++;
-     gtk_grid_attach(chosen?grid:extras_grid,tiles[i],pos%cols,pos/cols,1,1);
+     gtk_grid_attach(GTK_GRID(chosen?grid:extras_grid),tiles[i],pos%cols,pos/cols,1,1);
      g_object_unref(tiles[i]);
    }
    gtk_widget_show_all(grid);
@@ -866,8 +866,8 @@ static void reflow(int width) {
  }
  if(pcols!=last_power_columns){
    last_power_columns=pcols;
-   for(int i=0;i<4;i++){g_object_ref(powers[i]);if(gtk_widget_get_parent(powers[i]))gtk_container_remove(power_grid,powers[i]);}
-   for(int i=0;i<4;i++){gtk_grid_attach(power_grid,powers[i],i%pcols,i/pcols,1,1);g_object_unref(powers[i]);}
+   for(int i=0;i<4;i++){g_object_ref(powers[i]);if(gtk_widget_get_parent(powers[i]))gtk_container_remove(GTK_CONTAINER(power_grid),powers[i]);}
+   for(int i=0;i<4;i++){gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1);g_object_unref(powers[i]);}
    gtk_widget_show_all(power_grid);
  }
 }
@@ -905,14 +905,14 @@ static int claim_instance(void){
 }
 static gboolean tray_finish_restore(void *unused){
  (void)unused;
- if(win){gtk_window_deiconify(win);gtk_widget_show_all(win);gtk_window_present(win);}
+ if(win){gtk_window_deiconify(GTK_WINDOW(win));gtk_widget_show_all(win);gtk_window_present(GTK_WINDOW(win));}
  tray_restoring=0;
  return 0;
 }
 static void tray_show_window(void){
  if(!win)return;
  tray_restoring=1;
- gtk_window_deiconify(win);gtk_widget_show_all(win);gtk_window_present(win);
+ gtk_window_deiconify(GTK_WINDOW(win));gtk_widget_show_all(win);gtk_window_present(GTK_WINDOW(win));
  /* Some XFCE window managers send the iconified-state event after restore.
   * Present a second time once that event has been processed. */
  g_timeout_add(140,tray_finish_restore,NULL);
@@ -921,7 +921,7 @@ static gboolean reopen_check(void *unused){
  (void)unused;if(reopen_requested){reopen_requested=0;tray_show_window();}return 1;
 }
 /* Don't leave an invisible process behind if the desktop has no tray. */
-static gboolean can_minimize_to_tray(void){return using_status_notifier ? tray_available : (tray_icon && gtk_status_icon_is_embedded(tray_icon));}
+static gboolean can_minimize_to_tray(void){return using_status_notifier ? tray_available : (tray_icon && gtk_status_icon_is_embedded(GTK_STATUS_ICON(tray_icon)));}
 static gboolean close_to_tray(void *widget,void*event,void*unused){
  (void)widget;(void)event;(void)unused;
  if(can_minimize_to_tray()){gtk_widget_hide(win);return 1;}
@@ -943,7 +943,7 @@ typedef struct { GtkWidget* inputs[8]; int relay; GtkWidget*parent; } PairContex
 static void on_pair_click(void*w,void*p){
  (void)w; PairContext*c=p;
  for(int i=0;i<5;i++){
-   const char*v=gtk_entry_get_text(c->inputs[i]);
+   const char*v=gtk_entry_get_text(GTK_ENTRY(c->inputs[i]));
    if(strchr(v,'\n')||strchr(v,'\r'))return;
    safe_copy(cfg[i],512,v);
  }
@@ -952,7 +952,7 @@ static void on_pair_click(void*w,void*p){
 static void on_games_setup_from_settings(void*w,void*p){
  PairContext*c=p;
  for(int i=0;i<5;i++){
-   const char*v=gtk_entry_get_text(c->inputs[i]);
+   const char*v=gtk_entry_get_text(GTK_ENTRY(c->inputs[i]));
    if(strchr(v,'\n')||strchr(v,'\r'))return;
    safe_copy(cfg[i],512,v);
  }
@@ -962,19 +962,19 @@ static void on_tail(void*w,void*p){(void)w;(void)p;setup_tailscale();}
 static void on_system_info(void*w,void*p){
  (void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("System Info",win,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
- gtk_window_set_default_size(d,490,390);
- GtkWidget*area=gtk_dialog_get_content_area(d);
- GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(box,20);add(area,box,1);
+ gtk_window_set_default_size(GTK_WINDOW(d),490,390);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
+ GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,1);
  add(box,label("SYSTEM INFO","modalheading"),0);
  spec_status=label("READING HARDWARE...","helper");add(box,spec_status,0);
- GtkWidget*rows=gtk_grid_new();gtk_grid_set_row_spacing(rows,13);gtk_grid_set_column_spacing(rows,18);add(box,rows,1);
+ GtkWidget*rows=gtk_grid_new();gtk_grid_set_row_spacing(GTK_GRID(rows),13);gtk_grid_set_column_spacing(GTK_GRID(rows),18);add(box,rows,1);
  const char*names[]={"MODEL","PROCESSOR","GRAPHICS","VIDEO MEMORY","SYSTEM RAM","OPERATING SYSTEM","NVIDIA DRIVER"};
  for(int i=0;i<7;i++){
-   GtkWidget*name=label(names[i],"specname");gtk_widget_set_size_request(name,135,-1);gtk_grid_attach(rows,name,0,i,1,1);
-   spec_values[i]=label("...","specvalue");gtk_label_set_ellipsize(spec_values[i],3);gtk_widget_set_hexpand(spec_values[i],1);
-   gtk_grid_attach(rows,spec_values[i],1,i,1,1);
+   GtkWidget*name=label(names[i],"specname");gtk_widget_set_size_request(name,135,-1);gtk_grid_attach(GTK_GRID(rows),name,0,i,1,1);
+   spec_values[i]=label("...","specvalue");gtk_label_set_ellipsize(GTK_LABEL(spec_values[i]),3);gtk_widget_set_hexpand(spec_values[i],1);
+   gtk_grid_attach(GTK_GRID(rows),spec_values[i],1,i,1,1);
  }
- gtk_widget_show_all(d);begin_job(6);gtk_dialog_run(d);
+ gtk_widget_show_all(d);begin_job(6);gtk_dialog_run(GTK_DIALOG(d));
  for(int i=0;i<7;i++)spec_values[i]=NULL;
  spec_status=NULL;gtk_widget_destroy(d);
 }
@@ -983,8 +983,8 @@ typedef struct {GtkWidget*parent,*fields[8],*disk;} PresetExportContext;
 static void export_preset(void*w,void*p){
  (void)w;PresetExportContext*c=p;char v[CONFIG_COUNT][512];
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,cfg[i]);
- for(int i=0;i<8;i++)safe_copy(v[i],512,gtk_entry_get_text(c->fields[i]));
- safe_copy(v[10],512,gtk_entry_get_text(c->disk));
+ for(int i=0;i<8;i++)safe_copy(v[i],512,gtk_entry_get_text(GTK_ENTRY(c->fields[i])));
+ safe_copy(v[10],512,gtk_entry_get_text(GTK_ENTRY(c->disk)));
  if(!now_preset_values_valid(v)){
   preset_alert(c->parent,"Preset not saved","Check server, relay, URL, and wake script fields. Presets cannot contain URL passwords or tokens.");return;
  }
@@ -998,32 +998,32 @@ static int backup_pick(char*out,size_t n,void*parent,int save){
  GtkWidget*d=gtk_file_chooser_dialog_new(save?"Export Full Backup":"Restore Full Backup",parent,save?1:0,
   "CANCEL",GTK_RESPONSE_CANCEL,save?"SAVE":"OPEN",GTK_RESPONSE_OK,NULL);
  const char*home=getenv("HOME");
- if(home&&*home)gtk_file_chooser_set_current_folder(d,home);
+ if(home&&*home)gtk_file_chooser_set_current_folder(GTK_FILE_CHOOSER(d),home);
  if(save){
-  gtk_file_chooser_set_current_name(d,"My-OptiPlex-full.onb");
-  gtk_file_chooser_set_do_overwrite_confirmation(d,1);
+  gtk_file_chooser_set_current_name(GTK_FILE_CHOOSER(d),"My-OptiPlex-full.onb");
+  gtk_file_chooser_set_do_overwrite_confirmation(GTK_FILE_CHOOSER(d),1);
  }
  int ok=0;
- if(gtk_dialog_run(d)==GTK_RESPONSE_OK){char*path=gtk_file_chooser_get_filename(d);if(path){safe_copy(out,n,path);ok=1;g_free(path);}}
+ if(gtk_dialog_run(GTK_DIALOG(d))==GTK_RESPONSE_OK){char*path=gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(d));if(path){safe_copy(out,n,path);ok=1;g_free(path);}}
  gtk_widget_destroy(d);return ok;
 }
 static int backup_password(void*parent,int restore,char*out,size_t n){
  GtkWidget*d=gtk_dialog_new_with_buttons(restore?"Unlock Backup":"Encrypt Backup",parent,1,
                                       "CANCEL",GTK_RESPONSE_CANCEL,restore?"RESTORE":"ENCRYPT",GTK_RESPONSE_OK,NULL);
- GtkWidget*box=gtk_dialog_get_content_area(d);GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
- gtk_container_set_border_width(col,18);add(box,col,0);
+ GtkWidget*box=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
+ gtk_container_set_border_width(GTK_CONTAINER(col),18);add(box,col,0);
  GtkWidget*note=label(restore?"Your SSH key and Moonlight pairing may be replaced. Use only on a trusted PC.":
    "Contains SSH credentials and Moonlight pairing. Keep this file private.","helper");
- gtk_label_set_line_wrap(note,1);add(col,note,0);
- GtkWidget*password=gtk_entry_new();gtk_entry_set_visibility(password,0);
- gtk_entry_set_placeholder_text(password,"Backup password (12+ characters)");add(col,password,0);
+ gtk_label_set_line_wrap(GTK_LABEL(note),1);add(col,note,0);
+ GtkWidget*password=gtk_entry_new();gtk_entry_set_visibility(GTK_ENTRY(password),0);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(password),"Backup password (12+ characters)");add(col,password,0);
  GtkWidget*again=NULL;
- if(!restore){again=gtk_entry_new();gtk_entry_set_visibility(again,0);
-  gtk_entry_set_placeholder_text(again,"Confirm password");add(col,again,0);}
+ if(!restore){again=gtk_entry_new();gtk_entry_set_visibility(GTK_ENTRY(again),0);
+  gtk_entry_set_placeholder_text(GTK_ENTRY(again),"Confirm password");add(col,again,0);}
  gtk_widget_show_all(d);int ok=0;
- if(gtk_dialog_run(d)==GTK_RESPONSE_OK){
-  const char*pass=gtk_entry_get_text(password);
-  const char*confirm=again?gtk_entry_get_text(again):pass;
+ if(gtk_dialog_run(GTK_DIALOG(d))==GTK_RESPONSE_OK){
+  const char*pass=gtk_entry_get_text(GTK_ENTRY(password));
+  const char*confirm=again?gtk_entry_get_text(GTK_ENTRY(again)):pass;
   size_t z=strlen(pass);
   if(z>=12&&z<n&&!strcmp(pass,confirm)){memcpy(out,pass,z+1);ok=1;}
   else preset_alert(d,"Invalid password","Use at least 12 characters. Both passwords must match.");
@@ -1049,10 +1049,10 @@ static int backup_execute(int restore,const char*path,const char*password){
 static int full_backup_ui(void*parent,int restore){
  if(restore){
   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",parent,1,"CANCEL",GTK_RESPONSE_CANCEL,"CONTINUE",GTK_RESPONSE_OK,NULL);
-  GtkWidget*area=gtk_dialog_get_content_area(d);
+  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
   GtkWidget*n=label("Restore may replace SSH keys, Moonlight settings and OptiPlex preferences.\nOnly restore on a computer you own and trust.","helper");
-  gtk_label_set_line_wrap(n,1);gtk_container_set_border_width(area,16);add(area,n,0);
-  gtk_widget_show_all(d);int result=gtk_dialog_run(d);gtk_widget_destroy(d);if(result!=GTK_RESPONSE_OK)return 0;
+  gtk_label_set_line_wrap(GTK_LABEL(n),1);gtk_container_set_border_width(GTK_CONTAINER(area),16);add(area,n,0);
+  gtk_widget_show_all(d);int result=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);if(result!=GTK_RESPONSE_OK)return 0;
  }
  char path[PATH_MAX];if(!backup_pick(path,sizeof path,parent,!restore))return 0;
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
@@ -1065,36 +1065,36 @@ static int full_backup_ui(void*parent,int restore){
  return rc==0;
 }
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
-static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(parent,GTK_RESPONSE_CANCEL);}
+static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);}
 static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",win,1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
- gtk_window_set_default_size(d,510,440);
- GtkWidget*area=gtk_dialog_get_content_area(d);
- GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(scroll,1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
- GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(col,18);gtk_container_add(scroll,col);
+ gtk_window_set_default_size(GTK_WINDOW(d),510,440);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
+ GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
+ GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(GTK_CONTAINER(col),18);gtk_container_add(GTK_CONTAINER(scroll),col);
  add(col,label("CONNECTION","modalheading"),0);
  GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
  tailscale_label=label("CHECKING TAILSCALE","helper");add(col,tailscale_label,0);
- GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(gt,10);gtk_grid_set_row_spacing(gt,7);add(col,gt,0);
- GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(advanced_grid,10);gtk_grid_set_row_spacing(advanced_grid,7);
- GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(advanced,advanced_grid);
+ GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
+ GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
+ GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
  const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Legacy Downloads URL (unused)"};
  GtkWidget*fields[8];
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
   GtkWidget*dest=(i<2||i>=5)?gt:advanced_grid;int row=i<2?i:i>=5?i-3:i-2;
-  gtk_grid_attach(dest,l,0,row,1,1);
-  fields[i]=gtk_entry_new();gtk_entry_set_text(fields[i],cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(dest,fields[i],1,row,1,1);
+  gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
+  fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
  GtkWidget*disklabel=label("Downloads disk",NULL);
- GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(diskentry,cfg[10]);gtk_widget_set_hexpand(diskentry,1);
- gtk_grid_attach(advanced_grid,disklabel,0,7,1,1);gtk_grid_attach(advanced_grid,diskentry,1,7,1,1);
+ GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
+ gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
  GtkWidget*combo=gtk_combo_box_text_new();const char*opts[]={"Default browser (automatic)","System default","Chrome Flatpak","Chrome native"};
- for(int i=0;i<4;i++)gtk_combo_box_text_append_text(combo,opts[i]);
+ for(int i=0;i<4;i++)gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo),opts[i]);
  int which=!strcmp(cfg[8],"system")?1:!strcmp(cfg[8],"chrome-flatpak")?2:!strcmp(cfg[8],"chrome")?3:0;
- gtk_combo_box_set_active(combo,which);
- gtk_grid_attach(advanced_grid,label("Browser",NULL),0,6,1,1);
- gtk_grid_attach(advanced_grid,combo,1,6,1,1);
+ gtk_combo_box_set_active(GTK_COMBO_BOX(combo),which);
+ gtk_grid_attach(GTK_GRID(advanced_grid),label("Browser",NULL),0,6,1,1);
+ gtk_grid_attach(GTK_GRID(advanced_grid),combo,1,6,1,1);
  GtkWidget*actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  GtkWidget*t=button("TAILSCALE","setupaction");g_signal_connect_data(t,"clicked",(GCallback)on_tail,NULL,NULL,0);add(actions,t,1);
  PairContext server_context={.relay=0},relay_context={.relay=1};
@@ -1105,8 +1105,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,actions,0);
  add(col,label("OPTIONAL SERVICES","modalheading"),0);
  add(col,label("Bruiser uses Open WebUI on SERVER:3000 by default. Override only if needed.","helper"),0);
- GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(ai_entry,"Bruiser AI URL (http(s)://...)");
- gtk_entry_set_text(ai_entry,cfg[14]);add(col,ai_entry,0);
+ GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(ai_entry),"Bruiser AI URL (http(s)://...)");
+ gtk_entry_set_text(GTK_ENTRY(ai_entry),cfg[14]);add(col,ai_entry,0);
  GtkWidget*games=button("GAMES SETUP","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
@@ -1118,20 +1118,20 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
  GtkWidget*featured_checks[9],*tray_checks[9],*choices=gtk_grid_new();
- gtk_grid_set_row_spacing(choices,5);gtk_grid_set_column_spacing(choices,18);
- gtk_grid_attach(choices,label("SERVICE","storagehead"),0,0,1,1);
- gtk_grid_attach(choices,label("PRIMARY","storagehead"),1,0,1,1);
- gtk_grid_attach(choices,label("TRAY","storagehead"),2,0,1,1);
+ gtk_grid_set_row_spacing(GTK_GRID(choices),5);gtk_grid_set_column_spacing(GTK_GRID(choices),18);
+ gtk_grid_attach(GTK_GRID(choices),label("SERVICE","storagehead"),0,0,1,1);
+ gtk_grid_attach(GTK_GRID(choices),label("PRIMARY","storagehead"),1,0,1,1);
+ gtk_grid_attach(GTK_GRID(choices),label("TRAY","storagehead"),2,0,1,1);
  const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
  for(int i=0;i<9;i++){
-   gtk_grid_attach(choices,label(service_names[i],NULL),0,i+1,1,1);
+   gtk_grid_attach(GTK_GRID(choices),label(service_names[i],NULL),0,i+1,1,1);
    featured_checks[i]=gtk_check_button_new_with_label("");
    tray_checks[i]=gtk_check_button_new_with_label("");
-   gtk_toggle_button_set_active(featured_checks[i],(fm&(1u<<i))!=0);
-   gtk_toggle_button_set_active(tray_checks[i],(tm&(1u<<i))!=0);
-   gtk_grid_attach(choices,featured_checks[i],1,i+1,1,1);
-   gtk_grid_attach(choices,tray_checks[i],2,i+1,1,1);
+   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(featured_checks[i]),(fm&(1u<<i))!=0);
+   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
+   gtk_grid_attach(GTK_GRID(choices),featured_checks[i],1,i+1,1,1);
+   gtk_grid_attach(GTK_GRID(choices),tray_checks[i],2,i+1,1,1);
  }
  add(col,choices,0);
  add(col,advanced,0);
@@ -1139,7 +1139,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
  GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
  g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,&export_context,NULL,0);add(col,export_btn,0);
- gtk_box_reorder_child(col,export_btn,2);
+ gtk_box_reorder_child(GTK_BOX(col),export_btn,2);
  GtkWidget*full_export=button("EXPORT FULL BACKUP","setupaction");
  g_signal_connect_data(full_export,"clicked",(GCallback)export_full_backup,d,NULL,0);add(col,full_export,0);
  GtkWidget*full_import=button("RESTORE FULL BACKUP","setupaction");
@@ -1147,20 +1147,20 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 
  GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
  gtk_widget_show_all(d);
- int resp=gtk_dialog_run(d);
+ int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
-   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(fields[i]);if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
-   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(combo);
-   const char*disk=gtk_entry_get_text(diskentry);
+   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
+   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
    safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-    const char*ai=gtk_entry_get_text(ai_entry);
+    const char*ai=gtk_entry_get_text(GTK_ENTRY(ai_entry));
     if(now_safe_preset_url(ai))safe_copy(cfg[14],512,ai);
     else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
     unsigned selected=0,featured=0;
     for(int i=0;i<9;i++){
-      if(gtk_toggle_button_get_active(tray_checks[i]))selected|=1u<<i;
-      if(gtk_toggle_button_get_active(featured_checks[i]))featured|=1u<<i;
+      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
+      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
     }
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
     snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
@@ -1175,13 +1175,13 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=now_valid_host(gtk_entry_get_text(c->host))&&now_valid_user(gtk_entry_get_text(c->user));
- gtk_assistant_set_page_complete(c->assistant,c->server_page,ok);
- gtk_label_set_text(c->notice,"");
+ int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
+ gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->server_page,ok);
+ gtk_label_set_text(GTK_LABEL(c->notice),"");
 }
 static void wizard_save(Wizard*c){
- const char*values[]={gtk_entry_get_text(c->host),gtk_entry_get_text(c->user),
-                      gtk_entry_get_text(c->relay),gtk_entry_get_text(c->relayuser),gtk_entry_get_text(c->wake)};
+ const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
+                      gtk_entry_get_text(GTK_ENTRY(c->relay)),gtk_entry_get_text(GTK_ENTRY(c->relayuser)),gtk_entry_get_text(GTK_ENTRY(c->wake))};
  if(!now_valid_host(values[0])||!now_valid_user(values[1])){
    return;
  }
@@ -1191,13 +1191,13 @@ static void wizard_save(Wizard*c){
  }
  if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
-   const char *url=gtk_entry_get_text(c->service_inputs[i]);
+   const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
  }
  /* For a fresh installation, make basic services follow the selected server. */
  if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
  if(!*cfg[7])snprintf(cfg[7],512,"http://%s:8085",cfg[0]);
- config_save();gtk_label_set_text(c->notice,"SAVED");
+ config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
 static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
@@ -1208,19 +1208,19 @@ static void wizard_prepare(void*a,void*page,void*p){
    if(now_run(args,out,sizeof out,4)==0 && strstr(out,"100."))snprintf(text,sizeof text,"TAILSCALE CONNECTED");
    else snprintf(text,sizeof text,"TAILSCALE NOT CONNECTED");
  }else snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");
- gtk_label_set_text(c->ts_state,text);
- if(c->game_state)gtk_label_set_text(c->game_state,moonlight_mode_name());
+ gtk_label_set_text(GTK_LABEL(c->ts_state),text);
+ if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);
  if(page==c->games_page){
-   if(c->wolf_state)gtk_label_set_text(c->wolf_state,"CHECKING WOLF CONNECTION...");
+   if(c->wolf_state)gtk_label_set_text(GTK_LABEL(c->wolf_state),"CHECKING WOLF CONNECTION...");
    /* Use the address entered in the wizard without saving partial settings. */
-   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(c->host));
+   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(GTK_ENTRY(c->host)));
    /* The server may stream even if its pairing page is unavailable; do not block setup. */
    begin_job(8);
  }
 }
 static void picker_selection_changed(void *combo,void *accept){
- gtk_widget_set_sensitive(accept,gtk_combo_box_get_active(combo)>=0);
+ gtk_widget_set_sensitive(accept,gtk_combo_box_get_active(GTK_COMBO_BOX(combo))>=0);
 }
 static void find_server(Wizard*c){
  char output[65536]={0};
@@ -1229,25 +1229,25 @@ static void find_server(Wizard*c){
    preset_alert(c->assistant,"Find server",*output?output:"Could not list devices. Check Tailscale, or enter an address manually.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",c->assistant,1,"Cancel",GTK_RESPONSE_CANCEL,NULL);
- GtkWidget*accept=gtk_dialog_add_button(d,"Use this device",GTK_RESPONSE_OK);
+ GtkWidget*accept=gtk_dialog_add_button(GTK_DIALOG(d),"Use this device",GTK_RESPONSE_OK);
  gtk_widget_set_sensitive(accept,0);
- GtkWidget*area=gtk_dialog_get_content_area(d);gtk_container_set_border_width(area,18);
+ GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));gtk_container_set_border_width(GTK_CONTAINER(area),18);
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);add(area,col,0);
  GtkWidget*hint=label("Choose the computer running your server.\nThese are your Tailscale devices; SSH and Wolf are checked separately.","helper");
- gtk_label_set_line_wrap(hint,1);add(col,hint,0);
+ gtk_label_set_line_wrap(GTK_LABEL(hint),1);add(col,hint,0);
  GtkWidget*combo=gtk_combo_box_text_new();add(col,combo,0);
  char addresses[200][256];int count=0;char *save=NULL;
  for(char*line=strtok_r(output,"\n",&save);line&&count<200;line=strtok_r(NULL,"\n",&save)){
    char*tab=strchr(line,'\t');if(!tab)continue;*tab++=0;
    if(!now_valid_host(line))continue;
-   safe_copy(addresses[count++],256,line);gtk_combo_box_text_append_text(combo,tab);
+   safe_copy(addresses[count++],256,line);gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo),tab);
  }
  g_signal_connect_data(combo,"changed",(GCallback)picker_selection_changed,accept,NULL,0);
  gtk_widget_show_all(d);
- int response=gtk_dialog_run(d),selected=gtk_combo_box_get_active(combo);
+ int response=gtk_dialog_run(GTK_DIALOG(d)),selected=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
  if(response==GTK_RESPONSE_OK && selected>=0 && selected<count){
-   gtk_entry_set_text(c->host,addresses[selected]);
-   gtk_label_set_text(c->notice,"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+   gtk_entry_set_text(GTK_ENTRY(c->host),addresses[selected]);
+   gtk_label_set_text(GTK_LABEL(c->notice),"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
  }
  gtk_widget_destroy(d);
 }
@@ -1261,17 +1261,17 @@ static void wizard_action(void*w,void*p){
     char v[CONFIG_COUNT][512];
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,c->staged[i]);
     if(!now_preset_read(path,v,keys)){
-       gtk_label_set_text(c->preset_notice,"INVALID PRESET. NO CHANGES MADE.");return;
+       gtk_label_set_text(GTK_LABEL(c->preset_notice),"INVALID PRESET. NO CHANGES MADE.");return;
     }
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
     c->preset_loaded=1;
-    gtk_entry_set_text(c->host,v[0]);gtk_entry_set_text(c->user,v[1]);
-    gtk_entry_set_text(c->relay,v[2]);gtk_entry_set_text(c->relayuser,v[3]);gtk_entry_set_text(c->wake,v[4]);
+    gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
+    gtk_entry_set_text(GTK_ENTRY(c->relay),v[2]);gtk_entry_set_text(GTK_ENTRY(c->relayuser),v[3]);gtk_entry_set_text(GTK_ENTRY(c->wake),v[4]);
     for(int i=0;i<3;i++){
-       gtk_entry_set_text(c->service_inputs[i],v[5+i]);
-       if(service_labels[i])gtk_label_set_text(service_labels[i],*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
+       gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),v[5+i]);
+       if(service_labels[i])gtk_label_set_text(GTK_LABEL(service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
     }
-    gtk_label_set_text(c->preset_notice,"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
+    gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
     return;
  }
  if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
@@ -1289,17 +1289,17 @@ static void wizard_action(void*w,void*p){
  }
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",c->assistant,1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
-   GtkWidget*area=gtk_dialog_get_content_area(d);GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
-   gtk_container_set_border_width(box,20);add(area,box,0);
+   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
+   gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,0);
    add(box,label("NEW SERVER SETUP","modalheading"),0);
    GtkWidget*l=label("Automated server provisioning is not included yet.\nFor now, install Tailscale and SSH on the new server,\nthen use this wizard to connect.","helper");
-   gtk_label_set_line_wrap(l,1);add(box,l,0);
-   gtk_widget_show_all(d);gtk_dialog_run(d);gtk_widget_destroy(d);
+   gtk_label_set_line_wrap(GTK_LABEL(l),1);add(box,l,0);
+   gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  }
- if(c->game_state)gtk_label_set_text(c->game_state,moonlight_mode_name());
+ if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
 }
 static GtkWidget*wizard_button(Wizard*c,GtkWidget*page,const char*title,const char*id){
- GtkWidget*b=button(title,"setupaction");gtk_widget_set_name(b,id);gtk_style_context_add_class(gtk_widget_get_style_context(b),"setupaction");
+ GtkWidget*b=button(title,"setupaction");gtk_widget_set_name(b,id);gtk_style_context_add_class(GTK_STYLE_CONTEXT(gtk_widget_get_style_context(b)),"setupaction");
  g_signal_connect_data(b,"clicked",(GCallback)wizard_action,c,NULL,0);add(page,b,0);return b;
 }
 static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
@@ -1311,10 +1311,10 @@ static void wizard_service_check(void*w,void*p){
  Result*r=calloc(1,sizeof *r);if(!r)return;
  r->type=7;
  for(int i=0;i<3;i++){
-   const char*url=gtk_entry_get_text(c->service_inputs[i]);
-   if(!now_safe_preset_url(url)){gtk_label_set_text(service_labels[i],"INVALID URL");free(r);return;}
+   const char*url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
+   if(!now_safe_preset_url(url)){gtk_label_set_text(GTK_LABEL(service_labels[i]),"INVALID URL");free(r);return;}
    safe_copy(r->service_urls[i],sizeof r->service_urls[i],url);
-   gtk_label_set_text(service_labels[i],"CHECKING...");
+   gtk_label_set_text(GTK_LABEL(service_labels[i]),"CHECKING...");
  }
  services_inflight=1;pthread_t t;
  if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
@@ -1325,10 +1325,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
- gtk_window_set_title(a,"OptiPlex Now | Setup");gtk_window_set_default_size(a,710,480);
- gtk_window_set_transient_for(a,win);gtk_window_set_modal(a,1);
+ gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
+ gtk_window_set_transient_for(GTK_WINDOW(a),win);gtk_window_set_modal(GTK_WINDOW(a),1);
  /* Page 1: keep existing device setup. No credentials or pairings are reset. */
- GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(one,24);
+ GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
  wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
@@ -1339,34 +1339,34 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
     add(one,label("EXISTING CONNECTION FOUND","helper"),0);
     wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
  }
- gtk_assistant_append_page(a,one);gtk_assistant_set_page_title(a,one,"TAILSCALE");gtk_assistant_set_page_type(a,one,1);gtk_assistant_set_page_complete(a,one,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"TAILSCALE");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
  /* Page 2: choose your server. All values are prefilled from saved configuration. */
- GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(two,24);
+ GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
  add(two,label("FIND YOUR SERVER","modalheading"),0);
  wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
- c->host=gtk_entry_new();gtk_entry_set_placeholder_text(c->host,"Tailscale IP or hostname");gtk_entry_set_text(c->host,cfg[0]);add(two,c->host,0);
+ c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
  add(two,label("SSH USER","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(c->user,"optiplex");gtk_entry_set_text(c->user,cfg[1]);add(two,c->user,0);
+ c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"optiplex");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
  wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
- gtk_assistant_append_page(a,two);gtk_assistant_set_page_title(a,two,"SERVER");gtk_assistant_set_page_type(a,two,0);wizard_validate(NULL,c);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
  /* Page 3: pair SSH keys once. Relay is optional. */
- GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(three,22);
+ GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);
  add(three,label("SECURE ACCESS","modalheading"),0);
  add(three,label("Existing SSH keys are reused.","helper"),0);
  wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
  add(three,label("WAKE RELAY (OPTIONAL)","helper"),0);
- c->relay=gtk_entry_new();gtk_entry_set_placeholder_text(c->relay,"Relay Tailscale IP");gtk_entry_set_text(c->relay,cfg[2]);add(three,c->relay,0);
- c->relayuser=gtk_entry_new();gtk_entry_set_placeholder_text(c->relayuser,"Relay SSH user");gtk_entry_set_text(c->relayuser,cfg[3]);add(three,c->relayuser,0);
- c->wake=gtk_entry_new();gtk_entry_set_placeholder_text(c->wake,"Wake script on relay");gtk_entry_set_text(c->wake,cfg[4]);add(three,c->wake,0);
+ c->relay=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relay),"Relay Tailscale IP");gtk_entry_set_text(GTK_ENTRY(c->relay),cfg[2]);add(three,c->relay,0);
+ c->relayuser=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relayuser),"Relay SSH user");gtk_entry_set_text(GTK_ENTRY(c->relayuser),cfg[3]);add(three,c->relayuser,0);
+ c->wake=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->wake),"Wake script on relay");gtk_entry_set_text(GTK_ENTRY(c->wake),cfg[4]);add(three,c->wake,0);
  wizard_button(c,three,"AUTHORIZE RELAY KEY","w_relay");
- gtk_assistant_append_page(a,three);gtk_assistant_set_page_title(a,three,"ACCESS");gtk_assistant_set_page_type(a,three,0);gtk_assistant_set_page_complete(a,three,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),three);gtk_assistant_set_page_title(GTK_ASSISTANT(a),three,"ACCESS");gtk_assistant_set_page_type(GTK_ASSISTANT(a),three,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),three,1);
  /* Page 4: reuse the existing installed Moonlight, including AppImages. */
- GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(four,24);
+ GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("GAMES","modalheading"),0);
  c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
  c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
@@ -1375,31 +1375,31 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"PAIR WOLF","w_wolf");
  wizard_button(c,four,"OPEN WOLF PIN","w_wolfpin");
- gtk_assistant_append_page(a,four);gtk_assistant_set_page_title(a,four,"GAMES");gtk_assistant_set_page_type(a,four,0);gtk_assistant_set_page_complete(a,four,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL
   * wasn't configured locally. */
- GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(five,20);
+ GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(GTK_CONTAINER(five),20);
  add(five,label("SERVICES","modalheading"),0);
  add(five,label("Addresses from your preset are checked automatically.","helper"),0);
  const char*names[]={"VIDEOS URL","MUSIC URL","DOWNLOADS URL"};
- GtkWidget*rows=gtk_grid_new();gtk_grid_set_column_spacing(rows,9);gtk_grid_set_row_spacing(rows,11);add(five,rows,0);
+ GtkWidget*rows=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(rows),9);gtk_grid_set_row_spacing(GTK_GRID(rows),11);add(five,rows,0);
  for(int i=0;i<3;i++){
-   gtk_grid_attach(rows,label(names[i],"specname"),0,i,1,1);
+   gtk_grid_attach(GTK_GRID(rows),label(names[i],"specname"),0,i,1,1);
    c->service_inputs[i]=gtk_entry_new();gtk_widget_set_hexpand(c->service_inputs[i],1);
-   gtk_entry_set_text(c->service_inputs[i],c->staged[i+5]);
-   gtk_grid_attach(rows,c->service_inputs[i],1,i,1,1);
+   gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),c->staged[i+5]);
+   gtk_grid_attach(GTK_GRID(rows),c->service_inputs[i],1,i,1,1);
    service_labels[i]=label(*c->staged[i+5]?"NOT CHECKED":"ADD URL","specvalue");
-   gtk_grid_attach(rows,service_labels[i],2,i,1,1);
+   gtk_grid_attach(GTK_GRID(rows),service_labels[i],2,i,1,1);
  }
  GtkWidget*check=button("CHECK SERVICES","setupaction");g_signal_connect_data(check,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,check,0);
- gtk_assistant_append_page(a,five);gtk_assistant_set_page_title(a,five,"SERVICES");gtk_assistant_set_page_type(a,five,0);gtk_assistant_set_page_complete(a,five,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
  /* Page 6: nothing else needed for existing clients. */
- GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(six,24);
+ GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("READY","modalheading"),0);
  add(six,label("Saved settings carry over between updates.","helper"),0);
  add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
- gtk_assistant_append_page(a,six);gtk_assistant_set_page_title(a,six,"FINISH");gtk_assistant_set_page_type(a,six,2);gtk_assistant_set_page_complete(a,six,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"FINISH");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  g_signal_connect_data(a,"prepare",(GCallback)wizard_prepare,c,NULL,0);
  g_signal_connect_data(a,"apply",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"cancel",(GCallback)wizard_cancel,c,NULL,0);
@@ -1428,7 +1428,7 @@ static void fonts_register(void) {
 }
 static void tray_quit(void *w,void *data){
  (void)w;(void)data;
- if(tray_icon)gtk_status_icon_set_visible(tray_icon,0);
+ if(tray_icon)gtk_status_icon_set_visible(GTK_STATUS_ICON(tray_icon),0);
  if(app_indicator && app_indicator_set_status_fn)app_indicator_set_status_fn(app_indicator,0);
  gtk_main_quit();
 }
@@ -1454,14 +1454,14 @@ static void tray_action(void *widget,void *data){
 static void tray_menu_item(const char*caption,int action){
  GtkWidget *item=gtk_menu_item_new_with_label(caption);
  g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)action,NULL,0);
- gtk_menu_shell_append(tray_menu,item);
+ gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
 }
 static void tray_separator(void){
- GtkWidget*item=gtk_separator_menu_item_new();gtk_menu_shell_append(tray_menu,item);
+ GtkWidget*item=gtk_separator_menu_item_new();gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
 }
 static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
- gtk_menu_popup(tray_menu,NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
+ gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
@@ -1515,10 +1515,10 @@ static void tray_initialize(void){
  }
  /* XFCE Notification Area and desktops without an SNI host. */
  tray_icon=gtk_status_icon_new_from_icon_name("optiplex-now-tray");
- gtk_status_icon_set_tooltip_text(tray_icon,"OptiPlex Now");
+ gtk_status_icon_set_tooltip_text(GTK_STATUS_ICON(tray_icon),"OptiPlex Now");
  g_signal_connect_data(tray_icon,"activate",(GCallback)tray_toggle,NULL,NULL,0);
  g_signal_connect_data(tray_icon,"popup-menu",(GCallback)tray_popup,NULL,NULL,0);
- gtk_status_icon_set_visible(tray_icon,1);
+ gtk_status_icon_set_visible(GTK_STATUS_ICON(tray_icon),1);
 }
 
 static gboolean initial_tray_check(void *unused){
@@ -1538,22 +1538,22 @@ int main(int argc,char**argv) {
  }
  if(!claim_instance())return 0;
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
- GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(cp,CSS,-1,NULL);
+ GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),cp,GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
- win=gtk_window_new(0);gtk_window_set_title(win,"OptiPlex Now");gtk_window_set_default_size(win,660,505);
- gtk_window_set_icon_name(win,"optiplex-now");gtk_window_set_position(win,1);
+ win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,505);
+ gtk_window_set_icon_name(GTK_WINDOW(win),"optiplex-now");gtk_window_set_position(GTK_WINDOW(win),1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"window-state-event",(GCallback)minimize_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
- GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(sc,1,1);gtk_container_add(win,sc);
- GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");gtk_container_add(sc,shell);
- GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(body,14);add(shell,body,1);
+ GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),1,1);gtk_container_add(GTK_CONTAINER(win),sc);
+ GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");gtk_container_add(GTK_CONTAINER(sc),shell);
+ GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
  model_heading=label(current_model(),"title");
- gtk_label_set_ellipsize(model_heading,3);
- gtk_label_set_max_width_chars(model_heading,22);
+ gtk_label_set_ellipsize(GTK_LABEL(model_heading),3);
+ gtk_label_set_max_width_chars(GTK_LABEL(model_heading),22);
  add(brandcol,model_heading,0);
  GtkWidget*right=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);gtk_widget_set_valign(right,GTK_ALIGN_CENTER);add(head,right,0);
  GtkWidget*tools=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(right,tools,0);
@@ -1562,28 +1562,28 @@ int main(int argc,char**argv) {
  GtkWidget*sett=button("SETTINGS","setting");g_signal_connect_data(sett,"clicked",(GCallback)on_settings,NULL,NULL,0);add(tools,sett,0);
  status_detail=label("","detail");add(right,status_detail,0);
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
- GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(metrics,1);gtk_grid_set_column_spacing(metrics,8);add(body,metrics,0);
+ GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
  metric_cpu=label("CPU   --","metric");metric_gpu=label("GPU   --","metric");
- gtk_grid_attach(metrics,metric_cpu,0,0,1,1);gtk_grid_attach(metrics,metric_gpu,1,0,1,1);
+ gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);
  GtkWidget*diskbox=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);gtk_widget_set_name(diskbox,"drivemetric");
  GtkWidget*diskhead=label("STORAGE","storagehead");add(diskbox,diskhead,0);
  drive_combo=gtk_combo_box_text_new();gtk_widget_set_name(drive_combo,"drivecombo");gtk_widget_set_hexpand(drive_combo,1);
- gtk_combo_box_text_append_text(drive_combo,"Checking drives...");gtk_combo_box_set_active(drive_combo,0);
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(drive_combo),"Checking drives...");gtk_combo_box_set_active(GTK_COMBO_BOX(drive_combo),0);
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
- gtk_grid_attach(metrics,diskbox,2,0,1,1);
+ gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,1);
  add(body,label("PRIMARY ACTIONS","section"),0);
- grid=gtk_grid_new();gtk_grid_set_column_homogeneous(grid,1);gtk_grid_set_row_spacing(grid,7);gtk_grid_set_column_spacing(grid,7);
+ grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(grid),1);gtk_grid_set_row_spacing(GTK_GRID(grid),7);gtk_grid_set_column_spacing(GTK_GRID(grid),7);
  gtk_widget_set_hexpand(grid,1);add(body,grid,0);
  GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
- extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(extras_grid,1);
- gtk_grid_set_row_spacing(extras_grid,7);gtk_grid_set_column_spacing(extras_grid,7);
- gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(extras,extras_grid);
+ extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(extras_grid),1);
+ gtk_grid_set_row_spacing(GTK_GRID(extras_grid),7);gtk_grid_set_column_spacing(GTK_GRID(extras_grid),7);
+ gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(GTK_CONTAINER(extras),extras_grid);
  const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI"};
  for(int i=0;i<9;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
- power_grid=gtk_grid_new();gtk_grid_set_column_spacing(power_grid,7);gtk_grid_set_row_spacing(power_grid,7);
- gtk_grid_set_column_homogeneous(power_grid,1);add(body,power_grid,0);
+ power_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(power_grid),7);gtk_grid_set_row_spacing(GTK_GRID(power_grid),7);
+ gtk_grid_set_column_homogeneous(GTK_GRID(power_grid),1);add(body,power_grid,0);
  const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);

@@ -1,21 +1,18 @@
-name: Build and publish OptiPlex Now
+name: Publish OptiPlex NOW
+
+# Publishing is an explicit release operation, never a side effect of merging to main.
 on:
   push:
-    branches: [main]
-    paths:
-      - 'src/**'
-      - 'assets/**'
-      - 'package.py'
-      - 'Makefile'
-      - 'tests/**'
-      - 'README.md'
-      - '.github/workflows/release.yml'
-  workflow_dispatch:
+    tags:
+      - 'v*'
+
 permissions:
   contents: write
+
 concurrency:
   group: publish-optiplex-now
   cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-24.04
@@ -26,41 +23,41 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends
-      - name: Test and build from the checked-out source
+      - name: Verify release tag and build from source
+        shell: bash
         run: |
           set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          test -n "$version"
+          test "$version" != "$GITHUB_REF_NAME"
           make package
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk
-          mapfile -t pkgs < <(find dist -maxdepth 1 -name 'OptiPlex-Now_*_amd64.deb' -type f)
-          test "${#pkgs[@]}" -eq 1
-          package="${pkgs[0]}"
-          version="$(dpkg-deb -f "$package" Version)"
-          test "$version" = "1.13.0"
-          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now'
+          package="dist/OptiPlex-Now_${version}_amd64.deb"
+          test -f "$package"
+          test "$(dpkg-deb -f "$package" Package)" = "optiplex-now"
+          test "$(dpkg-deb -f "$package" Version)" = "$version"
+          test "$(dpkg-deb -f "$package" Architecture)" = "amd64"
+          dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now$'
           cp "$package" dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum "OptiPlex-Now_${version}_amd64.deb" OptiPlex-Now_amd64.deb > SHA256SUMS)
-      - name: Publish one latest production release
+      - name: Publish new immutable versioned artifacts
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
+        shell: bash
         run: |
           set -euo pipefail
-          version="1.13.0"
-          tag="v${version}"
-          if gh release view "$tag" >/dev/null 2>&1; then
-            echo "Release ${tag} exists; refusing to rewrite an existing published version" >&2
+          version="${GITHUB_REF_NAME#v}"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite published assets" >&2
             exit 1
           fi
-          cat > release-notes.md <<'NOTES'
-          OptiPlex Now 1.13.0 release.
-
-          - The Desktop tile launches Wolf's existing OptiPlex Studio Desktop application.
-          - AppIndicator uses the readable 'OptiPlex Now' display title where supported.
-          - Includes configurable shortcuts, web gaming access, and optional server utilities from 1.12 development.
-          - Steam continues to launch Wolf's existing Steam application.
-          - Installer is rebuilt and validated from the release source commit.
-
-          Requires your existing Tailscale, Wolf, and remote services. It does not install or modify those services.
-          NOTES
-          gh release create "$tag"             dist/OptiPlex-Now_1.13.0_amd64.deb             dist/OptiPlex-Now_amd64.deb             dist/SHA256SUMS             --target "$GITHUB_SHA"             --title "OptiPlex Now 1.13.0"             --notes-file release-notes.md             --latest
+          gh release create "$GITHUB_REF_NAME" \
+            "dist/OptiPlex-Now_${version}_amd64.deb" \
+            dist/OptiPlex-Now_amd64.deb \
+            dist/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "OptiPlex NOW ${GITHUB_REF_NAME}" \
+            --generate-notes \
+            --latest

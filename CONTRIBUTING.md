@@ -37,7 +37,7 @@ make package
 dpkg-deb -f dist/OptiPlex-Now_1.13.0_amd64.deb Package Version Architecture
 \`\`\`
 
-Build downloads font sources from upstream; internet access is needed and downloaded fonts are not yet content-pinned. A passing build is **not** proof of working Wolf playback, pairing, GTK tray behavior or fresh installation. Do not execute host-maintenance helpers as part of testing. Never use the primary OptiPlex as a throwaway test host.
+Build downloads font sources from a pinned Google Fonts commit and verifies their exact upstream Git blob IDs and sizes; a network connection is needed for a clean build. To intentionally upgrade fonts, review the new upstream commit and update `FONT_REV`, both blob IDs and both byte counts in `Makefile` together. The atomic download recipe refuses partial or altered fonts. A passing build is **not** proof of working Wolf playback, pairing, GTK tray behavior or fresh installation. Do not execute host-maintenance helpers as part of testing. Never use the primary OptiPlex as a throwaway test host.
 
 ## Safe PR workflow
 

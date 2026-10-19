@@ -4,7 +4,7 @@
 
 # Application structure and optional services
 
-> **Architecture note (2026-10-19):** Older mentions of **Studio** as a synth/step-sequencer idea predate today's separately released [OptiPlex Studio v0.3.0](https://github.com/SteezyMode/OptiplexStudio/releases/tag/v0.3.0), whose scope is an AI-assisted Godot/Blender game-development environment. NOW remains an independent streaming/server-access client. See [Current Status](CURRENT-STATUS.md) and Studio's [ADR-001](https://github.com/SteezyMode/OptiplexStudio/blob/main/docs/ADR-001-LOCAL-FIRST-SHARED-STUDIO-RUNTIME.md). Legacy synth concepts are optional tool capabilities, not a separate current application architecture.
+> **Architecture note (2026-10-19):** Older mentions of **Studio** as a synth/step-sequencer idea predate today's separately released [OptiPlex Studio v0.3.0](https://github.com/SteezyMode/OptiplexStudio/releases/tag/v0.3.0), whose scope is an AI-assisted Godot/Blender game-development environment. NOW remains an independent streaming/server-access client. See [Current Status](../CURRENT-STATUS.md) and Studio's [ADR-001](https://github.com/SteezyMode/OptiplexStudio/blob/main/docs/ADR-001-LOCAL-FIRST-SHARED-STUDIO-RUNTIME.md). Legacy synth concepts are optional tool capabilities, not a separate current application architecture.
 
 
 Status: design baseline for draft 1.12.0, 2026-10-16. This document distinguishes implemented behavior from proposals.
@@ -72,4 +72,4 @@ No Studio server, database, authentication, pattern sync, browser UI or synthesi
 - Configuration remains compatible with old `config.ini` and v1 presets.
 - A fresh client must restore its own private identity or pair explicitly; never bake Moonlight/SSH/MoonlightWeb credentials into public releases.
 - Change production server services only with backups, explicit opt-in, tests and rollback.
-- Source of truth for observed operations: [operations-handoff.md](operations-handoff.md).
+- Source of truth for observed operations: [operations-handoff.md](../operations-handoff.md).

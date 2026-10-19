@@ -9,6 +9,8 @@
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
+**New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): a two-minute product brief, source-code map, exact build/test commands, safety boundaries and where to help. For the distinction between this client and the independent creative application, see [Suite architecture](https://github.com/SteezyMode/OptiplexSuite/blob/main/ARCHITECTURE.md).
+
 **Current version: 1.13.0. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Long-term product architecture
@@ -76,15 +78,16 @@ Add `optiplex-now --start-in-tray` to desktop startup. Edit an existing entry in
 
 ## Build
 
-Requires x86-64 Linux, GCC, make, binutils, curl, Python 3, GTK 3/Gio runtime libraries, fontconfig and OpenSSL development files. Pillow is optional for generating icon sizes. The profile helper requires Python 3.11 or newer.
+Requires x86-64 Linux, GCC, make, binutils, curl, Python 3, GTK 3/Gio runtime libraries, fontconfig and OpenSSL development files. Pillow is required to package the current icon sizes. The profile helper requires Python 3.11 or newer.
 
 ```sh
-make package
+make check-process check-presets
 python3 -m unittest discover -s tests -v
+make package
 ```
 
 The build downloads Inter and Limelight fonts and writes the installer to `dist/`. Fonts are embedded; end users do not fetch them at runtime. See [font notices](FONT-NOTICES.md).
 
 `src/` contains the application and helpers; `tests/` contains profile-tool tests; `assets/` contains icons. `downloads/` holds the current prebuilt installer. Generated build folders and personal credentials are excluded.
 
-The build and profile-tool tests pass. The new music-profile workflow has not yet been tested against the live reference server. No application-code license has been selected. This project is not affiliated with Dell.
+The build and profile-tool tests pass. The new music-profile workflow has not yet been tested against the live reference server. No application-code license has been selected; clarify licensing before outside contributions or commercial distribution. This project is not affiliated with Dell.

@@ -32,7 +32,9 @@ static int writeall(int fd,const void *ptr,size_t n){const unsigned char*p=ptr;w
 static int readall(int fd,void *ptr,size_t n){unsigned char*p=ptr;while(n){ssize_t k=read(fd,p,n);if(k<0&&errno==EINTR)continue;if(k<=0)return 0;p+=k;n-=(size_t)k;}return 1;}
 static int record_path(char *dest,size_t n,int idx){const char*home=getenv("HOME");if(!home||*home!='/')return 0;return snprintf(dest,n,"%s/%s",home,paths[idx])<(int)n;}
 static int mkdir_parents(char *name){char t[PATH_MAX];size_t len=strlen(name);if(len>=sizeof t)return 0;memcpy(t,name,len+1);
- for(char *p=t+1;*p;p++)if(*p=='/'){*p=0;if(mkdir(t,0700)<0&&errno!=EEXIST)return 0;struct stat st;if(lstat(t,&st)!=0||!S_ISDIR(st.st_mode))return 0;*p='/';}return 1;}
+ for(char *p=t+1;*p;p++)if(*p=='/'){*p=0;if(mkdir(t,0700)<0&&errno!=EEXIST)return 0;struct stat st;if(lstat(t,&st)!=0||!S_ISDIR(st.st_mode))return 0;*p='/';}
+ return 1;
+}
 /* Atomic writes for restored entries. Refuse symlinks at the destination. */
 static int restore_file(int idx,const unsigned char *data,size_t len){
  char path[PATH_MAX],temp[PATH_MAX];if(!record_path(path,sizeof path,idx)||!mkdir_parents(path))return 0;
@@ -42,7 +44,8 @@ static int restore_file(int idx,const unsigned char *data,size_t len){
  int ok=fchmod(fd,idx==2?0644:0600)==0&&writeall(fd,data,len)&&fsync(fd)==0;
  if(close(fd)<0)ok=0;
  if(ok){if(rename(temp,path)!=0)ok=0;}
- if(!ok)unlink(temp);return ok;
+ if(!ok){unlink(temp);}
+ return ok;
 }
 static int capture(unsigned char *plain,size_t *pos){
  memcpy(plain,magic,8);*pos=8;
@@ -57,7 +60,8 @@ static int capture(unsigned char *plain,size_t *pos){
  return 1;
 }
 static int validate_records(const unsigned char *plain,size_t n,const unsigned char **ptrs,uint32_t *lengths){
- if(n<8||memcmp(plain,magic,8)!=0)return 0;size_t p=8;
+ if(n<8||memcmp(plain,magic,8)!=0)return 0;
+ size_t p=8;
  for(int i=0;i<RECORDS;i++){
   if(p+5>n||plain[p++]!=i)return 0;
   lengths[i]=get32(plain+p);p+=4;
@@ -69,7 +73,7 @@ static int validate_records(const unsigned char *plain,size_t n,const unsigned c
 static int load_password(char *s,size_t n){if(!fgets(s,n,stdin))return 0;size_t i=strcspn(s,"\r\n");if(i<12||i>1024)return 0;s[i]=0;return 1;}
 int main(int argc,char**argv){
  umask(077);
- if(argc!=3||strcmp(argv[1],"export")&&strcmp(argv[1],"restore")){fprintf(stderr,"Usage: optiplex-now-backup export|restore FILE\n");return 2;}
+ if(argc!=3||(strcmp(argv[1],"export")&&strcmp(argv[1],"restore"))){fprintf(stderr,"Usage: optiplex-now-backup export|restore FILE\n");return 2;}
  char password[2048]={0};if(!load_password(password,sizeof password)){fprintf(stderr,"Passphrase must have at least 12 characters.\n");return 3;}
  const int is_export=!strcmp(argv[1],"export");int ok=0;
  unsigned char salt[16],iv[12],key[32],tag[16];unsigned char *plain=getbuf(MAX_PLAIN),*cipher=getbuf(MAX_PLAIN);
@@ -99,7 +103,8 @@ int main(int argc,char**argv){
   int good=writeall(fd,hdr,40)&&writeall(fd,cipher,cipher_len)&&writeall(fd,tag,16)&&fsync(fd)==0;
   if(close(fd)!=0)good=0;
   if(good&&rename(tmp,argv[2])!=0)good=0;
-  if(!good)unlink(tmp);ok=good;
+  if(!good){unlink(tmp);}
+  ok=good;
  }else{
   int k=0,z=0;
   if(EVP_DecryptInit_ex(ctx,EVP_aes_256_gcm(),NULL,key,iv)!=1||

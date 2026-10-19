@@ -27,7 +27,7 @@ build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/pr
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
-	$(CC) $(CFLAGS) src/backup.c -o $@ -lcrypto
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
 
 package: all
 	python3 package.py

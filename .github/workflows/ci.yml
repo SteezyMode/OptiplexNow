@@ -25,6 +25,7 @@ jobs:
         run: |
           set -euo pipefail
           make check-process
+          make check-presets
           make package
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk

@@ -9,7 +9,7 @@
 
 A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
 
-**New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): a two-minute product brief, source-code map, exact build/test commands, safety boundaries and where to help. For the distinction between this client and the independent creative application, see [Suite architecture](https://github.com/SteezyMode/OptiplexSuite/blob/main/ARCHITECTURE.md).
+**New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): the source map, build/test commands and safety boundaries. The [documentation index](docs/README.md) separates current implementation, proposed server work and archived design history. For the distinction between this client and the independent creative application, see [Suite architecture](https://github.com/SteezyMode/OptiplexSuite/blob/main/ARCHITECTURE.md).
 
 **Current version: 1.13.0. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 

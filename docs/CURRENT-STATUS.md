@@ -7,6 +7,12 @@ Updated: **2026-10-19 JST**. Use with the dated [2026-10-16 operational inventor
 - [PR #13](https://github.com/SteezyMode/OptiplexNow/pull/13) proposes renaming the visible desktop label to **Studio** and generalizing the streaming settings label. **Open, not merged** at this audit. The actual Wolf application identifier `OptiPlex Studio Desktop` remains as-is.
 - Don't infer the exact app installed on the Mac mini, MacBook, or host from the latest release. A GitHub release does **not** upgrade installed applications.
 
+## Source-only engineering cleanup since v1.13.0
+
+The `main` branch has post-release source changes, **not a new installed package**: separated validation and publication workflows, removed obsolete release upload paths, extracted/tested process and portable-preset modules, replaced manual GTK function declarations with official GTK development headers and runtime type conversions, introduced Xvfb startup and ELF non-executable-stack tests, and added contributor/review guidelines. See Git history and PRs #16–#24 for individual changes.
+
+The automated build/GTK smoke passed, but full real-device integration, low-resolution/tray behavior, stream reconnect and upgrade/rollback tests are **not yet signed off**. Existing compiler warnings and remaining old UI coupling are tracked engineering debt. Do not claim source passing CI means v1.13.0 has been re-released or deployed.
+
 ## Current NOW responsibilities
 NOW is a separately installable Linux client for remote access/streaming and server conveniences. Its v1.13.0 release supports launching Steam and the Wolf Studio Desktop through Moonlight, configurable service shortcuts, browser-based services, SSH/SFTP and host controls, backup/preset export/import and opt-in Wolf maintenance. See [README](../README.md) for shipped app behavior and limitations.
 
@@ -30,9 +36,9 @@ NOW is a separately installable Linux client for remote access/streaming and ser
 - Separate server backups, authenticated web gaming continuity and off-network tests remain tracked in [operations-handoff](operations-handoff.md).
 
 ## Next work / guardrails
-1. **No new NOW release tonight.** Published version is v1.13.0; review old PR #1 and current UI PR #13 before deciding which changes are still relevant.
+1. **No automatic NOW release from cleanup commits.** Published version is v1.13.0; release only after device acceptance, version bump, and explicit new tag. Review old PR #1 and current UI PR #13 before deciding which changes are still relevant.
 2. Verify only on an actual client before claiming successful deployment, tray behavior or reconnect support. No indiscriminate Wolf restart or volume replacement.
-3. Continue the current **short playable zombie encounter** in Studio, not in NOW. Keep global game-project source and Codex work in Studio; NOW only supplies optional remote access.
+3. Keep game project source, creative integrations and Codex lifecycle in Studio, not NOW; NOW owns optional remote access and planned host provisioning only.
 4. Maintain backwards-compatible client config and working `games.monumentrisk.com` public HTTPS. Do not bulk-convert working URLs to SSH/Tailscale-only endpoints or change server auth casually.
 5. Preserve Wolf config/data, MoonlightWeb tokens, existing user preferences, Jellyfin/Caddy/VPN/music services and private backups. No credentials in GitHub.
 

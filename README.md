@@ -1,5 +1,9 @@
 # OptiPlex Now
 
+[![Build, package and GUI verification](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
+**Automated health checks:** Pull requests, changes to main and a weekly Monday 03:17 UTC run compile, package, and exercise the installed native GTK app on disposable Ubuntu runners. These checks never publish a release or modify the reference server; live Wolf/streaming functionality still needs separate acceptance.
+
+
 > **Current project/release status (2026-10-19):** See [Current Status](docs/CURRENT-STATUS.md) for the latest verified v1.13.0 release, unmerged UI PR #13, open reliability work, and the boundary between NOW and the independent OptiPlex Studio. The older [October 16 operations handoff](docs/operations-handoff.md) is a historical server snapshot, not a current release plan.
 
 

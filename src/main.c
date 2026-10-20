@@ -1276,14 +1276,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
+ /* Streaming needs a reachable host, never SSH credentials. */
+ int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)));
+ const char*optional_user=gtk_entry_get_text(GTK_ENTRY(c->user));
+ if(*optional_user && !now_valid_user(optional_user))ok=0;
  gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->server_page,ok);
  gtk_label_set_text(GTK_LABEL(c->notice),"");
 }
 static void wizard_save(Wizard*c){
  const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
                       gtk_entry_get_text(GTK_ENTRY(c->relay)),gtk_entry_get_text(GTK_ENTRY(c->relayuser)),gtk_entry_get_text(GTK_ENTRY(c->wake))};
- if(!now_valid_host(values[0])||!now_valid_user(values[1])){
+ if(!now_valid_host(values[0])||(*values[1]&&!now_valid_user(values[1]))){
    return;
  }
  for(int i=0;i<5;i++){
@@ -1350,7 +1353,7 @@ static void find_server(Wizard*c){
  int response=gtk_dialog_run(GTK_DIALOG(d)),selected=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
  if(response==GTK_RESPONSE_OK && selected>=0 && selected<count){
    gtk_entry_set_text(GTK_ENTRY(c->host),addresses[selected]);
-   gtk_label_set_text(GTK_LABEL(c->notice),"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+   gtk_label_set_text(GTK_LABEL(c->notice),"SERVER SELECTED. SSH USER IS OPTIONAL FOR STREAMING.");
  }
  gtk_widget_destroy(d);
 }
@@ -1449,7 +1452,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SSH USER","helper"),0);
+ add(two,label("SSH USER (OPTIONAL — FILES / ADMIN ONLY)","helper"),0);
  c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"optiplex");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
@@ -1457,10 +1460,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
- /* Page 3: pair SSH keys once. Relay is optional. */
+ /* Page 3: optional SSH and relay management; not required for games. */
  GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);
- add(three,label("SECURE ACCESS","modalheading"),0);
- add(three,label("Existing SSH keys are reused.","helper"),0);
+ add(three,label("OPTIONAL SERVER ADMINISTRATION","modalheading"),0);
+ add(three,label("Skip this page for Steam and Wolf streaming. SSH is only for files, maintenance and administrative controls.","helper"),0);
  wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
  add(three,label("WAKE RELAY (OPTIONAL)","helper"),0);
  c->relay=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relay),"Relay Tailscale IP");gtk_entry_set_text(GTK_ENTRY(c->relay),cfg[2]);add(three,c->relay,0);

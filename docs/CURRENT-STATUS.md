@@ -22,6 +22,10 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 - Read-only VPN status lookup by Gluetun Docker image, not container name. Tailscale and running Wolf desktop indicators use active-state coloring.
 - Optional reference-host-specific maintenance helpers. These are not a server installer.
 
+## Portable defaults (development source, not v1.16.1)
+
+New source changes after the v1.16.1 tag remove the reference-host video and Web Gaming domain defaults, the reference SSH username, and automatically guessed optional service ports. Web Gaming and Downloads use user-configured URLs. Previously saved client URLs stay unchanged, but existing users must configure a Web Gaming URL after installing a future release because the old fixed domain was never saved to their config. **The published v1.16.1 installer is unchanged and still has the historical household defaults.** Verify the new code through CI and a clean-client test before making a new release.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

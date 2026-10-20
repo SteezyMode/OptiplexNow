@@ -162,6 +162,24 @@ def verify():
     raise RuntimeError("MoonlightWeb did not become healthy")
 
 
+def preflight():
+    """Read-only validation, without pulling images or changing containers."""
+    info = inspect()
+    _ = recreate_args(info, info["Image"], STATE / ".never-written-preflight")
+    check_image_defaults(info)
+    if not info["State"]["Running"]:
+        raise RuntimeError("MoonlightWeb is not running")
+    volume, source, _ = volume_from(info)
+    if not source.is_dir():
+        raise RuntimeError("MoonlightWeb persistent data volume unavailable")
+    sessions = active_wolf_apps()
+    print("MoonlightWeb supported standalone deployment: YES")
+    print("Current data volume:", volume)
+    print("Wolf application containers:", ", ".join(sessions) if sessions else "none")
+    print("Update allowed now:", "NO — active Wolf app containers" if sessions else "YES")
+    print("No changes made.")
+
+
 def status():
     info = inspect()
     volume, _, _ = volume_from(info)
@@ -242,7 +260,7 @@ def update():
 
 def menu():
     status()
-    print("\n1. Check status\n2. Update MoonlightWeb (deferred while Wolf apps run)\n0. Exit")
+    print("\n1. Check status\n2. Update MoonlightWeb (deferred while Wolf apps run)\n3. Read-only preflight\n0. Exit")
     option = input("Choose: ").strip()
     if option == "1":
         status()
@@ -251,20 +269,22 @@ def menu():
             update()
         else:
             print("Cancelled; no changes made.")
+    elif option == "3":
+        preflight()
     elif option != "0":
         raise RuntimeError("Unknown option")
 
 
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("status", "update", "menu"):
-        print("Usage: moonlightweb-maintenance {status|update|menu}", file=sys.stderr)
+    if len(sys.argv) != 2 or sys.argv[1] not in ("status", "preflight", "update", "menu"):
+        print("Usage: moonlightweb-maintenance {status|preflight|update|menu}", file=sys.stderr)
         return 2
     if os.geteuid() != 0:
         print("Run with sudo on the OptiPlex server", file=sys.stderr)
         return 1
     os.umask(0o077)
     try:
-        {"status": status, "update": update, "menu": menu}[sys.argv[1]]()
+        {"status": status, "preflight": preflight, "update": update, "menu": menu}[sys.argv[1]]()
         return 0
     except (OSError, RuntimeError, subprocess.CalledProcessError, ValueError,
             KeyError, IndexError, EOFError) as exc:

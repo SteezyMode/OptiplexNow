@@ -16,6 +16,8 @@ test -x /usr/lib/optiplex-now/optiplex-now-backup
 test -x /usr/bin/optiplex-now-preflight
 test -x /usr/lib/optiplex-now/server-preflight
 optiplex-now-preflight --json | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["scope"] == "this_computer_read_only"; assert data["streaming_ready"] == "not_tested"; assert data["changes_made"] is False'
+optiplex-now-preflight --json --backend sunshine | python3 -c 'import json,sys; p=json.load(sys.stdin)["install_plan"]; assert p["backend"] == "sunshine" and p["can_install"] is False and p["phase"] == "advisory_only"'
+optiplex-now-preflight --json --backend wolf | python3 -c 'import json,sys; p=json.load(sys.stdin)["install_plan"]; assert p["backend"] == "wolf" and p["can_install"] is False and p["needs_explicit_approval"] is True'
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

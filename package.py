@@ -24,7 +24,7 @@ pairing=pkg/'usr/lib/optiplex-now/pairing'
 pairing.mkdir(exist_ok=True)
 for script in ('now_pairing_broker.py','now_pairing_identity.py',
                'now_pairing_requests.py','now_pairing_owner.py',
-               'now_pairing_owner_identity.py'):
+               'now_pairing_owner_identity.py','now_pairing_trust.py'):
  shutil.copy2(root/'server'/script,pairing/script)
 (pairing/'now_pairing_broker.py').chmod(0o755)
 (pkg/'usr/lib/optiplex-now/find-now-hosts.py').chmod(0o755)

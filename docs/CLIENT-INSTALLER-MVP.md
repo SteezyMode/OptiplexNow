@@ -1,78 +1,53 @@
-# NOW client installer MVP — Tailscale-first onboarding
+# OptiPlex NOW Linux Client MVP — locked release contract v1.0
 
-**Status:** Development roadmap; not a shipped claim. **Tracking:** [Issue #48](https://github.com/SteezyMode/OptiplexNow/issues/48).  
-**Scope:** Make the existing working Linux NOW client easy to set up against **any compatible already-running user/server machine**, without redesigning the GTK/tray GUI or modifying a production host. A guided *new server installer* remains a separate essential product track.
+**Frozen scope:** 2026-10-20. **Owner/tracking:** [#48](https://github.com/SteezyMode/OptiplexNow/issues/48). **Review branch:** [#49](https://github.com/SteezyMode/OptiplexNow/pull/49).  
+**Definition:** An ordinary user can install NOW on a clean supported Debian/Ubuntu-family x86-64 Linux machine, join an authorized Tailscale network once, choose **their own already prepared Wolf host**, pair native Moonlight once, and thereafter click the **existing NOW Steam or Desktop action** to open an independent virtual session without controlling the host display. Reopening NOW or switching networks must not repeat setup unnecessarily.
 
-## North-star client experience
+**Change control:** This is the **sole controlling Linux client MVP plan**. Phase order, non-goals, and release criteria are fixed for v1.0. New features, architecture or priorities require an **explicit user-approved v1.1 amendment** in a separate PR/issue. Bug fixes required to satisfy a gate are not scope creep. A draft PR, successful CI, or an already working developer installation cannot be represented as shippable client acceptance.
 
-1. Install NOW on a fresh supported Linux computer.
-2. In the **existing NOW Setup Wizard**, detect/install Tailscale if absent; if already enrolled and connected, **skip login**. Otherwise guide **one official Tailscale sign-in**, never request the user's account password inside NOW.
-3. Use the authorized Tailscale peer inventory to populate existing server selection; identify a compatible NOW host **only after a narrow, authenticated host capability check** when such an agent has been developed and tested. Retain the existing legacy device picker until then, clearly labelled as a device list.
-4. Select the desired server and remember its identity/hostname. Server endpoints and supported service actions should be **host-specific**, not hardcoded to the reference OptiPlex or silently assigned to arbitrary tailnet peers.
-5. Offer **Steam over Moonlight/Wolf** as the first essential flow. Reuse an existing native/Snap/AppImage/Flatpak Moonlight installation; guide the initial native Moonlight pairing **once** where not yet paired, then preserve its local certificate.
-6. Launch Steam in Wolf's **virtual/independent session**, not by stealing the server's visible desktop. Relaunch NOW and stream again without signing in, typing an IP, setting up SSH or repairing anything.
-7. Existing service links (e.g. **Jellyfin**, then optionally Dropped Needle) can use the selected host's configured service location. Those services may need their **own initial login**; Tailscale network identity alone is **not** a Jellyfin account or native Moonlight certificate. Save/reuse service credentials only using service-supported client storage, not a bundled server admin password.
+## Required sequential gates
 
-**One primary Tailscale sign-in** is the connectivity/discovery *UX anchor*, **not** blanket authorization to every daemon on a remote computer. Enforce each service's native first-time authorization rather than silently bypassing security. Tailscale itself cannot guarantee a host is configured, powered on, reachable, or running any given service. Manual IP and LAN-only fallback remain available.
+| Gate | Required work | Objective pass condition | PR/issue |
+| --- | --- | --- | --- |
+| **G0 — stabilize** | Audit *existing* draft stack; correct CI-visible and untested errors; preserve saved config, tray controls, encrypted backups and native client | Existing installed client upgrades with no regression. CI and tests green. Working reference server unchanged | #49, #51, #52, #55, #56 |
+| **G1 — install/readiness** | Existing .deb installs GUI on fresh supported Linux; detect Tailscale state and native/Snap/AppImage/Flatpak Moonlight; user-confirmed installer for missing dependencies; show real failures, not assumed success | Fresh client reaches setup without copy/paste commands; existing dependencies are reused, not reinstalled | #48 |
+| **G2 — Tailscale auth & server choice** | Skip login if enrolled; official browser authorization when necessary with secure local privilege handling and confirmed completion; pick authorized peer or manual/LAN hostname; remember server; don't identify all tailnet peers as NOW hosts | One official login at most, selected compatible server persists; offline/disconnected/denied recoverable | #51/#56; #48 |
+| **G3 — native Wolf/Moonlight pairing** | Steam/desktop path does **not** require SSH user/key or host admin access; detect already-paired state or launch Moonlight native pairing with clear owner PIN action, then verify real session and reconnect | First-time stream succeeds; subsequent NOW Steam clicks reconnect; host physical screen unaffected; no Wolf installed on client | #48 |
+| **G4 — optional service links** | Existing Videos/Jellyfin browser URL and optional Web Gaming configured **per server**; no personal server/domain defaults; retain old configurations or explicitly flag migration; don't require media auth for gaming | User selects own host/service addresses, sees clear unavailable/not-authenticated state, normal Jellyfin/browser login preserved | #55/#53; #50 |
+| **G5 — clean client acceptance** | Disposable clean Linux Mint/Ubuntu/Pop!_OS x86-64 install plus one physical second client for video/audio/gamepad; inside and outside LAN; uninstall/reinstall, update and failure/recovery tests | All end-to-end checks recorded with exact OS, version, date, results; no production-server changes during test | #48 |
+| **G6 — ship** | Review exact diff and dependencies, all scoped PRs to main in sequence, stable signed/reproducible artifact review (if available), immutable tag release workflow and documented known limitations | Publish **only** after G0–G5 passing and user approval; can roll back to 1.14.0 and restore existing settings | #48 |
 
-## Current code baseline (verified against main, 2026-10-20)
+**PR dependency/order:** #49 (this plan) → #51 (client auth state) → #52 (Moonlight Snap lookup) → #55 (Web Gaming URL) → #56 (experimental browser sign-in **only after proper multiline JSON/event/polkit tests**). Rebase and test each against main before merge. None automatically merged. Experimental server discovery/approval proposals #44–#47 are NOT client release dependencies.
 
-| What already works or exists | Source | Installer improvement |
-| --- | --- | --- |
-| Native amd64 Debian package, GTK/tray and system integration | `package.py`, `src/main.c` | Preserve package/upgrades, do not reinvent install |
-| Existing Settings → Setup Wizard | `src/main.c` | Improve this wizard; **no new dashboard or GUI replacement** |
-| Tailscale device list | `src/find-servers.py` | Keep as legacy picker, add connected-state awareness and refresh |
-| Tailscale setup button | `setup_tailscale()` | Currently executes `sudo tailscale up` when installed; must avoid redundant sign-in |
-| Moonlight detection | `moonlight_mode()` | Already handles executable on PATH, AppImage, Flatpak; accommodate Snap under desktop PATH |
-| Moonlight installer action | `install_moonlight()` | Already offers user-triggered Flatpak installation; verify result, no forced format change |
-| Moonlight pairing and Steam launch | `pair_wolf()`, `launch_wolf_app("Steam")` | Already present and established; preserve behavior, improve first-run status/error handling |
-| Configured web/media shortcuts, SSH/SFTP, remote status | `src/main.c` | Keep as-is; **do not require SSH setup for basic games** |
-| New server provisioning | GUI placeholder | Separate guided-server-installation track, not a prerequisite here |
+**Known review blockers at freeze:**
+- #56's first parser consumes `tailscale up --json` one line at a time; upstream emits **pretty-printed multi-line JSON objects**. Must fix, add realistic fixture tests, and validate on clean client. A CLI result is **not** a verified successful login until status is observed.
+- #55 removes an implicitly hardcoded legacy Web Gaming URL. Avoid silently breaking current reference-machine shortcut; document a one-time configuration/migration path and test updates. No new installs should default to the developer's domain.
+- Current Setup Wizard combines basic streaming with optional SSH administration and forces SSH username validation. Remove that prerequisite on the **gaming path**, without breaking existing optional SSH/SFTP and power actions.
+- Some workflows only run when a draft targets `main`; stacked draft PR CI successes against `main` validate the **combined head** and do not by themselves prove independent PRs can be cherry-picked.
+- UI labels, launcher status and stream/pairing claims must be derived from actual state, not just launching a subprocess.
+- Release and settings/preset compatibility must be verified with real old `config.ini` and `.onp` samples.
 
-## Delivery milestones (separate reviewable PRs)
+## User journey to test
 
-### P0 — Setup readiness contract and regression tests
-- Detect **new installation** and **already configured client** states without overwriting stored host, preferred Moonlight or pairing.
-- Add deterministic tests for dependency detection, GUI compatibility and saved configuration. Preserve current executable, settings path, tray controls and existing actions.
-- Keep CI isolated from the developer's real server.
+1. Download and install the versioned official `.deb` on a clean supported computer; launch existing GTK NOW UI.
+2. Detect/reuse or offer explicit install of missing Tailscale and Moonlight, with errors/retry.
+3. Authenticate with Tailscale's **upstream** login only if not already connected; do not store Tailscale account passwords/tokens in NOW.
+4. Choose any allowed, prepared Wolf server (not automatically the developer's OptiPlex). Reuse saved connection on repeat launches. LAN/manual choice remains.
+5. Pair native Moonlight *once*; ask owner to approve PIN via the real Wolf mechanism. Native Moonlight stores its certificate locally, NOT in ordinary client presets.
+6. Click existing NOW **Steam**, then **Desktop**. Both connect to **independent Wolf virtual sessions**. Verify controls, sound, video and unaffected physical server desktop.
+7. Optionally open configured Jellyfin URL and use its supported existing login/Quick Connect. Optional Web Gaming URL is configured by user, not invented from a tailnet login; browser/web stream requires a compatible server-side gateway.
+8. Quit/reopen NOW; reconnect on home network, then over a separate network; handle down/offline/revoked host gracefully.
 
-### P1 — Reuse or install Tailscale/Moonlight
-- One read-only local dependency/state probe:
-  - Tailscale missing / installed but disconnected / authorized and connected / unavailable.
-  - Moonlight missing / native including Snap / AppImage / Flatpak, with actual executable usability checked.
-- Detect Snap even if launching from desktop does not inherit `/snap/bin` in PATH.
-- Show compact readiness and **user-confirmed** install/login actions inside current Setup Wizard. Use official installation processes; never silently install dependencies.
-- New `.deb` must **not** require Tailscale or Moonlight package installation to work for offline/LAN and non-gaming actions.
+## Outside the fixed Linux MVP
 
-### P2 — One Tailscale login, server discovery and saved selection
-- When already connected, never run `tailscale up` just to display the login page again.
-- When not connected, open the official Tailscale login and then refresh peer selection.
-- Existing picker uses authorized peers, with explicit compatibility status. Future server capability information can be served by a narrowly scoped read-only NOW presence endpoint, independently reviewed and tested; not required for the first legacy-picker demo.
-- Save stable server selection; handle a missing/offline/revoked host with clear, recoverable feedback. Manual hostname/LAN mode stays.
-- Do not require SSH credentials, privileged approvals, or host management on the main gaming path.
+- **New server installer** remains essential, but is a separately gated project; no Wolf/Docker/driver/GPU surgery on a running host in this client track.
+- **Windows NOW client** is the immediate next product track after G6. Windows should use native Moonlight as primary, Tailscale for peer connectivity, browser Jellyfin and optional MoonlightWeb. Wolf remains on compatible Linux servers. Do not require Windows server hosting.
+- **No MoonlightWeb fork/WebView** in v1; optional app-like window experimental later only after measuring gamepad, video/audio, fullscreen, pointer lock, certificate/TLS and latency. No public domain required for a private tailnet HTTP(S) service.
+- **No universal NOW account, central hosted portal, guest management, mandatory SSH, owner email PIN infrastructure, Codex/OAuth emulation, Jellyfin/Dropped Needle server provisioning**. Future server-owner email OTP is a separately gated feature; native Tailscale, Moonlight, Jellyfin and Studio/Codex credential boundaries remain.
+- No redesign of the current native tray/GTK client, no blanket package-format change, no storing secrets in GitHub, app config, presets or emails.
 
-### P3 — Native first-time pairing, Steam and reconnect
-- Select existing usable Moonlight backend rather than reinstalling or switching packaging.
-- Run Moonlight native pairing once when needed, keep per-device Moonlight credential local, and never promise that Tailscale login automatically pairs a different protocol.
-- Click existing **Steam** NOW shortcut → Wolf virtual session streams from chosen host. Verify audio, gamepad, usable FPS and that host display stays unaffected.
-- After application/network restart or switching between home/remote, the same saved host and pairing state continue working.
+## Release decision
 
-### P4 — Service shortcuts without provisioning
-- **Jellyfin first:** use existing Videos action; optionally populate URL from a compatible server's explicit advertisement/config, otherwise accept manual URL. Jellyfin authenticates users using its own existing mechanism. Never copy admin credentials.
-- **Dropped Needle later:** same principle with existing configurable Music action. No media server install, library scan, Docker orchestration or account-manager implementation in client MVP.
+**PASS** only if independent source/CI checks, installed-package smoke test, fresh-device end-to-end stream, persistent reconnection, service URL isolation, packaging/upgrades and manual failure recovery **all** pass. Otherwise **NO SHIP**, with a specific failed gate and next corrective PR.
 
-### P5 — Acceptance and release
-- Disposable clean Mint/Ubuntu/Pop!_OS amd64 install: `.deb` → existing wizard → optional Tailscale login → choose an already prepared Wolf server → pair Moonlight once → Steam → quit/relaunch → Steam again.
-- Upgrade an already configured client (including Snap Moonlight) without changing installed package format, saved host, pairing or GUI shortcuts.
-- Test LAN and genuine outside-LAN connectivity, video/audio/input, Linux tray environments, online/offline, login failure, unsupported packages and permission-denied states.
-- CI confirms package/build/regressions; **manual real-client streaming is required** to claim end-to-end success. Only publish via the existing immutable tag-release workflow after approval.
-
-## Out of scope for this installer milestone
-
-- Fresh server provisioning; Wolf/GPU/container installation; driver surgery; Jellyfin/Dropped Needle deployment; always-on pairing broker; guest/tenant account management; new tile dashboards; central NOW account; native Windows port; changes to running developer host.
-- Avoid conflating **Tailscale sign-in** (network/device identity), **native Moonlight pairing** (streaming authorization), **Jellyfin sign-in** (media account), and **SSH keys** (optional privileged management).
-- Draft experiments #44–#47 can be evaluated independently and **must not become mandatory** for the existing client installation MVP.
-
-## Definition of done
-
-A new Linux user can install NOW, sign into Tailscale once if needed, select an existing permitted compatible server through the current GUI, complete Moonlight pairing once, and thereafter open the existing NOW tray and launch Steam in an independent remote Wolf session at home or away. Media shortcuts are host-configurable but do not block game onboarding. No server changes or SSH administration necessary for the ordinary client-only path.
+*Plan versions are additive: v1.0 remains fixed; if scope changes are approved, a new v1.1 plan links to this commit rather than rewriting the history of v1.0.*

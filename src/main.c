@@ -334,9 +334,26 @@ static void pair(int relay) {
  char*args[]={"ssh-copy-id","-i",pub,dest,NULL};
  if(terminal_launch(args))say(relay?"Authorize the relay in the terminal":"Authorize the server in the terminal");
 }
+/* Fixed-state, read-only probe. Never handle Tailscale account credentials. */
+static int client_tailscale_state(void) {
+ char out[64]={0};
+ char*args[]={"/usr/bin/python3","/usr/lib/optiplex-now/client_auth.py","tailscale",NULL};
+ if(now_run(args,out,sizeof out,4)!=0)return 0;
+ if(!strcmp(out,"connected\\n"))return 1;
+ if(!strcmp(out,"login_required\\n"))return 2;
+ if(!strcmp(out,"disconnected\\n"))return 3;
+ if(!strcmp(out,"missing\\n"))return 4;
+ return 0;
+}
 static void setup_tailscale(void) {
- if(now_program_exists("tailscale")){char*args[]={"sudo","tailscale","up",NULL};if(terminal_launch(args))say("Sign in to Tailscale in the opened terminal");}
- else browser_open("https://tailscale.com/download/linux");
+ int status=client_tailscale_state();
+ if(status==1){say("TAILSCALE IS ALREADY CONNECTED");return;}
+ if(status==4){browser_open("https://tailscale.com/download/linux");return;}
+ if(status==0){say("CANNOT CHECK TAILSCALE. CHECK THAT THE SERVICE IS RUNNING");return;}
+ /* The official Tailscale CLI owns login; no password goes into NOW.
+  * Future milestone: present its browser/device flow inside this wizard. */
+ char*args[]={"sudo","tailscale","up",NULL};
+ if(terminal_launch(args))say("COMPLETE TAILSCALE SIGN-IN IN THE OPENED TERMINAL");
 }
 
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
@@ -1270,11 +1287,13 @@ static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;(void)page;Wizard*c=p;
  char text[160];
- if(now_program_exists("tailscale")){
-   char out[128]={0};char*args[]={"tailscale","ip","-4",NULL};
-   if(now_run(args,out,sizeof out,4)==0 && strstr(out,"100."))snprintf(text,sizeof text,"TAILSCALE CONNECTED");
-   else snprintf(text,sizeof text,"TAILSCALE NOT CONNECTED");
- }else snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");
+ switch(client_tailscale_state()){
+  case 1: snprintf(text,sizeof text,"TAILSCALE CONNECTED");break;
+  case 2: snprintf(text,sizeof text,"TAILSCALE SIGN-IN REQUIRED");break;
+  case 3: snprintf(text,sizeof text,"TAILSCALE DISCONNECTED");break;
+  case 4: snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");break;
+  default: snprintf(text,sizeof text,"TAILSCALE STATUS UNAVAILABLE");break;
+ }
  gtk_label_set_text(GTK_LABEL(c->ts_state),text);
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);

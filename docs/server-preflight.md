@@ -1,6 +1,6 @@
 # Local server preflight (prototype)
 
-**Status:** Development-only code on the feature branch; NOT shipped in a tagged NOW release. **No fresh-host installer exists.**
+**Status:** Unreleased development implementation; NOT shipped in a tagged NOW release. **No fresh-host installer exists.**
 
 This helper is the first read-only component of the proposed server onboarding work. It examines **the Linux computer where it runs**, not the remote host already selected in NOW's client. It is not a remote checker and does not validate an end-to-end game stream.
 

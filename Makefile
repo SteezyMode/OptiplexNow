@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets
+.PHONY: all clean package check-process check-presets check-config
 all: build/optiplex-desk build/optiplex-now-backup
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
@@ -54,3 +54,8 @@ check-process: | build
 check-presets: | build
 	$(CC) $(CFLAGS) -Isrc tests/test_presets.c src/presets.c -o build/test-presets
 	./build/test-presets
+
+# Behavior tests for configuration compatibility; no GUI or private files required.
+check-config: | build
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc tests/test_config.c src/config.c -o build/test-config
+	./build/test-config

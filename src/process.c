@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
 #include <unistd.h>
@@ -207,4 +208,47 @@ int now_program_exists(const char *name) {
     }
     free(dup);
     return found;
+}
+
+
+/* Unlike a mere PATH check, return the executable pathname so callers can
+ * launch a Snap command even when the desktop process PATH omits /snap/bin.
+ * The fallback is selected by the caller, never provided by a remote host. */
+static int copy_launchable(const char *candidate, char *out, size_t cap) {
+    if (!candidate || candidate[0] != '/' || !out || cap < 2) return 0;
+    struct stat info;
+    if (stat(candidate, &info) != 0 || !S_ISREG(info.st_mode) ||
+            access(candidate, X_OK) != 0) return 0;
+    size_t length = strlen(candidate);
+    if (length >= cap) return 0;
+    memcpy(out, candidate, length + 1);
+    return 1;
+}
+
+int now_resolve_executable(const char *name, const char *fallback,
+                           char *out, size_t cap) {
+    if (out && cap) out[0] = '\0';
+    if (!name || !*name || strchr(name, '/') || !out || cap < 2) return 0;
+    const char *path = getenv("PATH");
+    if (path) {
+        char *dup = strdup(path);
+        if (dup) {
+            char *cursor = dup;
+            char *part;
+            while ((part = strsep(&cursor, ":")) != NULL) {
+                /* Absolute search directories only. Do not execute a stray
+                 * relative executable from an arbitrary working directory. */
+                if (*part != '/') continue;
+                char candidate[PATH_MAX];
+                int n = snprintf(candidate, sizeof candidate, "%s/%s", part, name);
+                if (n > 0 && (size_t)n < sizeof candidate &&
+                        copy_launchable(candidate, out, cap)) {
+                    free(dup);
+                    return 1;
+                }
+            }
+            free(dup);
+        }
+    }
+    return copy_launchable(fallback, out, cap);
 }

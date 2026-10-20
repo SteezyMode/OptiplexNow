@@ -22,6 +22,7 @@
 #include "process.h"
 #include "presets.h"
 #include "server_preflight_ui.h"
+#include "now_discovery_ui.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -1343,7 +1344,8 @@ static void wizard_action(void*w,void*p){
     return;
  }
  if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
- if(!strcmp(n,"w_find"))find_server(c);
+ if(!strcmp(n,"w_now_find"))now_discovery_open(GTK_WINDOW(c->assistant),GTK_ENTRY(c->host),GTK_LABEL(c->notice));
+ else if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
  else if(!strcmp(n,"w_pair"))pair(0);
  else if(!strcmp(n,"w_relay"))pair(1);
@@ -1414,6 +1416,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
+ wizard_button(c,two,"FIND NOW SERVER (EXPERIMENTAL)","w_now_find");
  wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
  wizard_button(c,two,"CHECK THIS COMPUTER (READ-ONLY)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);

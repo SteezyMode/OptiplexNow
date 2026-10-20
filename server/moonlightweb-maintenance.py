@@ -248,7 +248,7 @@ def update():
     print("MoonlightWeb will briefly stop. Wolf will not be touched.", flush=True)
     stopped = False
     renamed = False
-    created = False
+    old_container_id = old["Id"]
     previous_policy = old["HostConfig"]["RestartPolicy"]["Name"]
     old_name = None
     env_file = None
@@ -264,7 +264,6 @@ def update():
         env_file = write_private_env(old)
         args = recreate_args(old, new_id, env_file)
         subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        created = True
         docker("start", NAME)
         verify()
         print("MoonlightWeb update verified.")
@@ -273,9 +272,17 @@ def update():
         print("Reopen Web Gaming and reconnect to Wolf Studio Desktop.")
     except Exception:
         print("Update failed. Attempting to restore the prior container.", file=sys.stderr)
-        if created:
-            subprocess.run(["docker", "rm", "-f", NAME], capture_output=True)
         if renamed:
+            # docker create can leave a container even when its command fails.
+            # Never remove the original container; identify any replacement by ID.
+            try:
+                replacement = inspect(NAME)
+            except subprocess.CalledProcessError:
+                replacement = None
+            if replacement is not None:
+                if replacement.get("Id") == old_container_id:
+                    raise RuntimeError("Rollback blocked: original container still owns live name")
+                docker("rm", "-f", NAME)
             docker("rename", old_name, NAME)
         if stopped:
             docker("update", "--restart=" + previous_policy, NAME)

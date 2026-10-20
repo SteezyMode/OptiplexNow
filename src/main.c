@@ -1537,6 +1537,20 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
+static void tray_desktop_caption(char *out,size_t cap){
+ const char *home=getenv("HOME");char path[PATH_MAX];
+ snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
+ FILE *f=fopen(path,"r");if(!f){safe_copy(out,cap,"XFCE");return;}
+ if(!fgets(out,(int)cap,f)){safe_copy(out,cap,"XFCE");fclose(f);return;}
+ fclose(f);out[strcspn(out,"\r\n")]=0;
+ if(!*out)safe_copy(out,cap,"XFCE");
+}
+static void tray_desktop_caption_save(const char *value){
+ char path[PATH_MAX];const char *home=getenv("HOME");
+ snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
+ FILE*f=fopen(path,"w");if(!f)return;
+ fprintf(f,"%s\n",value);fclose(f);chmod(path,0600);
+}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -1544,11 +1558,19 @@ static void tray_build_menu(void){
  unsigned mask=tray_button_mask();
  if(mask){
   tray_separator();
-  static const char*captions[]={
-   "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
-   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI"
-  };
-  for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+  static const char *names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
+  static const char *descriptions[]={"Steam","Jellyfin","Dropped Needle","SFTP","VueTorrent","SSH","","Wolf UI"};
+  char desktop[128];tray_desktop_caption(desktop,sizeof desktop);
+  for(int i=0;i<8;i++)if(mask & (1u<<i)){
+   char caption[256];snprintf(caption,sizeof caption,"%-12s |  %s",names[i],i==6?desktop:descriptions[i]);
+   GtkWidget*item=gtk_menu_item_new_with_label(caption);
+   GtkWidget*child=gtk_bin_get_child(GTK_BIN(item));
+   if(GTK_IS_LABEL(child)){PangoAttrList*attrs=pango_attr_list_new();
+     pango_attr_list_insert(attrs,pango_attr_family_new("monospace"));
+     gtk_label_set_attributes(GTK_LABEL(child),attrs);pango_attr_list_unref(attrs);}
+   g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
+   gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
+  }
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);

@@ -1517,6 +1517,7 @@ static void wizard_action(void*w,void*p){
  if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
+ else if(!strcmp(n,"w_ts_signup"))browser_open("https://login.tailscale.com/start");
  else if(!strcmp(n,"w_pair"))pair(0);
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
@@ -1571,8 +1572,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
- add(one,label("Sign in with your approved account. Connection status updates automatically.","helper"),0);
+ add(one,label("Sign in with an account invited to your home network.","helper"),0);
+ wizard_button(c,one,"SIGN IN WITH TAILSCALE","w_ts");
+ wizard_button(c,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup");
+ add(one,label("Already signed in? NOW detects your connection automatically. A new account still needs an invitation.","helper"),0);
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
  wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
  c->preset_notice=label("","helper");add(one,c->preset_notice,0);

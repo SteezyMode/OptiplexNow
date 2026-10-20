@@ -1,44 +1,56 @@
-# NOW application design — maintained architecture
+# Client architecture
 
-**Current application:** native GTK3 Linux client/launcher for an **already configured** server. The independent [Studio](https://github.com/SteezyMode/OptiplexStudio) is a creative workspace; neither application replaces Wolf or Moonlight. Start with [contributor guidance](../CONTRIBUTING.md) and [current status](CURRENT-STATUS.md).
+Status: implemented client boundaries and future contracts. See [Current status](CURRENT-STATUS.md) for observed test coverage.
 
-The earlier browser synthesizer proposal formerly named "Studio" has been [archived](archive/2026-10-16-studio-synth-design.md). It is **not** the active Studio product, a dependency, or a NOW 2.x commitment.
+## Runtime
 
-## Component ownership
+The installed package provides a GTK3 desktop launcher, supporting scripts, status/tray UI, and optional host-management helpers. NOW invokes separately installed Moonlight for streaming and configured browser/SSH/SFTP programs for other access. Tailscale provides a supported path to remote peers; Tailscale is not a NOW account service.
 
-| Component | Responsibility |
+The app is a client for an **already configured Linux host**. The New Server Setup surface does not provision Wolf, media software, credentials, containers or a VPN.
+
+## Boundaries
+
+| Owner | Owns |
 | --- | --- |
-| NOW client (src/main.c) | GTK launcher, settings, connection UI, user-triggered actions, status/tray |
-| Process helpers (src/process.c) | Bounded subprocess execution, detached launch and executable discovery |
-| Portable presets (src/presets.c) | Allowlisted non-secret connection export/import; legacy headers remain readable |
-| Encrypted backups (src/backup.c) | Explicit client backup/restore for selected preferences, SSH keys and Moonlight state |
-| Supporting scripts | Tailscale discovery, SSH/SFTP and explicit opt-in server maintenance |
-| Future NOW server manager | **Proposed** fresh-host setup, provisioning, ownership, recovery, Wolf management |
+| NOW client | Connection/configuration UI, discovery, allowed host actions, status presentation, client backups |
+| NOW future host manager | Opt-in installation, service registry, config lifecycle, health/diagnostics, scoped enrollment, update/repair/backup |
+| Wolf | Streaming server, application and desktop sessions, Moonlight protocol endpoints |
+| Moonlight | Video/audio/control client and device certificate identity |
+| Tailscale or a future supported alternative | Network membership and reachability |
+| Media software | Jellyfin authentication, media playback, libraries and service internals |
+| OptiPlex Studio | Local-first creative projects, tools and AI-assisted workflows |
 
-NOW 1.13.0 **requires a prepared server**. New Server Setup is a placeholder, not an installer.
+Do not put server admin power in an ordinary client. The Wolf Unix management socket and Docker control must stay host-local behind an authenticated, narrow mediation layer.
 
-## Compatibility contracts
+## Identity and data model
 
-- Current client configuration path: ~/.config/optiplex-desk/config.ini (or under XDG_CONFIG_HOME); existing indexed keys and user preferences must survive upgrades.
-- Primary and tray actions use **independent masks**, so upgrading must not silently reset a user's layout.
-- Portable .onp files include only a narrowly allowlisted set of non-secret remote settings; never include SSH private keys, passwords or Moonlight pairing.
-- Encrypted .onb backups hold sensitive client data; keep them private and test recovery off-host.
-- Visible brand, installed package ID, config directory and preset/backup format IDs are **not interchangeable**. A rename needs distinct migration plans for display labels, Debian IDs, client config paths, and the historic .onp/.onb headers. Preserve old data and allow rollback; never use a bulk text replacement.
+Do not conflate the following:
 
-## Streaming and identity
+- **User:** principal entitled to access a specific host or logical desktop.
+- **Device:** individually paired client certificate and future NOW enrollment credential; revocable separately.
+- **Host:** server with a stable ID and explicit ownership.
+- **Desktop/profile:** durable workspace definition, owner and data home; not necessarily a current container.
+- **Session:** transient connection and running stream state; never infer a connected user from container count.
 
-NOW launches Moonlight against existing Wolf apps. A Wolf **app**, **profile**, **user/device identity** and **running stream session** are different entities. Two devices opening the same shortcut do not necessarily reconnect to the same live desktop. Native Moonlight pairing and web administrative certificate identity are separate mechanisms.
+The current beta uses Tailscale peer access, SSH trust and native Moonlight/Wolf pairing, **not** one unified NOW identity. Future email approval authorizes a new device under an existing account. It cannot bypass host-owner authorization or grant a new host automatically.
 
-Preserve existing Wolf volumes, current desktop sessions, persistent homes, credentials, and working Jellyfin/VPN/Caddy services. The future manager must enforce access at the native streaming layer—not merely hide unauthorized desktops in NOW's UI. It must not expose Docker or privileged Wolf management sockets to ordinary client devices.
+## Configuration compatibility
 
-See [upstream-first Wolf integration](UPSTREAM-FIRST-WOLF-INTEGRATION.md) and [multi-user feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md). These are plans, not shipped server capabilities.
+- Persisted client settings: `~/.config/optiplex-desk/config.ini` (or configured XDG config directory). Preserve indexed fields and user-defined links during upgrades.
+- Display name, Debian package ID, desktop executable, config directory, preset format and backup format are different compatibility surfaces. Never bulk-rename them.
+- `.onp` presets export only allowed non-secret connection settings. Keep legacy files readable.
+- `.onb` backups are encrypted and may include SSH/Moonlight identity; protect them like credentials and test restore on a trusted spare client.
+- Primary action and tray action selections are separate masks. Migration must retain both.
+- Existing host services and user data are outside the client's installation lifecycle unless explicitly opted into an owned management operation.
 
-## Engineering and release gates
+## Health and capability contracts
 
-The [contributor guide](../CONTRIBUTING.md) has development commands and a source map. Unit and C tests cover helper behavior and portable preset compatibility; Debian package checks cover packaging; Xvfb launches a real GTK window; the linker check ensures a non-executable ELF stack. Tag-only workflows publish new immutable releases, as specified in [release process](RELEASE-PROCESS.md).
+Report state and source independently: Tailscale is connected/disconnected, Wolf can be reachable/running, desktop container count is not client session count, and Gluetun health is a container-defined probe rather than an independently verified tunnel exit IP. Missing data is unknown, not healthy.
 
-A successful CI run still cannot prove Moonlight playback, tray integration, SSH authorization, project persistence, or the 1024x768 layout. Run these manually on a representative client before approving an installed release.
+An eventual host installer must publish managed service IDs and health capabilities instead of requiring a name such as `gluetun`. Avoid accidental Docker permission expansion and application-specific host assumptions.
 
-## Scope discipline
+## Engineering gates
 
-Keep UI, code, tests, and documentation synchronized. Record new features as issues with verifiable acceptance criteria. New creative tools and experimental games belong to Studio or their own explicit proposals, not a reintroduced browser synthesizer hidden in NOW's launcher.
+GitHub CI compiles, checks packaging, runs unit checks and GTK smoke tests. The release workflow publishes only new version tags. Neither substitutes for fresh-client pairing, real gameplay, live audio/input, or backup restore.
+
+Technical details: [Pairing contract](WOLF-PAIRING-HOST-CONTRACT.md), [Host installer](HOST-INSTALLER.md), [Wolf adapter/fork policy](UPSTREAM-FIRST-WOLF-INTEGRATION.md), [Beta acceptance](BETA-ACCEPTANCE.md).

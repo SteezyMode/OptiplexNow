@@ -38,11 +38,13 @@ def sample():
 
 class MoonlightWebMaintenanceTests(unittest.TestCase):
     def test_preserves_data_volume_ports_image_and_caps(self):
-        args = mw.recreate_args(sample(), "sha256:new")
+        args = mw.recreate_args(sample(), "sha256:new", Path("/tmp/mw-secret.env"))
         self.assertEqual(args[-1], "sha256:new")
         self.assertIn("moonlightweb-test-data:/data:z", args)
-        self.assertIn("MW_HTTPS_PORT=8443", args)
-        self.assertIn("MW_HTTP_PORT=8080", args)
+        self.assertIn("--env-file", args)
+        self.assertIn("/tmp/mw-secret.env", args)
+        self.assertNotIn("MW_HTTPS_PORT=8443", args)
+        self.assertNotIn("MW_HTTP_PORT=8080", args)
         self.assertIn("unless-stopped", args)
         self.assertIn("NET_BIND_SERVICE", args)
         self.assertIn("ALL", args)
@@ -53,23 +55,23 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
         info = sample()
         info["Mounts"][0]["Type"] = "bind"
         with self.assertRaises(RuntimeError):
-            mw.recreate_args(info, "sha256:new")
+            mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
 
     def test_rejects_compose_adoption(self):
         info = sample()
         info["Config"]["Labels"]["com.docker.compose.project"] = "gaming"
         with self.assertRaises(RuntimeError):
-            mw.recreate_args(info, "sha256:new")
+            mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
 
     def test_rejects_dangerous_docker_overrides(self):
         info = sample()
         info["HostConfig"]["Privileged"] = True
         with self.assertRaises(RuntimeError):
-            mw.recreate_args(info, "sha256:new")
+            mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
         info = sample()
         info["HostConfig"]["Devices"] = [{"PathOnHost": "/dev/dri"}]
         with self.assertRaises(RuntimeError):
-            mw.recreate_args(info, "sha256:new")
+            mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
 
     def test_wolf_ui_not_mistaken_for_user_session(self):
         with patch.object(mw, "docker", return_value="wolf\nWolf-UI_abc\nWolfStudioDesktop_123\nWolfSteam_456"):

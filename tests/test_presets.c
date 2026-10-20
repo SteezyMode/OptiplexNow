@@ -9,7 +9,7 @@
 static const char *const fields[NOW_PRESET_CONFIG_COUNT] = {
     "host","user","relay","relay_user","wake_command","videos","music",
     "downloads","browser","moonlight_appimage","storage_path","model_host",
-    "model_name","tray_buttons","ai_url","featured_actions"
+    "model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"
 };
 
 static int fail(const char *why) {
@@ -36,6 +36,7 @@ int main(void) {
     strcpy(values[1],"alice");
     strcpy(values[5],"https://media.example.local");
     strcpy(values[14],"https://ai.example.local");
+    strcpy(values[16],"https://games.example.local");
     strcpy(values[9],"/private/device-specific/moonlight.AppImage");
 
     if(!now_preset_write(path,values,fields))goto end;
@@ -44,16 +45,17 @@ int main(void) {
     FILE *fp=fopen(path,"r");
     if(!fp)goto end;
     char header[160]={0};
-    int v2=fgets(header,sizeof header,fp)!=NULL && strcmp(header,"# OptiPlex Now server preset v2\n")==0;
+    int v2=fgets(header,sizeof header,fp)!=NULL && strcmp(header,"# OptiPlex Now server preset v3\n")==0;
     fclose(fp);
     if(!v2)goto end;
     if(!now_preset_read(path,imported,fields))goto end;
-    if(strcmp(imported[0],"example.local")||strcmp(imported[14],"https://ai.example.local"))goto end;
+    if(strcmp(imported[0],"example.local")||strcmp(imported[14],"https://ai.example.local")||strcmp(imported[16],"https://games.example.local"))goto end;
     if(imported[9][0])goto end; /* Device-specific path must never be in a portable preset. */
 
     memset(imported,0,sizeof imported);
+    strcpy(imported[16],"https://previous-host.example");
     if(!write_text(path,"# OptiPlex Now server preset v1\nhost=legacy.local\nuser=bob\n"))goto end;
-    if(!now_preset_read(path,imported,fields)||strcmp(imported[0],"legacy.local"))goto end;
+    if(!now_preset_read(path,imported,fields)||strcmp(imported[0],"legacy.local")||imported[16][0])goto end;
 
     memset(imported,0,sizeof imported);
     if(!write_text(path,"# OptiPlex Now server preset v2 (v1 imports supported)\nhost=legacy2.local\nuser=bob\n"))goto end;
@@ -79,6 +81,16 @@ int main(void) {
     memset(imported,0,sizeof imported);
     if(!write_text(path,"# OptiPlex Now server preset v2\nhost=bad host\nuser=bob\n"))goto end;
     if(now_preset_read(path,imported,fields))goto end;
+
+    /* Legacy v2 must not silently accept fields it never defined. */
+    memset(imported,0,sizeof imported);
+    strcpy(imported[0],"original.local");
+    if(!write_text(path,"# OptiPlex Now server preset v2\\nhost=ok.local\\nuser=bob\\nweb_gaming_url=https://games.example.local\\n"))goto end;
+    if(now_preset_read(path,imported,fields)||strcmp(imported[0],"original.local"))goto end;
+
+    /* New v3 refuses a token-bearing URL and leaves previous values intact. */
+    if(!write_text(path,"# OptiPlex Now server preset v3\\nhost=ok.local\\nuser=bob\\nweb_gaming_url=https://games.example.local/?token=secret\\n"))goto end;
+    if(now_preset_read(path,imported,fields)||strcmp(imported[0],"original.local"))goto end;
 
     if(now_safe_preset_url("https://bob:password@example.com"))goto end;
     if(now_safe_wake_path("/tmp/a;rm -rf /"))goto end;

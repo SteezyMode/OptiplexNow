@@ -19,6 +19,7 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 ## Long-term product architecture
 
+- [Client installer MVP: Tailscale-first onboarding](docs/CLIENT-INSTALLER-MVP.md): scoped roadmap to reuse the existing GTK client, Moonlight, and a single Tailscale sign-in with one-time native pairing. **Roadmap, not implemented.**
 - [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
 - [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
 

@@ -63,6 +63,8 @@ def query_owner(host, action, request_id=None, *, connection=http.client.HTTPCon
             return False, "invalid_response"
         if action != "list":
             if message.get("decision_recorded") is True:
+                if action == "trust" and message.get("future_devices_trusted") is True:
+                    return True, "trusted_account"
                 return True, "decision_recorded"
             return False, "invalid_response"
         items = message.get("pending")
@@ -186,7 +188,7 @@ def main(argv):
             for rid, node, backend in response:
                 print(PREFIX + "request\t" + rid + "\t" + node + "\t" + backend)
     else:
-        print(PREFIX + ("trusted_account" if action == "trust" and response == "decision_recorded" else "decision_recorded"))
+        print(PREFIX + response)
     return 0
 
 

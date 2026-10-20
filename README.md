@@ -4,7 +4,9 @@
 
 **Linux client for games, media, and remote access to an existing personal server.** NOW combines Moonlight/Wolf launch controls, media links, remote files, and basic host management in a GTK3 desktop application.
 
-**Release channel:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the published private closed beta build. Fresh-client acceptance remains pending.\n\n**Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
+**Release channel:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the published private closed beta build. Fresh-client acceptance remains pending.
+
+**Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
 
 ## Download
 

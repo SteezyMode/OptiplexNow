@@ -67,7 +67,8 @@ static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_free,*drive_combo;
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
-static GtkWidget *wizard_wolf_label=NULL;
+static GtkWidget *wizard_wolf_label=NULL,*wizard_moonlight_label=NULL;
+static int moonlight_install_running=0;
 static char wolf_probe_host[512];
 static GtkWidget *service_labels[3]={NULL,NULL,NULL};
 #define MAX_DRIVES 16
@@ -711,12 +712,19 @@ static void launch_torrents(void){
 }
 /* User-consented, asynchronous installation. No terminal, root shell or
  * arbitrary package installation; Flatpak runs in the current user's scope. */
+static void moonlight_install_status(const char *message){
+ say(message);
+ if(wizard_moonlight_label)gtk_label_set_text(GTK_LABEL(wizard_moonlight_label),message);
+ if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),message);
+ if(games_state)gtk_label_set_text(GTK_LABEL(games_state),moonlight_mode_name());
+}
 static void moonlight_install_completed(GObject *source,GAsyncResult *result,gpointer stage) {
  GError *error=NULL;
  gboolean completed=g_subprocess_wait_check_finish(G_SUBPROCESS(source),result,&error);
  if(!completed){
+  moonlight_install_running=0;
   if(error)g_error_free(error);
-  say("MOONLIGHT INSTALL FAILED. CHECK FLATPAK AND RETRY");
+  moonlight_install_status("MOONLIGHT INSTALL FAILED. CHECK FLATPAK AND RETRY");
   return;
  }
  if(GPOINTER_TO_INT(stage)==1){
@@ -725,20 +733,24 @@ static void moonlight_install_completed(GObject *source,GAsyncResult *result,gpo
       "flatpak","install","--user","--noninteractive","--assumeyes",
       "flathub","com.moonlight_stream.Moonlight",NULL);
   if(!process){
+   moonlight_install_running=0;
    if(error)g_error_free(error);
-   say("COULD NOT START MOONLIGHT INSTALL");
+   moonlight_install_status("COULD NOT START MOONLIGHT INSTALL");
    return;
   }
-  say("INSTALLING MOONLIGHT FOR THIS USER...");
+  moonlight_install_status("INSTALLING MOONLIGHT FOR THIS USER...");
   g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(2));
   g_object_unref(process);
   return;
  }
+ moonlight_install_running=0;
  if(flatpak_has("com.moonlight_stream.Moonlight")){
-  say("MOONLIGHT INSTALLED. CONTINUE IN SETUP");
- }else say("MOONLIGHT INSTALL NOT DETECTED. RETRY INSTALL");
+  moonlight_install_status("MOONLIGHT INSTALLED. CONTINUE IN SETUP");
+ }else moonlight_install_status("MOONLIGHT INSTALL NOT DETECTED. RETRY INSTALL");
 }
 static void install_moonlight(void){
+ if(moonlight_install_running){moonlight_install_status("MOONLIGHT INSTALL ALREADY RUNNING");return;}
+ if(has_moonlight()){moonlight_install_status("MOONLIGHT IS ALREADY INSTALLED");return;}
  if(!now_program_exists("flatpak")){
   say("FLATPAK NOT INSTALLED. INSTALL FLATPAK USING YOUR DISTRO PACKAGE MANAGER");
   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS NEEDED FOR AUTOMATIC MOONLIGHT INSTALL");
@@ -762,10 +774,11 @@ static void install_moonlight(void){
      "https://flathub.org/repo/flathub.flatpakrepo",NULL);
  if(!process){
   if(error)g_error_free(error);
-  say("COULD NOT CONFIGURE FLATHUB");
+  moonlight_install_status("COULD NOT CONFIGURE FLATHUB");
   return;
  }
- say("PREPARING FLATHUB...");
+ moonlight_install_running=1;
+ moonlight_install_status("PREPARING FLATHUB...");
  g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(1));
  g_object_unref(process);
 }
@@ -1473,7 +1486,7 @@ static void wizard_service_check(void*w,void*p){
  if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
  else {services_inflight=0;free(r);}
 }
-static void wizard_destroy(void*w,void*p){(void)w;wizard_wolf_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
+static void wizard_destroy(void*w,void*p){(void)w;wizard_wolf_label=NULL;wizard_moonlight_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
 static void on_wizard(void*w,void*p){(void)w;(void)p;
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
@@ -1521,7 +1534,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  /* Page 4: reuse the existing installed Moonlight, including AppImages. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("GAMES","modalheading"),0);
- c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
+ c->game_state=label(moonlight_mode_name(),"gameshint");wizard_moonlight_label=c->game_state;add(four,c->game_state,0);
  c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
  c->games_page=four;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");

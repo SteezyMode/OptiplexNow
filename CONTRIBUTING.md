@@ -26,6 +26,8 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 
 A shared `.clang-format` defines four-space C indentation and a 100-column target. Format newly extracted or edited functions, not the entire legacy `main.c` in unrelated PRs. Preserve the existing serialized config index order, file path and legacy preset inputs.
 
+The active [six-item Beta 1 engineering work order](docs/PRODUCT.md#beta-1-engineering-execution-plan) is applied within existing product milestones. For the first Wolf slice, separate transport/parsing from GTK before changing blocking calls. Any worker result must return to the GTK main context, respect cancellation and dialog lifetime, and be checked against the intended client identity. Keep formatting-only changes out of behavioral PRs. Sanitizers belong to a separately tested diagnostic target, not a surprise change to release build flags.
+
 ## Local build
 
 Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Python 3, GTK3/fontconfig headers, OpenSSL headers, curl, Pillow and Xvfb/test GUI dependencies. A clean build downloads two fonts from pinned upstream revisions with integrity and size verification.

@@ -189,6 +189,22 @@ class PairingRequests:
             entry.state = "approved" if approve else "denied"
             return True
 
+    def owner_approve_and_get_peer(self, request_id):
+        """Trusted owner only: atomically approve an existing pending request.
+
+        Return the already verified account for optional future-device trust.
+        An expired, denied, or missing request never yields an identity.
+        """
+        if not isinstance(request_id, str) or not _REQUEST_ID.fullmatch(request_id):
+            return None
+        with self._lock:
+            self._purge(self._clock())
+            entry = self._requests.get(request_id)
+            if entry is None or entry.state != "pending":
+                return None
+            entry.state = "approved"
+            return entry.peer
+
     def take_grant_for_adapter(self, peer, request_id, backend):
         """Local trusted adapter only. Consume once, bind peer AND backend.
 

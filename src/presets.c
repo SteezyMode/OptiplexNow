@@ -78,6 +78,23 @@ int now_safe_preset_url(const char *s) {
     return 1;
 }
 
+int now_web_gaming_url(const char *base, int settings, char *out, size_t cap) {
+    if (!out || !cap) return 0;
+    out[0] = '\0';
+    if (!base || !*base || !now_safe_preset_url(base)) return 0;
+    size_t length = strlen(base);
+    while (length && base[length-1] == '/') length--;
+    if (!length) return 0;
+    /* Query and fragment are forbidden by now_safe_preset_url; only append
+     * the upstream MoonlightWeb route/query to a configured path. */
+    const char *suffix = settings ? "/settings" : "?launch=steam";
+    size_t needed = length + strlen(suffix) + 1;
+    if (needed > cap) return 0;
+    memcpy(out, base, length);
+    strcpy(out + length, suffix);
+    return 1;
+}
+
 int now_preset_values_valid(char v[NOW_PRESET_CONFIG_COUNT][512]) {
     if (!now_valid_host(v[0]) || !now_valid_user(v[1])) return 0;
     if (*v[2] && !now_valid_host(v[2])) return 0;

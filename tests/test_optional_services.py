@@ -32,14 +32,24 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):
-        self.assertIn("#define CONFIG_COUNT 16", SOURCE)
+        self.assertIn("#define CONFIG_COUNT 17", SOURCE)
+        self.assertIn("#define WEB_GAMING_URL_SETTING 16", SOURCE)
         self.assertIn("#define FEATURED_MASK_SETTING 15", SOURCE)
         self.assertIn("#define NEW_INSTALL_FEATURED_MASK 207u", SOURCE)
         self.assertIn("#define EXISTING_INSTALL_FEATURED_MASK 255u", SOURCE)
         self.assertIn("if(!has_featured)snprintf(cfg[FEATURED_MASK_SETTING]", SOURCE)
-        self.assertIn('"tray_buttons","ai_url","featured_actions"', SOURCE)
-        self.assertIn('"255","","207"', SOURCE)
+        self.assertIn('"tray_buttons","ai_url","featured_actions","web_gaming_url"', SOURCE)
+        self.assertIn('"255","","207",""', SOURCE)
         self.assertIn("last_columns=-1;", SOURCE)
+
+    def test_web_gaming_is_explicitly_configured(self):
+        self.assertIn('web_gaming_url', SOURCE)
+        self.assertIn('now_web_gaming_url(base,settings,url,sizeof url)', SOURCE)
+        self.assertIn('SET WEB GAMING URL IN SETTINGS', SOURCE)
+        self.assertNotIn('games.monumentrisk.com', SOURCE)
+        self.assertIn('http://100.100.100.100', SOURCE)
+        self.assertIn('w_ts_refresh', SOURCE)
+        self.assertIn('w_ts_cli', SOURCE)
 
     def test_ai_url_and_admin_are_optional(self):
         self.assertIn("if(*cfg[14]){", SOURCE)
@@ -54,13 +64,14 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertNotIn("bruiser.monumentrisk.com", SOURCE)
 
     def test_old_connection_preset_remains_importable(self):
-        self.assertIn("#define PRESET_COUNT 10", PRESET_SOURCE)
-        self.assertIn("7,10,14}", PRESET_SOURCE)
+        self.assertIn("#define PRESET_COUNT 11", PRESET_SOURCE)
+        self.assertIn("7,10,14,16}", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V2", PRESET_SOURCE)
+        self.assertIn("PRESET_HEADER_V3", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V1", PRESET_SOURCE)
         self.assertIn("if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}", SOURCE)
         self.assertIn("if(*line && *line!='#')", PRESET_SOURCE)
-        self.assertIn("if(!now_safe_preset_url(v[14]))return 0;", PRESET_SOURCE)
+        self.assertIn("if(!now_safe_preset_url(v[14])||!now_safe_preset_url(v[16]))return 0;", PRESET_SOURCE)
 
 
 if __name__ == "__main__":

@@ -85,7 +85,8 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 16
+#define CONFIG_COUNT 17
+#define WEB_GAMING_URL_SETTING 16
 #define FEATURED_MASK_SETTING 15
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
@@ -93,8 +94,8 @@ static char config_path[PATH_MAX];
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207",""};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -350,15 +351,35 @@ static int client_tailscale_state(void) {
  if(!strcmp(out,"missing\n"))return 4;
  return 0;
 }
+static const char *client_tailscale_label(void) {
+ switch(client_tailscale_state()){
+  case 1: return "TAILSCALE CONNECTED";
+  case 2: return "TAILSCALE SIGN-IN REQUIRED";
+  case 3: return "TAILSCALE DISCONNECTED";
+  case 4: return "TAILSCALE NOT INSTALLED";
+  default: return "TAILSCALE STATUS UNAVAILABLE";
+ }
+}
+/* Prefer Tailscale's own on-device web interface, available on modern
+ * desktop clients at the reserved local address. Authentication remains
+ * upstream: NOW never receives the account password or node keys. */
 static void setup_tailscale(void) {
  int status=client_tailscale_state();
- if(status==1){say("TAILSCALE IS ALREADY CONNECTED");return;}
+ if(status==1){say("TAILSCALE ALREADY CONNECTED");return;}
  if(status==4){browser_open("https://tailscale.com/download/linux");return;}
- if(status==0){say("CANNOT CHECK TAILSCALE. CHECK THAT THE SERVICE IS RUNNING");return;}
- /* The official Tailscale CLI owns login; no password goes into NOW.
-  * Future milestone: present its browser/device flow inside this wizard. */
+ if(status==0){say("TAILSCALE UNAVAILABLE. CHECK THE LOCAL SERVICE");return;}
+ browser_open("http://100.100.100.100");
+ say("TAILSCALE WEB INTERFACE OPENED. RETURN TO NOW AND REFRESH STATUS");
+}
+/* Older Tailscale versions may lack the local web interface. The legacy
+ * one-time CLI path remains an explicit user choice, not the default. */
+static void tailscale_cli_fallback(void) {
+ if(client_tailscale_state()==1){say("TAILSCALE ALREADY CONNECTED");return;}
+ if(!now_program_exists("tailscale")){
+  browser_open("https://tailscale.com/download/linux");return;
+ }
  char*args[]={"sudo","tailscale","up",NULL};
- if(terminal_launch(args))say("COMPLETE TAILSCALE SIGN-IN IN THE OPENED TERMINAL");
+ if(terminal_launch(args))say("FINISH TAILSCALE SIGN-IN IN THE TERMINAL");
 }
 
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
@@ -824,7 +845,28 @@ static void open_remote_files(void){
  if(now_program_exists("gio")){char*args[]={"gio","open",url,NULL};now_launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
-static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+/* Only open the explicitly configured endpoint. Older builds contained a
+ * developer-specific URL here; never leak fresh client requests to it. */
+static void open_web_gaming(int settings){
+ const char *base=cfg[WEB_GAMING_URL_SETTING];
+ if(!*base){say("SET WEB GAMING URL IN SETTINGS");return;}
+ char url[768];
+ if(!now_web_gaming_url(base,settings,url,sizeof url)){
+  say("WEB GAMING URL INVALID");return;
+ }
+ browser_open(url);
+}
+/* Settings button may use the currently edited URL before it is saved. */
+static void on_web_gaming_settings(void*w,void*p){
+ (void)w;
+ if(!p){open_web_gaming(1);return;}
+ const char*base=gtk_entry_get_text(GTK_ENTRY(p));
+ char url[768];
+ if(!now_web_gaming_url(base,1,url,sizeof url)){
+  say("SET A VALID WEB GAMING URL FIRST");return;
+ }
+ browser_open(url);
+}
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.
  * The client has no Docker privileges and does not manage Wolf itself. */
 static void on_web_gaming_maintenance(void*w,void*p){
@@ -883,7 +925,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==7)open_web_gaming(0);
  else if(n==8)on_bruiser_ai(NULL,NULL);
  
 }
@@ -1085,12 +1127,13 @@ static void on_system_info(void*w,void*p){
  spec_status=NULL;gtk_widget_destroy(d);
 }
 
-typedef struct {GtkWidget*parent,*fields[8],*disk;} PresetExportContext;
+typedef struct {GtkWidget*parent,*fields[8],*disk,*web;} PresetExportContext;
 static void export_preset(void*w,void*p){
  (void)w;PresetExportContext*c=p;char v[CONFIG_COUNT][512];
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,cfg[i]);
  for(int i=0;i<8;i++)safe_copy(v[i],512,gtk_entry_get_text(GTK_ENTRY(c->fields[i])));
  safe_copy(v[10],512,gtk_entry_get_text(GTK_ENTRY(c->disk)));
+ if(c->web)safe_copy(v[WEB_GAMING_URL_SETTING],512,gtk_entry_get_text(GTK_ENTRY(c->web)));
  if(!now_preset_values_valid(v)){
   preset_alert(c->parent,"Preset not saved","Check server, relay, URL, and wake script fields. Presets cannot contain URL passwords or tokens.");return;
  }
@@ -1192,6 +1235,15 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
   gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
   fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
+ /* Optional per-server Web Gaming gateway. Blank means unavailable.
+  * Never default to an unrelated reference developer domain. */
+ GtkWidget*web_label=label("Web Gaming URL",NULL);
+ GtkWidget*web_field=gtk_entry_new();
+ gtk_entry_set_text(GTK_ENTRY(web_field),cfg[WEB_GAMING_URL_SETTING]);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(web_field),"Optional HTTPS URL or Tailscale host:port");
+ gtk_widget_set_hexpand(web_field,1);
+ gtk_grid_attach(GTK_GRID(gt),web_label,0,5,1,1);
+ gtk_grid_attach(GTK_GRID(gt),web_field,1,5,1,1);
  GtkWidget*disklabel=label("Downloads disk",NULL);
  GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
  gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
@@ -1213,7 +1265,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
- g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,web_field,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  add(col,label("SERVICES","modalheading"),0);
@@ -1240,7 +1292,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
  g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
  add(col,advanced,0);
- PresetExportContext export_context={.parent=d,.disk=diskentry};
+ PresetExportContext export_context={.parent=d,.disk=diskentry,.web=web_field};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
  GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
  g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,&export_context,NULL,0);add(col,export_btn,0);
@@ -1254,6 +1306,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
+   const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_field));
+   if(now_safe_preset_url(web_url))
+    safe_copy(cfg[WEB_GAMING_URL_SETTING],512,web_url);
+   else preset_alert(d,"Invalid Web Gaming URL",
+      "Use an http:// or https:// address without credentials, query, or fragment. Previous value kept.");
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
@@ -1273,7 +1330,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
-typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
+typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3],*web_url; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
  int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
@@ -1295,23 +1352,27 @@ static void wizard_save(Wizard*c){
    const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
  }
+ if(c->web_url) {
+  const char*url=gtk_entry_get_text(GTK_ENTRY(c->web_url));
+  if(now_safe_preset_url(url))safe_copy(cfg[WEB_GAMING_URL_SETTING],512,url);
+  else {gtk_label_set_text(GTK_LABEL(c->notice),"INVALID WEB GAMING URL — NOT SAVED");return;}
+ }
  /* For a fresh installation, make basic services follow the selected server. */
  if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
  if(!*cfg[7])snprintf(cfg[7],512,"http://%s:8085",cfg[0]);
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
 static void wizard_service_check(void*w,void*p);
+static void wizard_validate_web(void*w,void*p){
+ (void)w;Wizard*c=p;
+ if(!c->web_url || !c->services_page)return;
+ const char*value=gtk_entry_get_text(GTK_ENTRY(c->web_url));
+ gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->services_page,
+                                 now_safe_preset_url(value));
+}
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;(void)page;Wizard*c=p;
- char text[160];
- switch(client_tailscale_state()){
-  case 1: snprintf(text,sizeof text,"TAILSCALE CONNECTED");break;
-  case 2: snprintf(text,sizeof text,"TAILSCALE SIGN-IN REQUIRED");break;
-  case 3: snprintf(text,sizeof text,"TAILSCALE DISCONNECTED");break;
-  case 4: snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");break;
-  default: snprintf(text,sizeof text,"TAILSCALE STATUS UNAVAILABLE");break;
- }
- gtk_label_set_text(GTK_LABEL(c->ts_state),text);
+ gtk_label_set_text(GTK_LABEL(c->ts_state),client_tailscale_label());
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);
  if(page==c->games_page){
@@ -1370,6 +1431,7 @@ static void wizard_action(void*w,void*p){
     c->preset_loaded=1;
     gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
     gtk_entry_set_text(GTK_ENTRY(c->relay),v[2]);gtk_entry_set_text(GTK_ENTRY(c->relayuser),v[3]);gtk_entry_set_text(GTK_ENTRY(c->wake),v[4]);
+    if(c->web_url)gtk_entry_set_text(GTK_ENTRY(c->web_url),v[WEB_GAMING_URL_SETTING]);
     for(int i=0;i<3;i++){
        gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),v[5+i]);
        if(service_labels[i])gtk_label_set_text(GTK_LABEL(service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
@@ -1380,6 +1442,8 @@ static void wizard_action(void*w,void*p){
  if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
+ else if(!strcmp(n,"w_ts_cli"))tailscale_cli_fallback();
+ else if(!strcmp(n,"w_ts_refresh"))gtk_label_set_text(GTK_LABEL(c->ts_state),client_tailscale_label());
  else if(!strcmp(n,"w_pair"))pair(0);
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
@@ -1434,7 +1498,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
+ add(one,label("Tailscale opens its local sign-in page in your browser. Return here to refresh the status.","helper"),0);
+ wizard_button(c,one,"OPEN TAILSCALE SIGN-IN","w_ts");
+ wizard_button(c,one,"REFRESH CONNECTION STATUS","w_ts_refresh");
+ wizard_button(c,one,"TERMINAL FALLBACK (OLDER TAILSCALE)","w_ts_cli");
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
  wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
  c->preset_notice=label("","helper");add(one,c->preset_notice,0);
@@ -1484,6 +1551,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
   * wasn't configured locally. */
  GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(GTK_CONTAINER(five),20);
  add(five,label("SERVICES","modalheading"),0);
+ add(five,label("WEB GAMING URL (OPTIONAL)","helper"),0);
+ c->web_url=gtk_entry_new();
+ gtk_entry_set_placeholder_text(GTK_ENTRY(c->web_url),"https://your-server.example or http://100.x.y.z:port");
+ gtk_entry_set_text(GTK_ENTRY(c->web_url),cfg[WEB_GAMING_URL_SETTING]);add(five,c->web_url,0);
  add(five,label("Addresses from your preset are checked automatically.","helper"),0);
  const char*names[]={"VIDEOS URL","MUSIC URL","DOWNLOADS URL"};
  GtkWidget*rows=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(rows),9);gtk_grid_set_row_spacing(GTK_GRID(rows),11);add(five,rows,0);
@@ -1496,7 +1567,9 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
    gtk_grid_attach(GTK_GRID(rows),service_labels[i],2,i,1,1);
  }
  GtkWidget*check=button("CHECK SERVICES","setupaction");g_signal_connect_data(check,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,check,0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);
+ g_signal_connect_data(c->web_url,"changed",(GCallback)wizard_validate_web,c,NULL,0);
+ wizard_validate_web(NULL,c);
  /* Page 6: nothing else needed for existing clients. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("READY","modalheading"),0);

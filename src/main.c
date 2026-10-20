@@ -78,6 +78,10 @@ static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
 static char appimage_found[PATH_MAX];
 static void tray_build_menu(void);
+static void tray_desktop_caption(char *out,size_t cap);
+static void tray_desktop_caption_save(const char *value);
+static void tray_order_load(int out[8]);
+static void tray_order_save(const int order[8]);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
@@ -1146,12 +1150,49 @@ static int full_backup_ui(void*parent,int restore){
 }
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
 static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);}
+static void settings_open_page(GtkWidget *button,gpointer unused){
+ (void)unused;
+ GtkStack *stack=GTK_STACK(g_object_get_data(G_OBJECT(button),"settings-stack"));
+ const char *page=g_object_get_data(G_OBJECT(button),"settings-page");
+ if(stack&&page)gtk_stack_set_visible_child_name(stack,page);
+}
+static GtkWidget *settings_page(GtkWidget *stack,const char *name){
+ GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);
+ gtk_container_set_border_width(GTK_CONTAINER(content),14);
+ gtk_container_add(GTK_CONTAINER(scroll),content);
+ gtk_stack_add_named(GTK_STACK(stack),scroll,name);
+ return content;
+}
+static void settings_link(GtkWidget *container,GtkWidget *stack,const char *caption,const char *page){
+ GtkWidget *b=button(caption,"setupaction");
+ g_object_set_data(G_OBJECT(b),"settings-stack",stack);
+ g_object_set_data(G_OBJECT(b),"settings-page",(gpointer)page);
+ g_signal_connect(b,"clicked",G_CALLBACK(settings_open_page),NULL);
+ add(container,b,0);
+}
 static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
- gtk_window_set_default_size(GTK_WINDOW(d),510,440);
+ /* A single resizable dialog with internal navigation; suitable for 1024x768. */
+ gtk_window_set_default_size(GTK_WINDOW(d),680,550);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
- GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(GTK_CONTAINER(col),18);gtk_container_add(GTK_CONTAINER(scroll),col);
+ GtkWidget*stack=gtk_stack_new();
+ gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+ gtk_widget_set_vexpand(stack,TRUE);
+ add(area,stack,1);
+ GtkWidget*home=settings_page(stack,"home");
+ settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
+ settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
+ 
+ add(home,label("SETUP & MAINTENANCE","modalheading"),0);
+ settings_link(home,stack,"CONNECTIONS & SERVER  ›","connection");
+ GtkWidget*connection=settings_page(stack,"connection");
+ GtkWidget*gaming=settings_page(stack,"gaming");
+ GtkWidget*preferences=settings_page(stack,"preferences");
+ GtkWidget*pages[]={connection,gaming,preferences};
+ for(int k=0;k<3;k++)settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home");
+ GtkWidget*col=connection;
  add(col,label("CONNECTION","modalheading"),0);
  GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
  tailscale_label=label("CHECKING TAILSCALE","helper");add(col,tailscale_label,0);
@@ -1183,6 +1224,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
+ col=gaming;
  add(col,label("STREAMING","modalheading"),0);
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
@@ -1190,14 +1232,24 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
- add(col,label("SERVICES","modalheading"),0);
+ col=preferences;
+ add(col,label("DESKTOP SHORTCUT NAME","modalheading"),0);
+ add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
+ char desktop_label[128];tray_desktop_caption(desktop_label,sizeof desktop_label);
+ GtkWidget*desktop_caption_entry=gtk_entry_new();
+ gtk_entry_set_max_length(GTK_ENTRY(desktop_caption_entry),48);
+ gtk_entry_set_text(GTK_ENTRY(desktop_caption_entry),desktop_label);
+ add(col,desktop_caption_entry,0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[8],*tray_checks[8],*choices=gtk_grid_new();
+ GtkWidget*featured_checks[8],*tray_checks[8],*order_spins[8],*choices=gtk_grid_new();
+ int current_order[8],positions[8];tray_order_load(current_order);
+ for(int i=0;i<8;i++)positions[current_order[i]]=i+1;
  gtk_grid_set_row_spacing(GTK_GRID(choices),5);gtk_grid_set_column_spacing(GTK_GRID(choices),18);
  gtk_grid_attach(GTK_GRID(choices),label("SERVICE","storagehead"),0,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("PRIMARY","storagehead"),1,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("TRAY","storagehead"),2,0,1,1);
+ gtk_grid_attach(GTK_GRID(choices),label("TRAY ORDER","storagehead"),3,0,1,1);
  const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
  for(int i=0;i<8;i++){
@@ -1208,8 +1260,12 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
    gtk_grid_attach(GTK_GRID(choices),featured_checks[i],1,i+1,1,1);
    gtk_grid_attach(GTK_GRID(choices),tray_checks[i],2,i+1,1,1);
+   order_spins[i]=gtk_spin_button_new_with_range(1,8,1);
+   gtk_spin_button_set_value(GTK_SPIN_BUTTON(order_spins[i]),positions[i]);
+   gtk_grid_attach(GTK_GRID(choices),order_spins[i],3,i+1,1,1);
  }
  add(col,choices,0);
+ col=connection;
  add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
  g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
@@ -1225,6 +1281,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 
  GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
  gtk_widget_show_all(d);
+ gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");
  int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
@@ -1239,6 +1296,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     }
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
     snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
+    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
+      tray_desktop_caption_save(new_caption);
+    int ordered[8],ranks[8];
+    for(int i=0;i<8;i++){ranks[i]=gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(order_spins[i]));ordered[i]=current_order[i];}
+    /* Stable sort: ties preserve previous order. */
+    for(int i=1;i<8;i++){int key=ordered[i],j=i-1;
+      while(j>=0 && ranks[ordered[j]]>ranks[key]){ordered[j+1]=ordered[j];j--;}
+      ordered[j+1]=key;
+    }
+    tray_order_save(ordered);
     config_save();tray_build_menu();
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
     reflow(dimensions.width>0?dimensions.width:660);
@@ -1537,6 +1605,48 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
+static void tray_desktop_caption(char *out,size_t cap){
+ const char *home=getenv("HOME");char path[PATH_MAX];
+ snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
+ FILE *f=fopen(path,"r");if(!f){safe_copy(out,cap,"XFCE");return;}
+ if(!fgets(out,(int)cap,f)){safe_copy(out,cap,"XFCE");fclose(f);return;}
+ fclose(f);out[strcspn(out,"\r\n")]=0;
+ if(!*out)safe_copy(out,cap,"XFCE");
+}
+static void tray_desktop_caption_save(const char *value){
+ char path[PATH_MAX];const char *home=getenv("HOME");
+ snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
+ FILE*f=fopen(path,"w");if(!f)return;
+ fprintf(f,"%s\n",value);fclose(f);chmod(path,0600);
+}
+/* Order is local to the client. Missing/invalid files use the original order. */
+static void tray_order_path(char *path,size_t cap){
+ const char *xdg=getenv("XDG_CONFIG_HOME"),*home=getenv("HOME");
+ if(xdg&&*xdg)snprintf(path,cap,"%s/optiplex-desk/tray-order",xdg);
+ else snprintf(path,cap,"%s/.config/optiplex-desk/tray-order",home?home:"/tmp");
+}
+static void tray_order_load(int out[8]){
+ for(int i=0;i<8;i++)out[i]=i;
+ char path[PATH_MAX],buf[64];tray_order_path(path,sizeof path);
+ FILE*f=fopen(path,"r");if(!f)return;
+ if(!fgets(buf,sizeof buf,f)){fclose(f);return;}fclose(f);
+ int seen=0,temp[8];
+ for(int i=0;i<8;i++){
+  if(buf[i]<'0'||buf[i]>'7'){return;}
+  int v=buf[i]-'0';if(seen&(1<<v))return;
+  seen|=1<<v;temp[i]=v;
+ }
+ if(seen==255)for(int i=0;i<8;i++)out[i]=temp[i];
+}
+static void tray_order_save(const int order[8]){
+ char path[PATH_MAX],tmp[PATH_MAX];tray_order_path(path,sizeof path);
+ snprintf(tmp,sizeof tmp,"%s.tmp",path);
+ FILE*f=fopen(tmp,"w");if(!f)return;
+ for(int i=0;i<8;i++)fputc('0'+order[i],f);
+ fputc('\n',f);
+ if(fclose(f)==0){chmod(tmp,0600);if(rename(tmp,path)!=0)unlink(tmp);}
+ else unlink(tmp);
+}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -1544,11 +1654,26 @@ static void tray_build_menu(void){
  unsigned mask=tray_button_mask();
  if(mask){
   tray_separator();
-  static const char*captions[]={
-   "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
-   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI"
-  };
-  for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+  static const char *names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
+  static const char *descriptions[]={"Steam","Jellyfin","Dropped Needle","SFTP","VueTorrent","SSH","","Wolf UI"};
+  char desktop[128];tray_desktop_caption(desktop,sizeof desktop);
+  int order[8];tray_order_load(order);
+  for(int j=0;j<8;j++){int i=order[j];if(!(mask & (1u<<i)))continue;
+   /* Explicit label columns keep separators aligned under variable-width themes. */
+   GtkWidget*item=gtk_menu_item_new();
+   GtkWidget*line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
+   GtkWidget*name=gtk_label_new(names[i]),*bar=gtk_label_new("|");
+   GtkWidget*detail=gtk_label_new(i==6?desktop:descriptions[i]);
+   gtk_widget_set_size_request(name,115,-1);
+   gtk_label_set_xalign(GTK_LABEL(name),0.0f);
+   gtk_label_set_xalign(GTK_LABEL(detail),0.0f);
+   gtk_box_pack_start(GTK_BOX(line),name,FALSE,FALSE,0);
+   gtk_box_pack_start(GTK_BOX(line),bar,FALSE,FALSE,0);
+   gtk_box_pack_start(GTK_BOX(line),detail,FALSE,FALSE,0);
+   gtk_container_add(GTK_CONTAINER(item),line);
+   g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
+   gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
+  }
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);

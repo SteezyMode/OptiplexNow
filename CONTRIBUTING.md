@@ -26,6 +26,8 @@
 
 The optional `server/server-preflight.py` provides a read-only **local** compatibility inventory. It never provisions services or authenticates devices; see [preflight development instructions](docs/server-preflight.md).
 
+The separate `src/now_discovery_ui.c/.h` and `src/server_preflight_ui.c/.h` own their GTK dialogs. `src/find-now-hosts.py` owns bounded Tailscale client discovery, and `server/now-host-agent.py` owns the explicitly started read-only host endpoint. The host executable is never a privileged management service or auto-enabled daemon. See [discovery prototype](docs/now-host-discovery.md) and the [client onboarding architecture](docs/SERVER-ONBOARDING-AND-TAILSCALE.md).
+
 ## Build/test on a disposable development machine
 
 Target: amd64 Ubuntu/Pop!_OS 24.04 (other distributions unverified). Install the build requirements in [README](README.md), including GCC, make, binutils, Python, libssl-dev, Pillow and font-download prerequisites.

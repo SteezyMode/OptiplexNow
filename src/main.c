@@ -22,6 +22,7 @@
 #include <poll.h>
 #include "process.h"
 #include "presets.h"
+#include "config.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -91,19 +92,11 @@ static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
-static char config_path[PATH_MAX];
-#define CONFIG_COUNT 17
-#define FEATURED_MASK_SETTING 15
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
-#define EXISTING_INSTALL_FEATURED_MASK 255u
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
-#define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"};
-static const char *defaults[]={"","","","","","","","","system","","/","","","255","","207",""};
-static char cfg[CONFIG_COUNT][512];
-static int first_run=0;
+#define TRAY_DEFAULT_BUTTONS 255u;
 static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
@@ -164,34 +157,6 @@ static const char *CSS =
 "#specvalue {font-size:12px;color:#ece8e0;font-weight:700;}";
 static void safe_copy(char *dest, size_t cap, const char *src) { snprintf(dest,cap,"%s",src?src:""); }
 static void mkdir_safe(const char *p) { mkdir(p,0700); }
-static void config_location(void) {
- const char *xdg=getenv("XDG_CONFIG_HOME"); char dir[PATH_MAX];
- snprintf(dir,sizeof dir,"%s",(xdg&&*xdg)?xdg:"");
- if (!*dir) snprintf(dir,sizeof dir,"%s/.config",getenv("HOME")?getenv("HOME"):"/tmp");
- mkdir_safe(dir); size_t len=strlen(dir); if(len+30>=sizeof dir)return;
- strcpy(dir+len,"/optiplex-desk");mkdir_safe(dir);
- snprintf(config_path,sizeof config_path,"%s/config.ini",dir);
-}
-static void config_load(void) {
- config_location();for(int i=0;i<CONFIG_COUNT;i++)safe_copy(cfg[i],512,defaults[i]);
- FILE*f=fopen(config_path,"r");if(!f){
-   first_run=1;
-   /* A fresh client has no host-specific URLs. Existing config.ini settings,
-    * including saved media links and deliberately blank fields, are preserved. */
-   return;
- }
- int has_featured=0;
- char line[1024]; while(fgets(line,sizeof line,f)){
-   line[strcspn(line,"\r\n")]=0;char *eq=strchr(line,'=');if(!eq)continue;*eq++=0;
-   for(int i=0;i<CONFIG_COUNT;i++)if(!strcmp(line,keys[i])){
-     safe_copy(cfg[i],512,eq);
-     if(i==FEATURED_MASK_SETTING)has_featured=1;
-   }
- }fclose(f);
- /* Keep all eight prior dashboard buttons for upgrades, while fresh installs
-  * start with a six-button selection. Never lose a user's existing layout. */
- if(!has_featured)snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",EXISTING_INSTALL_FEATURED_MASK);
-}
 /* Tray and featured selection are independent bitmasks. */
 static unsigned tray_button_mask(void) {
  char *end=NULL;errno=0;
@@ -206,10 +171,12 @@ static unsigned featured_mask(void){
    return EXISTING_INSTALL_FEATURED_MASK;
  return (unsigned)value;
 }
-static void config_save(void) {
- update_model_heading();
- FILE*f=fopen(config_path,"w");if(!f)return;fchmod(fileno(f),0600);
- for(int i=0;i<CONFIG_COUNT;i++)fprintf(f,"%s=%s\n",keys[i],cfg[i]);fclose(f);
+static void config_save(void)
+{
+    update_model_heading();
+    if (!now_config_save()) {
+        fprintf(stderr, "Unable to save OptiPlex NOW configuration\n");
+    }
 }
 static void preset_alert(void*parent,const char*title,const char*msg){
  GtkWidget*d=gtk_dialog_new_with_buttons(title,GTK_WINDOW(parent),1,"OK",GTK_RESPONSE_OK,NULL);
@@ -1275,7 +1242,7 @@ static int full_backup_ui(void*parent,int restore){
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
  int rc=backup_execute(restore,path,pw);explicit_bzero(pw,sizeof pw);
  if(rc==0){
-  if(restore){config_load();last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);reflow(dimensions.width>0?dimensions.width:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
+  if(restore){now_config_load();last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);reflow(dimensions.width>0?dimensions.width:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
   else preset_alert(parent,"Backup saved","Encrypted backup saved. Keep your password safe and only restore on a trusted computer.");
  }else preset_alert(parent,"Backup failed",rc==-2?"Backup helper is missing. Reinstall OptiPlex Now.":
        "Backup failed. Check file, password, and permissions. No settings were intentionally reset.");
@@ -1928,7 +1895,7 @@ int main(int argc,char**argv) {
  }
  int instance_result=claim_instance();
  if(instance_result<=0)return instance_result==0?0:1;
- fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
+ fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
  win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,350);

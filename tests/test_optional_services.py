@@ -35,7 +35,7 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n)", SOURCE)
         self.assertIn("gtk_list_box_insert(GTK_LIST_BOX(order_list),row,-1)", SOURCE)
         self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
-        self.assertIn('snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
+        self.assertIn('snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):

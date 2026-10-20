@@ -19,6 +19,7 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 ## Long-term product architecture
 
+- [Service sign-in UX and streaming-client choices](docs/SERVICE-AUTH-UX.md): Tailscale-first device setup, native Moonlight pairing, optional email PINs, Jellyfin Quick Connect and Studio/Codex device login; staged design, **not shipped service SSO**.
 - [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
 - [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
 

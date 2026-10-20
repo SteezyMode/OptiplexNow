@@ -850,12 +850,10 @@ static void open_remote_files(void){
 static void open_web_gaming(int settings){
  const char *base=cfg[WEB_GAMING_URL_SETTING];
  if(!*base){say("SET WEB GAMING URL IN SETTINGS");return;}
- if(!now_safe_preset_url(base)){say("WEB GAMING URL INVALID");return;}
- size_t len=strlen(base);
- while(len && base[len-1]=='/')len--;
- if(len==0 || len>499){say("WEB GAMING URL INVALID");return;}
  char url[768];
- snprintf(url,sizeof url,"%.*s%s",(int)len,base,settings?"/settings":"?launch=steam");
+ if(!now_web_gaming_url(base,settings,url,sizeof url)){
+  say("WEB GAMING URL INVALID");return;
+ }
  browser_open(url);
 }
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;open_web_gaming(1);}

@@ -436,7 +436,9 @@ static gboolean finish_on_main(void *arg) {
    if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
    if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
    if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
-   if(metric_network)gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  CONNECTED":"TAILSCALE  DISCONNECTED");
+   if(metric_network){gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  connected":"TAILSCALE  disconnected");
+    GtkStyleContext*cs=gtk_widget_get_style_context(metric_network);gtk_style_context_remove_class(cs,"good");gtk_style_context_remove_class(cs,"bad");
+    gtk_style_context_add_class(cs,r->tail?"good":"bad");}
    if(metric_vpn){gtk_label_set_text(GTK_LABEL(metric_vpn),r->success==1?(*r->vpn_state?r->vpn_state:"VPN  UNKNOWN"):"VPN  --");
     GtkStyleContext*cs=gtk_widget_get_style_context(metric_vpn);gtk_style_context_remove_class(cs,"good");gtk_style_context_remove_class(cs,"bad");
     if(r->success==1 && strstr(r->vpn_state,"VPN  HEALTHY"))gtk_style_context_add_class(cs,"good");
@@ -444,7 +446,9 @@ static gboolean finish_on_main(void *arg) {
    if(metric_wolf){gtk_label_set_text(GTK_LABEL(metric_wolf),r->success==1?(*r->wolf_state?r->wolf_state:"WOLF SERVICE  UNKNOWN"):"WOLF SERVICE  --");
     GtkStyleContext*cs=gtk_widget_get_style_context(metric_wolf);gtk_style_context_remove_class(cs,"good");
     if(r->success==1 && strstr(r->wolf_state,"WOLF SERVICE  running"))gtk_style_context_add_class(cs,"good");}
-   if(metric_wolf_sessions)gtk_label_set_text(GTK_LABEL(metric_wolf_sessions),r->success==1?(*r->wolf_sessions?r->wolf_sessions:"WOLF DESKTOPS  UNKNOWN"):"WOLF DESKTOPS  --");
+   if(metric_wolf_sessions){gtk_label_set_text(GTK_LABEL(metric_wolf_sessions),r->success==1?(*r->wolf_sessions?r->wolf_sessions:"WOLF DESKTOPS  unknown"):"WOLF DESKTOPS  --");
+    GtkStyleContext*cs=gtk_widget_get_style_context(metric_wolf_sessions);gtk_style_context_remove_class(cs,"good");
+    if(r->success==1 && strstr(r->wolf_sessions,"WOLF DESKTOPS  ")==r->wolf_sessions && atoi(r->wolf_sessions+strlen("WOLF DESKTOPS  "))>0)gtk_style_context_add_class(cs,"good");}
    update_drives(r);
    if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;

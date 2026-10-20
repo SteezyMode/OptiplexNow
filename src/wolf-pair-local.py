@@ -66,13 +66,17 @@ def main():
         # Local authenticated caller sends index and PIN through stdin (not process argv).
         request = json.load(sys.stdin)
         index, pin = request.get("index"), request.get("pin")
+        client_ip = request.get("client_ip")
         if type(index) is not int or index < 1 or not isinstance(pin, str) or not (4 <= len(pin) <= 12) or not pin.isdigit():
             raise ValueError("Invalid index or PIN")
         pending = call_api("GET", "/api/v1/pair/pending")
         requests = pending.get("requests") or []
         if pending.get("success") is not True or index > len(requests):
             raise ValueError("Pairing request expired; refresh pending requests")
-        secret = requests[index - 1].get("pair_secret")
+        selected = requests[index - 1]
+        if not isinstance(client_ip, str) or selected.get("client_ip") != client_ip:
+            raise ValueError("Pending clients changed; refresh and select again")
+        secret = selected.get("pair_secret")
         if not isinstance(secret, str) or not secret:
             raise ValueError("Pairing request missing secret")
         result = call_api("POST", "/api/v1/pair/client", {"pair_secret": secret, "pin": pin})

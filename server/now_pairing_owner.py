@@ -112,6 +112,8 @@ class OwnerControl(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
 
     daemon_threads = True
     allow_reuse_address = False
+    # Keep the accept queue ahead of a short burst of local owner commands.
+    request_queue_size = 32
 
     def __init__(self, socket_dir, pairing_requests):
         # Import locally so unrelated discovery/preflight runtimes stay isolated.

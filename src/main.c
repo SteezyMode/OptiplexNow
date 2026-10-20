@@ -85,7 +85,7 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 16
+#define CONFIG_COUNT 17
 #define FEATURED_MASK_SETTING 15
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
@@ -93,8 +93,8 @@ static char config_path[PATH_MAX];
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207",""};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -824,7 +824,13 @@ static void open_remote_files(void){
  if(now_program_exists("gio")){char*args[]={"gio","open",url,NULL};now_launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
-static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+static void on_web_gaming_settings(void*w,void*p){
+ (void)w;(void)p;
+ if(!*cfg[16]||!now_safe_preset_url(cfg[16])){say("CONFIGURE WEB GAMING URL IN SETTINGS");return;}
+ char url[640];
+ if(snprintf(url,sizeof url,"%s%s",cfg[16],strchr(cfg[16],'?')?"&settings=1":"/settings")>=(int)sizeof url){say("WEB GAMING URL TOO LONG");return;}
+ browser_open(url);
+}
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.
  * The client has no Docker privileges and does not manage Wolf itself. */
 static void on_web_gaming_maintenance(void*w,void*p){
@@ -883,7 +889,10 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==7){
+  if(!*cfg[16]||!now_safe_preset_url(cfg[16]))say("CONFIGURE WEB GAMING URL IN SETTINGS");
+  else browser_open(cfg[16]);
+ }
  else if(n==8)on_bruiser_ai(NULL,NULL);
  
 }
@@ -1192,6 +1201,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
   gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
   fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
+ GtkWidget*web_label=label("Web Gaming URL (optional)",NULL);
+ GtkWidget*web_entry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(web_entry),cfg[16]);
+ gtk_widget_set_hexpand(web_entry,1);
+ gtk_grid_attach(GTK_GRID(gt),web_label,0,5,1,1);
+ gtk_grid_attach(GTK_GRID(gt),web_entry,1,5,1,1);
  GtkWidget*disklabel=label("Downloads disk",NULL);
  GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
  gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
@@ -1254,6 +1268,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
+   const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_entry));
+   if(!*web_url||now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
+   else {say("INVALID WEB GAMING URL — NOT SAVED");}
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);

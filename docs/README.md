@@ -1,33 +1,28 @@
-# NOW documentation — how to find reliable information
+# Documentation map
 
-There is **one released application (NOW), one separate Studio application, and one coordinating Suite repository**. This directory contains technical details, proposals, and historical operational notes. It is not an independent status tracker.
+Read in this order when joining development or starting a new review.
 
-## Start here
-
-| Want to understand... | Read |
+| File | Authority |
 | --- | --- |
-| What NOW does, how to contribute, and the source map | [CONTRIBUTING](../CONTRIBUTING.md) |
-| Released vs current code vs pending work | [CURRENT-STATUS](CURRENT-STATUS.md) |
-| Current application boundaries and data formats | [Application design](application-design.md) |
-| Package build, tag-only publishing, rollback gates | [Release process](RELEASE-PROCESS.md) |
-| Installation with an **existing** server | [Server setup/reference-host notes](server-setup.md) |
-| Wolf update/repair procedures, explicit operator actions | [Wolf maintenance](wolf-maintenance.md) |
+| [Product direction](PRODUCT.md) | Vision, scope, phased requirements and exclusions |
+| [Current status](CURRENT-STATUS.md) | What code, CI and device observations support today |
+| [Beta acceptance](BETA-ACCEPTANCE.md) | Required end-to-end tester evidence |
+| [Architecture](application-design.md) | Code ownership, protocols, data compatibility and safe boundaries |
+| [Contributing](../CONTRIBUTING.md) | Build, test, PR discipline and code map |
+| [Release process](RELEASE-PROCESS.md) | Immutable tags, artifact verification and rollback |
+| [Wolf pairing contract](WOLF-PAIRING-HOST-CONTRACT.md) | Actual host API, client bridge, privilege model and unverified checks |
+| [Wolf integration and fork policy](UPSTREAM-FIRST-WOLF-INTEGRATION.md) | Future host manager design and evidence gate for a fork |
 
-- [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
+## Specialized references
 
-## Planned, not shipped
+- [Current test host, services and backups](server-setup.md): environment-specific observations. Not a universal setup recipe.
+- [Multi-user desktop feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): technical research, not a released feature.
+- [Wolf driver maintenance](wolf-maintenance.md): opt-in existing-host procedure.
+- [MoonlightWeb maintenance](moonlightweb-maintenance.md): opt-in update/rollback constraints for an existing deployment.
+- [Remote development via tmux](remote-development-tmux.md): maintainer workflow, not a runtime dependency.
 
-- [NOW server manager and upstream-first Wolf strategy](UPSTREAM-FIRST-WOLF-INTEGRATION.md): installation/provisioning concept and supported ownership boundary.
-- [Persistent multi-user desktop feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): streaming authorization and profile/session acceptance requirements.
+## Historical records
 
-Neither represents a released, tested fresh-server wizard or commercial multi-tenant security capability.
+`archive/` retains dated proposals and old session notes for traceability. [October 16 operations inventory](operations-handoff.md) is historical, not authoritative current deployment status. Do not use old version claims, IPs, container identifiers or release instructions without checking the live machine and current code. The former [next-session note](next-session.md) is a historical pointer only.
 
-## Historical or environment-specific information
-
-- [Operator inventory (2026-10-16)](operations-handoff.md): useful observations, **not** current live server truth.
-- [Former next-session note](next-session.md): archived session directions and pointer to the current sources.
-- [Earlier browser synth proposal](archive/2026-10-16-studio-synth-design.md): former idea also called Studio, **not** the currently released native OptiPlex Studio product.
-- [Archived old session handoff](archive/2026-10-19-next-session.md).
-- [Remote tmux guidance](remote-development-tmux.md): developer workflow, not a product runtime guarantee.
-
-When source and documents conflict, verify implementation/tests in the owning app, then correct its CURRENT-STATUS and README. Suite only points to the authoritative owner; do not copy state lists back and forth.
+**Rule:** Implementation is established by code and tests; release publication by GitHub Releases; working user flows by device tests. Plans belong in PRODUCT or tracked issues. Do not create another current-status or personal handoff document.

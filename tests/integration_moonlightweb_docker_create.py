@@ -14,8 +14,12 @@ import tempfile
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location(
-    "moonlightweb_maintenance", ROOT / "server" / "moonlightweb-maintenance.py")
+helper = ROOT / "server" / "moonlightweb-maintenance.py"
+if not helper.is_file():
+    helper = Path("/tmp/moonlightweb-maintenance.py")
+if not helper.is_file():
+    raise SystemExit("Missing maintenance helper: download it to /tmp first")
+spec = importlib.util.spec_from_file_location("moonlightweb_maintenance", helper)
 mw = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mw)
 

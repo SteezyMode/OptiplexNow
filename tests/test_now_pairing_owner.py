@@ -16,7 +16,7 @@ import unittest
 
 SERVER = Path(__file__).resolve().parents[1] / "server"
 sys.path.insert(0, str(SERVER))
-from now_pairing_requests import PairingRequests, PeerIdentity
+import now_pairing_requests
 
 spec = importlib.util.spec_from_file_location(
     "now_pairing_owner", SERVER / "now_pairing_owner.py")
@@ -27,8 +27,11 @@ spec.loader.exec_module(owner)
 class OwnerSocketTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory(prefix="now-owner-test-")
-        self.queue = PairingRequests()
-        self.peer = PeerIdentity("n_DEVICE_01", "u_ACCOUNT_01")
+        # Another regression module loads this same file dynamically during
+        # unittest discovery; resolve types from the current shared module.
+        pairing = sys.modules["now_pairing_requests"]
+        self.queue = pairing.PairingRequests()
+        self.peer = pairing.PeerIdentity("n_DEVICE_01", "u_ACCOUNT_01")
         self.service = owner.OwnerControl(self.folder.name, self.queue)
         self.thread = Thread(target=self.service.serve_forever,
                              kwargs={"poll_interval": 0.01}, daemon=True)

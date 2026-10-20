@@ -46,6 +46,22 @@ The native GTK setup wizard now offers **CHECK THIS COMPUTER (READ-ONLY)** on th
 
 The GUI smoke test covers dialog opening, recheck and safe early closing on isolated Xvfb. CI packages the checker, compiles the main GTK application and runs the smoke test. It does **not** confirm actual client input, Moonlight playback or the appearance on all themes/desktop sizes. The manual on-device UI and compatibility check are still required before release.
 
+## Advisory backend setup plans
+
+Select **Sunshine — this desktop** or **Wolf — independent desktop** from the local compatibility dialog. Select **CHECK AGAIN** to evaluate the chosen backend. The checker now also accepts:
+
+```sh
+optiplex-now-preflight --backend sunshine
+optiplex-now-preflight --backend wolf
+optiplex-now-preflight --backend sunshine --json
+```
+
+These are **plans, not executable installer recipes**. The new optional JSON `install_plan` member preserves the existing inventory schema version 1 and reports `phase: advisory_only`, `can_install: false`, `needs_explicit_approval: true`, `blocking_reasons`, and stable `steps` (IDs with statuses such as `action_needed`, `review_required`, `verify_required`, `optional`, `observed`).
+
+The planner explicitly distinguishes a running service from a working streaming session. NVIDIA driver detection does not certify an encoder; Tailscale running does not prove that the client has access; a listening port does not prove a conflict. Missing `docker` or `sunshine` from the read-only probes does not mean installation is safe. Known existing Wolf/Sunshine services require manual review, and a host outside the original test scope is blocked from any future unattended installation.
+
+The planner does **not** install packages, change drivers, touch container state, enroll into Tailscale, perform Moonlight pairing, save a plan to disk, or claim compatibility. A later transactional installer will require separate design, local authorization, per-version compatibility testing, backups, interruption recovery and rollback.
+
 ## Follow-on steps before calling this user-ready
 
 1. Run and compare the report on a **disposable** Ubuntu/Pop!_OS 24.04 NVIDIA host, including a host with Docker permissions denied.

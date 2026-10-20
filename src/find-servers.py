@@ -4,16 +4,27 @@ import ipaddress
 import json
 import subprocess
 import sys
+import socket
+from concurrent.futures import ThreadPoolExecutor
 
 
-def candidates(status):
+def stream_port_reachable(address):
+    """A reachable standard GameStream HTTP port is a hint, not proof of a Wolf server."""
+    try:
+        with socket.create_connection((address, 47989), timeout=0.4):
+            return True
+    except OSError:
+        return False
+
+
+def candidates(status, probe=stream_port_reachable):
     if status.get('BackendState') != 'Running':
         raise ValueError('Connect Tailscale on this computer, then try Find server again.')
     rows = []
     seen = set()
     peers = status.get('Peer') or {}
-    nodes = [(False, x) for x in peers.values()]
-    for local, node in nodes:
+    nodes = list(peers.values())
+    for node in nodes:
         if not isinstance(node, dict):
             continue
         addresses = []
@@ -32,8 +43,17 @@ def candidates(status):
         name = node.get('HostName') or node.get('DNSName') or address
         name = ''.join(c if c.isprintable() and c not in '\t\r\n' else ' ' for c in str(name))[:120]
         state = 'Online' if node.get('Online') else 'Offline'
-        rows.append((0 if node.get('Online') else 1, name.casefold(), address, f'{name} — {state} — {address}'))
-    return [(address, label) for _, _, address, label in sorted(rows)[:200]]
+        rows.append((bool(node.get('Online')), name, address, state))
+    # Probe only a bounded number of online peers, concurrently, to avoid stalling setup.
+    online = sorted((row for row in rows if row[0]), key=lambda row: row[1].casefold())[:25]
+    with ThreadPoolExecutor(max_workers=10) as pool:
+        hints = dict(zip((row[2] for row in online), pool.map(probe, (row[2] for row in online))))
+    ordered = sorted(rows, key=lambda row: (0 if hints.get(row[2]) else 1 if row[0] else 2, row[1].casefold()))
+    result = []
+    for is_online, name, address, state in ordered[:200]:
+        hint = ' — Game streaming port reachable' if hints.get(address) else ''
+        result.append((address, f'{name} — {state}{hint} — {address}'))
+    return result
 
 
 def main():

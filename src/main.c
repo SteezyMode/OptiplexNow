@@ -78,6 +78,8 @@ static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
 static char appimage_found[PATH_MAX];
 static void tray_build_menu(void);
+static void tray_desktop_caption(char *out,size_t cap);
+static void tray_desktop_caption_save(const char *value);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);

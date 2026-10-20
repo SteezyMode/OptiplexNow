@@ -13,6 +13,7 @@ shutil.copy2(root/'build/optiplex-now-backup',pkg/'usr/lib/optiplex-now/optiplex
 shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remote-files')
 (pkg/'usr/lib/optiplex-now/open-remote-files').chmod(0o755)
 shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-web-gaming-admin')
+shutil.copy2(root/'src/local-web-gaming-pin.py',pkg/'usr/lib/optiplex-now/local-web-gaming-pin.py')
 (pkg/'usr/lib/optiplex-now/open-web-gaming-admin').chmod(0o755)
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')

@@ -32,7 +32,8 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("if(!(mask & (1u<<i)))continue;", SOURCE)
         self.assertIn("tray_order_save(ordered);", SOURCE)
         self.assertIn("gtk_spin_button_new_with_range(1,8,1)", SOURCE)
-        self.assertIn("gtk_widget_set_size_request(name,115,-1)", SOURCE)
+        self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
+        self.assertIn('snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):

@@ -33,7 +33,7 @@ class SettingsNavigationTests(unittest.TestCase):
 
     def test_existing_save_path_and_admin_actions(self):
         section = SOURCE.split("static void on_settings(void*w,void*p)", 1)[1].split("/* Setup assistant.", 1)[0]
-        for expected in ('gtk_dialog_run(GTK_DIALOG(d))', 'if(resp==GTK_RESPONSE_OK)', 'config_save();tray_build_menu();',
+        for expected in ('gtk_dialog_run(GTK_DIALOG(d))', 'if(resp==GTK_RESPONSE_OK)', 'g_timeout_add(200,tray_rebuild_after_settings,NULL);',
                          'on_web_gaming_admin', 'on_web_gaming_settings', 'on_games_setup_from_settings'):
             self.assertIn(expected, section)
 

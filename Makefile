@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-preflight-ui
+.PHONY: all clean package check-process check-presets check-preflight-ui check-now-discovery-ui
 all: build/optiplex-desk build/optiplex-now-backup
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/server_preflight_ui.c src/server_preflight_ui.h src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/server_preflight_ui.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/server_preflight_ui.c src/server_preflight_ui.h src/now_discovery_ui.c src/now_discovery_ui.h src/process.c src/process.h src/presets.c src/presets.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/server_preflight_ui.c src/now_discovery_ui.c src/process.c src/presets.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
@@ -59,3 +59,8 @@ check-presets: | build
 check-preflight-ui: | build
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) -Isrc tests/test_preflight_ui.c src/server_preflight_ui.c -o build/test-preflight-ui $(GTK_LIBS)
 	xvfb-run -a ./build/test-preflight-ui
+
+# Isolated GTK discovery test. No real Tailscale session or live host required.
+check-now-discovery-ui: | build
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) -Isrc tests/test_now_discovery_ui.c src/now_discovery_ui.c -o build/test-now-discovery-ui $(GTK_LIBS)
+	xvfb-run -a ./build/test-now-discovery-ui

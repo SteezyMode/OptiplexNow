@@ -36,7 +36,7 @@ The current beta uses Tailscale peer access, SSH trust and native Moonlight/Wolf
 
 ## Configuration compatibility
 
-- Persisted client settings: `~/.config/optiplex-desk/config.ini` (or configured XDG config directory). Preserve indexed fields and user-defined links during upgrades.
+- Persisted client settings: `~/.config/optiplex-desk/config.ini` (or configured XDG config directory). `src/config.c/.h` now owns file parsing, defaults, compatibility migration, and atomic private saves. It retains an indexed compatibility array for the current GTK controller; a future typed settings API can remove index coupling after its callers and migration tests are converted. Preserve all field positions and user-defined links during upgrades.
 - Display name, Debian package ID, desktop executable, config directory, preset format and backup format are different compatibility surfaces. Never bulk-rename them.
 - `.onp` presets export only allowed non-secret connection settings. Keep legacy files readable.
 - `.onb` backups are encrypted and may include SSH/Moonlight identity; protect them like credentials and test restore on a trusted spare client.
@@ -49,6 +49,10 @@ The current beta uses Tailscale peer access, SSH trust and native Moonlight/Wolf
 Report state and source independently: Tailscale is connected/disconnected, Wolf can be reachable/running, desktop container count is not client session count, and Gluetun health is a container-defined probe rather than an independently verified tunnel exit IP. Missing data is unknown, not healthy.
 
 An eventual host installer must publish managed service IDs and health capabilities instead of requiring a name such as `gluetun`. Avoid accidental Docker permission expansion and application-specific host assumptions.
+
+## Maintainability and threading direction
+
+The current `main.c` remains a large controller that owns the tray, wizard, status presentation and launch handlers. Untangling it is incremental: extract configuration first; separate host probes and launch operations from GTK widgets next; then make any remaining blocking SSH/Tailscale/Wolf enrollment operations asynchronous with timeouts, cancellation and main-thread UI completion. GTK widgets must be accessed on the GTK main thread. Keep changes narrow and provide behavioral tests for offline, malformed and timeout paths. Do not claim nonblocking pairing before it is implemented and device-tested.
 
 ## Engineering gates
 

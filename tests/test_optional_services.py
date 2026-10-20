@@ -8,6 +8,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text()
 PRESET_SOURCE = (ROOT / "src" / "presets.c").read_text()
+CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
+CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
 
 
 class OptionalServiceTests(unittest.TestCase):
@@ -39,13 +41,13 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):
-        self.assertIn("#define CONFIG_COUNT 17", SOURCE)
-        self.assertIn("#define FEATURED_MASK_SETTING 15", SOURCE)
+        self.assertIn("#define CONFIG_COUNT 17", CONFIG_HEADER)
+        self.assertIn("#define FEATURED_MASK_SETTING 15", CONFIG_HEADER)
         self.assertIn("#define NEW_INSTALL_FEATURED_MASK 207u", SOURCE)
-        self.assertIn("#define EXISTING_INSTALL_FEATURED_MASK 255u", SOURCE)
-        self.assertIn("if(!has_featured)snprintf(cfg[FEATURED_MASK_SETTING]", SOURCE)
-        self.assertIn('"tray_buttons","ai_url","featured_actions","web_gaming_url"', SOURCE)
-        self.assertIn('"255","","207",""', SOURCE)
+        self.assertIn("#define EXISTING_INSTALL_FEATURED_MASK 255u", CONFIG_HEADER)
+        self.assertIn("if (!has_featured)", CONFIG_SOURCE)
+        self.assertIn('"ai_url", "featured_actions", "web_gaming_url"', CONFIG_SOURCE)
+        self.assertIn('"", "", "255", "", "207", ""', CONFIG_SOURCE)
         self.assertIn("last_columns=-1;", SOURCE)
 
     def test_ai_url_and_admin_are_optional(self):

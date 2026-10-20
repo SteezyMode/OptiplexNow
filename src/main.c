@@ -823,6 +823,14 @@ static void on_games_action(void*w,void*arg){(void)w;
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
  else if(resp==103)pair_wolf();
+ else if(resp==106){
+  /* Login belongs to MoonlightWeb's normal HTTPS client, NOT its admin page.
+   * The server owner supplies the one-time device access PIN separately. */
+  browser_open("https://games.monumentrisk.com");
+  say("WEB GAMING LOGIN REQUESTED. ENTER THE ACCESS PIN FROM THE SERVER OWNER");
+  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),
+    "Enter the one-time Web Gaming access PIN issued by the server owner. No SSH or admin tunnel is needed on this client.");
+ }
  else if(resp==104){
    if(!now_valid_host(cfg[0])){
      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHOOSE A SERVER FIRST");
@@ -877,6 +885,8 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
  GtkWidget*pin=button("OPEN WOLF APPROVAL LINK (SSH OPTIONAL)","setupaction");
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
+ GtkWidget*web_login=button("PAIR WEB GAMING IN BROWSER","setupaction");
+ g_signal_connect_data(web_login,"clicked",(GCallback)on_games_action,(void*)(long)106,NULL,0);add(col,web_login,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
  games_notice=label("","gameshint");add(col,games_notice,0);
@@ -918,14 +928,81 @@ static void on_web_gaming_maintenance(void*w,void*p){
  if(terminal_launch(args))say("WEB MAINTENANCE OPENED IN TERMINAL. SERVER HELPER REQUIRED.");
  else preset_alert(win,"Maintenance unavailable","No terminal emulator found. Install a terminal and retry.");
 }
+/* Advanced admin action. Routine pairing must not depend on this tunnel.
+ * Unlike now_launch(), GSubprocess returns verified tunnel readiness; GTK,
+ * not an SSH subprocess, launches the user's default browser. */
+static gboolean web_admin_in_progress=FALSE;
+static void web_admin_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL,*err_text=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,
+                                                  &out,&err_text,&error);
+ web_admin_in_progress=FALSE;
+ const char*code=out?g_strstrip(out):"";
+ const char*message="WEB GAMING ADMIN COULD NOT OPEN. VERIFY CLIENT SETUP";
+ const char*port_prefix="NOW_ADMIN_STATUS=tunnel_ready:";
+ if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
+       && g_str_has_prefix(code,port_prefix)){
+  const char*port_text=code+strlen(port_prefix);
+  char*endptr=NULL;errno=0;
+  long port=strtol(port_text,&endptr,10);
+  if(errno==0 && endptr && *endptr==0 && port>=20000 && port<40000){
+   /* GTK knows this process' desktop session. Never shell out to a detached
+    * browser process or trust arbitrary helper-provided URLs. */
+   char url[100];
+   snprintf(url,sizeof url,"https://127.0.0.1:%ld/admin",port);
+   GError*browser_error=NULL;
+   if(gtk_show_uri_on_window(GTK_WINDOW(win),url,0,&browser_error)){
+    say("ADMIN BROWSER REQUESTED. LOCAL TLS CERTIFICATE WARNING REMAINS UNSOLVED");
+   }else{
+    say("WEB GAMING ADMIN BROWSER LAUNCH FAILED");
+    preset_alert(win,"Web Gaming Admin browser unavailable",
+      "The SSH tunnel is ready, but your desktop did not open the admin page. Configure a default web browser.");
+   }
+   if(browser_error)g_error_free(browser_error);
+   goto cleanup;
+  }
+ }
+ if(g_str_has_prefix(code,"NOW_ADMIN_STATUS="))code+=strlen("NOW_ADMIN_STATUS=");
+ if(!strcmp(code,"invalid_settings"))message="Set a valid server address and SSH user in Settings.";
+ else if(!strcmp(code,"ssh_not_installed"))message="OpenSSH client is missing. Reinstall NOW dependencies.";
+ else if(!strcmp(code,"ssh_not_authorized"))message="SSH permission denied or host identity not trusted. Owner must authorize SSH separately.";
+ else if(!strcmp(code,"server_unreachable"))message="Cannot reach the selected server over SSH. Check Tailscale, server and port 22.";
+ else if(!strcmp(code,"server_name_invalid"))message="Cannot resolve the selected server. Check the hostname and Tailscale.";
+ else if(!strcmp(code,"local_port_unavailable"))message="Local admin tunnel port is occupied. Check for stale SSH tunnels.";
+ else if(!strcmp(code,"admin_tunnel_unreachable"))message="SSH returned, but local admin tunnel is unavailable. Check the host's MoonlightWeb service.";
+ else if(!strcmp(code,"ssh_tunnel_timeout"))message="SSH admin tunnel timed out. Verify server reachability and SSH authorization.";
+ else if(!strcmp(code,"local_configuration_error"))message="Cannot create the local private SSH control directory.";
+ else if(!strcmp(code,"ssh_tunnel_failed"))message="SSH admin tunnel failed. Check SSH trust, credentials, and server availability.";
+ else if(!strcmp(code,"admin_launch_error"))message="Unable to start the admin helper or browser.";
+ else if(error)message="Web Gaming Admin launcher failed unexpectedly.";
+ say("WEB GAMING ADMIN FAILED. SEE DETAILS");
+ preset_alert(win,"Web Gaming Admin unavailable",message);
+cleanup:
+ if(error)g_error_free(error);
+ g_free(out);g_free(err_text);
+}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
- if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ if(web_admin_in_progress){say("WEB GAMING ADMIN IS ALREADY STARTING");return;}
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  preset_alert(win,"Web Gaming Admin","Set a valid server and SSH user in Settings. Regular game streaming does not require SSH.");
+  return;
+ }
  const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
  if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
- char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
- now_launch(args);
- say("OPENING WEB GAMING ADMIN VIA SSH");
+ GError*error=NULL;
+ GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_PIPE,
+                                      &error,helper,cfg[0],cfg[1],NULL);
+ if(!process){
+  if(error)g_error_free(error);
+  preset_alert(win,"Web Gaming Admin unavailable","Could not launch the packaged admin helper. Reinstall OptiPlex NOW.");
+  return;
+ }
+ web_admin_in_progress=TRUE;
+ say("CHECKING WEB GAMING ADMIN TUNNEL AND BROWSER...");
+ g_subprocess_communicate_utf8_async(process,NULL,NULL,web_admin_finished,NULL);
+ g_object_unref(process);
 }
 /* Open WebUI is the Bruiser front end; Ollama and SearXNG remain separate.
  * Default to the user's configured host, not a machine-specific fixed IP. */
@@ -1470,6 +1547,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf();
+ else if(!strcmp(n,"w_webgaming")){browser_open("https://games.monumentrisk.com");say("WEB GAMING LOGIN REQUESTED. SERVER OWNER MUST PROVIDE AN ACCESS PIN");}
  else if(!strcmp(n,"w_wolfpin")){
   if(!now_valid_host(cfg[0]))say("CHOOSE A SERVER FIRST");
   else if(!now_valid_user(cfg[1]))preset_alert(c->assistant,"Wolf approval",
@@ -1568,6 +1646,9 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"START MOONLIGHT PAIRING","w_wolf");
  wizard_button(c,four,"OPEN WOLF APPROVAL LINK (IF SSH CONFIGURED)","w_wolfpin");
+ add(four,label("WEB GAMING (BROWSER CLIENT) — SEPARATE FROM NATIVE MOONLIGHT PAIRING","helper"),0);
+ wizard_button(c,four,"PAIR WEB GAMING IN BROWSER","w_webgaming");
+ add(four,label("Use the existing secure Web Gaming site. The server owner supplies the one-time Web Gaming access PIN. Advanced administration is not required on the client.","helper"),0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL

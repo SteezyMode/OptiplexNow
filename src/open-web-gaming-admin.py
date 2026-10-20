@@ -1,17 +1,27 @@
 #!/usr/bin/env python3
-"""Open MoonlightWeb admin through a trusted SSH loopback tunnel.
+"""Open the existing MoonlightWeb owner admin UI over a client-side SSH tunnel.
 
-Requires a previously authorized SSH key and a reachable server (normally Tailscale).
-Never passes a MoonlightWeb credential to a URL or the command line.
+This is an advanced owner-only action, NOT a routine gaming pairing mechanism.
+Emit fixed, non-sensitive machine-readable statuses (and local port) so NOW's
+GTK GUI can launch the browser and report failures. Never log SSH stderr,
+credentials or browser URLs.
 """
 from __future__ import annotations
 
 import hashlib
 import re
+import shutil
 import socket
 import subprocess
 import sys
 from pathlib import Path
+
+STATUS_PREFIX = "NOW_ADMIN_STATUS="
+
+
+def report(status: str) -> None:
+    # Only fixed codes, never tunnel destinations, tokens or stderr contents.
+    print(STATUS_PREFIX + status, flush=True)
 
 
 def tunnel_settings(host: str, user: str, home: Path) -> tuple[Path, int]:
@@ -27,11 +37,39 @@ def tunnel_settings(host: str, user: str, home: Path) -> tuple[Path, int]:
 
 
 def checked_run(argv: list[str], seconds: int) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(argv, capture_output=True, text=True, timeout=seconds, check=False)
+    return subprocess.run(argv, capture_output=True, text=True,
+                          timeout=seconds, check=False)
+
+
+def ssh_failure(stderr: str) -> str:
+    # Do not pass arbitrary remote stderr back to the GUI.
+    reason = (stderr or "").lower()
+    if "permission denied" in reason or "host key verification failed" in reason:
+        return "ssh_not_authorized"
+    if "address already in use" in reason or "bind " in reason:
+        return "local_port_unavailable"
+    if "could not resolve hostname" in reason or "name or service not known" in reason:
+        return "server_name_invalid"
+    if ("connection refused" in reason or "no route to host" in reason
+            or "connection timed out" in reason or "network is unreachable" in reason):
+        return "server_unreachable"
+    return "ssh_tunnel_failed"
 
 
 def open_admin(host: str, user: str, home: Path) -> int:
-    control, port = tunnel_settings(host, user, home)
+    try:
+        control, port = tunnel_settings(host, user, home)
+    except ValueError:
+        report("invalid_settings")
+        return 2
+    except OSError:
+        report("local_configuration_error")
+        return 1
+
+    if not shutil.which("ssh"):
+        report("ssh_not_installed")
+        return 1
+
     check = ["ssh", "-S", str(control), "-O", "check", "-o", "BatchMode=yes",
              "-o", "ConnectTimeout=3", "-l", user, host]
     try:
@@ -45,29 +83,32 @@ def open_admin(host: str, user: str, home: Path) -> int:
                        "-o", "ConnectTimeout=6",
                        "-o", "ServerAliveInterval=30",
                        "-o", "ServerAliveCountMax=3", "-l", user, host]
-            result = checked_run(command, 12)
-            if result.returncode != 0:
-                print("Admin tunnel failed. Check Tailscale, SSH pairing and server address.", file=sys.stderr)
-                if result.stderr:
-                    print(result.stderr.strip()[:500], file=sys.stderr)
+            response = checked_run(command, 12)
+            if response.returncode != 0:
+                report(ssh_failure(response.stderr))
                 return 1
-        with socket.create_connection(("127.0.0.1", port), timeout=2):
-            pass
-        subprocess.Popen(["xdg-open", f"https://127.0.0.1:{port}/admin"],
-                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                         stderr=subprocess.DEVNULL, start_new_session=True)
+        try:
+            with socket.create_connection(("127.0.0.1", port), timeout=2):
+                pass
+        except OSError:
+            report("admin_tunnel_unreachable")
+            return 1
+
+        # Only the GTK parent opens the URL. This helper returns a bounded
+        # loopback port, not a browser window or an authentication credential.
+        # GTK can then observe its own browser/portal-launch failures.
+        report(f"tunnel_ready:{port}")
         return 0
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        print(f"Unable to open admin tunnel: {type(exc).__name__}", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        report("ssh_tunnel_timeout")
+        return 1
+    except OSError:
+        report("admin_launch_error")
         return 1
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print("Usage: open-web-gaming-admin HOST SSH_USER", file=sys.stderr)
+        report("invalid_settings")
         sys.exit(2)
-    try:
-        sys.exit(open_admin(sys.argv[1], sys.argv[2], Path.home()))
-    except ValueError as exc:
-        print(str(exc), file=sys.stderr)
-        sys.exit(2)
+    sys.exit(open_admin(sys.argv[1], sys.argv[2], Path.home()))

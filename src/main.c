@@ -85,7 +85,8 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 16
+#define CONFIG_COUNT 17
+#define WEB_GAMING_URL_SETTING 16
 #define FEATURED_MASK_SETTING 15
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
@@ -93,8 +94,8 @@ static char config_path[PATH_MAX];
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"};
+static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207",""};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
@@ -824,7 +825,20 @@ static void open_remote_files(void){
  if(now_program_exists("gio")){char*args[]={"gio","open",url,NULL};now_launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
-static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+/* Only open the explicitly configured endpoint. Older builds contained a
+ * developer-specific URL here; never leak fresh client requests to it. */
+static void open_web_gaming(int settings){
+ const char *base=cfg[WEB_GAMING_URL_SETTING];
+ if(!*base){say("SET WEB GAMING URL IN SETTINGS");return;}
+ if(!now_safe_preset_url(base)){say("WEB GAMING URL INVALID");return;}
+ size_t len=strlen(base);
+ while(len && base[len-1]=='/')len--;
+ if(len==0 || len>499){say("WEB GAMING URL INVALID");return;}
+ char url[768];
+ snprintf(url,sizeof url,"%.*s%s",(int)len,base,settings?"/settings":"?launch=steam");
+ browser_open(url);
+}
+static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;open_web_gaming(1);}
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.
  * The client has no Docker privileges and does not manage Wolf itself. */
 static void on_web_gaming_maintenance(void*w,void*p){
@@ -883,7 +897,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==7)open_web_gaming(0);
  else if(n==8)on_bruiser_ai(NULL,NULL);
  
 }
@@ -1192,6 +1206,15 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
   gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
   fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
+ /* Optional per-server Web Gaming gateway. Blank means unavailable.
+  * Never default to an unrelated reference developer domain. */
+ GtkWidget*web_label=label("Web Gaming URL",NULL);
+ GtkWidget*web_field=gtk_entry_new();
+ gtk_entry_set_text(GTK_ENTRY(web_field),cfg[WEB_GAMING_URL_SETTING]);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(web_field),"Optional HTTPS URL or Tailscale host:port");
+ gtk_widget_set_hexpand(web_field,1);
+ gtk_grid_attach(GTK_GRID(gt),web_label,0,5,1,1);
+ gtk_grid_attach(GTK_GRID(gt),web_field,1,5,1,1);
  GtkWidget*disklabel=label("Downloads disk",NULL);
  GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
  gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
@@ -1254,6 +1277,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
+   const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_field));
+   if(now_safe_preset_url(web_url))
+    safe_copy(cfg[WEB_GAMING_URL_SETTING],512,web_url);
+   else preset_alert(d,"Invalid Web Gaming URL",
+      "Use an http:// or https:// address without credentials, query, or fragment. Previous value kept.");
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
@@ -1273,7 +1301,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
-typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
+typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3],*web_url; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
  int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
@@ -1294,6 +1322,11 @@ static void wizard_save(Wizard*c){
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
+ }
+ if(c->web_url) {
+  const char*url=gtk_entry_get_text(GTK_ENTRY(c->web_url));
+  if(now_safe_preset_url(url))safe_copy(cfg[WEB_GAMING_URL_SETTING],512,url);
+  else {gtk_label_set_text(GTK_LABEL(c->notice),"INVALID WEB GAMING URL — NOT SAVED");return;}
  }
  /* For a fresh installation, make basic services follow the selected server. */
  if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
@@ -1484,6 +1517,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
   * wasn't configured locally. */
  GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(GTK_CONTAINER(five),20);
  add(five,label("SERVICES","modalheading"),0);
+ add(five,label("WEB GAMING URL (OPTIONAL)","helper"),0);
+ c->web_url=gtk_entry_new();
+ gtk_entry_set_placeholder_text(GTK_ENTRY(c->web_url),"https://your-server.example or http://100.x.y.z:port");
+ gtk_entry_set_text(GTK_ENTRY(c->web_url),cfg[WEB_GAMING_URL_SETTING]);add(five,c->web_url,0);
  add(five,label("Addresses from your preset are checked automatically.","helper"),0);
  const char*names[]={"VIDEOS URL","MUSIC URL","DOWNLOADS URL"};
  GtkWidget*rows=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(rows),9);gtk_grid_set_row_spacing(GTK_GRID(rows),11);add(five,rows,0);

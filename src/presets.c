@@ -12,9 +12,9 @@
 #define PRESET_HEADER_V2 "# OptiPlex Now server preset v2\n"
 #define PRESET_HEADER_V2_LEGACY "# OptiPlex Now server preset v2 (v1 imports supported)\n"
 
-/* Only these ten non-secret settings are exported. */
-#define PRESET_COUNT 10
-static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14};
+/* Only these non-secret settings are exported. Legacy v1/v2 imports remain valid. */
+#define PRESET_COUNT 11
+static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14,16};
 
 static void preset_copy(char *dest, size_t cap, const char *src) {
     snprintf(dest, cap, "%s", src ? src : "");
@@ -86,7 +86,7 @@ int now_preset_values_valid(char v[NOW_PRESET_CONFIG_COUNT][512]) {
     for (int i = 5; i <= 7; i++) {
         if (!now_safe_preset_url(v[i])) return 0;
     }
-    if(!now_safe_preset_url(v[14]))return 0;
+    if(!now_safe_preset_url(v[14])||!now_safe_preset_url(v[16]))return 0;
     if (*v[10] && v[10][0] != '/') return 0;
 
     for (int i = 0; i < PRESET_COUNT; i++) {

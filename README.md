@@ -44,6 +44,8 @@ Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installati
 
 ## Connect
 
+**Household beta default:** On a clean NOW client installation, the Videos shortcut is pre-filled with `https://media.monumentrisk.com`. Existing installations retain their saved Videos URL (including an intentionally blank URL), and the Setup Wizard can change it. Tailscale connects the device to the network; it does not automatically sign into Jellyfin or any other service that independently requires authentication.
+
 1. Sign into Tailscale on the server and client.
 2. Open **Settings → Setup Wizard**. Choose **Find server on Tailscale**, then confirm the server and SSH username.
 3. Authorize SSH, verifying the server fingerprint when prompted.

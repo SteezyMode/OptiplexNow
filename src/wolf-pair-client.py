@@ -28,11 +28,11 @@ def validated(host, user):
 
 def invoke(host, user, action, payload=None):
     validated(host, user)
-    if action not in ("pending", "pair"):
+    if action not in ("pending", "pending-text", "pair"):
         raise ValueError("Unsupported action")
     argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6",
             "-o", "StrictHostKeyChecking=yes", "-l", user, "--", host,
-            HOST_HELPER, action]
+            HOST_HELPER, "pending" if action == "pending-text" else action]
     p = subprocess.run(argv, input=json.dumps(payload).encode() if payload else b"",
                        capture_output=True, timeout=15, check=False)
     if p.returncode:
@@ -45,7 +45,7 @@ def invoke(host, user, action, payload=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("pending", "pair"))
+    parser.add_argument("action", choices=("pending", "pending-text", "pair"))
     parser.add_argument("host")
     parser.add_argument("user")
     args = parser.parse_args()
@@ -53,7 +53,18 @@ def main():
     if args.action == "pair":
         if not isinstance(payload, dict) or set(payload) != {"index", "client_ip", "pin"}:
             raise ValueError("Invalid pairing request")
-    print(json.dumps(invoke(args.host, args.user, args.action, payload)))
+    response = invoke(args.host, args.user, args.action, payload)
+    if args.action == "pending-text":
+        for client in response.get("clients", []):
+            index, address = client.get("index"), client.get("client_ip")
+            if type(index) is int and isinstance(address, str):
+                try:
+                    ipaddress.ip_address(address)
+                except ValueError:
+                    continue
+                print(f"{index}\\t{address}")
+    else:
+        print(json.dumps(response))
 
 
 if __name__ == "__main__":

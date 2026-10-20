@@ -13,6 +13,12 @@ sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
 test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
+test -x /usr/lib/optiplex-now/find-now-hosts.py
+test -x /usr/bin/optiplex-now-host-agent
+test -x /usr/lib/optiplex-now/now-host-agent
+# CLI help only; no listener starts or daemon configuration changes.
+optiplex-now-host-agent --help >/dev/null
+python3 /usr/lib/optiplex-now/find-now-hosts.py --help >/dev/null
 test -x /usr/bin/optiplex-now-preflight
 test -x /usr/lib/optiplex-now/server-preflight
 optiplex-now-preflight --json | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["scope"] == "this_computer_read_only"; assert data["streaming_ready"] == "not_tested"; assert data["changes_made"] is False'

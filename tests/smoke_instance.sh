@@ -7,7 +7,18 @@ cd "$(dirname "$0")/.."
 # Set NOW_BINARY to validate a package installed under /usr/bin instead of a build artifact.
 export NOW_BINARY="${NOW_BINARY:-./build/optiplex-desk}"
 tmp="$(mktemp -d -t now-instance.XXXXXX)"
-trap 'rm -rf "$tmp"' EXIT
+cleanup() {
+  # A GTK/GVfs child can briefly create home files while its D-Bus session
+  # is shutting down; tolerate that teardown race in disposable test data.
+  for attempt in 1 2 3 4 5; do
+    if rm -rf -- "$tmp" 2>/dev/null && [[ ! -e "$tmp" ]]; then
+      return 0
+    fi
+    sleep 0.2
+  done
+  rm -rf -- "$tmp"
+}
+trap cleanup EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime" "$tmp/blocked"
 chmod 700 "$tmp/runtime" "$tmp/blocked"
 printf 'do not modify\n' > "$tmp/untouched"

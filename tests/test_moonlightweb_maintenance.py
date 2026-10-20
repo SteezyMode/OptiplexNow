@@ -120,6 +120,64 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
             self.assertFalse(any(call.args[0] in ("stop", "rename", "rm")
                                  for call in docker.call_args_list))
 
+    def test_successful_update_only_touches_moonlightweb(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text("MW_HTTPS_PORT=8443\n")
+            old = sample()
+            old["Mounts"][0]["Source"] = directory
+            def fake_docker(*args):
+                if args[:2] == ("image", "inspect"):
+                    return '[{"Id": "sha256:new"}]'
+                return ""
+            with patch.object(mw, "active_wolf_apps", return_value=[]), \
+                 patch.object(mw, "inspect", return_value=old), \
+                 patch.object(mw, "check_image_defaults"), \
+                 patch.object(mw, "docker", side_effect=fake_docker) as docker, \
+                 patch.object(mw, "save_backup", return_value=("teststamp", Path(directory) / "backup.tar.gz")), \
+                 patch.object(mw, "write_private_env", return_value=env_file), \
+                 patch.object(mw, "verify") as verify, \
+                 patch.object(mw.subprocess, "run") as process:
+                mw.update()
+                verify.assert_called_once_with()
+                commands = [call.args for call in docker.call_args_list]
+                self.assertIn(("stop", "--time", "20", "moonlightweb"), commands)
+                self.assertIn(("rename", "moonlightweb", "moonlightweb-preupdate-teststamp"), commands)
+                self.assertIn(("start", "moonlightweb"), commands)
+                self.assertFalse(any("wolf" in arg.lower() for command in commands for arg in command))
+                create = process.call_args.args[0]
+                self.assertEqual(create[-1], "sha256:new")
+                self.assertIn("moonlightweb-test-data:/data:z", create)
+                self.assertNotIn("MW_HTTPS_PORT=8443", create)
+
+    def test_failed_update_restores_old_container_without_deleting_volume(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env"
+            env_file.write_text("MW_HTTPS_PORT=8443\n")
+            old = sample()
+            old["Mounts"][0]["Source"] = directory
+            def fake_docker(*args):
+                if args[:2] == ("image", "inspect"):
+                    return '[{"Id": "sha256:new"}]'
+                return ""
+            with patch.object(mw, "active_wolf_apps", return_value=[]), \
+                 patch.object(mw, "inspect", return_value=old), \
+                 patch.object(mw, "check_image_defaults"), \
+                 patch.object(mw, "docker", side_effect=fake_docker) as docker, \
+                 patch.object(mw, "save_backup", return_value=("teststamp", Path(directory) / "backup.tar.gz")), \
+                 patch.object(mw, "write_private_env", return_value=env_file), \
+                 patch.object(mw, "verify", side_effect=RuntimeError("backend failed")), \
+                 patch.object(mw.subprocess, "run"):
+                with self.assertRaisesRegex(RuntimeError, "backend failed"):
+                    mw.update()
+                commands = [call.args for call in docker.call_args_list]
+                self.assertIn(("rename", "moonlightweb-preupdate-teststamp", "moonlightweb"), commands)
+                self.assertIn(("update", "--restart=unless-stopped", "moonlightweb"), commands)
+                self.assertIn(("start", "moonlightweb"), commands)
+                self.assertFalse(any(command[0] in ("volume", "rm", "rmi") for command in commands))
+
     def test_status_does_not_print_secrets(self):
         with patch.object(mw, "inspect", return_value=sample()), \
              patch.object(mw, "active_wolf_apps", return_value=[]), \

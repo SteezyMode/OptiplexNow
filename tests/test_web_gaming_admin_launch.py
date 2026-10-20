@@ -122,6 +122,17 @@ class WebGamingAdminTests(unittest.TestCase):
         self.assertIn("ssh_not_authorized",SOURCE)
         self.assertIn("browser_launch_failed",SOURCE)
 
+    def test_regular_web_gaming_pairing_never_uses_ssh_admin(self):
+        self.assertIn('button("PAIR WEB GAMING IN BROWSER","setupaction")',SOURCE)
+        self.assertIn('wizard_button(c,four,"PAIR WEB GAMING IN BROWSER","w_webgaming")',SOURCE)
+        self.assertIn('browser_open("https://games.monumentrisk.com");',SOURCE)
+        self.assertIn("ENTER THE ACCESS PIN FROM THE SERVER OWNER",SOURCE)
+        section=SOURCE[SOURCE.index('else if(resp==106){'):
+                       SOURCE.index('else if(resp==104){')]
+        self.assertNotIn("open-web-gaming-admin",section)
+        self.assertNotIn("terminal_launch(",section)
+        self.assertNotIn("ssh",section)
+
     def test_no_unsafe_bypass_or_credentials_output(self):
         source=(ROOT/"src"/"open-web-gaming-admin.py").read_text()
         self.assertNotIn("verify=False",source)

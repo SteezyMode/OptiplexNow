@@ -216,6 +216,117 @@ def collect(*, os_release=None, arch=None, memory_kib=None, home_free_bytes=None
     }
 
 
+
+def build_install_plan(report, backend):
+    """Advisory-only next steps. Never instruct a privileged operation.
+
+    A preflight observation is not authorization, encoder certification, or
+    sufficient information to choose packages/versions or alter a host.
+    """
+    if backend not in ("sunshine", "wolf"):
+        raise ValueError("Unsupported streaming backend")
+    system, hw, found = report["platform"], report["hardware"], report["components"]
+    steps = []
+    blockers = []
+
+    def step(identifier, status, title, detail):
+        steps.append({
+            "id": identifier, "status": status,
+            "title": title, "detail": detail
+        })
+
+    if system["initial_test_scope_match"]:
+        step("platform", "observed", "Supported test target",
+             "Matches the proposed Ubuntu/Pop!_OS 24.04 amd64 testing scope; installation remains unverified.")
+    else:
+        blockers.append("Host outside the initial supported testing scope")
+        step("platform", "review_required", "Check operating system",
+             "This platform has not been qualified. Do not attempt automated installation.")
+
+    if hw["nvidia_driver_gpus"]:
+        step("encoder", "verify_required", "Verify hardware video encoding",
+             "NVIDIA driver detected. NVENC access, codec support and live stream encoding are not tested.")
+    else:
+        blockers.append("Compatible encoder not verified")
+        step("encoder", "review_required", "Check GPU and encoder",
+             "No working NVIDIA driver was observed. Do not assume the GPU is incompatible; check drivers and available encoders first.")
+
+    if backend == "wolf":
+        if found["docker"] == "not_installed":
+            step("runtime", "action_needed", "Install supported container runtime",
+                 "Wolf requires a tested container runtime. Choose versions and permissions only in a future approved installer.")
+        elif found["docker"] == "unavailable":
+            blockers.append("Container runtime not accessible")
+            step("runtime", "review_required", "Inspect container runtime",
+                 "Docker is installed but not accessible, or its daemon is unavailable. No permissions will be changed.")
+        else:
+            step("runtime", "verify_required", "Verify container runtime",
+                 "Docker responds; GPU device access and Wolf-specific container requirements are not yet tested.")
+
+    observed = found[backend]
+    if (backend == "sunshine" and observed == "running") or (
+            backend == "wolf" and observed == "detected"):
+        step("streaming_host", "verify_required", "Inspect existing " + backend.title(),
+             "An existing host was detected. Adopt safely only after checking its configuration and current sessions.")
+    elif backend == "sunshine" and observed == "installed":
+        step("streaming_host", "verify_required", "Inspect installed Sunshine",
+             "The executable is present; service status and pairing are not verified.")
+    elif observed == "unknown":
+        blockers.append("Existing " + backend.title() + " status unknown")
+        step("streaming_host", "review_required", "Inspect streaming host",
+             "Cannot determine the existing host state. Do not overwrite anything.")
+    else:
+        step("streaming_host", "action_needed", "Provision " + backend.title(),
+             "Not detected by the current probes. A future installer must first check additional locations and preserve existing data.")
+
+    other = "wolf" if backend == "sunshine" else "sunshine"
+    other_state = found[other]
+    if other_state in (("installed", "running") if other == "sunshine" else ("detected",)):
+        blockers.append("Other streaming host already detected")
+        step("other_host", "review_required", "Review existing " + other.title(),
+             "A second streaming host may conflict with ports or active sessions. Preserve it until reviewed.")
+    elif other_state == "unknown":
+        step("other_host", "verify_required", "Check other streaming services",
+             "Could not confirm whether another streaming backend is active.")
+
+    ports = report["streaming_ports_listening"]
+    if ports is None:
+        step("ports", "verify_required", "Inspect streaming ports",
+             "Listener inventory unavailable. A future installer must verify port ownership and required protocols.")
+    elif ports:
+        step("ports", "review_required", "Review streaming listeners",
+             "Related ports are listening; the checker cannot identify ownership or whether they conflict.")
+    else:
+        step("ports", "verify_required", "Verify backend port requirements",
+             "No matching listeners observed. This is not proof that all required ports are available.")
+
+    if hw["home_free_gib"] is None:
+        step("storage", "verify_required", "Choose persistent storage",
+             "Available space could not be measured. Select project/game paths and preserve existing data.")
+    else:
+        step("storage", "verify_required", "Choose persistent storage",
+             "Home filesystem capacity was observed; actual game and desktop storage must be selected and checked.")
+
+    if found["tailscale"] == "connected":
+        step("remote_access", "verify_required", "Verify optional remote access",
+             "Tailscale reports running; client authorization, DNS and external-network reachability are not tested.")
+    else:
+        step("remote_access", "optional", "Set up optional remote access",
+             "For access away from home, guide a separate official Tailscale sign-in. LAN-only use does not require it.")
+
+    step("pairing", "action_needed", "Pair Moonlight and test a real stream",
+         "Use a second device to verify picture, audio, input and reconnection before declaring setup complete.")
+
+    return {
+        "backend": backend,
+        "phase": "advisory_only",
+        "can_install": False,
+        "needs_explicit_approval": True,
+        "blocking_reasons": blockers,
+        "steps": steps,
+    }
+
+
 def format_human(data):
     p, h, c = data["platform"], data["hardware"], data["components"]
     lines = [
@@ -235,6 +346,17 @@ def format_human(data):
             if data["streaming_ports_listening"] is not None else "unknown"),
     ]
     lines.extend("- " + note for note in data["observations"])
+    plan = data.get("install_plan")
+    if plan is not None:
+        lines.append("")
+        lines.append("PROPOSED " + plan["backend"].upper() + " SETUP PLAN (NO INSTALLER)")
+        for item in plan["steps"]:
+            lines.append("[{}] {}: {}".format(
+                item["status"], item["title"], item["detail"]))
+        if plan["blocking_reasons"]:
+            lines.append("Needs review before installation: " +
+                         "; ".join(plan["blocking_reasons"]))
+        lines.append("Installing or approving system changes is not supported.")
     lines.append("No changes made. Actual streaming and encoder readiness NOT tested.")
     return "\n".join(lines)
 
@@ -242,8 +364,12 @@ def format_human(data):
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Read-only local server compatibility inventory")
     parser.add_argument("--json", action="store_true", help="Machine-readable report")
+    parser.add_argument("--backend", choices=("sunshine", "wolf"),
+                        help="Show advisory requirements for a future backend installation")
     args = parser.parse_args(argv)
     data = collect()
+    if args.backend is not None:
+        data["install_plan"] = build_install_plan(data, args.backend)
     print(json.dumps(data, sort_keys=True, indent=2) if args.json else format_human(data))
     return 0
 

@@ -14,6 +14,7 @@ There is **one released application (NOW), one separate Studio application, and 
 | Wolf update/repair procedures, explicit operator actions | [Wolf maintenance](wolf-maintenance.md) |
 
 - [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
+- [Local server preflight](server-preflight.md): development-only read-only host compatibility CLI and verification steps; not a fresh-server installer.
 
 ## Planned, not shipped
 

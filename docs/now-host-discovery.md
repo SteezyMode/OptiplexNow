@@ -43,6 +43,26 @@ python3 src/find-now-hosts.py --json
 
 It emits a sanitized array of confirmed NOW nodes. Existing legacy `find-servers.py` and manual host entry are retained unchanged.
 
+## Contract and identity verification (development)
+
+The host's `tailscale whois --json <peer-ip>` response contains a `Node.Addresses` collection of **assigned node addresses**; `Node.AllowedIPs` can also include subnet routing. The experimental host now requires the **exact /32 IPv4 assignment** matching the source. It never substitutes a broad AllowedIPs route as proof of a unique client identity. This fail-closed interpretation may require adapting to actual daemon-version fields during isolated two-device testing; it should not be weakened into broad route acceptance.
+
+CI now includes an **actual localhost HTTP exchange** between the agent's real request handler and the discovery scanner's real protocol parser, with injected synthetic Tailscale WhoIs responses and a temporary loopback-only test listener. It checks discovery success, denied identity, mismatched host identity, and rejection of control/POST requests. A simulated tailnet transport proves the JSON and HTTP components work together; **it does not prove Tailscale's real routing, its grant rules, OS firewalls, WhoIs response compatibility, or practical Moonlight connectivity**.
+
+### Live two-device acceptance checklist (not performed)
+
+On disposable computers only, after explicitly enrolling them in a separate test tailnet and authorizing the necessary TCP 18791 connectivity:
+
+1. On host, run `optiplex-now-host-agent --backend sunshine` in check-only mode; confirm no port is opened or service enabled.
+2. Start the agent in foreground only with `optiplex-now-host-agent --serve --backend sunshine`; verify it binds to **only the intended Tailscale IP and TCP 18791**.
+3. On the second device, use **Setup Wizard → Server → FIND NOW SERVER (EXPERIMENTAL)**; confirm that the returned label and host identity match the test host, and that selecting it fills only the host field.
+4. Check the same steps with a second online but unrelated Tailscale peer and a denied grant; they must not be presented as NOW hosts.
+5. Interrupt/reconnect Tailscale, restart the host agent, and revoke peer access; verify the host disappears and appears again as appropriate, without changing other server settings.
+6. Verify an ordinary Moonlight/Sunshine pairing and reconnect separately. Host discovery is not permission to initiate streaming.
+7. Stop the foreground agent and verify the listener disappears; confirm no automatic service was enabled and no persistent server data changed.
+
+**Block release** if any of the real Tailscale WhoIs fields, node IDs, identity-match rules, or client access checks differ from the synthetic fixtures. Do not experiment by exposing the production Wolf, SSH, Docker socket or Caddy services.
+
 ## Validation and rollout gates
 
 Mock/unit tests cover IPv4 binding restrictions, no implicit service startup, WhoIs allow/deny, read-only HTTP endpoints, peer filtering, response-marker mismatch and malicious JSON, plus isolated GTK opening/closing. Debian installed-package acceptance checks the two CLI entry points without starting host services. CI **does not** verify actual cross-device streaming or Tailscale interoperability.

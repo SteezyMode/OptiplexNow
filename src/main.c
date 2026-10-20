@@ -929,8 +929,8 @@ static void on_web_gaming_maintenance(void*w,void*p){
  else preset_alert(win,"Maintenance unavailable","No terminal emulator found. Install a terminal and retry.");
 }
 /* Advanced admin action. Routine pairing must not depend on this tunnel.
- * Unlike now_launch(), GSubprocess preserves the helper's exit status and
- * delivers a bounded, non-sensitive result to the existing NOW interface. */
+ * Unlike now_launch(), GSubprocess returns verified tunnel readiness; GTK,
+ * not an SSH subprocess, launches the user's default browser. */
 static gboolean web_admin_in_progress=FALSE;
 static void web_admin_finished(GObject*source,GAsyncResult*result,gpointer unused){
  (void)unused;
@@ -940,10 +940,28 @@ static void web_admin_finished(GObject*source,GAsyncResult*result,gpointer unuse
  web_admin_in_progress=FALSE;
  const char*code=out?g_strstrip(out):"";
  const char*message="WEB GAMING ADMIN COULD NOT OPEN. VERIFY CLIENT SETUP";
+ const char*port_prefix="NOW_ADMIN_STATUS=tunnel_ready:";
  if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
-       && !strcmp(code,"NOW_ADMIN_STATUS=browser_handoff_requested")){
-  say("ADMIN BROWSER REQUESTED. LOCAL HTTPS TRUST MAY STILL NEED CONFIGURATION");
-  goto cleanup;
+       && g_str_has_prefix(code,port_prefix)){
+  const char*port_text=code+strlen(port_prefix);
+  char*endptr=NULL;errno=0;
+  long port=strtol(port_text,&endptr,10);
+  if(errno==0 && endptr && *endptr==0 && port>=20000 && port<40000){
+   /* GTK knows this process' desktop session. Never shell out to a detached
+    * browser process or trust arbitrary helper-provided URLs. */
+   char url[100];
+   snprintf(url,sizeof url,"https://127.0.0.1:%ld/admin",port);
+   GError*browser_error=NULL;
+   if(gtk_show_uri_on_window(GTK_WINDOW(win),url,0,&browser_error)){
+    say("ADMIN BROWSER REQUESTED. LOCAL TLS CERTIFICATE WARNING REMAINS UNSOLVED");
+   }else{
+    say("WEB GAMING ADMIN BROWSER LAUNCH FAILED");
+    preset_alert(win,"Web Gaming Admin browser unavailable",
+      "The SSH tunnel is ready, but your desktop did not open the admin page. Configure a default web browser.");
+   }
+   if(browser_error)g_error_free(browser_error);
+   goto cleanup;
+  }
  }
  if(g_str_has_prefix(code,"NOW_ADMIN_STATUS="))code+=strlen("NOW_ADMIN_STATUS=");
  if(!strcmp(code,"invalid_settings"))message="Set a valid server address and SSH user in Settings.";
@@ -953,8 +971,6 @@ static void web_admin_finished(GObject*source,GAsyncResult*result,gpointer unuse
  else if(!strcmp(code,"server_name_invalid"))message="Cannot resolve the selected server. Check the hostname and Tailscale.";
  else if(!strcmp(code,"local_port_unavailable"))message="Local admin tunnel port is occupied. Check for stale SSH tunnels.";
  else if(!strcmp(code,"admin_tunnel_unreachable"))message="SSH returned, but local admin tunnel is unavailable. Check the host's MoonlightWeb service.";
- else if(!strcmp(code,"browser_not_installed"))message="No xdg-open desktop browser handler found. Configure a default browser.";
- else if(!strcmp(code,"browser_launch_failed"))message="Default browser did not accept the admin URL. Check xdg-open configuration.";
  else if(!strcmp(code,"ssh_tunnel_timeout"))message="SSH admin tunnel timed out. Verify server reachability and SSH authorization.";
  else if(!strcmp(code,"local_configuration_error"))message="Cannot create the local private SSH control directory.";
  else if(!strcmp(code,"ssh_tunnel_failed"))message="SSH admin tunnel failed. Check SSH trust, credentials, and server availability.";

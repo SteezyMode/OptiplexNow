@@ -1150,12 +1150,51 @@ static int full_backup_ui(void*parent,int restore){
 }
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
 static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);}
+static void settings_open_page(GtkWidget *button,gpointer unused){
+ (void)unused;
+ GtkStack *stack=GTK_STACK(g_object_get_data(G_OBJECT(button),"settings-stack"));
+ const char *page=g_object_get_data(G_OBJECT(button),"settings-page");
+ if(stack&&page)gtk_stack_set_visible_child_name(stack,page);
+}
+static GtkWidget *settings_page(GtkWidget *stack,const char *name){
+ GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);
+ gtk_container_set_border_width(GTK_CONTAINER(content),14);
+ gtk_container_add(GTK_CONTAINER(scroll),content);
+ gtk_stack_add_named(GTK_STACK(stack),scroll,name);
+ return content;
+}
+static void settings_link(GtkWidget *container,GtkWidget *stack,const char *caption,const char *page){
+ GtkWidget *b=button(caption,"setupaction");
+ g_object_set_data(G_OBJECT(b),"settings-stack",stack);
+ g_object_set_data(G_OBJECT(b),"settings-page",(gpointer)page);
+ g_signal_connect(b,"clicked",G_CALLBACK(settings_open_page),NULL);
+ add(container,b,0);
+}
 static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
- gtk_window_set_default_size(GTK_WINDOW(d),510,440);
+ /* A single resizable dialog with internal navigation; suitable for 1024x768. */
+ gtk_window_set_default_size(GTK_WINDOW(d),680,550);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),1,1);gtk_widget_set_vexpand(scroll,1);add(area,scroll,1);
- GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);gtk_container_set_border_width(GTK_CONTAINER(col),18);gtk_container_add(GTK_CONTAINER(scroll),col);
+ GtkWidget*stack=gtk_stack_new();
+ gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+ gtk_widget_set_vexpand(stack,TRUE);
+ add(area,stack,1);
+ GtkWidget*home=settings_page(stack,"home");
+ add(home,label("EVERYDAY SETTINGS","modalheading"),0);
+ settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
+ settings_link(home,stack,"VIDEOS & SERVICES  ›","services");
+ settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
+ add(home,label("SETUP & MAINTENANCE","modalheading"),0);
+ settings_link(home,stack,"CONNECTIONS & SERVER  ›","connection");
+ GtkWidget*connection=settings_page(stack,"connection");
+ GtkWidget*gaming=settings_page(stack,"gaming");
+ GtkWidget*services=settings_page(stack,"services");
+ GtkWidget*preferences=settings_page(stack,"preferences");
+ GtkWidget*pages[]={connection,gaming,services,preferences};
+ for(int k=0;k<4;k++)settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home");
+ GtkWidget*col=connection;
  add(col,label("CONNECTION","modalheading"),0);
  GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
  tailscale_label=label("CHECKING TAILSCALE","helper");add(col,tailscale_label,0);
@@ -1187,6 +1226,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
+ col=gaming;
  add(col,label("STREAMING","modalheading"),0);
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
@@ -1194,6 +1234,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ col=preferences;
  add(col,label("TRAY DESKTOP LABEL","modalheading"),0);
  add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
  char desktop_label[128];tray_desktop_caption(desktop_label,sizeof desktop_label);
@@ -1201,6 +1242,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_entry_set_max_length(GTK_ENTRY(desktop_caption_entry),48);
  gtk_entry_set_text(GTK_ENTRY(desktop_caption_entry),desktop_label);
  add(col,desktop_caption_entry,0);
+ col=services;
  add(col,label("SERVICES","modalheading"),0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
@@ -1227,6 +1269,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    gtk_grid_attach(GTK_GRID(choices),order_spins[i],3,i+1,1,1);
  }
  add(col,choices,0);
+ col=connection;
  add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
  g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
@@ -1242,6 +1285,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 
  GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
  gtk_widget_show_all(d);
+ gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");
  int resp=gtk_dialog_run(GTK_DIALOG(d));
  if(resp==GTK_RESPONSE_OK){
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}

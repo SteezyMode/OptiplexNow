@@ -5,6 +5,9 @@ authenticated initial claim. Incoming devices cannot enroll an owner,
 replace the stored identity, or supply a recipient email address.
 """
 import os
+import json
+import ipaddress
+import subprocess
 import re
 import stat
 
@@ -47,3 +50,40 @@ def load_pinned_owner(path):
         return parse_owner_user_id(value.decode("ascii"))
     finally:
         os.close(fd)
+
+
+def owner_from_local_tailscale(*, runner=subprocess.run):
+    """Trusted host bootstrap for an already user-enrolled Tailscale server.
+
+    Used only at explicit SERVER-role activation, never as a request handler.
+    Tagged or shared/unnamed nodes cannot claim owner identity automatically.
+    """
+    try:
+        outcome = runner(["tailscale", "status", "--json"], capture_output=True,
+                         text=True, timeout=3, check=False)
+        if outcome.returncode or len(outcome.stdout) > 524288:
+            raise ValueError("Tailscale status unavailable")
+        status = json.loads(outcome.stdout)
+        if not isinstance(status, dict) or status.get("BackendState") != "Running":
+            raise ValueError("Tailscale server is not connected")
+        node = status.get("Self")
+        if not isinstance(node, dict) or node.get("Tags") or node.get("ShareeNode"):
+            raise ValueError("Server identity is not a personal owner node")
+        user_id = parse_owner_user_id(str(node.get("UserID", "")))
+        ips = node.get("TailscaleIPs")
+        network = ipaddress.ip_network("100.64.0.0/10")
+        if not isinstance(ips, list):
+            raise ValueError("Server has no Tailnet identity")
+        valid_ips = []
+        for raw in ips:
+            try:
+                ip = ipaddress.ip_address(raw)
+            except (TypeError, ValueError):
+                continue
+            if ip.version == 4 and ip in network and str(ip) != "100.100.100.100":
+                valid_ips.append(str(ip))
+        if len(set(valid_ips)) != 1:
+            raise ValueError("Server has no unique Tailscale IPv4 address")
+        return user_id
+    except (OSError, ValueError, UnicodeError, subprocess.TimeoutExpired) as err:
+        raise ValueError("Cannot establish registered local Tailscale owner") from err

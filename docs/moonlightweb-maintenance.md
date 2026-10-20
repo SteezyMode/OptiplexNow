@@ -96,7 +96,7 @@ deployment was performed simply by merging this code.
 
 ## Wolf desktop persistence caveat
 
-Upstream stable Wolf documents `WOLF_STOP_CONTAINER_ON_EXIT=TRUE` as its default, which can end a desktop application container when streaming stops. The updater deliberately refuses to update while Wolf application containers are running. It therefore **does not yet** deliver an uninterrupted live desktop across a MoonlightWeb update. Preserving Studio project files and Wolf application home directories is a separate guarantee from preserving running GUI programs and unsaved edits. Confirm the actual Wolf setting and test a disconnect/reconnect before changing update policy.
+The reference server was **observed on 2026-10-20** with `WOLF_STOP_CONTAINER_ON_EXIT=TRUE`; upstream stable Wolf documents that value as the default. Thus disconnecting a web stream can stop and remove the corresponding app/desktop container. The updater deliberately refuses to update while Wolf application containers are running. It therefore **does not yet** deliver an uninterrupted live desktop across a MoonlightWeb update. Preserving Studio project files and Wolf application home directories is a separate guarantee from preserving running GUI programs and unsaved edits. Confirm the actual Wolf setting and test a disconnect/reconnect before changing update policy.
 
 ## Future milestones
 

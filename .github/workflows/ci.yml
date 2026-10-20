@@ -31,6 +31,7 @@ jobs:
           set -euo pipefail
           make check-process
           make check-presets
+          make check-config
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

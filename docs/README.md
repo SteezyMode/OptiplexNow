@@ -14,6 +14,7 @@ There is **one released application (NOW), one separate Studio application, and 
 | Wolf update/repair procedures, explicit operator actions | [Wolf maintenance](wolf-maintenance.md) |
 
 - [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
+- [NOW Host discovery proof of concept](now-host-discovery.md): experimental tailnet-only opt-in presence agent and GTK client discovery, not a security-reviewed streaming authorization system.
 
 ## Planned, not shipped
 

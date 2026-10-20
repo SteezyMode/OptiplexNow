@@ -903,6 +903,68 @@ done:
  if(error)g_error_free(error);
  g_free(out);
 }
+/* Client asks the independently authenticated host for owner approval.
+ * No need to know SSH credentials or approach the physical server console. */
+static gboolean now_access_request_busy=FALSE;
+static void now_access_request_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,&out,NULL,&error);
+ now_access_request_busy=FALSE;
+ const char*status=out?g_strstrip(out):"";
+ if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))){
+  if(!strcmp(status,"NOW_OWNER_STATUS=access_pending")){
+   say("DEVICE ACCESS REQUESTED. WAITING FOR THE SERVER OWNER");
+   preset_alert(win,"Device access requested",
+     "Your device is waiting for the server owner to approve it remotely in NOW. No SSH or server-screen interaction is needed.");
+   goto end;
+  }
+  if(!strcmp(status,"NOW_OWNER_STATUS=access_approved")){
+   say("SERVER OWNER APPROVED. COMPLETE NATIVE MOONLIGHT PAIRING");
+   preset_alert(win,"Owner approved",
+     "The server owner approved this device. Native Moonlight/Wolf pairing must also finish before games can stream.");
+   goto end;
+  }
+  if(!strcmp(status,"NOW_OWNER_STATUS=access_denied")){
+   say("DEVICE ACCESS DENIED BY SERVER OWNER");
+   preset_alert(win,"Device access denied",
+     "The owner denied this request. Contact the owner if you should have access.");
+   goto end;
+  }
+ }
+ say("DEVICE ACCESS REQUEST FAILED");
+ preset_alert(win,"Cannot request device access",
+   "Check your server's Tailscale address and that the opt-in NOW pairing broker is installed and running. Your server owner may need to finish NOW Server setup.");
+end:
+ if(error)g_error_free(error);
+ g_free(out);
+}
+static void on_now_request_access(void*w,void*p){
+ (void)w;(void)p;
+ if(now_access_request_busy){say("DEVICE ACCESS REQUEST IN PROGRESS");return;}
+ if(!now_valid_host(cfg[0])){
+  preset_alert(win,"Device access","Select your server in NOW Settings first.");
+  return;
+ }
+ const char*helper="/usr/lib/optiplex-now/now-owner-approvals.py";
+ if(access(helper,R_OK)!=0){
+  preset_alert(win,"Device access","Pairing helper missing. Reinstall NOW.");
+  return;
+ }
+ GError*error=NULL;
+ GSubprocess*proc=g_subprocess_new(
+    G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+    &error,"/usr/bin/python3",helper,cfg[0],"request",NULL);
+ if(!proc){
+  if(error)g_error_free(error);
+  preset_alert(win,"Device access","Unable to start the access request.");
+  return;
+ }
+ now_access_request_busy=TRUE;
+ say("SENDING DEVICE ACCESS REQUEST...");
+ g_subprocess_communicate_utf8_async(proc,NULL,NULL,now_access_request_finished,NULL);
+ g_object_unref(proc);
+}
 static void on_remote_owner_approvals(void*w,void*p){
  (void)w;(void)p;
  if(remote_owner_busy){say("OWNER APPROVAL REQUEST ALREADY IN PROGRESS");return;}
@@ -1307,6 +1369,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ GtkWidget*access_request=button("REQUEST GAMING ACCESS TO SERVER","setupaction");
+ g_signal_connect_data(access_request,"clicked",(GCallback)on_now_request_access,NULL,NULL,0);
+ add(col,access_request,0);
  GtkWidget*owner_inbox=button("PENDING DEVICE APPROVALS (REMOTE OWNER)","setupaction");
  g_signal_connect_data(owner_inbox,"clicked",(GCallback)on_remote_owner_approvals,NULL,NULL,0);
  add(col,owner_inbox,0);

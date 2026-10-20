@@ -86,6 +86,28 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
             inspect.assert_not_called()
             docker.assert_not_called()
 
+    def test_preflight_never_pulls_or_stops_containers(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as directory:
+            info = sample()
+            info["Mounts"][0]["Source"] = directory
+            with patch.object(mw, "inspect", return_value=info), \
+                 patch.object(mw, "check_image_defaults"), \
+                 patch.object(mw, "active_wolf_apps", return_value=[]), \
+                 patch.object(mw, "docker") as docker:
+                mw.preflight()
+                docker.assert_not_called()
+
+    def test_preflight_blocks_when_persistent_volume_missing(self):
+        info = sample()
+        info["Mounts"][0]["Source"] = "/path/that/does/not/exist"
+        with patch.object(mw, "inspect", return_value=info), \
+             patch.object(mw, "check_image_defaults"), \
+             patch.object(mw, "docker") as docker:
+            with self.assertRaisesRegex(RuntimeError, "persistent data volume unavailable"):
+                mw.preflight()
+            docker.assert_not_called()
+
     def test_same_image_is_noop(self):
         original = sample()
         with patch.object(mw, "active_wolf_apps", return_value=[]), \

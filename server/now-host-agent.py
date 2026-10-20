@@ -101,6 +101,11 @@ def make_handler(payload, authorize=peer_authorized):
         server_version = "NOW-discovery-prototype"
         sys_version = ""
 
+        def setup(self):
+            super().setup()
+            # Bound a slow or abusive tailnet peer's connection lifetime.
+            self.connection.settimeout(2)
+
         def do_GET(self):
             if self.path != "/v1/discover":
                 self.send_error(404, "Not found")

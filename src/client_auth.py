@@ -24,7 +24,8 @@ def classify(status):
             for raw in ips:
                 try:
                     address = ipaddress.ip_address(raw)
-                    if address.version == 4 and address in ipaddress.ip_network("100.64.0.0/10"):
+                    if (address.version == 4 and address in ipaddress.ip_network("100.64.0.0/10")
+                            and str(address) != "100.100.100.100"):
                         return "connected"
                 except (TypeError, ValueError):
                     continue

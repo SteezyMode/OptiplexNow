@@ -11,8 +11,10 @@ Maintain **one native `.deb` for NOW itself** and one application with selectabl
 
 Use separable service adapters:
 - **Core server MVP:** Wolf streaming, a single desktop/game profile, verified native Moonlight pairing and diagnostics.
-- **Optional:** Moonlight Web, Jellyfin, DroppedNeedle, each adoptable independently and removable from NOW management without data deletion.
+- **Optional:** Moonlight Web and Jellyfin; DroppedNeedle with optional ListenBrainz/Last.fm connections; an advanced Downloads & Music category with qBittorrent, VueTorrent (qBittorrent web interface), slskd and optional Gluetun/VPN routing. Components are selectable and adoptable independently; coordinated recipes may declare dependencies but never silently install the entire stack. Removing NOW management must not delete application data.
 - **Separate product:** OptiPlex Studio; can be streamed as an ordinary desktop application, but has no dependency on NOW.
+
+VPN/network recipes require explicit routing and port plans, secret-safe credential handling, and verified leak/recovery tests before claiming protection. Follow [existing reference stack documentation](../server-setup.md).
 
 Prefer discover/adopt over takeover; preserve existing credentials, mounts, configuration, running services and pairing. Define safe rollback and uninstall/data retention. For privileged actions use a narrow authenticated boundary, never general exposed Docker/Wolf sockets. Prefer upstream supported APIs and configurations before considering forks.
 

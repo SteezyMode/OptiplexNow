@@ -156,7 +156,9 @@ class PairingRequests:
         with self._lock:
             self._purge(self._clock())
             entry = self._requests.get(request_id)
-            if not entry or entry.peer != peer:
+            # Only pending requests can be withdrawn. A denied request must
+            # retain its cooldown; clients cannot cancel/reissue to bypass it.
+            if not entry or entry.peer != peer or entry.state != "pending":
                 return False
             del self._requests[request_id]
             return True

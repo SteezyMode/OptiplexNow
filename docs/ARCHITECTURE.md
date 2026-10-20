@@ -13,10 +13,11 @@ One native `.deb` installs the NOW application. The app supports **client**, **s
 | Wolf adapter (planned) | One tested streaming host/profile, pairing/status and version-safe operations | Wolf's streaming implementation |
 | Moonlight Web adapter (optional) | Existing browser streaming endpoint discovery and supported maintenance | Wolf/Moonlight internals |
 | Jellyfin adapter (optional) | Discovery, optional install, health and open native UI | Media transcoding, libraries and playback logic |
-| DroppedNeedle adapter (optional) | Discovery, optional install, health and open native UI | Music discovery/acquisition business logic |
+| DroppedNeedle adapter (optional) | Discovery, optional install, health and open native UI; optional ListenBrainz/Last.fm connections | Music discovery/acquisition business logic or third-party account ownership |
+| Download adapters (optional) | qBittorrent with optional VueTorrent interface, slskd, and explicitly selected Gluetun/VPN routing | Download protocols, third-party VPN credentials or unrestricted host networking |
 | OptiPlex Studio | Independently installed creative/project workflows | NOW server management |
 
-Wolf and Moonlight/Web may use their upstream mechanisms and versions. Service integrations should be independently enabled, disabled, and upgraded. No optional service is a prerequisite to launch NOW.
+Wolf and Moonlight/Web may use their upstream mechanisms and versions. Service integrations should be independently enabled, disabled, and upgraded. The optional Downloads & Music category may offer coordinated configuration of DroppedNeedle, qBittorrent/VueTorrent, slskd and Gluetun when selected, but must not implicitly install all components. A VPN must never be advertised as protecting traffic unless routing and leak behavior are actually verified. No optional service is a prerequisite to launch NOW.
 
 ## Provisioning flow (planned)
 1. User chooses client/server/both; perform read-only OS, GPU/encoder, storage, networking and service discovery.

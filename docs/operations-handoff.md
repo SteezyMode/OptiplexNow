@@ -18,7 +18,7 @@ This is an operator handoff, not a deployment claim. Use alongside [server-setup
 - Host: Pop!_OS 24.04, OptiPlex 7070 SFF, i7-9700, 32 GiB, NVIDIA RTX 3050 LP 6 GiB. Hardware from existing operator records; live hardware inventory was **not** repeated during this session.
 - LAN SSH: `optiplex@192.168.40.212`.
 - Tailscale SSH/streaming: `optiplex@100.121.156.34`. A stable MagicDNS name is preferable to embedding either IP in future releases.
-- Public browser-gaming URL: `https://games.monumentrisk.com`, served separately from Tailscale by Caddy.
+- Public browser-gaming URL: the configured HTTPS gaming hostname, served separately from Tailscale by Caddy.
 - Running Docker containers **observed** (not proof of pending image updates):
 
 | Container | Image | Compose project / file |
@@ -41,9 +41,9 @@ This is an operator handoff, not a deployment claim. Use alongside [server-setup
 
 ## Authentication and remote administration
 
-**Normal Web Gaming:** `https://games.monumentrisk.com`. MoonlightWeb 0.3.1 accepts a one-time access PIN or a reusable certificate-token file and saves a browser session if **Remember me** is enabled. The certificate-token file is a bearer credential; do not add it to the public codebase.
+**Normal Web Gaming:** the configured HTTPS gaming hostname. MoonlightWeb 0.3.1 accepts a one-time access PIN or a reusable certificate-token file and saves a browser session if **Remember me** is enabled. The certificate-token file is a bearer credential; do not add it to the public codebase.
 
-**Working LAN admin:** `https://192.168.40.212:8443/admin` after enrolling the browser and unlocking admin with the configured password. The public `/admin` URL instead returned the ordinary Wolf/Web Gaming UI in operator testing. Do **not** treat `games.monumentrisk.com/admin` as a working admin shortcut.
+**Working LAN admin:** `https://192.168.40.212:8443/admin` after enrolling the browser and unlocking admin with the configured password. The public `/admin` URL instead returned the ordinary Wolf/Web Gaming UI in operator testing. Do **not** treat the public gaming hostname's `/admin` path as a working admin shortcut.
 
 **Remote administration constraint:** MoonlightWeb v0.3.1's admin unlock checks for RFC1918/loopback/link-local addresses and does not classify Tailscale's `100.64.0.0/10` addresses as LAN. A direct `https://100.121.156.34:8443/admin` request can reach the service but is **not a verified way to unlock admin**.
 

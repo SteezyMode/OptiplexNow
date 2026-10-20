@@ -14,6 +14,9 @@ There is **one released application (NOW), one separate Studio application, and 
 | Wolf update/repair procedures, explicit operator actions | [Wolf maintenance](wolf-maintenance.md) |
 
 - [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
+- [Local server preflight](server-preflight.md): development-only read-only host compatibility CLI and verification steps; not a fresh-server installer.
+- [NOW Host discovery](now-host-discovery.md): opt-in tailnet-only read-only host endpoint, client picker, and isolated contract tests.
+- [One-sign-in onboarding design](SERVER-ONBOARDING-AND-TAILSCALE.md): proposal for account-free Tailscale-first discovery and owner-approved Moonlight pairing.
 
 ## Planned, not shipped
 

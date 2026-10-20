@@ -32,6 +32,8 @@ jobs:
           make check-process
           make check-presets
           make package
+          make check-preflight-ui
+          make check-now-discovery-ui
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh
           python3 -m unittest discover -s tests -v

@@ -4,7 +4,9 @@ This record preserves earlier observations and is **not** a current release, ser
 
 # Operations handoff — 2026-10-16
 
-> **Historical and anonymized server inventory (captured 2026-10-16):** Host addresses and operator account examples are redacted for portability; the original Git history may still contain the older values.\n\n> **Historical server inventory (captured 2026-10-16):** This file intentionally preserves dated host/service/auth observations, but its statements that `main` was v1.11.9 and v1.12.0 was only a draft are **superseded**. GitHub now has published [v1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.13.0) and v1.12.0 releases. For release state, open PRs, separation from Studio and next-session instructions, read [Current Status](CURRENT-STATUS.md). Do not treat obsolete future-tense packaging statements here as undone/unshipped without checking the release.
+> **Historical and anonymized server inventory (captured 2026-10-16):** Host addresses and operator account examples are redacted for portability; the original Git history may still contain the older values.
+
+> **Historical server inventory (captured 2026-10-16):** This file intentionally preserves dated host/service/auth observations, but its statements that `main` was v1.11.9 and v1.12.0 was only a draft are **superseded**. GitHub now has published [v1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.13.0) and v1.12.0 releases. For release state, open PRs, separation from Studio and next-session instructions, read [Current Status](CURRENT-STATUS.md). Do not treat obsolete future-tense packaging statements here as undone/unshipped without checking the release.
 
 
 This is an operator handoff, not a deployment claim. Use alongside [server-setup.md](server-setup.md) and [next-session.md](next-session.md). This project is a **personal** Linux client for an existing home server.

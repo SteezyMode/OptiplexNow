@@ -3,14 +3,14 @@
 Status: operator workflow; documentation only. Last updated 2026-10-18.
 
 ## Why
-When developing OptiPlex NOW remotely over Tailscale SSH (including from an iPhone over cellular), start interactive long-running work **inside a named tmux session on the OptiPlex host**. This keeps a terminal, active Codex CLI, build, or maintenance job connected to its server-side PTY if the MacBook closes, the iPhone locks, or an SSH connection drops. No VPN, GPU, Wolf desktop, Jellyfin, or application services need restarting.
+When developing OptiPlex NOW remotely over Tailscale SSH, start interactive long-running work **inside a named tmux session on your development host**. This keeps a terminal, active Codex CLI, build, or maintenance job connected to its server-side PTY if the MacBook closes, the iPhone locks, or an SSH connection drops. No VPN, GPU, Wolf desktop, Jellyfin, or application services need restarting.
 
 This is primarily a **developer/operator practice**, not an end-user launcher feature. Do not wrap routine short one-off SSH commands in tmux.
 
 ## Requirements
 - `tmux` installed on the **host**: `sudo apt install -y tmux` (installed interactively on 2026-10-18; no guarantee on other hosts).
-- SSH access to `optiplex@100.121.156.34` through Tailscale or appropriate LAN address.
-- The OptiPlex must remain powered on; network access must be restored to reattach.
+- SSH access to an authorized development host through Tailscale or an appropriate LAN address. Replace `YOUR_USER` and `YOUR_TAILSCALE_HOST` in examples.
+- The host must remain powered on; network access must be restored to reattach.
 
 ## Typical workflow : one step at a time
 On the host, after SSH login:
@@ -37,7 +37,7 @@ To inspect the current pane or stop a process, reattach before acting. Use `Ctrl
 From a MacBook with working SSH and Tailscale, you can explicitly attach in one command:
 
 ```bash
-ssh -t optiplex@100.121.156.34 'tmux new-session -A -s now-dev'
+ssh -t YOUR_USER@YOUR_TAILSCALE_HOST 'tmux new-session -A -s now-dev'
 ```
 
 ## Naming convention

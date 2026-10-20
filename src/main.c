@@ -791,6 +791,16 @@ static void open_remote_files(void){
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+/* Opens a deliberately interactive, SSH-backed server maintenance menu.
+ * The client has no Docker privileges and does not manage Wolf itself. */
+static void on_web_gaming_maintenance(void*w,void*p){
+ (void)w;(void)p;
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ const char*helper="/usr/lib/optiplex-now/web-gaming-maintenance";
+ if(access(helper,X_OK)!=0){say("WEB MAINTENANCE HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
+ char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
+ if(terminal_launch(args))say("OPENING WEB GAMING MAINTENANCE VIA SSH");
+}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
@@ -1174,6 +1184,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
+ g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
  GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
  g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
  add(col,label("SHORTCUTS","modalheading"),0);

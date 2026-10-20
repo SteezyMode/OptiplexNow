@@ -14,14 +14,19 @@ import unittest
 
 SRC=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(SRC/"server"))
-import now_pairing_broker as broker
-import now_pairing_requests as requests
-import now_pairing_trust as trusted
+import importlib
+# Import after discovery: earlier tests load the pairing module dynamically.
+# Importing here would retain a different PeerIdentity dataclass instance.
+broker = requests = trusted = None
 MAIN=(SRC/"src"/"main.c").read_text()
 
 
 class HouseholdAutoApprovalTests(unittest.TestCase):
     def setUp(self):
+        global broker, requests, trusted
+        broker=importlib.import_module("now_pairing_broker")
+        requests=importlib.import_module("now_pairing_requests")
+        trusted=importlib.import_module("now_pairing_trust")
         self.temp=tempfile.TemporaryDirectory()
         os.chmod(self.temp.name,0o700)
         self.owner=requests.PeerIdentity("nOwnerDevice","1042")

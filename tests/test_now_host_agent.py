@@ -58,7 +58,7 @@ class AgentTests(unittest.TestCase):
             calls.append(args)
             return FakeResult({"Node": {
                 "ID": 99, "Addresses": ["100.99.0.18/32"],
-                "UserProfile": {"LoginName": "private@example.com"}})
+                "UserProfile": {"LoginName": "private@example.com"}}})
         self.assertTrue(agent.peer_authorized("100.99.0.18", runner=run))
         self.assertEqual(calls[0], ["tailscale", "whois", "--json", "100.99.0.18"])
         self.assertFalse(agent.peer_authorized("100.99.0.19", runner=run))

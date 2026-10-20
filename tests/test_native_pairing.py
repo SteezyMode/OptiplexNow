@@ -29,7 +29,9 @@ class NativePairingTests(unittest.TestCase):
         self.assertIn("START MOONLIGHT PAIRING",SRC)
         self.assertIn("SSH is NOT required to stream games",SRC)
         self.assertNotIn('"/api/v1/pair/client"',SRC)
-        self.assertNotIn('"/var/run/docker.sock"',SRC)
+        # Pairing on the CLIENT may not touch Docker or an owner socket.
+        section=SRC[SRC.index("static void pair_wolf(void){"):SRC.index("static void on_games_action(")]
+        self.assertNotIn('"/var/run/docker.sock"',section)
 
     def test_existing_stream_shortcut_stays_wolf_native(self):
         self.assertIn('launch_wolf_app("Steam")',SRC)

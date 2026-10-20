@@ -369,7 +369,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     data = collect()
     if args.backend is not None:
-        data["install_plan"] = build_install_plan(data, args.backend)
+        # Preserve the unmodified inventory for callers and tests.
+        data = {**data, "install_plan": build_install_plan(data, args.backend)}
     print(json.dumps(data, sort_keys=True, indent=2) if args.json else format_human(data))
     return 0
 

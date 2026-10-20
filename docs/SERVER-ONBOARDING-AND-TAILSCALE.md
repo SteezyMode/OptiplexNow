@@ -7,7 +7,7 @@
 
 ## Product objective
 
-A person with a supported Linux PC should be able to make it a remotely streamable personal computer using a guided installation, then sign into OptiPlex NOW on a second device to discover that server automatically. No memorized IP addresses, terminal commands, Docker configuration, manually copied SSH settings, or remembered Moonlight host addresses should be necessary for the ordinary happy path.
+A person with a supported Linux PC should be able to make it a remotely streamable personal computer using a guided installation, then install NOW on a second device, authorize Tailscale **at most once** when needed, discover that server automatically, and stream after a safe first-time pairing approval. An optional future NOW website account is not required for this first-release user journey. No memorized IP addresses, terminal commands, Docker configuration, manually copied SSH settings, or remembered Moonlight host addresses should be necessary for the ordinary happy path.
 
 **Explicitly separate three concerns:**
 1. **NOW account and optional website:** identifies the person's registered servers and synchronizes *non-secret* connection metadata/preferences.
@@ -22,11 +22,30 @@ NOW 1.14.0 is a native x86-64 Debian/Ubuntu-family **client for an existing serv
 
 The first install target should be a tested subset of Ubuntu/Pop!_OS 24.04 and compatible NVIDIA encoder configurations, narrowed by empirical clean-machine testing. Other distros, GPUs and architectures are candidates, not promises. A NOW desktop client currently exists for compatible Linux; users of Windows/macOS/mobile/TV Moonlight would initially receive instructions and supported pairing information through a web portal, not an invented native NOW client.
 
+## Default first-release decision: one sign-in, not two
+
+**Recommendation for the first supported Linux-client release:** Use the existing official **Tailscale sign-in as the only new-account login required** for remote client setup. Do not require a separate NOW website identity, registration, or password. On a client with an authorized and working Tailscale connection, account login can be **zero steps**. If Tailscale is disconnected or the device is unapproved, direct users to the official sign-in/approval process. Local-LAN setup continues without Tailscale.
+
+**Host discovery without a website:** NOW reads the local Tailscale peer inventory (or supported local API) and attempts bounded read-only discovery of a narrowly scoped NOW host agent at a documented, fixed tailnet-only endpoint on accessible peers. Only a server with a valid, authenticated NOW service response enters the **My computers** list; a peer appearing in `tailscale status` is *not* evidence that it runs NOW. Store a stable server public identity/fingerprint, advertised streaming backend and full MagicDNS hostname locally. Hostname/IP changes may require rediscovery, but do not require users to memorize them. Discovery must be rate-limited, respect Tailscale grants, avoid probing unrelated network segments and not assume every tailnet peer is a server.
+
+**Control vs streaming:** The client talks to the host's restricted NOW agent using authenticated HTTPS over Tailscale for discovery, pairing requests, capabilities and status. The host uses Tailscale's LocalAPI/WhoIs to bind incoming connections to real tailnet node/user identity, plus NOW's own owner-approved per-device authorization before granting sensitive actions. No raw Wolf, Sunshine, Docker, SSH or root management interfaces should be exposed to ordinary clients. Streaming itself is **Moonlight directly to Wolf/Sunshine over Tailscale** (or LAN), not proxied through an account site or the NOW agent.
+
+**First-time Moonlight pairing:** Network authorization is not streaming authorization. A Moonlight client must independently pair with the selected streaming host and keep its **own private certificate/credential locally**. Sunshine documents an authenticated host-side pairing API and Wolf has a restricted Unix-socket pairing interface for versions that actually support it. NOW should attempt a guided pairing handshake only after verified device identity and an explicit owner authorization on the host or an existing trusted administrator device. The final design may show one confirmation/PIN step; **do not promise truly silent pairing until the actual external Moonlight client and pinned host versions support it and adversarial tests pass**. Never upload or sync client private keys, host admin passwords, Tailscale keys or pairing secrets into a website registry.
+
+**Reconnection:** Reuse persisted Tailscale enrollment, the saved server ID/hostname and the locally paired Moonlight certificate. The intended normal repeat experience is **open NOW → Play**, with no login. Reauthentication, device approvals, lost keys, changed network grants or a replaced host may occasionally require interaction.
+
+**Cross-tailnet access:** A person outside the owner's tailnet still needs explicit machine-sharing invitation/acceptance (or equivalent policy) and owner-approved streaming pairing. A valid NOW login cannot silently bypass those steps. Keep client/host authorization separate from any future NOW account.
+
+**Site policy:** A temporary development website may later offer an optional account/registry for cross-device server lists, invitations and settings. It does **not** make Tailscale sign-in disappear and should not become mandatory for LAN or same-tailnet clients. Tailscale OAuth app device provisioning is alpha and **single-tailnet only** as of its June 24, 2026 documentation; it is not an acceptable general cross-customer onboarding mechanism. Users own their tailnets, not a shared developer-controlled tailnet.
+
+External reference docs: [Tailscale node identity/WhoIs](https://tailscale.com/docs/concepts/tailscale-identity), [Tailscale machine sharing](https://tailscale.com/docs/features/sharing), [Tailscale OAuth provisioning limitations](https://tailscale.com/docs/features/oauth-apps/device-provisioning), [Sunshine pairing API](https://docs.lizardbyte.dev/projects/sunshine/master/md_docs_2api.html), [Wolf pairing API](https://games-on-whales.github.io/wolf/stable/dev/api.html).
+
 ## First-class user journeys
 
 ### A. Register a new home server (opt-in cloud path)
 
 1. Run NOW on the intended supported Linux server. Choose **Set up this PC as a server**.
+   **First-release path:** local install and Tailscale setup do **not** require creating a NOW cloud account; the optional steps 6-7 below are a separate future extension.
 2. Read-only preflight detects distro/architecture, available GPU encode path, kernel/driver capabilities, memory/storage, Tailscale status, Docker/container runtime, audio/input capabilities, network/port conflicts and existing streaming installs. Display exactly what must change, with clear unsupported/error states.
 3. User chooses **Stream my existing desktop (Sunshine)** or **Create an independent desktop (Wolf)**. The wizard configures *one primary streaming host per default port set*; do not start two conflicting streaming hosts automatically.
 4. User approves required OS changes. An explicitly authorized, narrowly scoped local server manager installs/pins components, configures services, preserves existing state and has an executable rollback plan. Avoid arbitrary privileged commands from clients or web.
@@ -35,24 +54,26 @@ The first install target should be a tested subset of Ubuntu/Pop!_OS 24.04 and c
 7. Optionally register a display name, random stable server ID, Tailscale fully qualified MagicDNS name, supported capabilities and narrow, non-sensitive health/version information. Show an explicit privacy notice. There must be no inbound public listener required for cloud registration; status reporting is outbound HTTPS.
 8. After a second device actually plays a verified stream, mark streaming setup complete. A running process/container alone is insufficient.
 
-### B. Add a new client computer to the same account
+### B. Add a new client computer (first-release Tailscale-first path)
 
-1. Install NOW and click **Sign in to NOW**. Authenticate through system browser with a standard public-client flow (authorization code + PKCE), or a secure device-code flow where callbacks are unavailable; exact auth provider TBD. The website could be hosted on any temporary development hostname, but no deployment is implied here.
-2. NOW obtains an account-scoped server list over HTTPS and offers **My Gaming PC**, **Family Desktop**, etc. It auto-fills server identity, advertised apps, MagicDNS FQDN, and non-secret preferences. No manual IP or SSH username should be needed for first streaming.
-3. If Tailscale is already installed and authorized in the matching tailnet, check live reachability. If not, guide official Tailscale installation and user sign-in, with the right tailnet or Tailscale machine-share invitation. **NOW website login alone does not enroll a machine in Tailscale**.
-4. Resolve the server's full MagicDNS name, with an observed Tailscale address as an optional diagnostic fallback. Never use a hard-coded home LAN IP as the canonical server identity.
-5. Ensure Moonlight is installed/selected. Offer native Moonlight pairing to Sunshine or Wolf; a PIN must be approved by an already-authorized host administrator or via a dedicated, authenticated manager operation. Do not bypass pairing or copy a shared long-lived pairing secret from the website.
-6. Verify real playback, audio/input as applicable, disconnect/reconnect, and save the local client configuration securely.
+1. Install NOW on a compatible Linux client. If Tailscale is already installed and authorized, reuse its existing device session and skip account sign-in.
+2. Otherwise use NOW's **Connect securely** action to launch the **official Tailscale sign-in flow** once. The client machine receives a device identity from Tailscale. The user does not enter any host IP, tailnet name, SSH user or Moonlight PIN into NOW account settings. If device approval is enabled, an authorized tailnet administrator still has to approve the device.
+3. NOW enumerates only reachable/authorized Tailscale peers and detects NOW hosts through a narrowly scoped, authenticated read-only service check. Use the full MagicDNS hostname and stable host identity; don't mistake a generic Tailscale peer for a compatible host.
+4. Display **My computers** with approved server names and streaming backend. The user selects a host (or auto-selects their only approved host).
+5. Start Moonlight pairing on this client. Route the pairing request to the host manager for **explicit owner authorization**. Prefer a one-click owner approval instead of manual copy/paste; verify actual support in the installed Moonlight/Wolf/Sunshine versions before hiding the PIN.
+6. Verify picture, audio/input and reconnection. Save only local client identity and non-secret server preferences; subsequent use should be **open NOW → Play**.
 
-On later sign-ins, NOW should restore its server list and preferences automatically. Tailscale and Moonlight local device credentials persist under their own security models; the registry must not copy them between devices.
+**First-setup interaction budget:** one Tailscale sign-in **if needed**, plus a device approval and/or a host pairing confirmation **when security requires it**. Those confirmations are not additional account logins. Account reuse or LAN-only operation may have no login at all. The app must not promise unattended access to a server the owner has not authorized.
+
+**Future optional website path:** A NOW account could synchronize a list of approved server identities across newly installed clients, but it must not replace official Tailscale enrollment, host authorization, or native Moonlight pairing. It should not be the default in the single-sign-in release.
 
 ### C. Share a server with another person
 
-A second NOW account is **not** automatically a member of the owner's Tailscale network. Treat granting access as a distinct owner approval:
-- NOW owner authorizes the other person in the NOW account/registry layer.
+A recipient does not need a NOW website account in the first-release path. Their Tailscale identity is still **not** automatically a member of the owner's Tailscale network. Treat granting access as a distinct owner approval:
+- NOW host owner explicitly authorizes the recipient's device for streaming; an optional future account/registry layer may supplement but not replace this approval.
 - Tailnet owner uses Tailscale's supported **share a machine** invitation (or an intentionally configured same-tailnet invitation/policy) so the recipient can reach only authorized resources. The recipient accepts and signs in using their own Tailscale identity.
 - Wolf/Sunshine pairing is approved separately. For Wolf, per-person desktop/session authorization and isolation require additional validation at the native Moonlight/host boundary; NOW UI filtering alone is not security.
-- Show revoke access in the UI and clearly distinguish NOW account revocation, Tailscale network permission and Moonlight paired-device revocation.
+- Show revoke access in the UI and clearly distinguish NOW device authorization, Tailscale network permission, Moonlight paired-device revocation and any later website-account revocation.
 
 A household multi-user product is a later security milestone, not something guaranteed by creating two Wolf containers.
 
@@ -103,7 +124,9 @@ A development login screen should be strictly utilitarian. Suggested labels: **S
 
 **Phase 2 — Tailscale guided connectivity:** official user sign-in, reuse existing enrollment, hostname discovery, authorized reachability tests, Moonlight PIN workflow and remote reconnect verification. Existing-server migration must remain non-destructive.
 
-**Phase 3 — Optional account/registry proof:** server challenge/linking, secure web login, sign in from a second NOW client, server list sync, automatic hostname resolution and a full client-stream test. Server management stays private; website downtime does not block known local clients.
+**Phase 3 — Automatic client discovery and host pairing:** signed/authorized host identity, narrow tailnet-only discovery and host status, verified Tailscale device identity, owner-approved Moonlight pairing, local credential persistence, and a real client-stream test. No NOW website login required.
+
+**Phase 3b — Optional account/registry proof (later):** separate hosted sign-in, server challenge/linking, metadata sync and account recovery; never require this for the Tailscale-first or LAN-only journey. Server management stays private; website downtime does not block known local clients.
 
 **Phase 4 — Other backend, maintenance/recovery and outside testing:** validate Wolf/Sunshine interoperability decisions, safe version pins, observability, backup/restore, broken-network UX and external-network playback. Then invite limited real users to measure time-to-first-stream and support requests.
 
@@ -114,7 +137,7 @@ A development login screen should be strictly utilitarian. Suggested labels: **S
 - Fresh supported Linux machine completes preflight with useful actionable errors.
 - Re-running an interrupted setup is idempotent; installed unrelated services and data remain untouched.
 - One streaming host works with Moonlight; an actual picture/input test succeeds.
-- A new client signs into NOW and sees its registered server without typing an IP.
+- A new client signs into Tailscale if necessary, automatically discovers its authorized NOW server without typing an IP, and does not need a separate NOW website account.
 - Tailscale enrollment (if needed) is user-authorized through Tailscale; denied access remains denied even with a valid NOW website session.
 - Moonlight pairing is device-specific and owner-approved; revocation can be tested.
 - Client reconnect works from a genuinely separate outside-LAN network.

@@ -856,7 +856,17 @@ static void open_web_gaming(int settings){
  }
  browser_open(url);
 }
-static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;open_web_gaming(1);}
+/* Settings button may use the currently edited URL before it is saved. */
+static void on_web_gaming_settings(void*w,void*p){
+ (void)w;
+ if(!p){open_web_gaming(1);return;}
+ const char*base=gtk_entry_get_text(GTK_ENTRY(p));
+ char url[768];
+ if(!now_web_gaming_url(base,1,url,sizeof url)){
+  say("SET A VALID WEB GAMING URL FIRST");return;
+ }
+ browser_open(url);
+}
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.
  * The client has no Docker privileges and does not manage Wolf itself. */
 static void on_web_gaming_maintenance(void*w,void*p){
@@ -1255,7 +1265,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
- g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,web_field,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  add(col,label("SERVICES","modalheading"),0);

@@ -1190,6 +1190,13 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
+ add(col,label("TRAY DESKTOP LABEL","modalheading"),0);
+ add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
+ char desktop_label[128];tray_desktop_caption(desktop_label,sizeof desktop_label);
+ GtkWidget*desktop_caption_entry=gtk_entry_new();
+ gtk_entry_set_max_length(GTK_ENTRY(desktop_caption_entry),48);
+ gtk_entry_set_text(GTK_ENTRY(desktop_caption_entry),desktop_label);
+ add(col,desktop_caption_entry,0);
  add(col,label("SERVICES","modalheading"),0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
@@ -1239,6 +1246,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     }
     snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
     snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
+    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
+      tray_desktop_caption_save(new_caption);
     config_save();tray_build_menu();
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
     reflow(dimensions.width>0?dimensions.width:660);

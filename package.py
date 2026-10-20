@@ -17,6 +17,7 @@ shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
 shutil.copy2(root/'src/find-now-hosts.py',pkg/'usr/lib/optiplex-now/find-now-hosts.py')
+shutil.copy2(root/'src/now-owner-approvals.py',pkg/'usr/lib/optiplex-now/now-owner-approvals.py')
 (pkg/'usr/lib/optiplex-now/find-now-hosts.py').chmod(0o755)
 shutil.copy2(root/'server/now-host-agent.py',pkg/'usr/lib/optiplex-now/now-host-agent')
 (pkg/'usr/lib/optiplex-now/now-host-agent').chmod(0o755)

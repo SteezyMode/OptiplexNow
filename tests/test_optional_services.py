@@ -32,7 +32,7 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):
-        self.assertIn("#define CONFIG_COUNT 16", SOURCE)
+        self.assertIn("#define CONFIG_COUNT 17", SOURCE)
         self.assertIn("#define FEATURED_MASK_SETTING 15", SOURCE)
         self.assertIn("#define NEW_INSTALL_FEATURED_MASK 207u", SOURCE)
         self.assertIn("#define EXISTING_INSTALL_FEATURED_MASK 255u", SOURCE)

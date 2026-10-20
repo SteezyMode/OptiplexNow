@@ -51,6 +51,32 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
         self.assertNotIn("wolf", args)
         self.assertNotIn("rm", args)
 
+    def test_preserves_existing_no_new_privileges_hardening(self):
+        info = sample()
+        # Observed Oct 20 reference server: no added capabilities, dropped ALL,
+        # a named volume without mode suffix, and no-new-privileges.
+        info["HostConfig"]["CapAdd"] = None
+        info["HostConfig"]["SecurityOpt"] = ["no-new-privileges"]
+        info["HostConfig"]["Binds"] = ["moonlightweb-test-data:/data"]
+        info["Mounts"][0]["Mode"] = ""
+        args = mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+        self.assertIn("moonlightweb-test-data:/data", args)
+        self.assertIn("--security-opt", args)
+        position = args.index("--security-opt")
+        self.assertEqual(args[position + 1], "no-new-privileges")
+        self.assertEqual(args.count("--security-opt"), 1)
+        self.assertNotIn("--cap-add", args)
+        self.assertIn("ALL", args)
+
+    def test_rejects_unrecognized_security_options(self):
+        for value in (["apparmor=unconfined"], ["no-new-privileges", "label=disable"],
+                      ["no-new-privileges=false"]):
+            with self.subTest(value=value):
+                info = sample()
+                info["HostConfig"]["SecurityOpt"] = value
+                with self.assertRaisesRegex(RuntimeError, "security options"):
+                    mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+
     def test_rejects_bind_mount_change(self):
         info = sample()
         info["Mounts"][0]["Type"] = "bind"

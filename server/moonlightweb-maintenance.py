@@ -78,14 +78,17 @@ def recreate_args(info, image_id, env_file):
     # Preserve supported memory and fractional CPU quotas exactly.
     # Docker reports the memory limit in bytes and CPU quota in nanocpus.
     memory = host.get("Memory") or 0
+    memory_swap = host.get("MemorySwap") or 0
     nano_cpus = host.get("NanoCpus") or 0
     if (type(memory) is not int or memory < 0
+            or type(memory_swap) is not int or memory_swap < -1
+            or (memory_swap not in (0, -1) and (not memory or memory_swap < memory))
             or type(nano_cpus) is not int or nano_cpus < 0):
         raise RuntimeError("Invalid Docker resource limits")
     # Avoid silently dropping other resource controls we don't yet recreate.
     if host.get("CpuShares") or any(host.get(key) for key in (
             "CpuPeriod", "CpuQuota", "CpuRtPeriod", "CpuRtRuntime",
-            "CpusetCpus", "CpusetMems", "MemoryReservation", "MemorySwap",
+            "CpusetCpus", "CpusetMems", "MemoryReservation",
             "PidsLimit", "OomKillDisable", "CgroupParent", "BlkioWeight")
             ) or host.get("MemorySwappiness") not in (None, -1):
         # -1 is Docker's default (unspecified) swappiness.
@@ -110,6 +113,8 @@ def recreate_args(info, image_id, env_file):
         args.extend(["--security-opt", option])
     if memory:
         args.extend(["--memory", str(memory) + "b"])
+    if memory_swap:
+        args.extend(["--memory-swap", str(memory_swap) + "b" if memory_swap > 0 else "-1"])
     if nano_cpus:
         # Format without floating-point rounding; 1_000_000_000 == 1 CPU.
         cpu_limit = ("%d.%09d" % divmod(nano_cpus, 1_000_000_000)).rstrip("0").rstrip(".")

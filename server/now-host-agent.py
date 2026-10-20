@@ -81,15 +81,19 @@ def peer_authorized(address, runner=None):
         node = who.get("Node")
         if not isinstance(node, dict) or not (node.get("StableID") or node.get("ID")):
             return False
-        # Different releases may return IPs as Addresses or AllowedIPs.
-        ips = node.get("Addresses") or node.get("AllowedIPs") or []
+        # WhoIs Node.Addresses are addresses assigned to the node. Do
+        # NOT use AllowedIPs: these can include routed subnets and must
+        # never grant device identity to traffic merely behind a route.
+        ips = node.get("Addresses")
         if not isinstance(ips, list):
             return False
         for raw in ips:
             try:
-                if ipaddress.ip_address(address) in ipaddress.ip_network(raw, strict=False):
+                assigned = ipaddress.ip_network(raw, strict=False)
+                if (assigned.version == 4 and assigned.prefixlen == 32
+                        and assigned.network_address == ipaddress.ip_address(address)):
                     return True
-            except ValueError:
+            except (TypeError, ValueError):
                 continue
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired):
         pass

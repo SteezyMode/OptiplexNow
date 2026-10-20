@@ -24,6 +24,8 @@
 
 **Boundary:** NOW owns client UI, configuration, onboarding and (eventually) host orchestration. Wolf owns streaming/sessions, Moonlight is a client, Studio owns creative projects and Codex. Don't merge these responsibilities just because the reference machine runs them all.
 
+The experimental opt-in NOW Host discovery helper and client peer picker are documented in [now-host-discovery](docs/now-host-discovery.md). They are not an installer, authentication replacement, or implemented pairing flow. Do not start the agent on the production OptiPlex.
+
 ## Build/test on a disposable development machine
 
 Target: amd64 Ubuntu/Pop!_OS 24.04 (other distributions unverified). Install the build requirements in [README](README.md), including GCC, make, binutils, Python, libssl-dev, Pillow and font-download prerequisites.

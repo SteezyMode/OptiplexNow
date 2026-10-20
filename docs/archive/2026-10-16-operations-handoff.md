@@ -4,7 +4,7 @@ This record preserves earlier observations and is **not** a current release, ser
 
 # Operations handoff — 2026-10-16
 
-> **Historical server inventory (captured 2026-10-16):** This file intentionally preserves dated host/service/auth observations, but its statements that `main` was v1.11.9 and v1.12.0 was only a draft are **superseded**. GitHub now has published [v1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.13.0) and v1.12.0 releases. For release state, open PRs, separation from Studio and next-session instructions, read [Current Status](CURRENT-STATUS.md). Do not treat obsolete future-tense packaging statements here as undone/unshipped without checking the release.
+> **Historical and anonymized server inventory (captured 2026-10-16):** Host addresses and operator account examples are redacted for portability; the original Git history may still contain the older values.\n\n> **Historical server inventory (captured 2026-10-16):** This file intentionally preserves dated host/service/auth observations, but its statements that `main` was v1.11.9 and v1.12.0 was only a draft are **superseded**. GitHub now has published [v1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.13.0) and v1.12.0 releases. For release state, open PRs, separation from Studio and next-session instructions, read [Current Status](CURRENT-STATUS.md). Do not treat obsolete future-tense packaging statements here as undone/unshipped without checking the release.
 
 
 This is an operator handoff, not a deployment claim. Use alongside [server-setup.md](server-setup.md) and [next-session.md](next-session.md). This project is a **personal** Linux client for an existing home server.
@@ -20,20 +20,20 @@ This is an operator handoff, not a deployment claim. Use alongside [server-setup
 ## Reference server observed on 2026-10-16
 
 - Host: Pop!_OS 24.04, OptiPlex 7070 SFF, i7-9700, 32 GiB, NVIDIA RTX 3050 LP 6 GiB. Hardware from existing operator records; live hardware inventory was **not** repeated during this session.
-- LAN SSH: `optiplex@192.168.40.212`.
-- Tailscale SSH/streaming: `optiplex@100.121.156.34`. A stable MagicDNS name is preferable to embedding either IP in future releases.
-- Public browser-gaming URL: `https://games.monumentrisk.com`, served separately from Tailscale by Caddy.
+- LAN SSH: `OPERATOR@LAN_HOST`.
+- Tailscale SSH/streaming: `OPERATOR@TAILSCALE_HOST`. A stable MagicDNS name is preferable to embedding either IP in future releases.
+- Public browser-gaming URL: `https://REFERENCE_WEB_GAMING_HOST`, served separately from Tailscale by Caddy.
 - Running Docker containers **observed** (not proof of pending image updates):
 
 | Container | Image | Compose project / file |
 | --- | --- | --- |
 | wolf | ghcr.io/games-on-whales/wolf:stable | standalone |
 | moonlightweb | ghcr.io/linckosz/moonlight-web:latest | standalone |
-| slskd-vpn | slskd/slskd:0.25.1 | music-vpn / `/home/optiplex/music-vpn/compose.json` |
+| slskd-vpn | slskd/slskd:0.25.1 | music-vpn / `/home/OPERATOR/music-vpn/compose.json` |
 | qbittorrent-vpn | lscr.io/linuxserver/qbittorrent:5.1.4 | music-vpn / same file |
 | music-vpn | qmcgaw/gluetun:v3.41 | music-vpn / same file |
 | droppedneedle | droppedneedle/droppedneedle:latest | music-vpn / same file |
-| open-webui | ghcr.io/open-webui/open-webui:main | searxng / `/home/optiplex/searxng/compose.yaml` |
+| open-webui | ghcr.io/open-webui/open-webui:main | searxng / `/home/OPERATOR/searxng/compose.yaml` |
 | searxng | searxng/searxng:latest | searxng / same file |
 
 - Wolf state: `/etc/wolf` bind-mounted to the container. Its NVIDIA driver volume was named `wolf-nvidia-driver-595.104.02` when inspected. **Do not** delete volumes while troubleshooting.
@@ -45,18 +45,18 @@ This is an operator handoff, not a deployment claim. Use alongside [server-setup
 
 ## Authentication and remote administration
 
-**Normal Web Gaming:** `https://games.monumentrisk.com`. MoonlightWeb 0.3.1 accepts a one-time access PIN or a reusable certificate-token file and saves a browser session if **Remember me** is enabled. The certificate-token file is a bearer credential; do not add it to the public codebase.
+**Normal Web Gaming:** `https://REFERENCE_WEB_GAMING_HOST`. MoonlightWeb 0.3.1 accepts a one-time access PIN or a reusable certificate-token file and saves a browser session if **Remember me** is enabled. The certificate-token file is a bearer credential; do not add it to the public codebase.
 
-**Working LAN admin:** `https://192.168.40.212:8443/admin` after enrolling the browser and unlocking admin with the configured password. The public `/admin` URL instead returned the ordinary Wolf/Web Gaming UI in operator testing. Do **not** treat `games.monumentrisk.com/admin` as a working admin shortcut.
+**Working LAN admin:** `https://LAN_HOST:8443/admin` after enrolling the browser and unlocking admin with the configured password. The public `/admin` URL instead returned the ordinary Wolf/Web Gaming UI in operator testing. Do **not** treat `games.monumentrisk.com/admin` as a working admin shortcut.
 
-**Remote administration constraint:** MoonlightWeb v0.3.1's admin unlock checks for RFC1918/loopback/link-local addresses and does not classify Tailscale's `100.64.0.0/10` addresses as LAN. A direct `https://100.121.156.34:8443/admin` request can reach the service but is **not a verified way to unlock admin**.
+**Remote administration constraint:** MoonlightWeb v0.3.1's admin unlock checks for RFC1918/loopback/link-local addresses and does not classify Tailscale's `100.64.0.0/10` addresses as LAN. A direct `https://TAILSCALE_HOST:8443/admin` request can reach the service but is **not a verified way to unlock admin**.
 
 **Draft 1.12.0 solution:** Settings → Web Gaming Admin starts an SSH local forward from the client to server loopback port 8443, then opens `https://127.0.0.1:<local-port>/admin`. The port is deterministic per SSH user/host, in the range 20000–39999; the bind address is loopback only. The helper reuses an existing verified SSH ControlMaster where possible. It requires reachable SSH (generally Tailscale), prior SSH key authorization, and a default browser with `xdg-open`. The first connection may need browser acceptance of MoonlightWeb's self-signed TLS certificate. **This helper is implemented in the draft branch but not yet live-tested.**
 
 Manual fallback while abroad (run on the client after Tailscale is connected):
 
 ```sh
-ssh -f -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18443:127.0.0.1:8443 optiplex@100.121.156.34
+ssh -f -N -o ExitOnForwardFailure=yes -L 127.0.0.1:18443:127.0.0.1:8443 OPERATOR@TAILSCALE_HOST
 ```
 
 Then open `https://127.0.0.1:18443/admin`. This uses SSH authorization rather than making public internet visitors eligible for admin privilege.
@@ -91,11 +91,11 @@ Do not claim that any of these are automatic today.
 Run one command at a time on the reference client:
 
 ```sh
-ssh optiplex@100.121.156.34 'docker ps --format "{{.Names}} | {{.Image}} | {{.Status}}"'
+ssh OPERATOR@TAILSCALE_HOST 'docker ps --format "{{.Names}} | {{.Image}} | {{.Status}}"'
 ```
 
 ```sh
-ssh optiplex@100.121.156.34 'systemctl is-active wolf-start docker caddy jellyfin tailscaled'
+ssh OPERATOR@TAILSCALE_HOST 'systemctl is-active wolf-start docker caddy jellyfin tailscaled'
 ```
 
 If login fails: check Tailscale or LAN routing before changing Wolf. If Web Gaming fails while native Moonlight works: check Caddy and MoonlightWeb health. If native Moonlight fails while website works: inspect Wolf logs/pairing and GPU availability; do not delete Wolf or MoonlightWeb volumes as a first attempt.

@@ -67,7 +67,8 @@ static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_free,*drive_combo;
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
-static GtkWidget *wizard_wolf_label=NULL;
+static GtkWidget *wizard_wolf_label=NULL,*wizard_moonlight_label=NULL;
+static int moonlight_install_running=0;
 static char wolf_probe_host[512];
 static GtkWidget *service_labels[3]={NULL,NULL,NULL};
 #define MAX_DRIVES 16
@@ -709,18 +710,77 @@ static void launch_torrents(void){
  char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
  browser_open(url);
 }
-static void install_moonlight(void){
- if(!now_program_exists("flatpak")){
-   say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
+/* User-consented, asynchronous installation. No terminal, root shell or
+ * arbitrary package installation; Flatpak runs in the current user's scope. */
+static void moonlight_install_status(const char *message){
+ say(message);
+ if(wizard_moonlight_label)gtk_label_set_text(GTK_LABEL(wizard_moonlight_label),message);
+ if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),message);
+ if(games_state)gtk_label_set_text(GTK_LABEL(games_state),moonlight_mode_name());
+}
+static void moonlight_install_completed(GObject *source,GAsyncResult *result,gpointer stage) {
+ GError *error=NULL;
+ gboolean completed=g_subprocess_wait_check_finish(G_SUBPROCESS(source),result,&error);
+ if(!completed){
+  moonlight_install_running=0;
+  if(error)g_error_free(error);
+  moonlight_install_status("MOONLIGHT INSTALL FAILED. CHECK FLATPAK AND RETRY");
+  return;
+ }
+ if(GPOINTER_TO_INT(stage)==1){
+  GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE |
+      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+      "flatpak","install","--user","--noninteractive","--assumeyes",
+      "flathub","com.moonlight_stream.Moonlight",NULL);
+  if(!process){
+   moonlight_install_running=0;
+   if(error)g_error_free(error);
+   moonlight_install_status("COULD NOT START MOONLIGHT INSTALL");
    return;
+  }
+  moonlight_install_status("INSTALLING MOONLIGHT FOR THIS USER...");
+  g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(2));
+  g_object_unref(process);
+  return;
  }
- /* The action is explicitly user initiated. Flatpak asks to install the remote and package. */
- char*args[]={"sh","-c","flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install --user flathub com.moonlight_stream.Moonlight; printf '\\nPress Enter to close...'; read _",NULL};
- if(terminal_launch(args)){
-   say("COMPLETE INSTALLATION IN THE TERMINAL");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"COMPLETE INSTALLATION IN THE TERMINAL");
+ moonlight_install_running=0;
+ if(flatpak_has("com.moonlight_stream.Moonlight")){
+  moonlight_install_status("MOONLIGHT INSTALLED. CONTINUE IN SETUP");
+ }else moonlight_install_status("MOONLIGHT INSTALL NOT DETECTED. RETRY INSTALL");
+}
+static void install_moonlight(void){
+ if(moonlight_install_running){moonlight_install_status("MOONLIGHT INSTALL ALREADY RUNNING");return;}
+ if(has_moonlight()){moonlight_install_status("MOONLIGHT IS ALREADY INSTALLED");return;}
+ if(!now_program_exists("flatpak")){
+  say("FLATPAK NOT INSTALLED. INSTALL FLATPAK USING YOUR DISTRO PACKAGE MANAGER");
+  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS NEEDED FOR AUTOMATIC MOONLIGHT INSTALL");
+  return;
  }
+ GtkWidget *dialog=gtk_message_dialog_new(GTK_WINDOW(win),GTK_DIALOG_MODAL,
+     GTK_MESSAGE_QUESTION,GTK_BUTTONS_NONE,
+     "Install Moonlight for this Linux user through Flathub?");
+ gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+     "OptiPlex NOW will add the official Flathub remote if missing and install Moonlight. "
+     "Existing Moonlight installations are not replaced. No server changes are made.");
+ gtk_dialog_add_buttons(GTK_DIALOG(dialog),"CANCEL",GTK_RESPONSE_CANCEL,
+                        "INSTALL MOONLIGHT",GTK_RESPONSE_OK,NULL);
+ int response=gtk_dialog_run(GTK_DIALOG(dialog));
+ gtk_widget_destroy(dialog);
+ if(response!=GTK_RESPONSE_OK)return;
+ GError *error=NULL;
+ GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE |
+     G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+     "flatpak","remote-add","--user","--if-not-exists","flathub",
+     "https://flathub.org/repo/flathub.flatpakrepo",NULL);
+ if(!process){
+  if(error)g_error_free(error);
+  moonlight_install_status("COULD NOT CONFIGURE FLATHUB");
+  return;
+ }
+ moonlight_install_running=1;
+ moonlight_install_status("PREPARING FLATHUB...");
+ g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(1));
+ g_object_unref(process);
 }
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
@@ -1276,14 +1336,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
+ /* Streaming needs a reachable host, never SSH credentials. */
+ int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)));
+ const char*optional_user=gtk_entry_get_text(GTK_ENTRY(c->user));
+ if(*optional_user && !now_valid_user(optional_user))ok=0;
  gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->server_page,ok);
  gtk_label_set_text(GTK_LABEL(c->notice),"");
 }
 static void wizard_save(Wizard*c){
  const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
                       gtk_entry_get_text(GTK_ENTRY(c->relay)),gtk_entry_get_text(GTK_ENTRY(c->relayuser)),gtk_entry_get_text(GTK_ENTRY(c->wake))};
- if(!now_valid_host(values[0])||!now_valid_user(values[1])){
+ if(!now_valid_host(values[0])||(*values[1]&&!now_valid_user(values[1]))){
    return;
  }
  for(int i=0;i<5;i++){
@@ -1350,7 +1413,7 @@ static void find_server(Wizard*c){
  int response=gtk_dialog_run(GTK_DIALOG(d)),selected=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
  if(response==GTK_RESPONSE_OK && selected>=0 && selected<count){
    gtk_entry_set_text(GTK_ENTRY(c->host),addresses[selected]);
-   gtk_label_set_text(GTK_LABEL(c->notice),"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+   gtk_label_set_text(GTK_LABEL(c->notice),"SERVER SELECTED. SSH USER IS OPTIONAL FOR STREAMING.");
  }
  gtk_widget_destroy(d);
 }
@@ -1423,7 +1486,7 @@ static void wizard_service_check(void*w,void*p){
  if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
  else {services_inflight=0;free(r);}
 }
-static void wizard_destroy(void*w,void*p){(void)w;wizard_wolf_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
+static void wizard_destroy(void*w,void*p){(void)w;wizard_wolf_label=NULL;wizard_moonlight_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
 static void on_wizard(void*w,void*p){(void)w;(void)p;
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
@@ -1449,7 +1512,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SSH USER","helper"),0);
+ add(two,label("SSH USER (OPTIONAL — FILES / ADMIN ONLY)","helper"),0);
  c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"optiplex");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
@@ -1457,10 +1520,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
- /* Page 3: pair SSH keys once. Relay is optional. */
+ /* Page 3: optional SSH and relay management; not required for games. */
  GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);
- add(three,label("SECURE ACCESS","modalheading"),0);
- add(three,label("Existing SSH keys are reused.","helper"),0);
+ add(three,label("OPTIONAL SERVER ADMINISTRATION","modalheading"),0);
+ add(three,label("Skip this page for Steam and Wolf streaming. SSH is only for files, maintenance and administrative controls.","helper"),0);
  wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
  add(three,label("WAKE RELAY (OPTIONAL)","helper"),0);
  c->relay=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relay),"Relay Tailscale IP");gtk_entry_set_text(GTK_ENTRY(c->relay),cfg[2]);add(three,c->relay,0);
@@ -1471,7 +1534,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  /* Page 4: reuse the existing installed Moonlight, including AppImages. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("GAMES","modalheading"),0);
- c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
+ c->game_state=label(moonlight_mode_name(),"gameshint");wizard_moonlight_label=c->game_state;add(four,c->game_state,0);
  c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
  c->games_page=four;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");

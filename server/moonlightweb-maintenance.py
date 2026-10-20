@@ -66,10 +66,15 @@ def recreate_args(info, image_id, env_file):
     if "com.docker.compose.project" in (cfg.get("Labels") or {}):
         raise RuntimeError("Compose-managed service: update through its Compose project")
     unsupported = ("Devices", "DeviceRequests", "Mounts", "PortBindings", "Links",
-                   "ExtraHosts", "Dns", "DnsSearch", "SecurityOpt", "Tmpfs",
+                   "ExtraHosts", "Dns", "DnsSearch", "Tmpfs",
                    "VolumesFrom", "GroupAdd", "Sysctls", "Ulimits")
     if any(host.get(key) for key in unsupported):
         raise RuntimeError("Custom Docker options found; refusing to drop them")
+    security_opts = host.get("SecurityOpt") or []
+    # This is a defense-in-depth setting in the reference deployment.
+    # Preserve it exactly; reject other/unrecognized security overrides.
+    if security_opts not in ([], ["no-new-privileges"]):
+        raise RuntimeError("Unsupported Docker security options; refusing to drop them")
     if host.get("Memory", 0) or host.get("NanoCpus", 0) or host.get("CpuShares", 0):
         raise RuntimeError("Custom resource limits found; refusing changes")
     binds = host.get("Binds") or []
@@ -88,6 +93,8 @@ def recreate_args(info, image_id, env_file):
         args.extend(["--cap-drop", cap])
     for cap in caps_add:
         args.extend(["--cap-add", cap])
+    for option in security_opts:
+        args.extend(["--security-opt", option])
     spec = volume + ":/data"
     if mode:
         spec += ":" + mode

@@ -16,6 +16,7 @@ There is **one released application (NOW), one separate Studio application, and 
 - [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
 - [Local server preflight](server-preflight.md): development-only read-only host compatibility CLI and verification steps; not a fresh-server installer.
 - [NOW Host discovery](now-host-discovery.md): opt-in tailnet-only read-only host endpoint, client picker, and isolated contract tests.
+- [Owner-approved pairing core](pairing-authorization.md): non-networked request/approval state machine and its trusted-host integration boundaries; native Moonlight pairing not implemented.
 - [One-sign-in onboarding design](SERVER-ONBOARDING-AND-TAILSCALE.md): proposal for account-free Tailscale-first discovery and owner-approved Moonlight pairing.
 
 ## Planned, not shipped

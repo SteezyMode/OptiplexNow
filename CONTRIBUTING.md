@@ -28,6 +28,8 @@ The optional `server/server-preflight.py` provides a read-only **local** compati
 
 The separate `src/now_discovery_ui.c/.h` and `src/server_preflight_ui.c/.h` own their GTK dialogs. `src/find-now-hosts.py` owns bounded Tailscale client discovery, and `server/now-host-agent.py` owns the explicitly started read-only host endpoint. The host executable is never a privileged management service or auto-enabled daemon. See [discovery prototype](docs/now-host-discovery.md) and the [client onboarding architecture](docs/SERVER-ONBOARDING-AND-TAILSCALE.md).
 
+The separate `server/now_pairing_requests.py` module implements only in-memory, owner-approved, single-use authorization decisions. It **must not** be imported into an untrusted HTTP handler as an approval operation and does not call native Moonlight pairing APIs. See [pairing authorization](docs/pairing-authorization.md).
+
 ## Build/test on a disposable development machine
 
 Target: amd64 Ubuntu/Pop!_OS 24.04 (other distributions unverified). Install the build requirements in [README](README.md), including GCC, make, binutils, Python, libssl-dev, Pillow and font-download prerequisites.

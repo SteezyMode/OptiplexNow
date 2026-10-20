@@ -15,6 +15,7 @@ typedef struct {
     GtkWidget *status;
     GtkWidget *report;
     GtkWidget *spinner;
+    GtkWidget *backend;
     GtkWidget *again;
     GSubprocess *child;
     guint timeout_id;
@@ -47,6 +48,7 @@ static void preflight_done(GObject *source, GAsyncResult *result, gpointer data)
     if (!state->closed) {
         gtk_spinner_stop(GTK_SPINNER(state->spinner));
         gtk_widget_set_sensitive(state->again, TRUE);
+        gtk_widget_set_sensitive(state->backend, TRUE);
         if (state->timed_out) {
             gtk_label_set_text(GTK_LABEL(state->status), "Check timed out");
             gtk_label_set_text(GTK_LABEL(state->report),
@@ -92,7 +94,15 @@ static void preflight_begin(PreflightUI *state) {
         return;
     }
 
-    const char *argv[] = {PREFLIGHT_PYTHON, PREFLIGHT_HELPER, NULL};
+    /* The GUI supplies only one of two statically defined values.
+     * No user-entered command or path reaches subprocess execution. */
+    const char *backend = gtk_combo_box_get_active_id(GTK_COMBO_BOX(state->backend));
+    if (!backend || (strcmp(backend, "sunshine") && strcmp(backend, "wolf"))) {
+        gtk_label_set_text(GTK_LABEL(state->status), "Choose a streaming backend");
+        return;
+    }
+    const char *argv[] = {PREFLIGHT_PYTHON, PREFLIGHT_HELPER,
+                          "--backend", backend, NULL};
     GError *error = NULL;
     state->child = g_subprocess_newv(argv,
         G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_PIPE,
@@ -110,6 +120,7 @@ static void preflight_begin(PreflightUI *state) {
         "Checking operating system, hardware, Tailscale and streaming services.\n"
         "This is a local, read-only inventory.");
     gtk_widget_set_sensitive(state->again, FALSE);
+    gtk_widget_set_sensitive(state->backend, FALSE);
     gtk_spinner_start(GTK_SPINNER(state->spinner));
 
     /* Async child I/O keeps the GTK window responsive. Timeout and window
@@ -166,6 +177,20 @@ GtkWidget *now_preflight_open(GtkWindow *parent) {
     gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
     gtk_box_pack_start(GTK_BOX(box), hint, FALSE, FALSE, 0);
 
+    GtkWidget *backend_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(box), backend_row, FALSE, FALSE, 0);
+    GtkWidget *backend_label = gtk_label_new("Plan for");
+    gtk_box_pack_start(GTK_BOX(backend_row), backend_label, FALSE, FALSE, 0);
+    state->backend = gtk_combo_box_text_new();
+    gtk_widget_set_name(state->backend, "now-preflight-backend");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->backend),
+                              "sunshine", "Sunshine - this desktop");
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->backend),
+                              "wolf", "Wolf - independent desktop");
+    gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->backend), "sunshine");
+    gtk_widget_set_hexpand(state->backend, TRUE);
+    gtk_box_pack_start(GTK_BOX(backend_row), state->backend, TRUE, TRUE, 0);
+
     GtkWidget *status_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
     gtk_box_pack_start(GTK_BOX(box), status_row, FALSE, FALSE, 0);
     state->spinner = gtk_spinner_new();
@@ -192,7 +217,8 @@ GtkWidget *now_preflight_open(GtkWindow *parent) {
     gtk_container_add(GTK_CONTAINER(scroll), state->report);
 
     GtkWidget *disclaimer = gtk_label_new(
-        "This report does not prove that video encoding or Moonlight streaming works.");
+        "Proposed actions only. Installation is unavailable. "
+        "Encoder performance, client pairing and remote streaming are not tested.");
     gtk_label_set_xalign(GTK_LABEL(disclaimer), 0.0f);
     gtk_label_set_line_wrap(GTK_LABEL(disclaimer), TRUE);
     gtk_box_pack_start(GTK_BOX(box), disclaimer, FALSE, FALSE, 0);

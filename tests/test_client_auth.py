@@ -16,7 +16,7 @@ class Result:
     def __init__(self, state=None, code=0, body=None):
         self.returncode = code
         self.stdout = body if body is not None else json.dumps(
-            {"BackendState": state, "Self": {"ID": "nPrivate"}})
+            {"BackendState": state, "Self": {"ID": "nPrivate", "TailscaleIPs": ["100.88.22.4"]}})
 
 
 class TestClientTailscaleAuth(unittest.TestCase):
@@ -45,6 +45,8 @@ class TestClientTailscaleAuth(unittest.TestCase):
         self.assertEqual(auth.classify({"BackendState": "Starting"}), "unavailable")
         self.assertEqual(auth.classify(None), "unavailable")
         self.assertEqual(auth.classify({"BackendState": "Running", "Self": []}), "unavailable")
+        self.assertEqual(auth.classify({"BackendState": "Running", "Self": {"TailscaleIPs": ["192.168.1.2"]}}), "unavailable")
+        self.assertEqual(auth.classify({"BackendState": "Running", "Self": {"TailscaleIPs": ["100.100.100.100"]}}), "connected")
 
     def test_command_failure_large_output_invalid_json_and_timeout(self):
         for proc in (
@@ -60,7 +62,7 @@ class TestClientTailscaleAuth(unittest.TestCase):
 
     def test_only_fixed_state_outputs_no_tailscale_secrets(self):
         fixture = {"BackendState": "Running", "Self": {
-            "ID": "very-secret-token", "DNSName": "private-user.tailnet"}}
+            "ID": "very-secret-token", "DNSName": "private-user.tailnet", "TailscaleIPs": ["100.99.5.23"]}}
         self.assertEqual(auth.classify(fixture), "connected")
         self.assertTrue(auth.STATES.issuperset({
             "connected", "login_required", "disconnected",

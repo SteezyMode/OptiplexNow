@@ -30,7 +30,10 @@ The reference host (Oct 20, 2026) uses:
 | Container | `moonlightweb` (standalone, not Compose-managed) |
 | Image | `ghcr.io/linckosz/moonlight-web:latest` |
 | Network | host |
-| Volume | `moonlightweb-test-data:/data:z` |
+| Volume | `moonlightweb-test-data:/data` (reference bind); `/data` volume mount mode checked |
+| Memory cap | 1073741824 bytes (1 GiB), preserved with `--memory 1073741824b` |
+| CPU cap | 1000000000 nanocpus (1 CPU), preserved with `--cpus 1` |
+| Security | `--cap-drop ALL`, `--security-opt no-new-privileges` |
 | Public URL | `https://games.monumentrisk.com` via existing Caddy |
 
 The manager inspects actual Docker state; only this narrow configuration family
@@ -38,7 +41,9 @@ is accepted. It refuses additional mounts, privileged/custom device settings,
 Compose management, custom entrypoints, unknown capabilities and unsupported
 restart policies rather than silently dropping Docker options. The reference
 host's observed `SecurityOpt=["no-new-privileges"]` is explicitly retained
-with `--security-opt no-new-privileges`; unknown security options are rejected. Do not assume
+with `--security-opt no-new-privileges`; its 1 GiB memory and 1 CPU quotas
+are recreated exactly. Unknown security options and additional unhandled
+resource controls are rejected rather than silently discarded. Do not assume
 that every MoonlightWeb deployment has this shape.
 
 ## Install/operate

@@ -40,11 +40,17 @@ The JSON schema version is currently `1`. `streaming_ready` always says `not_tes
 
 Every external invocation is from a fixed read-only allowlist with a three-second deadline and without `shell=True`. Tests inject synthetic responses and confirm that sensitive Tailscale addresses/peers and port bind addresses are not emitted.
 
+## Setup Wizard GUI (development)
+
+The native GTK setup wizard now offers **CHECK THIS COMPUTER (READ-ONLY)** on the Server page. It opens an asynchronous local report window, shows progress, allows **CHECK AGAIN**, and can be closed without keeping the wizard blocked. Checks come from the packaged `/usr/lib/optiplex-now/server-preflight` helper run through the fixed `/usr/bin/python3` interpreter, without a shell and without arguments from server settings. The helper has a 40-second overall GUI timeout; its individual allowlisted commands have 3-second limits. The dialog neither runs a privileged installer nor reads the configured remote server. A missing helper or failed run yields a plain error and does not assume a successful connection.
+
+The GUI smoke test covers dialog opening, recheck and safe early closing on isolated Xvfb. CI packages the checker, compiles the main GTK application and runs the smoke test. It does **not** confirm actual client input, Moonlight playback or the appearance on all themes/desktop sizes. The manual on-device UI and compatibility check are still required before release.
+
 ## Follow-on steps before calling this user-ready
 
 1. Run and compare the report on a **disposable** Ubuntu/Pop!_OS 24.04 NVIDIA host, including a host with Docker permissions denied.
 2. Improve evidence for encoder, audio/input and streaming ports using read-only mechanisms. Record confidence (`unknown` versus absent) rather than treating missing tools as negative evidence.
-3. Add a responsive, accessible GUI report to NOW's **New Server Setup (Planned)** entry; no terminal should be required for final consumer onboarding.
+3. Validate the new responsive GTK report on a clean supported computer, including small-screen layout and close/retry behavior; improve accessibility and presentation from observations.
 4. Implement a separate, least-privilege and explicitly authorized installer only after preflight correctness and rollback tests. Never share a general privileged Docker or Wolf control socket with the NOW web client.
 5. Obtain a genuine picture/audio/control reconnect test from Moonlight on another machine before changing `streaming_ready` semantics.
 

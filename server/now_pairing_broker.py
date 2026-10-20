@@ -81,13 +81,10 @@ def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None, hou
                 if self.headers.get("Content-Type") != "application/json":
                     self._send(415, {"error": "unsupported_media_type"})
                     return
-                if self.headers.get("Content-Length") not in ("18", "19", "20", "21", "22",
-                                                               "23", "24", "25", "26"):
-                    # A bounded payload only; contents are validated below.
-                    value = self.headers.get("Content-Length", "")
-                    if not value.isdecimal() or not 2 <= int(value) <= 64:
-                        self._send(400, {"error": "invalid_request"})
-                        return
+                value = self.headers.get("Content-Length", "")
+                if not value.isdecimal() or not 2 <= int(value) <= 64:
+                    self._send(400, {"error": "invalid_request"})
+                    return
                 data = self.rfile.read(int(self.headers["Content-Length"]))
                 try:
                     payload = json.loads(data)

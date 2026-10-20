@@ -237,9 +237,14 @@ static const char *find_appimage(void) {
  }
  return NULL;
 }
+static int find_native_moonlight(char*out,size_t cap) {
+ /* Snap's command is often missing from the desktop launcher's PATH. */
+ return now_resolve_executable("moonlight","/snap/bin/moonlight",out,cap);
+}
 static int moonlight_mode(void) {
  if(find_appimage())return 1;
- if(now_program_exists("moonlight"))return 2;
+ char executable[PATH_MAX];
+ if(find_native_moonlight(executable,sizeof executable))return 2;
  if(flatpak_has("com.moonlight_stream.Moonlight"))return 3;
  return 0;
 }
@@ -673,7 +678,11 @@ static int has_moonlight(void) {return moonlight_mode()!=0;}
 static void open_moonlight(void){
  int mode=moonlight_mode();
  if(mode==1){char*args[]={(char*)find_appimage(),NULL};now_launch(args);say("MOONLIGHT APPIMAGE OPENED");}
- else if(mode==2){char*args[]={"moonlight",NULL};now_launch(args);say("MOONLIGHT OPENED");}
+ else if(mode==2){
+  char executable[PATH_MAX];
+  if(!find_native_moonlight(executable,sizeof executable)){say("MOONLIGHT EXECUTABLE MISSING");return;}
+  char*args[]={executable,NULL};now_launch(args);say("MOONLIGHT OPENED");
+ }
  else if(mode==3){char*args[]={"flatpak","run","com.moonlight_stream.Moonlight",NULL};now_launch(args);say("MOONLIGHT OPENED");}
  else say("CHOOSE AN APPIMAGE OR INSTALL MOONLIGHT IN GAMES SETUP");
 }
@@ -685,7 +694,11 @@ static void launch_wolf_app(const char *app){
  if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");open_moonlight();return;}
  int mode=moonlight_mode();
  if(mode==1){char *args[]={(char*)find_appimage(),"stream",cfg[0],(char*)app,NULL};now_launch(args);}
- else if(mode==2){char *args[]={"moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
+ else if(mode==2){
+  char executable[PATH_MAX];
+  if(!find_native_moonlight(executable,sizeof executable)){say("MOONLIGHT EXECUTABLE MISSING");return;}
+  char*args[]={executable,"stream",cfg[0],(char*)app,NULL};now_launch(args);
+ }
  else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
  say("CONNECTING TO WOLF");
 }
@@ -712,7 +725,11 @@ static void install_moonlight(void){
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
  if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
- char *native[]={"moonlight","pair",cfg[0],NULL};
+ char executable[PATH_MAX];
+ if(moonlight_mode()==2 && !find_native_moonlight(executable,sizeof executable)){
+  say("MOONLIGHT EXECUTABLE MISSING");return;
+ }
+ char *native[]={executable,"pair",cfg[0],NULL};
  char *appimage[]={(char*)find_appimage(),"pair",cfg[0],NULL};
  char *flat[]={"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],NULL};
  int mode=moonlight_mode();

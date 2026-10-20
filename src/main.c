@@ -87,11 +87,11 @@ static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflig
 static char config_path[PATH_MAX];
 #define CONFIG_COUNT 16
 #define FEATURED_MASK_SETTING 15
-#define ALL_SERVICES_MASK 511u
+#define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
 #define EXISTING_INSTALL_FEATURED_MASK 255u
 #define TRAY_MASK_SETTING 13
-#define TRAY_ALL_BUTTONS 511u
+#define TRAY_ALL_BUTTONS 255u
 #define TRAY_DEFAULT_BUTTONS 255u
 static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
 static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
@@ -791,6 +791,17 @@ static void open_remote_files(void){
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
 static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+/* Opens a deliberately interactive, SSH-backed server maintenance menu.
+ * The client has no Docker privileges and does not manage Wolf itself. */
+static void on_web_gaming_maintenance(void*w,void*p){
+ (void)w;(void)p;
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ const char*helper="/usr/lib/optiplex-now/web-gaming-maintenance";
+ if(access(helper,X_OK)!=0){say("WEB MAINTENANCE HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
+ char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
+ if(terminal_launch(args))say("WEB MAINTENANCE OPENED IN TERMINAL. SERVER HELPER REQUIRED.");
+ else preset_alert(win,"Maintenance unavailable","No terminal emulator found. Install a terminal and retry.");
+}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
@@ -849,13 +860,13 @@ static void reflow(int width) {
  if(cols!=last_columns){
    last_columns=cols;
    /* Move each action to exactly one section without destroying its widget. */
-   for(int i=0;i<9;i++){
+   for(int i=0;i<8;i++){
      g_object_ref(tiles[i]);
      void*parent=gtk_widget_get_parent(tiles[i]);
      if(parent)gtk_container_remove(GTK_CONTAINER(parent),tiles[i]);
    }
    unsigned featured=featured_mask();int primary=0,other=0;
-   for(int i=0;i<9;i++){
+   for(int i=0;i<8;i++){
      int chosen=(featured&(1u<<i))!=0;
      int pos=chosen?primary++:other++;
      gtk_grid_attach(GTK_GRID(chosen?grid:extras_grid),tiles[i],pos%cols,pos/cols,1,1);
@@ -1164,28 +1175,24 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
  GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
- add(col,label("OPTIONAL SERVICES","modalheading"),0);
- add(col,label("Bruiser uses Open WebUI on SERVER:3000 by default. Override only if needed.","helper"),0);
- GtkWidget*ai_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(ai_entry),"Bruiser AI URL (http(s)://...)");
- gtk_entry_set_text(GTK_ENTRY(ai_entry),cfg[14]);add(col,ai_entry,0);
- GtkWidget*games=button("GAMES SETUP","setupaction");
+ add(col,label("STREAMING","modalheading"),0);
+ GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
- GtkWidget*aiadmin=button("BRUISER AI ADMIN","setupaction");
- g_signal_connect_data(aiadmin,"clicked",(GCallback)on_bruiser_admin,NULL,NULL,0);add(col,aiadmin,0);
+ add(col,label("SERVICES","modalheading"),0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[9],*tray_checks[9],*choices=gtk_grid_new();
+ GtkWidget*featured_checks[8],*tray_checks[8],*choices=gtk_grid_new();
  gtk_grid_set_row_spacing(GTK_GRID(choices),5);gtk_grid_set_column_spacing(GTK_GRID(choices),18);
  gtk_grid_attach(GTK_GRID(choices),label("SERVICE","storagehead"),0,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("PRIMARY","storagehead"),1,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("TRAY","storagehead"),2,0,1,1);
- const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming","Bruiser AI"};
+ const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
- for(int i=0;i<9;i++){
+ for(int i=0;i<8;i++){
    gtk_grid_attach(GTK_GRID(choices),label(service_names[i],NULL),0,i+1,1,1);
    featured_checks[i]=gtk_check_button_new_with_label("");
    tray_checks[i]=gtk_check_button_new_with_label("");
@@ -1195,13 +1202,15 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    gtk_grid_attach(GTK_GRID(choices),tray_checks[i],2,i+1,1,1);
  }
  add(col,choices,0);
+ add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
+ GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
+ g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
  add(col,advanced,0);
  PresetExportContext export_context={.parent=d,.disk=diskentry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
  GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
  g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,&export_context,NULL,0);add(col,export_btn,0);
- gtk_box_reorder_child(GTK_BOX(col),export_btn,2);
- GtkWidget*full_export=button("EXPORT FULL BACKUP","setupaction");
+  GtkWidget*full_export=button("EXPORT FULL BACKUP","setupaction");
  g_signal_connect_data(full_export,"clicked",(GCallback)export_full_backup,d,NULL,0);add(col,full_export,0);
  GtkWidget*full_import=button("RESTORE FULL BACKUP","setupaction");
  g_signal_connect_data(full_import,"clicked",(GCallback)restore_full_backup,d,NULL,0);add(col,full_import,0);
@@ -1215,11 +1224,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
    if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
    safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-    const char*ai=gtk_entry_get_text(GTK_ENTRY(ai_entry));
-    if(now_safe_preset_url(ai))safe_copy(cfg[14],512,ai);
-    else preset_alert(d,"Invalid Bruiser AI URL","Enter an http(s) URL without embedded credentials, query or fragment. The old AI URL was kept.");
-    unsigned selected=0,featured=0;
-    for(int i=0;i<9;i++){
+        unsigned selected=0,featured=0;
+    for(int i=0;i<8;i++){
       if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
       if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
     }
@@ -1506,8 +1512,7 @@ static void tray_action(void *widget,void *data){
  else if(action==12){tray_show_window();on_system_info(NULL,NULL);}
  else if(action==13)tray_quit(NULL,NULL);
  else if(action==14)on_restart_streaming(NULL,NULL);
- else if(action==8)on_bruiser_ai(NULL,NULL);
- else {
+  else {
    if(action==0 && !has_moonlight())tray_show_window();
    on_tile(NULL,(void*)(long)action);
  }
@@ -1533,10 +1538,9 @@ static void tray_build_menu(void){
   tray_separator();
   static const char*captions[]={
    "Games  |  Steam","Videos  |  Jellyfin","Music  |  Dropped Needle","Files  |  SFTP",
-   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI",
-    "Bruiser AI  |  Optional"
+   "Downloads  |  VueTorrent","Terminal  |  SSH","Desktop  |  XFCE","Web Gaming  |  Wolf UI"
   };
-  for(int i=0;i<9;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
+  for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",14);
@@ -1641,8 +1645,8 @@ int main(int argc,char**argv) {
  extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(extras_grid),1);
  gtk_grid_set_row_spacing(GTK_GRID(extras_grid),7);gtk_grid_set_column_spacing(GTK_GRID(extras_grid),7);
  gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(GTK_CONTAINER(extras),extras_grid);
- const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING","BRUISER AI"};
- for(int i=0;i<9;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
+ const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING"};
+ for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(power_grid),7);gtk_grid_set_row_spacing(GTK_GRID(power_grid),7);
  gtk_grid_set_column_homogeneous(GTK_GRID(power_grid),1);add(body,power_grid,0);

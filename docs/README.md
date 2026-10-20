@@ -13,6 +13,8 @@ There is **one released application (NOW), one separate Studio application, and 
 | Installation with an **existing** server | [Server setup/reference-host notes](server-setup.md) |
 | Wolf update/repair procedures, explicit operator actions | [Wolf maintenance](wolf-maintenance.md) |
 
+- [MoonlightWeb maintenance](moonlightweb-maintenance.md): supported 1.14.0 manual updater, prerequisites and limits; production update not yet acceptance-tested.
+
 ## Planned, not shipped
 
 - [NOW server manager and upstream-first Wolf strategy](UPSTREAM-FIRST-WOLF-INTEGRATION.md): installation/provisioning concept and supported ownership boundary.

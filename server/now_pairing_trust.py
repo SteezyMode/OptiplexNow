@@ -88,8 +88,14 @@ class HouseholdTrust:
                     "trusted_family_count": len(data["family"])}
 
     def trusts(self, peer):
-        from now_pairing_requests import PeerIdentity
-        if not isinstance(peer, PeerIdentity):
+        # The broker calls this only after PairingRequests.request has
+        # verified the WhoIs PeerIdentity. Re-check its validated shape, not
+        # Python class identity (the test suite can reload that dataclass).
+        if (not hasattr(peer, "user_id") or not hasattr(peer, "node_id")
+                or not isinstance(peer.user_id, str)
+                or not isinstance(peer.node_id, str)
+                or not _ID.fullmatch(peer.user_id)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", peer.node_id)):
             return False
         with self._lock:
             data = self._read()
@@ -106,8 +112,13 @@ class HouseholdTrust:
 
     def trust_existing_request(self, peer):
         """Owner-approved, verified pending peer; not an arbitrary user ID."""
-        from now_pairing_requests import PeerIdentity
-        if not isinstance(peer, PeerIdentity) or not _ID.fullmatch(peer.user_id):
+        # Only queue.owner_approve_and_get_peer supplies this argument; the
+        # client cannot provide arbitrary account IDs to this method.
+        if (not hasattr(peer, "user_id") or not hasattr(peer, "node_id")
+                or not isinstance(peer.user_id, str)
+                or not isinstance(peer.node_id, str)
+                or not _ID.fullmatch(peer.user_id)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", peer.node_id)):
             raise ValueError("Verified personal Tailscale user required")
         if peer.user_id == self.owner_id:
             raise ValueError("Owner identity is controlled by auto_owner setting")

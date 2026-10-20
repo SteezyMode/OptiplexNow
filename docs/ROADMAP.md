@@ -21,7 +21,8 @@ Read-only detection/adoption of existing Wolf instances, status explanations, sa
 ## 3 — Independently optional integrations
 **Moonlight Web:** supported browser access and maintenance; reuse existing working installations.
 **Jellyfin:** media service detection/opt-in setup, safe storage/permissions, health and native UI handoff.
-**DroppedNeedle:** opt-in music workflow detection/setup and independent lifecycle.
+**DroppedNeedle:** opt-in music workflow detection/setup and independent lifecycle; ListenBrainz and Last.fm are optional third-party account connections, not deployed NOW server components.
+**Downloads & Music (advanced, optional):** detect and optionally provision qBittorrent, VueTorrent as a compatible qBittorrent UI, slskd, and Gluetun when VPN isolation is requested. Explicitly model network-sharing dependencies, port bindings, credential import, storage access, leak testing and recovery. No bundled VPN provider or automatic account setup. Reference [existing music/download stack notes](server-setup.md).
 Order reflects priority, not mandatory dependencies; none should hold back MVP streaming. Existing NOW 1.x shortcuts and MoonlightWeb maintenance remain separate from future provisioning claims.
 
 ## 4 — Multi-user desktop feasibility

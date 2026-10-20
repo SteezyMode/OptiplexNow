@@ -22,6 +22,10 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 - [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
 - [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
 
+## Proposed Web Gaming maintenance (not in v1.13.0)
+
+A draft NOW-managed MoonlightWeb maintenance workflow is documented in [Web Gaming maintenance](docs/moonlightweb-maintenance.md). It adopts an existing standalone Docker installation, refuses updates while Wolf application sessions are active, and keeps the existing `/data` volume. The helper requires installation of a future tested NOW package on both the client and server. It has **not** been deployed or released. The public Caddy domain and Wolf are out of scope.
+
 ## Development
 
 Version 1.13.0 adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an optional Bruiser AI shortcut under Additional Services, automatically opening Open WebUI on the configured server's port 3000 unless overridden. Settings contains a separate Bruiser AI Admin shortcut. Settings now lets you choose any of the nine service actions as Primary Actions or move them into Additional Services, independently of tray shortcuts. Existing installs keep their previous eight featured actions; fresh installs start with six. Downloads still launches VueTorrent. Automated build checks do not replace on-device end-to-end tests. See [application structure](docs/application-design.md).

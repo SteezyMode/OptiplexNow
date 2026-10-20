@@ -2,8 +2,8 @@
 # Run the packaged server-side MoonlightWeb manager via the configured SSH host.
 # No credentials or Docker socket cross to the client.
 set -u
-host=\${1:?Missing server host}
-user=\${2:?Missing SSH user}
+host=${1:?Missing server host}
+user=${2:?Missing SSH user}
 echo "OptiPlex NOW — Web Gaming maintenance"
 echo "Connection: $user@$host"
 echo "The helper must also be installed on the server."

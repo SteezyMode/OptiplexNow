@@ -15,6 +15,7 @@ from now_pairing_identity import own_tailnet_ipv4, verify_tailscale_peer
 from now_pairing_owner import OwnerControl
 from now_pairing_owner_identity import load_pinned_owner, owner_from_local_tailscale
 from now_pairing_requests import PairingRequests
+from now_pairing_trust import HouseholdTrust
 
 PORT = 18792
 MAX_BODY = 128
@@ -25,9 +26,12 @@ OWNER_LIST = "/v1/owner/pairing/requests"
 OWNER_DECISION = re.compile(
     r"/v1/owner/pairing/requests/([A-Za-z0-9_-]{24,96})/(approve|deny)\Z")
 OWNER_CLIENT_HEADER = "X-NOW-Owner-Client"
+TRUST_SETTINGS = "/v1/owner/household"
+OWNER_FAMILY_DECISION = re.compile(
+    r"/v1/owner/pairing/requests/([A-Za-z0-9_-]{24,96})/approve-and-trust\Z")
 
 
-def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None):
+def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None, household=None):
     """All network calls re-verify their actual source IP via WhoIs."""
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         server_version = "NOW-Pairing-Prototype"
@@ -70,6 +74,54 @@ def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None):
             return peer is not None and peer.user_id == owner_user_id
 
         def do_POST(self):
+            if self.path == TRUST_SETTINGS:
+                if not self._owner() or household is None:
+                    self._send(403, {"error": "owner_only"})
+                    return
+                if self.headers.get("Content-Type") != "application/json":
+                    self._send(415, {"error": "unsupported_media_type"})
+                    return
+                if self.headers.get("Content-Length") not in ("18", "19", "20", "21", "22",
+                                                               "23", "24", "25", "26"):
+                    # A bounded payload only; contents are validated below.
+                    value = self.headers.get("Content-Length", "")
+                    if not value.isdecimal() or not 2 <= int(value) <= 64:
+                        self._send(400, {"error": "invalid_request"})
+                        return
+                data = self.rfile.read(int(self.headers["Content-Length"]))
+                try:
+                    payload = json.loads(data)
+                    if not isinstance(payload, dict) or set(payload) != {"auto_owner"}:
+                        raise ValueError
+                    household.set_owner_auto(payload["auto_owner"])
+                except (OSError, ValueError, PermissionError):
+                    self._send(400, {"error": "invalid_settings"})
+                    return
+                self._send(200, {"saved": True, **household.status()})
+                return
+            trusted = OWNER_FAMILY_DECISION.fullmatch(self.path)
+            if trusted:
+                if not self._owner() or household is None:
+                    self._send(403, {"error": "owner_only"})
+                    return
+                if self.headers.get("Content-Length", "") != "0":
+                    self._send(400, {"error": "body_not_allowed"})
+                    return
+                peer = queue.owner_approve_and_get_peer(trusted.group(1))
+                if peer is None:
+                    self._send(409, {"error": "not_pending"})
+                    return
+                try:
+                    household.trust_existing_request(peer)
+                except (OSError, ValueError, PermissionError):
+                    self._send(200, {"decision_recorded": True,
+                                     "future_devices_trusted": False,
+                                     "moonlight_paired": False})
+                    return
+                self._send(200, {"decision_recorded": True,
+                                 "future_devices_trusted": True,
+                                 "moonlight_paired": False})
+                return
             decision = OWNER_DECISION.fullmatch(self.path)
             if decision:
                 if not self._owner():
@@ -120,6 +172,10 @@ def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None):
             except RuntimeError:
                 self._send(429, {"error": "queue_full"})
                 return
+            if household is not None and household.trusts(peer):
+                # Auto-approve only an independently WhoIs-verified account.
+                # Does NOT bypass native streaming backend pairing.
+                queue.owner_decide(request_id, approve=True)
             self._send(202, {
                 "request_id": request_id,
                 "owner_status": queue.status_for_peer(peer, request_id),
@@ -127,6 +183,12 @@ def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None):
             })
 
         def do_GET(self):
+            if self.path == TRUST_SETTINGS:
+                if not self._owner() or household is None:
+                    self._send(403, {"error": "owner_only"})
+                    return
+                self._send(200, household.status())
+                return
             if self.path == OWNER_LIST:
                 if not self._owner():
                     self._send(403, {"error": "owner_only"})
@@ -212,6 +274,8 @@ def main(argv=None):
                         help="Trusted installer-registered mode-0600 Tailscale owner account ID")
     owner_config.add_argument("--owner-from-local-tailnet", action="store_true",
                         help="At explicit server activation, identify owner as the enrolled Tailscale server account")
+    parser.add_argument("--personal-use", action="store_true",
+                        help="On first server setup, auto-approve the owner Tailscale account; owner can change this remotely")
     parser.add_argument("--socket-dir",
                         help="Existing mode-0700 directory owned by this Unix user")
     args = parser.parse_args(argv)
@@ -219,7 +283,7 @@ def main(argv=None):
         parser.error("--socket-dir is only used with --serve")
     if args.serve and not args.socket_dir:
         parser.error("--serve requires --socket-dir")
-    if (args.owner_id_file is not None or args.owner_from_local_tailnet) and not args.serve:
+    if (args.owner_id_file is not None or args.owner_from_local_tailnet or args.personal_use) and not args.serve:
         parser.error("Owner binding requires --serve")
     try:
         address = own_tailnet_ipv4()
@@ -234,8 +298,11 @@ def main(argv=None):
                          else owner_from_local_tailscale() if args.owner_from_local_tailnet
                          else None)
         queue = PairingRequests()
+        household = (HouseholdTrust(args.socket_dir, owner_user_id,
+                                    default_auto_owner=args.personal_use)
+                     if owner_user_id is not None else None)
         # Both sockets live in THIS process and use precisely the same queue.
-        with PairingHTTPServer((address, PORT), make_handler(queue, owner_user_id=owner_user_id)) as server:
+        with PairingHTTPServer((address, PORT), make_handler(queue, owner_user_id=owner_user_id, household=household)) as server:
             with OwnerControl(args.socket_dir, queue) as owner:
                 worker = threading.Thread(target=owner.serve_forever,
                                           kwargs={"poll_interval": 0.2}, daemon=True)

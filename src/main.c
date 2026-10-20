@@ -64,7 +64,7 @@ static int instance_fd = -1;
 static int tray_restoring = 0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
 static GtkWidget *model_heading=NULL;
-static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_network,*metric_vpn,*metric_wolf,*metric_free,*drive_combo;
+static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_network,*metric_vpn,*metric_wolf,*metric_wolf_sessions,*metric_free,*drive_combo;
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
@@ -356,7 +356,7 @@ static void setup_tailscale(void) {
  else browser_open("https://tailscale.com/download/linux");
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -435,6 +435,7 @@ static gboolean finish_on_main(void *arg) {
    if(metric_network)gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  CONNECTED":"TAILSCALE  DISCONNECTED");
    if(metric_vpn)gtk_label_set_text(GTK_LABEL(metric_vpn),r->success==1?(*r->vpn_state?r->vpn_state:"VPN  UNKNOWN"):"VPN  --");
    if(metric_wolf)gtk_label_set_text(GTK_LABEL(metric_wolf),r->success==1?(*r->wolf_state?r->wolf_state:"WOLF  UNKNOWN"):"WOLF  --");
+   if(metric_wolf_sessions)gtk_label_set_text(GTK_LABEL(metric_wolf_sessions),r->success==1?(*r->wolf_sessions?r->wolf_sessions:"WOLF DESKTOPS  UNKNOWN"):"WOLF DESKTOPS  --");
    update_drives(r);
    if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;
@@ -545,6 +546,10 @@ static void *worker(void*arg){
       "awk -F'|' '{if($1!=\"running\")print \"GLUETUN  \" $1; else if($2==\"healthy\")print \"GLUETUN  HEALTHY\"; else if($2==\"unhealthy\")print \"GLUETUN  UNHEALTHY\"; else if($2==\"starting\")print \"GLUETUN  CHECKING\"; else print \"GLUETUN  RUNNING (UNVERIFIED)\"}'; "
       "else echo 'DOCKER UNAVAILABLE'; fi; "
       "printf 'WOLF_STATUS='; if command -v docker >/dev/null 2>&1; then docker inspect wolf --format '{{.State.Status}}' 2>/dev/null | awk 'NF {printf \"WOLF  %s\\n\",$1}'; else echo 'DOCKER UNAVAILABLE'; fi; "
+      "printf 'WOLF_DESKTOPS='; if command -v docker >/dev/null 2>&1; then "
+      "n=$(docker ps --format '{{.Names}}' 2>/dev/null | grep -c '^Wolf.*Desktop_'); "
+      "printf 'WOLF DESKTOPS  %s running (not client count)\\n' \"$n\"; "
+      "else echo 'DOCKER UNAVAILABLE'; fi; "
       "printf 'DRIVES_BEGIN\n'; "
       "df -hPT -x tmpfs -x devtmpfs -x overlay -x squashfs -x zramfs 2>/dev/null "
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
@@ -563,6 +568,7 @@ static void *worker(void*arg){
        get_metric(r->vram_used,sizeof r->vram_used,stats,"VRAM_USED=");
        get_metric(r->vpn_state,sizeof r->vpn_state,stats,"VPN_STATUS=");
        get_metric(r->wolf_state,sizeof r->wolf_state,stats,"WOLF_STATUS=");
+       get_metric(r->wolf_sessions,sizeof r->wolf_sessions,stats,"WOLF_DESKTOPS=");
        if(*r->gpu){strncat(r->gpu,"°C",sizeof r->gpu-strlen(r->gpu)-1);}
        const char*line=stats;
        while((line=strstr(line,"DRIVE=")) && r->drive_count<MAX_DRIVES){
@@ -1830,6 +1836,7 @@ int main(int argc,char**argv) {
   metric_network=label("TAILSCALE  --","helper");add(body,metric_network,0);
   metric_vpn=label("GLUETUN  --","helper");add(body,metric_vpn,0);
   metric_wolf=label("WOLF  --","helper");add(body,metric_wolf,0);
+  metric_wolf_sessions=label("WOLF DESKTOPS  --","helper");add(body,metric_wolf_sessions,0);
  /* The dashboard prioritizes host state. Launchers live on Software page. */
  GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
  GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);

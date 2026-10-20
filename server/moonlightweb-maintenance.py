@@ -120,9 +120,9 @@ def write_private_env(info):
             for item in info["Config"].get("Env") or []:
                 key, sep, _ = item.partition("=")
                 if (not sep or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
-                        or "\\n" in item or "\\r" in item):
+                        or "\n" in item or "\r" in item):
                     raise RuntimeError("Unsupported environment entry")
-                handle.write(item + "\\n")
+                handle.write(item + "\n")
         return path
     except Exception:
         path.unlink(missing_ok=True)

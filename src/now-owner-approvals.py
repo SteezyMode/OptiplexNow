@@ -32,7 +32,7 @@ def valid_host(address):
 def query_owner(host, action, request_id=None, *, connection=http.client.HTTPConnection):
     if not valid_host(host):
         return False, "invalid_host"
-    if action not in ("list", "approve", "deny"):
+    if action not in ("list", "approve", "deny", "trust"):
         return False, "invalid_action"
     if action == "list" and request_id is not None:
         return False, "invalid_action"
@@ -41,7 +41,7 @@ def query_owner(host, action, request_id=None, *, connection=http.client.HTTPCon
         return False, "invalid_request"
     path = "/v1/owner/pairing/requests"
     if action != "list":
-        path += "/" + request_id + "/" + action
+        path += "/" + request_id + "/" + ("approve-and-trust" if action == "trust" else action)
     method = "GET" if action == "list" else "POST"
     client = connection(host, PORT, timeout=4)
     try:
@@ -123,12 +123,51 @@ def request_access(host, backend="wolf", *, connection=http.client.HTTPConnectio
     finally:
         client.close()
 
+
+def household_setting(host, desired=None, *, connection=http.client.HTTPConnection):
+    """Get or change owner auto-trust via independently WhoIs-verified broker."""
+    if not valid_host(host):
+        return False, "invalid_host"
+    if desired is not None and type(desired) is not bool:
+        return False, "invalid_action"
+    conn = connection(host, PORT, timeout=4)
+    try:
+        payload = None if desired is None else json.dumps({"auto_owner": desired}).encode()
+        conn.request("GET" if desired is None else "POST",
+                     "/v1/owner/household",body=payload,
+                     headers={"X-NOW-Owner-Client":"desktop-v1",
+                              "Accept":"application/json",
+                              **({"Content-Type":"application/json"} if payload is not None else {})})
+        response = conn.getresponse()
+        data = response.read(MAX_BYTES + 1)
+        if len(data)>MAX_BYTES:return False,"invalid_response"
+        if response.status==403:return False,"owner_not_authorized"
+        if response.status!=200:return False,"server_unavailable"
+        reply=json.loads(data)
+        if not isinstance(reply,dict) or type(reply.get("auto_owner")) is not bool:
+            return False,"invalid_response"
+        return True,reply["auto_owner"]
+    except (OSError,ValueError,TimeoutError,json.JSONDecodeError):
+        return False,"server_unavailable"
+    finally:
+        conn.close()
+
 def main(argv):
     if len(argv) not in (2, 3):
         print(PREFIX + "invalid_action")
         return 2
     host, action = argv[0], argv[1]
     request_id = argv[2] if len(argv) == 3 else None
+    if action in ("owner-status", "owner-enable", "owner-disable"):
+        if request_id is not None:
+            print(PREFIX+"invalid_action")
+            return 2
+        desired = (True if action == "owner-enable" else
+                   False if action == "owner-disable" else None)
+        success, value = household_setting(host, desired)
+        print(PREFIX + (("owner_on" if value else "owner_off")
+                        if success else value))
+        return 0 if success else 1
     if action == "request":
         if request_id is not None or len(argv) != 2:
             print(PREFIX + "invalid_action")
@@ -147,7 +186,7 @@ def main(argv):
             for rid, node, backend in response:
                 print(PREFIX + "request\t" + rid + "\t" + node + "\t" + backend)
     else:
-        print(PREFIX + "decision_recorded")
+        print(PREFIX + ("trusted_account" if action == "trust" and response == "decision_recorded" else "decision_recorded"))
     return 0
 
 

@@ -80,6 +80,8 @@ static char appimage_found[PATH_MAX];
 static void tray_build_menu(void);
 static void tray_desktop_caption(char *out,size_t cap);
 static void tray_desktop_caption_save(const char *value);
+static void tray_order_load(int out[8]);
+static void tray_order_save(const int order[8]);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
@@ -1202,11 +1204,14 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,label("SERVICES","modalheading"),0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[8],*tray_checks[8],*choices=gtk_grid_new();
+ GtkWidget*featured_checks[8],*tray_checks[8],*order_spins[8],*choices=gtk_grid_new();
+ int current_order[8],positions[8];tray_order_load(current_order);
+ for(int i=0;i<8;i++)positions[current_order[i]]=i+1;
  gtk_grid_set_row_spacing(GTK_GRID(choices),5);gtk_grid_set_column_spacing(GTK_GRID(choices),18);
  gtk_grid_attach(GTK_GRID(choices),label("SERVICE","storagehead"),0,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("PRIMARY","storagehead"),1,0,1,1);
  gtk_grid_attach(GTK_GRID(choices),label("TRAY","storagehead"),2,0,1,1);
+ gtk_grid_attach(GTK_GRID(choices),label("TRAY ORDER","storagehead"),3,0,1,1);
  const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
  for(int i=0;i<8;i++){
@@ -1563,6 +1568,34 @@ static void tray_desktop_caption_save(const char *value){
  FILE*f=fopen(path,"w");if(!f)return;
  fprintf(f,"%s\n",value);fclose(f);chmod(path,0600);
 }
+/* Order is local to the client. Missing/invalid files use the original order. */
+static void tray_order_path(char *path,size_t cap){
+ const char *xdg=getenv("XDG_CONFIG_HOME"),*home=getenv("HOME");
+ if(xdg&&*xdg)snprintf(path,cap,"%s/optiplex-desk/tray-order",xdg);
+ else snprintf(path,cap,"%s/.config/optiplex-desk/tray-order",home?home:"/tmp");
+}
+static void tray_order_load(int out[8]){
+ for(int i=0;i<8;i++)out[i]=i;
+ char path[PATH_MAX],buf[64];tray_order_path(path,sizeof path);
+ FILE*f=fopen(path,"r");if(!f)return;
+ if(!fgets(buf,sizeof buf,f)){fclose(f);return;}fclose(f);
+ int seen=0,temp[8];
+ for(int i=0;i<8;i++){
+  if(buf[i]<'0'||buf[i]>'7'){return;}
+  int v=buf[i]-'0';if(seen&(1<<v))return;
+  seen|=1<<v;temp[i]=v;
+ }
+ if(seen==255)for(int i=0;i<8;i++)out[i]=temp[i];
+}
+static void tray_order_save(const int order[8]){
+ char path[PATH_MAX],tmp[PATH_MAX];tray_order_path(path,sizeof path);
+ snprintf(tmp,sizeof tmp,"%s.tmp",path);
+ FILE*f=fopen(tmp,"w");if(!f)return;
+ for(int i=0;i<8;i++)fputc('0'+order[i],f);
+ fputc('\n',f);
+ if(fclose(f)==0){chmod(tmp,0600);if(rename(tmp,path)!=0)unlink(tmp);}
+ else unlink(tmp);
+}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -1573,7 +1606,8 @@ static void tray_build_menu(void){
   static const char *names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
   static const char *descriptions[]={"Steam","Jellyfin","Dropped Needle","SFTP","VueTorrent","SSH","","Wolf UI"};
   char desktop[128];tray_desktop_caption(desktop,sizeof desktop);
-  for(int i=0;i<8;i++)if(mask & (1u<<i)){
+  int order[8];tray_order_load(order);
+  for(int j=0;j<8;j++){int i=order[j];if(!(mask & (1u<<i)))continue;
    char caption[256];snprintf(caption,sizeof caption,"%-12s |  %s",names[i],i==6?desktop:descriptions[i]);
    GtkWidget*item=gtk_menu_item_new_with_label(caption);
    GtkWidget*child=gtk_bin_get_child(GTK_BIN(item));

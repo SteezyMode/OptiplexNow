@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-config check-wolf-pairing
+.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport
 all: build/optiplex-desk build/optiplex-now-backup
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
@@ -64,3 +64,8 @@ check-config: | build
 check-wolf-pairing: | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc tests/test_wolf_pairing.c src/wolf_pairing.c -o build/test-wolf-pairing
 	./build/test-wolf-pairing
+
+# Exercise the async subprocess boundary without a GTK display or real SSH host.
+check-wolf-transport: | build
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_wolf_transport.c src/wolf_transport.c -o build/test-wolf-transport $(shell pkg-config --libs gio-2.0)
+	./build/test-wolf-transport

@@ -838,7 +838,7 @@ static void pair_wolf(void){
  say("MOONLIGHT PAIRING STARTED");
  wolf_pair_dialog(pin);
  memset(pin,0,sizeof pin);
- if(!g_subprocess_get_if_exited(process))g_subprocess_force_exit(process);
+ /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
 }
 static void on_games_action(void*w,void*arg){(void)w;

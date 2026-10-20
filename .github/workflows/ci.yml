@@ -32,6 +32,7 @@ jobs:
           make check-process
           make check-presets
           make check-config
+          make check-wolf-pairing
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

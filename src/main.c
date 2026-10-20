@@ -355,8 +355,16 @@ static void setup_tailscale(void) {
  if(status==1){say("TAILSCALE IS ALREADY CONNECTED");return;}
  if(status==4){browser_open("https://tailscale.com/download/linux");return;}
  if(status==0){say("CANNOT CHECK TAILSCALE. CHECK THAT THE SERVICE IS RUNNING");return;}
- /* The official Tailscale CLI owns login; no password goes into NOW.
-  * Future milestone: present its browser/device flow inside this wizard. */
+ /* Polkit authorizes the official CLI, then an unprivileged helper
+  * opens the CLI-provided login URL in this user's default browser. */
+ if(now_program_exists("pkexec") &&
+    access("/usr/lib/optiplex-now/tailscale_browser_login.py",R_OK)==0){
+  char*args[]={"/usr/bin/python3","/usr/lib/optiplex-now/tailscale_browser_login.py",NULL};
+  now_launch(args);
+  say("AUTHORIZE THE TAILSCALE REQUEST, THEN COMPLETE SIGN-IN IN YOUR BROWSER");
+  return;
+ }
+ /* Explicit fallback on installations without a graphical polkit agent. */
  char*args[]={"sudo","tailscale","up",NULL};
  if(terminal_launch(args))say("COMPLETE TAILSCALE SIGN-IN IN THE OPENED TERMINAL");
 }

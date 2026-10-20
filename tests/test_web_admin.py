@@ -34,9 +34,8 @@ class AdminTunnelTests(unittest.TestCase):
                 self.assertEqual(admin.open_admin("100.121.156.34", "optiplex", Path(tmp)), 0)
                 self.assertEqual(run.call_count, 1)
                 self.assertIn("-O", run.call_args.args[0])
-                url = opener.call_args.args[0][1]
-                self.assertTrue(url.startswith("https://127.0.0.1:"))
-                self.assertTrue(url.endswith("/admin"))
+                # Browser launch now belongs to NOW's GTK process, not Python.
+                opener.assert_not_called()
 
     def test_starts_loopback_only_forwarding(self):
         with tempfile.TemporaryDirectory() as tmp:

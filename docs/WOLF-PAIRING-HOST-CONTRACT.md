@@ -52,10 +52,10 @@ Jellyfin login integration and per-session termination are **deferred** for Beta
 - [x] Locate actual Wolf Unix socket and query live session API without changing sessions.
 - [x] Confirm OpenAPI endpoint and required pairing fields on installed Wolf version.
 - [x] Verify development host login can access Docker without sudo.
-- [ ] Verify host helper installed at the declared path; its permissions and ownership.
-- [ ] Execute read-only helper `pending` on the development host.
+- [x] Host helper manually installed at the declared path on development OptiPlex (user reported successful installation; ownership/permissions not separately audited).
+- [x] Execute read-only helper `pending` on the development host: returned `{\"success\": true, \"count\": 0, \"clients\": []}`.\n- [x] MacBook read-only SSH invocation of installed host helper returned the same successful empty result.
 - [ ] Complete actual Moonlight -> Wolf PIN pairing with test client.
-- [ ] Add and test NOW GTK pairing dialog with clear recovery behavior.
+- [ ] Validate new NOW GTK pairing dialog on MacBook: implementation on branch, not yet device tested.
 - [ ] Prove wrong/expired client selection cannot pair another device.
 - [ ] Smoke test Games, Videos and dashboard following a clean .deb install.
 - [ ] Test onboarding on a fresh Linux client in the ten-minute acceptance window.
@@ -65,3 +65,7 @@ Jellyfin login integration and per-session termination are **deferred** for Beta
 Investigate Headscale and real OptiPlex NOW identity/sharing, a restricted host management agent, Wolf APIs before considering a fork, and low-end Moonlight streaming profiles. See GitHub issue #85. **The product goal is Steam Remote Play ease with Moonlight performance and a simple GUI, independent of any one personal server.**
 
 Update this file *in the same PR as behavior changes*. Mark observed facts as verified with the date and reserve unchecked checklist items for anything not reproduced.
+
+## 2026-10-21 client UI integration (pending device validation)
+
+The native GTK dialog calls the packaged `wolf-pair-client.py` which invokes the fixed host helper path via key-authenticated SSH. Flow: launch Moonlight pairing, refresh pending clients, choose IP, type one-time PIN, submit via stdin. PIN is removed from GTK entry after submission; the local helper checks selected client IP still matches. This is not zero-PIN enrollment, not yet tested against a live pairing, and still requires independently provisioned SSH access and host helper installation. The client login architecture and server provisioning must eventually remove those manual prerequisites.

@@ -55,8 +55,8 @@ The NOW package contains two different helpers:
   updater; NOW must be installed **on the host** for this to exist.
 - `/usr/lib/optiplex-now/web-gaming-maintenance`: client-side SSH launcher.
 
-After installing the proposed package on both the host and a Linux client,
-open **NOW → Settings → WEB GAMING MAINTENANCE**. It opens an interactive terminal
+After installing NOW 1.14.0 on both the host and a Linux client,
+open **NOW → Settings → Updates & Maintenance → WEB GAMING MAINTENANCE**. It opens an interactive terminal
 using the configured server address and SSH user; select status or update.
 This is **not** an unattended update. The server's `sudo` policy still applies.
 No Docker socket is copied or exposed to clients.
@@ -96,11 +96,7 @@ Never commit `/data`, credentials, access token files, or inspect dumps.
 
 ## Release gate
 
-This branch requires unit tests, GTK/package CI, reference-machine inspection,
-and a tested rollback using a disposable duplicate of the persistent volume.
-Then test web-stream reconnect with a fresh Wolf Studio desktop before enabling
-updates on the production server. No update, service restart or new .deb
-deployment was performed simply by merging this code.
+Unit tests, package/GTK CI, reference-machine preflight and isolated Docker recreate, backup and rollback mechanics tests passed on October 20. The tests use disposable fixtures and do not exercise a full production migration or session reconnect. Before the first production update, confirm Wolf sessions have ended, service readiness and compatible data restore behavior, and perform a controlled web-stream reconnect test. Merging/releasing a package does not change live containers.
 
 ## Wolf desktop persistence caveat
 

@@ -65,6 +65,26 @@ class AgentTests(unittest.TestCase):
         self.assertFalse(agent.peer_authorized("192.168.0.18", runner=run))
         self.assertEqual(len(calls), 2)
 
+    def test_whois_never_authorizes_subnet_routes(self):
+        """A node with an advertised route is not the routed device."""
+        cases = (
+            {"ID": 8, "AllowedIPs": ["100.78.0.0/16"]},
+            {"ID": 8, "Addresses": ["100.78.0.0/16"]},
+            {"ID": 8, "Addresses": ["100.78.22.6/32"],
+             "AllowedIPs": ["100.78.0.0/16"]},
+            {"ID": 8, "Addresses": ["not-an-ip"], "AllowedIPs": ["100.78.0.0/16"]},
+        )
+        for node in cases:
+            with self.subTest(node=node):
+                def run(args, **kwargs):
+                    return FakeResult({"Node": node})
+                self.assertFalse(agent.peer_authorized("100.78.22.5", runner=run))
+        def run_exact(args, **kwargs):
+            return FakeResult({"Node": {"ID": 8,
+                "Addresses": ["100.78.22.5/32"],
+                "AllowedIPs": ["100.78.0.0/16"]}})
+        self.assertTrue(agent.peer_authorized("100.78.22.5", runner=run_exact))
+
     def test_whois_errors_fail_closed(self):
         for response in ({}, {"Node": {"ID": 2}},
                          {"Node": {"ID": 2, "Addresses": ["192.168.1.2"]}}):

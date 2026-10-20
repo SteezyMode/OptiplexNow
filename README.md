@@ -45,6 +45,8 @@ Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installati
 
 ## Connect
 
+**Client onboarding (development draft):** The existing Setup Wizard can open Tailscale's local device web interface for browser-based sign-in on supported versions, with an explicit older-client terminal fallback and a status refresh. It also includes an optional per-server **Web Gaming URL** instead of assuming any particular public website. Web Gaming remains separate from native Moonlight and is only available when the server runs that service; a public DNS name is not required when a private address is reachable. This functionality is in an unmerged draft, not the current release.
+
 1. Sign into Tailscale on the server and client.
 2. Open **Settings → Setup Wizard**. Choose **Find server on Tailscale**, then confirm the server and SSH username.
 3. Authorize SSH, verifying the server fingerprint when prompted.

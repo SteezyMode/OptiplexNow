@@ -30,6 +30,38 @@ The primary audience is an individual or household using a self-managed Linux ho
 
 Beta 1 uses a small group of preapproved Tailscale accounts. It does **not** include NOW-owned accounts, email approval, Headscale, zero-touch game pairing, or automatic host deployment. Those are separate milestones.
 
+## Beta 1 engineering execution plan
+
+**Next development session: October 22, 2026 (JST).** This is the engineering work order for the existing Beta 1 client, not a new product phase. The five product priorities remain: **(1) finish Wolf pairing, (2) improve Tailscale sign-in, (3) simplify device authorization, (4) complete fresh-client acceptance, (5) build a standardized host installer later**. See [Beta acceptance](BETA-ACCEPTANCE.md) for the actual release gate and [Architecture](application-design.md) for implementation boundaries.
+
+The October 21 configuration extraction in [PR #103](https://github.com/SteezyMode/OptiplexNow/pull/103) establishes the starting pattern. It does not mean the rest of `main.c` is modular or that pairing is nonblocking.
+
+| Work item | When | Smallest useful deliverable | Completion evidence |
+| --- | --- | --- | --- |
+| **1. Nonblocking pairing and setup I/O** | First, alongside Wolf | Move the blocking Wolf pending-request and authorization calls off the GTK thread. Preserve bounded timeouts, meaningful failure messages, safe cancellation and owner-controlled selection. Address other synchronous SSH/Tailscale wizard probes when those flows are touched. | UI remains interactive with a disconnected/slow host, cancel or dialog close causes no stale widget updates, and fake-host tests cover timeouts and refusal. Real unpaired-device pairing remains a separate required acceptance check. |
+| **2. Separate streaming logic from GTK** | During Wolf work | Extract one testable Moonlight/Wolf transport or pairing component with explicit inputs/results. Keep dialogs, tray actions and user messages in the GTK layer; do not redesign the host helper. | Compile/link and packaging remain unchanged in behavior; transport/parsing has behavioral tests; existing pairing and reconnection paths still work. |
+| **3. Readable, consistent C formatting** | With each touched function | Apply the existing `.clang-format` conventions to new modules and functions being edited, with meaningful names and straightforward control flow. | Reviewable diffs and clean compilation; no unrelated full-file formatting or behavior changes mixed into a functional PR. |
+| **4. Split status and tray responsibilities** | Later, alongside relevant client work | Extract host status parsing/probing first, then tray presentation or action mapping where worthwhile. Pass data through explicit interfaces instead of exporting GTK globals. | Status source and rendering stay distinct; offline/unknown/running/connected remain accurate; tray, restart and saved shortcut tests remain green. |
+| **5. Upgrade test quality** | Every related PR | Add unit/behavior tests using simulated host responses and failure cases. Replace source-text assertions when the affected subsystem is extracted, not through a separate testing rewrite. | Tests demonstrate decisions and results (wrong/stale pairing request, failed SSH, timeout, cancellation, config compatibility); CI still runs package and GTK smoke tests. |
+| **6. Add stricter diagnostics** | After affected modules are stable | Introduce an opt-in or separate CI sanitizer build for suitable native C tests (AddressSanitizer and UndefinedBehaviorSanitizer), then tighten warnings in the modules that are clean. | Diagnostic job runs reliably and is actionable; default package and release build are unchanged; pre-existing third-party/GTK warnings do not become a blanket release blocker. |
+
+### First session: one narrow Wolf slice
+
+1. Verify the new `main` baseline and reproduce the native Wolf pairing path without removing any already paired client. Identify where `wolf_pair_request()`, the pairing dialog, and `find_server()` call bounded **synchronous** commands from GTK callbacks.
+2. Create a focused Wolf PR: start with a small transport/parsing boundary and tests for zero, one, multiple, changed or malformed pending clients. Keep the existing host helper and Moonlight protocol.
+3. In a second PR only when the first is validated, make the Wolf pending/authorize flow asynchronous, with main-thread UI completion, timeouts and cancellation/lifetime handling. Do not silently authorize an unrecognized device.
+4. Run the existing CI and package smoke checks. If an actual unpaired test client is available, record the first-time PIN authorization and video/audio/input result. Otherwise explicitly mark the device check **not run** and carry it forward.
+
+**Stop condition:** if step 2 or 3 is not finished and verified, leave it in a reviewable PR and resume that work next session. Do not begin a tray extraction just to claim more roadmap progress.
+
+### Scope controls
+
+- No full rewrite of `main.c`, blanket automatic formatter run, language/framework migration, new backend, new account service, Wolf fork or host installer implementation during this pass.
+- Do not change production Docker, Wolf, Caddy, Jellyfin, Tailscale ACLs or working pairings as part of source cleanup.
+- Preserve `~/.config/optiplex-desk/config.ini`, keys and indices, `.onp` presets, `.onb` backups, tray behavior, desktop actions, CLI aliases and existing packaging.
+- Require one clear responsibility, a compatibility statement, behavioral checks, CI and review per PR. Do not publish a new `.deb` solely because an architecture PR passes CI.
+- No artificial file-size or line-count target. Reduce coupling and actual failure risk, not just the number of lines in `main.c`.
+
 ## Portable client configuration
 
 - A clean install must not default to the maintainer's Tailscale host, SSH account, or media and gaming domains.

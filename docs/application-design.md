@@ -50,9 +50,25 @@ Report state and source independently: Tailscale is connected/disconnected, Wolf
 
 An eventual host installer must publish managed service IDs and health capabilities instead of requiring a name such as `gluetun`. Avoid accidental Docker permission expansion and application-specific host assumptions.
 
-## Maintainability and threading direction
+## Maintainability and threading contract
 
-The current `main.c` remains a large controller that owns the tray, wizard, status presentation and launch handlers. Untangling it is incremental: extract configuration first; separate host probes and launch operations from GTK widgets next; then make any remaining blocking SSH/Tailscale/Wolf enrollment operations asynchronous with timeouts, cancellation and main-thread UI completion. GTK widgets must be accessed on the GTK main thread. Keep changes narrow and provide behavioral tests for offline, malformed and timeout paths. Do not claim nonblocking pairing before it is implemented and device-tested.
+The six ordered engineering items and next-session stop condition live in [Product direction](PRODUCT.md#beta-1-engineering-execution-plan). This section defines implementation boundaries, not a second roadmap.
+
+**Current state:** `src/config.c/.h` owns configuration persistence, and `src/process.c/.h` supplies bounded process execution. `main.c` still combines the GTK setup wizard, status/tray presentation and application launch logic. `wolf_pair_request()` invokes synchronous `GSubprocess` communication, and `find_server()` and some Tailscale wizard checks invoke blocking commands. Their timeouts limit the wait but do not make those GTK callbacks responsive.
+
+**Wolf and network operations:**
+- Keep process execution, pending-client parsing and Wolf authorization decisions outside GTK callbacks behind a small API with explicit host identity, selected client and result/error fields.
+- Perform potentially blocking SSH/API work in a worker or asynchronous subprocess. Copy required inputs before starting; post results to the GTK main context. Never dereference GTK widgets from the worker.
+- Track cancellation and dialog lifetime so a completion cannot update or revive a closed window. Coalesce duplicate requests, bound each wait, and show offline/refused/expired states without authorizing another client.
+- Distinguish what the existing SSH helper can do from what a normal beta tester is entitled to do. This refactor must not widen access to the host Docker socket or replace the future least-privilege authorization work.
+- Preserve the existing manual approval decision until explicit client identification and owner authorization have been verified. "Automatic" discovery is not permission to pair any pending IP.
+
+**Other module boundaries:**
+- Keep monitoring probes, normalization of service states and presentation separate. Current worker-based status updates are a useful model; do not collapse them back into blocking UI callbacks.
+- Tray and wizard layers may select actions and render state, but should not own low-level SSH commands or parsing rules. Keep external helper paths and launch semantics compatible unless a measured issue requires a separate change.
+- Apply `.clang-format` only to new or edited code. Never combine a repository-wide style diff with network, settings or pairing changes.
+
+**Verification contract:** mocked transport and parsing tests cover empty/stale/multiple pending requests, timeouts, cancellation and malformed data; compiled native tests cover extracted pure functions; GTK smoke tests cover lifetime and UI responsiveness where feasible. Real new-client pairing and streaming are independently required by [Beta acceptance](BETA-ACCEPTANCE.md). Do not substitute CI for device observations.
 
 ## Engineering gates
 

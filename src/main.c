@@ -339,10 +339,10 @@ static int client_tailscale_state(void) {
  char out[64]={0};
  char*args[]={"/usr/bin/python3","/usr/lib/optiplex-now/client_auth.py","tailscale",NULL};
  if(now_run(args,out,sizeof out,4)!=0)return 0;
- if(!strcmp(out,"connected\\n"))return 1;
- if(!strcmp(out,"login_required\\n"))return 2;
- if(!strcmp(out,"disconnected\\n"))return 3;
- if(!strcmp(out,"missing\\n"))return 4;
+ if(!strcmp(out,"connected\n"))return 1;
+ if(!strcmp(out,"login_required\n"))return 2;
+ if(!strcmp(out,"disconnected\n"))return 3;
+ if(!strcmp(out,"missing\n"))return 4;
  return 0;
 }
 static void setup_tailscale(void) {

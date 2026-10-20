@@ -1,83 +1,61 @@
-# OptiPlex NOW — Wolf pairing and host integration (Beta 1)
+# Wolf pairing and host integration contract
 
-**Status (2026-10-21): implementation in progress, not yet end-to-end tested.** This is a reproducible engineering record, not a claim that a fresh server can be installed automatically.
+**Status:** implementation exists in `main`, but the full fresh-device pairing flow has not passed acceptance. Updated 2026-10-21. This is a client/host interface record, not a turnkey server installer.
 
-## Intended product workflow
+## Verified test-host environment
 
-On the client: install NOW -> sign in -> discover authorized host -> pair Moonlight once in NOW -> launch Games or Videos. The host side must eventually be provisioned by NOW, not configured manually by each end user. The development OptiPlex is a test fixture, **not a product dependency**.
+- Pop!_OS 24.04 server with Docker container `wolf`.
+- Wolf Unix socket inside the container: `/run/user/wolf/wolf.sock`.
+- API document: `GET /api/v1/openapi-schema`.
+- Pairing endpoints: `GET /api/v1/pair/pending` and `POST /api/v1/pair/client`.
+- Session endpoints observed: `GET /api/v1/sessions` and `POST /api/v1/sessions/stop`.
+- Pending requests expose `client_ip` and `pair_secret`; authorization uses `pair_secret` and four-digit `pin`.
+- The host's trusted SSH operator account can reach Docker without sudo; this is **administrative power**, not a safe permission to give a normal end user.
+- Host pairing helper's read-only `pending` command returned an empty list successfully, both on the host and through SSH from the MacBook.
+- A completed first-time pairing POST from the native NOW UI has **not** been observed on a newly unpaired client.
 
-Jellyfin login integration and per-session termination are **deferred** for Beta 1. The existing confirmed **Restart streaming service** is the emergency global Wolf reset; it interrupts active streams. Do not mistake a running Wolf container or desktop container for proof of a connected user.
+The Wolf sessions API can include encryption keys. Never log raw session responses or secrets.
 
-## Verified on the development host (2026-10-21)
+## Packaged code and deployment
 
-- Host OS: Pop!_OS 24.04 LTS; Docker container name `wolf`.
-- Host login account has permission to run `docker info` without `sudo`. This is effectively administrator-level capability; never extend it to an untrusted NOW client.
-- Wolf's local Unix socket **inside the container** is `/run/user/wolf/wolf.sock`. Previous guesses `/var/run/wolf/wolf.sock` and `/tmp/wolf.sock` were incorrect.
-- `curl` is absent inside this Wolf image; `python3` works for Unix socket requests.
-- A local GET `/api/v1/sessions` returned HTTP 200 and real stream sessions, including their dimensions and frame rate. **The response also contains session encryption material. Never log or display raw session JSON.**
-- The OpenAPI document is at **GET `/api/v1/openapi-schema`**, not `/openapi.json`.
-- The installed API schema confirms: GET `/api/v1/pair/pending`, POST `/api/v1/pair/client`, GET `/api/v1/sessions` and POST `/api/v1/sessions/stop`.
-- `PendingPairClient` provides **`client_ip`**, **`pair_secret`**; `PairRequest` requires **`pair_secret`**, **`pin`** (the PIN displayed by the Moonlight client).
-- Only read-only schema and session queries were exercised on the host. **A live pairing POST has not been tested.**
+| Component | Location / action |
+| --- | --- |
+| GTK client | `src/main.c`: Moonlight predefined PIN, native pairing dialog, refresh/authorize action |
+| Client transport | `src/wolf-pair-client.py`, installed at `/usr/lib/optiplex-now/wolf-pair-client.py`; runs a constrained SSH helper |
+| Host helper source | `src/wolf-pair-local.py`, manually installed on the reference host at `/usr/local/libexec/optiplex-now/wolf-pair-local` |
+| Moonlight client | External executable or AppImage/Flatpak, not a Wolf service |
+| Future host installer | Must provision the helper, permissions, service discovery and network setup automatically; **not implemented** |
 
-## Code ownership / intended boundaries
+The host helper resolves `pair_secret` locally after validating a selected pending client's IP and index. The client submits selection and PIN over SSH stdin. The secret must not be sent to the normal client.
 
-- `src/wolf-pair-local.py`: the constrained helper intended to run **on the host**. It queries pending pairing requests but exposes only client IP and ordinal index, then accepts an index, original IP and PIN on stdin and resolves the pairing secret locally. Do not output the secret.
-- `src/wolf-pair-client.py`: the **client** SSH transport. Uses already trusted SSH keys, a pinned host key and a fixed host-side helper path. PIN is passed on stdin, never in a command-line argument.
-- `src/main.c`: GTK setup and Games UI. Moonlight pairing currently launches Moonlight separately and directs users to the Wolf PIN page. GUI integration of the new helper is **not done**.
-- `package.py`: bundles the client transport in the NOW .deb. Packaging this file does **not** install the host helper on a remote server.
-- `src/restart-streaming.sh`: current confirmed global Wolf service restart (with user confirmation); do not replace with speculative per-session container kills.
+NOW generates a four-digit PIN with OS randomness, runs Moonlight's `pair HOST --pin ####` CLI option and uses the matching PIN for authorization. The temporary PIN is currently visible in the Moonlight process argv, even though it is not logged or stored in NOW settings. Do not describe this flow as eliminating all exposure.
 
-## Host provisioning contract (not yet implemented)
+The pairing dialog still requires explicit refresh and authorization of the intended pending client. It may open even when Moonlight has already paired. **Pairing is not automatically guaranteed on the Games button**, and existing pairing does not prove fresh-device enrollment.
 
-1. Ensure Wolf and its local Unix API are available.
-2. Install **a vetted copy** of the host helper at `/usr/local/libexec/optiplex-now/wolf-pair-local`. Its location and permissions must be explicit and checked.
-3. Decide and enforce which SSH principal may run this helper; **do not grant all remote users access to Docker**, a generic shell, Wolf's unrestricted management API, or passwordless unrestricted sudo.
-4. For a trusted owner/test fixture, existing SSH access can exercise the pairing path temporarily; **this is not an appropriate multi-user sharing security model**.
-5. Confirm pending list and actual PIN pairing with a newly unpaired Moonlight client before claiming it works.
-6. The eventual host installer should carry out provisioning/validation with rollback and without breaking other server services.
+## Security requirements
 
-## Security / correctness acceptance
+- No raw Wolf or Docker management API over a public network, no generic client shell access, no unrestricted passwordless sudo.
+- Narrow broker with explicit host/device permissions, deterministic executable paths and a small allowlist.
+- Bound SSH/API waits, validate all messages and client selection before authorizing, fail closed on changes.
+- Confirm owner-authorized device enrollment. An account password is not automatic server permission.
+- Redact PINs, Wolf pairing secrets, Moonlight certificate keys, Tailscale enrollment keys and session crypto material from diagnostics and code.
+- Preserve already-paired device identity and user data during updates; do not reset working clients to test a new connection.
 
-- Never expose Wolf's Unix socket as a public TCP listener.
-- Do not persist, emit, or put `pair_secret`, session AES key/IV, or pairing PIN into logs, URLs, argv, telemetry, or UI history.
-- Verify `client_ip` plus selection still match at pair time; reject changed or expired pairing requests.
-- Bound IPC/network waits and message sizes; handle malformed JSON and API errors.
-- Treat any SSH user with Docker group membership as privileged. Authorization must be specific to the host owner and explicitly trusted devices.
-- No broad network scans, automatic pairing approval, arbitrary Docker actions, or default credentials.
-- Tests must distinguish **CI passed** from **host validated** and **fresh client tested**.
+## Required acceptance checks
 
-## Beta 1 verification checklist
+- [x] Observe the local socket and schema.
+- [x] Observe host helper read-only pending query.
+- [x] Query the same helper from MacBook over SSH.
+- [x] Implement native pairing dialog and generated predefined PIN in code.
+- [ ] Complete authorization from a genuinely unpaired client.
+- [ ] Verify wrong, expired or changed selection cannot authorize another device.
+- [ ] Verify client reconnect without a new PIN.
+- [ ] Verify Games streaming includes actual picture, audio and input after authorization.
+- [ ] Test timeouts, SSH trust failures and cancellation without a frozen GTK window.
+- [ ] Verify the final .deb on a client without prior NOW configuration.
 
-- [x] Locate actual Wolf Unix socket and query live session API without changing sessions.
-- [x] Confirm OpenAPI endpoint and required pairing fields on installed Wolf version.
-- [x] Verify development host login can access Docker without sudo.
-- [x] Host helper manually installed at the declared path on development OptiPlex (user reported successful installation; ownership/permissions not separately audited).
-- [x] Execute read-only helper `pending` on the development host: returned `{\"success\": true, \"count\": 0, \"clients\": []}`.\n- [x] MacBook read-only SSH invocation of installed host helper returned the same successful empty result.
-- [ ] Complete actual Moonlight -> Wolf PIN pairing with test client.
-- [ ] Validate new NOW GTK pairing dialog on MacBook: implementation on branch, not yet device tested.
-- [ ] Prove wrong/expired client selection cannot pair another device.
-- [ ] Smoke test Games, Videos and dashboard following a clean .deb install.
-- [ ] Test onboarding on a fresh Linux client in the ten-minute acceptance window.
+## Future replacement
 
-## Future architecture — not Beta 1 commitments
+The Beta 1 fixed-path SSH approach is a development bridge. The future NOW Host installer must register managed services and provide a least-privilege host agent. The eventual account flow should allow an existing account's new device to be approved via a short-lived email link, then provision only that device's authorized access. Neither feature is currently shipped.
 
-Investigate Headscale and real OptiPlex NOW identity/sharing, a restricted host management agent, Wolf APIs before considering a fork, and low-end Moonlight streaming profiles. See GitHub issue #85. **The product goal is Steam Remote Play ease with Moonlight performance and a simple GUI, independent of any one personal server.**
-
-Update this file *in the same PR as behavior changes*. Mark observed facts as verified with the date and reserve unchecked checklist items for anything not reproduced.
-
-## 2026-10-21 client UI integration (pending device validation)
-
-The native GTK dialog calls the packaged `wolf-pair-client.py` which invokes the fixed host helper path via key-authenticated SSH. Flow: launch Moonlight pairing, refresh pending clients, choose IP, type one-time PIN, submit via stdin. PIN is removed from GTK entry after submission; the local helper checks selected client IP still matches. This is not zero-PIN enrollment, not yet tested against a live pairing, and still requires independently provisioned SSH access and host helper installation. The client login architecture and server provisioning must eventually remove those manual prerequisites.
-
-## 2026-10-21 preselected PIN workflow — CI and real pairing pending
-
-Verified in upstream Moonlight Qt `app/cli/commandlineparser.cpp`: `moonlight pair <host> --pin <four-digit PIN>` supports a caller-selected PIN. In `app/cli/pair.cpp`, Moonlight uses that PIN in its normal pairing exchange instead of generating one internally. NOW can therefore choose the PIN, show it in the GTK dialog, and use it with Wolf without screen-scraping, copying, or manually transcribing.
-
-Implementation on this branch: PIN is generated with Linux `getrandom()`, passed to Moonlight CLI using `--pin`, shown in a read-only NOW entry, and later sent to Wolf over the already-defined SSH helper. Moonlight must stay running to finish certificate exchange after Wolf accepts the PIN. Current dialog still needs a Refresh and explicit Authorize action; unattended pairing is **not yet built or proven**. PIN appears in the local process's command arguments while pairing, so this is **not** a general solution for handling long-lived credentials; it is a temporary four-digit pairing PIN. Never log it, persist it, or include it in shell history.
-
-**Test on an unpaired Moonlight client before shipping.** An already-paired device cannot prove the pairing path works. Check that no terminal is opened, the correct Wolf pending client is selected, Moonlight completes the certificate exchange, and subsequent launches require no PIN.
-
-## 2026-10-21 first-run UI clarification
-
-The normal setup wizard exposes **Connect to Game Host** on its Games page; technical Wolf pairing controls are labeled as advanced help. This is discoverability work, **not yet auto-pairing**: clicking Games does not automatically detect an unpaired client and initiate onboarding, and a shared login does not grant server or Moonlight access. For a production-ready experience, account authorization and host provisioning must precede pairing; the manual pairing control is a fallback.
+See [Beta acceptance](BETA-ACCEPTANCE.md), [Architecture](application-design.md), [Host installer](HOST-INSTALLER.md) and [Issue #94](https://github.com/SteezyMode/OptiplexNow/issues/94).

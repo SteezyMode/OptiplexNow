@@ -12,7 +12,7 @@ This is primarily a **developer/operator practice**, not an end-user launcher fe
 - SSH access to `optiplex@100.121.156.34` through Tailscale or appropriate LAN address.
 - The OptiPlex must remain powered on; network access must be restored to reattach.
 
-## Typical workflow — one step at a time
+## Typical workflow : one step at a time
 On the host, after SSH login:
 
 ```bash

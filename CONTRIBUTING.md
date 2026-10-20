@@ -1,66 +1,55 @@
 # Contributing to OptiPlex NOW
 
-## Read this first (2 minutes)
+Read [Product direction](docs/PRODUCT.md), [Current status](docs/CURRENT-STATUS.md) and [Beta acceptance](docs/BETA-ACCEPTANCE.md) before proposing new scope.
 
-**NOW is a native GTK Linux launcher/manager for an existing remote host.** It starts Moonlight streams to Wolf apps, opens configured media/download services, and provides controlled SSH/SFTP and power/status features. **It is not a streaming engine, not OptiPlex Studio, and does not currently install a new server.** [Current verified status](docs/CURRENT-STATUS.md).
+NOW is currently an amd64 GTK3 Linux client for an already prepared server. It does not own Wolf's streaming protocol, Jellyfin's media service, Tailscale's network or Studio's creation features. The future host manager must remain separately installable.
 
-**The next product direction** is a guided **host installer/manager** with persistent, independently owned Wolf desktops. This is a proposal, not current code. Start with [upstream-first architecture](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md) and [multi-user authorization gates](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md) before designing it. No direct Docker socket or privileged Wolf API exposure to clients.
+## Source map
 
-## Code map
-
-| Location | Responsibility |
+| Path | Responsibility |
 | --- | --- |
-| \`src/main.c\` | Current GTK UI, settings and host/streaming controls. **Large legacy module to split incrementally**, not rewrite wholesale. |
-| \`src/process.c/.h\` | Executable discovery, bounded command execution, detached launches. No GTK dependency. |
-| \`src/presets.c/.h\` | Portable .onp validation/import/export; legacy header compatibility. No GTK dependency. |
-| \`src/backup.c\` | Encrypted trusted-device backup helper (separate binary). |
-| \`src/find-servers.py\` | Tailscale/server discovery helper. |
-| \`src/open-remote-files.sh\` | Remote file access. |
-| \`src/open-web-gaming-admin.py\` | SSH-mediated administrative browser path. |
-| \`src/restart-streaming.sh\`, \`server/wolf-driver-maintenance.py\` | Explicit opt-in host operations, not automatic client setup. |
-| \`src/server-profile.py\` | Existing music stack profile export and staged import—not a service installer. |
-| \`package.py\`, \`Makefile\`, \`assets/\` | Build, package manifest, desktop integration/artwork. |
-| \`tests/\`, \`.github/workflows/\` | Regression checks and strictly separated validation/publication. |
+| `src/main.c` | GTK3 UI, wizard, launcher, tray, state presentation and user-triggered actions |
+| `src/process.c/.h` | Subprocess execution and executable lookup |
+| `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
+| `src/backup.c` | Explicit encrypted client identity/settings backup |
+| `src/find-servers.py` | Peer discovery |
+| `src/wolf-pair-client.py` | SSH-mediated client pairing requests |
+| `src/wolf-pair-local.py` | Privileged host-side Wolf socket mediation; not auto-installed on the host |
+| `src/server-profile.py` | Existing music stack export/staged import; not a host installer |
+| `src/open-remote-files.sh`, `src/open-web-gaming-admin.py` | SFTP and opt-in browser administration |
+| `src/restart-streaming.sh`, `server/` | Explicit host maintenance tools with narrow documented assumptions |
+| `Makefile`, `package.py`, `assets/` | Build, pinned embedded fonts, package manifest and icons |
+| `tests/`, `.github/workflows/` | Regression tests, CI and immutable release publishing |
 
-**Boundary:** NOW owns client UI, configuration, onboarding and (eventually) host orchestration. Wolf owns streaming/sessions, Moonlight is a client, Studio owns creative projects and Codex. Don't merge these responsibilities just because the reference machine runs them all.
+`src/main.c` is still a large single module. Refactor incrementally with tests; do not replace the entire GUI or break current configuration while cleaning architecture.
 
-## Build/test on a disposable development machine
+## Local build
 
-Target: amd64 Ubuntu/Pop!_OS 24.04 (other distributions unverified). Install the build requirements in [README](README.md), including GCC, make, binutils, Python, libssl-dev, Pillow and font-download prerequisites.
+Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Python 3, GTK3/fontconfig headers, OpenSSL headers, curl, Pillow and Xvfb/test GUI dependencies. A clean build downloads two fonts from pinned upstream revisions with integrity and size verification.
 
-Run in the repository root:
-
-\`\`\`sh
+```sh
 make check-process check-presets
 python3 -m unittest discover -s tests -v
 make package
-dpkg-deb -f dist/OptiPlex-Now_1.14.0_amd64.deb Package Version Architecture
-\`\`\`
+```
 
-Build downloads font sources from a pinned Google Fonts commit and verifies their exact upstream Git blob IDs and sizes; a network connection is needed for a clean build. To intentionally upgrade fonts, review the new upstream commit and update `FONT_REV`, both blob IDs and both byte counts in `Makefile` together. The atomic download recipe refuses partial or altered fonts. A passing build is **not** proof of working Wolf playback, pairing, GTK tray behavior or fresh installation. Do not execute host-maintenance helpers as part of testing. Never use the primary OptiPlex as a throwaway test host.
+The resulting `.deb` is under `dist/`. Inspect the actual version in `package.py` before using its versioned filename. Do not commit binary installers or private backups.
 
-## Safe PR workflow
+## Pull request requirements
 
-1. Open an issue or describe one focused change. Cite the user behavior it fixes. Separate **verified**, **proposed**, and **untested** claims.
-2. Branch from \`main\`. Keep the changes narrow. Do not directly edit live host services, projects or user configuration.
-3. For a refactor, preserve input/output, UI labels, config paths and backwards compatibility. Add behavioral tests where practical; text-only source assertions are insufficient by themselves.
-4. Run the commands above and include the outcome in the PR. For UI/streaming changes, also enumerate *manual* on-device checks needed before a release.
-5. Use the PR description to document scope, tests, risk, rollback, and whether anything touches Wolf, Docker, VPN, SSH, browser authentication or user data.
-6. Do not declare completion until tests pass and the user-visible flow has been observed on the relevant device. Never auto-restart/recreate existing Wolf sessions or change services to pass a client test.
+1. State one user-visible behavior or architectural contract, including its issue and non-goals.
+2. State exact affected client files and any host-side effects. For server operations describe permissions, data retention, downtime and rollback.
+3. Preserve compatibility: `~/.config/optiplex-desk/config.ini`, `optiplex-now` and the `optiplex-desk` alias, existing shortcut masks, `.onp` non-secret presets and `.onb` encrypted backups.
+4. Avoid hardcoded reference-host assumptions. Use configured hosts, managed service identifiers or explicit compatibility fallbacks.
+5. Add executable behavioral tests where feasible; source-string assertions alone are insufficient for security, SSH and streaming correctness.
+6. Run build/tests and record the results. Mark real-client and live-host checks **not run** unless observed.
+7. Never silently stop Wolf sessions, restart the owner's services, expose Docker/Wolf admin sockets, bypass SSH host verification or paste credentials into committed files.
+8. Update authoritative documentation in the same PR if user behavior, service contracts, acceptance, or product boundaries change.
 
-## Release and compatibility rules
+Only new `vX.Y.Z` tags trigger releases. Read [Release process](docs/RELEASE-PROCESS.md); CI success is not a declaration that a stream worked. Do not overwrite existing tags/assets.
 
-Only \`.github/workflows/ci.yml\` (read-only main/PR checks) and \`release.yml\` (new version tags only) are active. The old 1.12/1.13 branch publisher workflows were retired. Changing this requires a deliberate security/release review and updates to \`tests/test_repo_contract.py\`. Follow [release process](docs/RELEASE-PROCESS.md): **no existing tag or artifact overwrite**.
+## Review standard
 
-Retain current \`optiplex-now\` / \`optiplex-desk\` compatibility and \`~/.config/optiplex-desk/config.ini\` until a tested migration exists. Keep existing .onp headers importable and .onb backups recoverable. A public brand name has not been selected; treat display names, Debian package IDs, config paths, GTK identifiers, Moonlight shortcuts and exported file headers as separate compatibility layers. Build explicit old-to-new migration and rollback tests rather than bulk renaming identifiers.
+Prefer fewer dependencies, narrow privileges, predictable failure modes and short operator instructions. Always distinguish planned, implemented, CI tested, host observed and fresh-device accepted. Long-term experiments, including Headscale and Wolf forks, require a recorded problem and an independent spike before inclusion in the default installer.
 
-**Licensing is not resolved:** there is no selected application-code license yet. Do not assume public visibility automatically grants redistribution rights; choose an explicit license/contribution policy before outside distribution or accepting substantial third-party contributions.
-
-## Good first areas
-
-- Split config parsing from GTK without changing existing upgrade behavior; add real round-trip tests.
-- Identify/remove obsolete hardcoded assumptions; retain working network endpoints and backward compatibility.
-- Improve clean-host preflight diagnostics **in an isolated test environment**.
-- Add tests around timeouts, resource cleanup, malformed settings and failed connections.
-
-Do **not** start by forking Wolf, redesigning the UI, or implementing multi-user auth as a hidden NOW button. The actual authorization must be enforced on the native Moonlight streaming path.
+No application-code license has been chosen yet. Do not assume public visibility confers permission to reuse or commercially distribute code. Preserve third-party license and attribution material.

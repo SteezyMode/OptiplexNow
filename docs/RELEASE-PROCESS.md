@@ -1,24 +1,26 @@
-# Release process (NOW)
+# Release process
 
-Status: active release process (2026-10-20). Validation on PRs and main is separate from publication.
+**Only explicit new version tags publish installers.** Changes merged into `main` trigger validation but never publish a release automatically.
 
-## Normal development
+## Validation and publication
 
-- Pull requests and pushes to `main` run `Validate OptiPlex NOW`.
-- CI compiles, runs unit tests and inspects the .deb; it does **not** publish a GitHub Release, change a host, or install an application.
-- Treat passing tests as necessary, not proof of working Moonlight/Wolf playback or an on-device GTK tray.
+1. Choose the exact code to ship. Update the Debian package version in `package.py`, release notes, and any current-status references.
+2. Run PR CI; merge approved code into `main`. CI runs build, C/Python tests, GTK smoke checks, package metadata checks and installed-package validation.
+3. Perform manual device testing for changed UI, networking or streaming behavior. Record any untested flows in [Beta acceptance](BETA-ACCEPTANCE.md).
+4. Create a **new** `vX.Y.Z` Git tag at the intended `main` commit, using local `git tag` and `git push` or the authenticated GitHub CLI/API. Never repoint an existing release tag.
+5. `.github/workflows/release.yml` rebuilds the tagged source, verifies that tag/version/package match, and publishes immutable GitHub assets:
+   - `OptiPlex-Now_X.Y.Z_amd64.deb`
+   - `OptiPlex-Now_amd64.deb`
+   - `SHA256SUMS`
+6. Verify [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases), workflow success, SHA256SUMS, package metadata and real installation. Only then call a version published.
 
-## Publishing a new version
+An absent tag means no release, even when code is merged. A matching tag with a failed workflow also does not produce an accepted release. New fixes get a new patch version; do not overwrite past artifacts.
 
-1. Review the changes and independently check the intended release scope.
-2. Bump the package version in `package.py` and update current-version documentation. Keep the package metadata and filename consistent.
-3. Merge the validated source to `main`. Do the relevant **manual device integration checks** (GTK launch, existing settings, Moonlight/Steam and Wolf desktop shortcut, reconnect and backout).
-4. Create and push an annotated **new** `vX.Y.Z` tag pointing to the exact approved commit, for example `git tag -a v1.14.0 -m 'NOW 1.14.0'` followed by `git push origin v1.14.0`. Do not reuse or move published tags.
-5. The tag-only workflow rebuilds and tests that commit, verifies the package version exactly matches the tag and creates new GitHub release assets plus `SHA256SUMS`. Existing releases are never overwritten.
-6. Confirm GitHub Actions success, the release asset filenames and checksums, and the install result on one representative supported Linux desktop.
+## Safety and rollback
 
-If the tag mismatches the package, publishing **must fail**. Fix source on a new commit and use a new approved tag; do not quietly replace a released binary.
+- CI is not a streaming acceptance test. A green workflow does not prove login, Moonlight certificate exchange, host connectivity or user data preservation.
+- The release pipeline must not touch the owner's server or deployed containers.
+- Reversion is installing an older versioned `.deb` while preserving compatible settings and identity; verify migrations before relying on rollback.
+- No workflow may publish from a PR or ordinary `main` push. Do not add a manual publisher without a deliberate release-control review.
 
-## Non-goals
-
-Publishing does not install or update the reference host, MoonlightWeb, Wolf, or user clients. Test manual operations independently. The future turnkey server installer is tracked separately.
+See [Contributing](../CONTRIBUTING.md) and [Current status](CURRENT-STATUS.md).

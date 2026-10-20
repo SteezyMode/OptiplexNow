@@ -1,3 +1,7 @@
+# Historical reference only
+
+This record preserves earlier observations and is **not** a current release, server inventory, or installation contract. For active behavior use [Current status](../CURRENT-STATUS.md), [Product direction](../PRODUCT.md), [Host installer](../HOST-INSTALLER.md) and live service inspection.
+
 # Operations handoff — 2026-10-16
 
 > **Historical server inventory (captured 2026-10-16):** This file intentionally preserves dated host/service/auth observations, but its statements that `main` was v1.11.9 and v1.12.0 was only a draft are **superseded**. GitHub now has published [v1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.13.0) and v1.12.0 releases. For release state, open PRs, separation from Studio and next-session instructions, read [Current Status](CURRENT-STATUS.md). Do not treat obsolete future-tense packaging statements here as undone/unshipped without checking the release.

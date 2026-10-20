@@ -1,94 +1,51 @@
-# OptiPlex Now
+# OptiPlex NOW
 
-[![Build, package and GUI verification](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
-**Automated health checks:** Pull requests, changes to main and a weekly Monday 03:17 UTC run compile, package, and exercise the installed native GTK app on disposable Ubuntu runners. These checks never publish a release or modify the reference server; live Wolf/streaming functionality still needs separate acceptance.
+[![Validate NOW](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
 
+**Linux client for games, media, and remote access to an existing personal server.** NOW combines Moonlight/Wolf launch controls, media links, remote files, and basic host management in a GTK3 desktop application.
 
-> **Release status (2026-10-20):** 1.14.0 is the accepted release candidate, validated by GitHub CI and a Mac mini hands-on check. See [Current Status](docs/CURRENT-STATUS.md). The October 16 operations handoff is historical.
+**Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
 
+## Download
 
-**Remote development:** [Persistent SSH/Codex sessions with tmux](docs/remote-development-tmux.md) — survive client disconnects (not host reboots).
+- [Latest official release and checksums](https://github.com/SteezyMode/OptiplexNow/releases/latest)
+- [Direct amd64 Debian package](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+- [Current code, release and test status](docs/CURRENT-STATUS.md)
 
-**Operator handoff:** [Observed server stack, recovery, and outstanding verification](docs/operations-handoff.md). Read this before editing the reference server or resuming unreleased 1.13.0 work. The handoff separates verified observations from planned features.
+Supports compatible x86-64 Debian/Ubuntu-derived Linux distributions. Native Windows and macOS packages are not provided.
 
-A personal Linux launcher for a home server: games through Moonlight, video and music in the browser, file access, SSH and host controls.
-
-**New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): the source map, build/test commands and safety boundaries. The [documentation index](docs/README.md) separates current implementation, proposed server work and archived design history. NOW owns server access/launching; the independent [Studio application](https://github.com/SteezyMode/OptiplexStudio) owns creative project and Codex workflows. The coordinating Suite documentation may be private and is not needed to build either application.
-
-**Version 1.14.0: Streaming & Maintenance release. Requires an existing server; fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
-
-## Long-term product architecture
-
-- [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
-- [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
-
-## Web Gaming maintenance (1.14.0)
-
-An opt-in MoonlightWeb maintenance helper is documented in [Web Gaming maintenance](docs/moonlightweb-maintenance.md). It requires NOW on both the client and server, supports a narrow existing standalone Docker configuration, and refuses updates while Wolf application containers run. It has passed isolated rollback tests, but a live production upgrade and reconnect have not been validated. The public Caddy domain and Wolf daemon are out of scope.
-
-## Development
-
-Version 1.14.0 adds a streamlined Streaming Setup for Moonlight/Wolf, Web Gaming controls, and manual MoonlightWeb maintenance under Updates & Maintenance. Eight default services can be configured independently for Primary Actions and tray shortcuts. Bruiser remains an independent host application and is no longer shown in NOW; its legacy stored settings are retained for compatibility. Downloads continues to open VueTorrent. See [application structure](docs/application-design.md).
-
-## Install
-
-[Download the latest OptiPlex NOW installer](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+Download the `OptiPlex-Now_amd64.deb` package, then install through the system's software installer or from its download directory:
 
 ```sh
 sudo apt install ./OptiPlex-Now_amd64.deb
 ```
 
-Quit and reopen the app after updating. Existing settings are retained. The link above downloads the latest release directly. Versioned installers and checksums are available on the [Releases page](https://github.com/SteezyMode/OptiplexNow/releases).
+Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
 
-Supports x86-64 Debian/Ubuntu-based Linux, including compatible Linux installations on Apple hardware. Native Windows and macOS builds are not included.
+## Connect to an existing host
 
-## Connect
+1. Install NOW and sign into Tailscale with an account already approved for the host.
+2. In **Settings > Setup Wizard**, discover the host or enter its address and SSH username. Confirm the expected SSH fingerprint.
+3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
+4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
 
-**Household beta default:** On a clean NOW client installation, the Videos shortcut is pre-filled with `https://media.monumentrisk.com`. Existing installations retain their saved Videos URL (including an intentionally blank URL), and the Setup Wizard can change it. Tailscale connects the device to the network; it does not automatically sign into Jellyfin or any other service that independently requires authentication.
+A fresh beta installation may preset Videos to `https://media.monumentrisk.com` for the reference-host test. This is not a general service. Replace the URL for another host. Existing user URLs are preserved. Tailscale connectivity does not sign into Jellyfin.
 
-1. Sign into Tailscale on the server and client.
-2. Open **Settings → Setup Wizard**. Choose **Find server on Tailscale**, then confirm the server and SSH username.
-3. Authorize SSH, verifying the server fingerprint when prompted.
-4. Install or select Moonlight and pair it with Wolf.
-5. Set the video, music and download service URLs. For Dropped Needle, leave Music URL blank to use `http://SERVER:8688`, or enter its existing address. The Music button opens its controls in your browser; sign in there.
+**Still manual:** first-time SSH authorization, a separately installed host pairing helper, and aspects of Wolf pairing. An already paired device should not be treated as proof that unpaired onboarding works. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
 
-The Tailscale picker lists devices; it does not install services or grant access. Manual addresses also work. Both ends need to remain connected to Tailscale for remote access.
+## Available functions
 
-## Features
+- Start Steam or a configured desktop through Moonlight and Wolf.
+- Open configured video, music, and download services in a browser.
+- Open an SFTP file browser and an SSH terminal.
+- Show CPU/GPU/memory information and host service states for Tailscale, VPN, Wolf, and desktop containers.
+- Configure primary and tray actions; request host power or global streaming-service restart with confirmation.
+- Export non-secret connection presets and encrypted client-identity backups.
+- Use optional server-specific maintenance tools with documented prerequisites.
 
-- Launch Steam or OptiPlex Studio Desktop directly through Moonlight; the Desktop shortcut uses Wolf's OptiPlex Studio Desktop application.
-- Open the existing Downloads shortcut in VueTorrent using the configured server host on port 8085 (requires qBittorrent/VueTorrent installed on that server).
-- Open video, music and download services in the browser.
-- Browse server files over SFTP and open an SSH terminal.
-- View server hardware and status; wake, sleep, restart or shut down the host when configured.
-- Use tray shortcuts and restart the streaming service.
-- Export connection presets or encrypted client backups containing SSH keys and supported Moonlight settings.
-- Export the supported music server profile, including its configuration, credentials and database; verify and stage an imported profile in a new folder.
+A green VPN indicator reports the selected Gluetun container's own health check, not an independently verified exit IP. A running Wolf desktop container is not necessarily an active connected streaming client.
 
-**Restart streaming service** interrupts active streams. It requires Docker, a `wolf` container, sudo access and `/usr/local/sbin/wolf-prepare-devices` on the host. A running container does not by itself confirm successful playback.
-
-Music-profile export runs on the server itself and temporarily stops the music/download stack. Its archive is private but unencrypted. Import does not remap paths, configure networking or deploy containers. Keep profiles and credentials out of GitHub.
-
-## Server setup
-
-[Server configuration, VPN, backups and planned installer](docs/server-setup.md)
-
-Those notes document the working AirVPN/Gluetun, slskd, qBittorrent and Dropped Needle arrangement, including the database and encryption key needed to preserve account integrations. They also describe Jellyfin/ErsatzTV and the remaining fresh-server work.
-
-Installing this client does not install Wolf, Jellyfin, a VPN stack, ErsatzTV or scheduled server backups.
-
-## Startup and troubleshooting
-
-Add `optiplex-now --start-in-tray` to desktop startup. Edit an existing entry instead of adding a duplicate. The older `optiplex-desk` command remains as a compatibility alias.
-
-- **Offline / Pair SSH:** check the address, Tailscale sign-in and SSH authorization.
-- **Games do not open:** check Moonlight, pairing and Wolf's advertised Steam application.
-- **No tray icon:** enable a StatusNotifier host or supported notification area. Without tray support, the app opens a window instead.
-- **Files fails on COSMIC:** check GVFS SFTP and FUSE support.
-
-## Build
-
-Requires x86-64 Linux, GCC, make, binutils, curl, Python 3, GTK 3/Gio runtime libraries, fontconfig and OpenSSL development files. Pillow is required to package the current icon sizes. The profile helper requires Python 3.11 or newer.
+## Development
 
 ```sh
 make check-process check-presets
@@ -96,8 +53,19 @@ python3 -m unittest discover -s tests -v
 make package
 ```
 
-The build downloads Inter and Limelight fonts and writes the installer to `dist/`. Fonts are embedded; end users do not fetch them at runtime. See [font notices](FONT-NOTICES.md).
+A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRIBUTING.md) for dependencies, source map, CI rules, and host safety. Only version-tagged workflows publish installers. Generated `.deb` files are not committed to source control.
 
-`src/` contains the application and helpers; `tests/` contains unit and regression tests; `assets/` contains icons. **Prebuilt installers are published only through [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases)**, not stored in the source tree. Generated build folders and personal credentials are excluded.
+## Documentation
 
-The build and profile-tool tests pass. The new music-profile workflow has not yet been tested against the live reference server. No application-code license has been selected; clarify licensing before outside contributions or commercial distribution. This project is not affiliated with Dell.
+| Subject | Primary reference |
+| --- | --- |
+| Scope, vision, principles, phases | [Product direction](docs/PRODUCT.md) |
+| Implemented, published, unverified | [Current status](docs/CURRENT-STATUS.md) |
+| First external tester acceptance | [Beta acceptance](docs/BETA-ACCEPTANCE.md) |
+| Code layout and compatibility contracts | [Architecture](docs/application-design.md) |
+| Build, release, rollback | [Contributing](CONTRIBUTING.md) and [Release process](docs/RELEASE-PROCESS.md) |
+| Host preparation, pairing, future installer and fork policy | [Documentation index](docs/README.md) |
+
+OptiPlex Studio is a [separate local-first creation application](https://github.com/SteezyMode/OptiplexStudio). NOW may stream its desktop but does not manage creative projects. The deprecated Suite is not a dependency.
+
+Application-code licensing has not been selected. Public source availability does not by itself grant redistribution rights. This project is not affiliated with Dell.

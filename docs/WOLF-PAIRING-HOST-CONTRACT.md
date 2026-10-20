@@ -69,3 +69,11 @@ Update this file *in the same PR as behavior changes*. Mark observed facts as ve
 ## 2026-10-21 client UI integration (pending device validation)
 
 The native GTK dialog calls the packaged `wolf-pair-client.py` which invokes the fixed host helper path via key-authenticated SSH. Flow: launch Moonlight pairing, refresh pending clients, choose IP, type one-time PIN, submit via stdin. PIN is removed from GTK entry after submission; the local helper checks selected client IP still matches. This is not zero-PIN enrollment, not yet tested against a live pairing, and still requires independently provisioned SSH access and host helper installation. The client login architecture and server provisioning must eventually remove those manual prerequisites.
+
+## 2026-10-21 preselected PIN workflow — CI and real pairing pending
+
+Verified in upstream Moonlight Qt `app/cli/commandlineparser.cpp`: `moonlight pair <host> --pin <four-digit PIN>` supports a caller-selected PIN. In `app/cli/pair.cpp`, Moonlight uses that PIN in its normal pairing exchange instead of generating one internally. NOW can therefore choose the PIN, show it in the GTK dialog, and use it with Wolf without screen-scraping, copying, or manually transcribing.
+
+Implementation on this branch: PIN is generated with Linux `getrandom()`, passed to Moonlight CLI using `--pin`, shown in a read-only NOW entry, and later sent to Wolf over the already-defined SSH helper. Moonlight must stay running to finish certificate exchange after Wolf accepts the PIN. Current dialog still needs a Refresh and explicit Authorize action; unattended pairing is **not yet built or proven**. PIN appears in the local process's command arguments while pairing, so this is **not** a general solution for handling long-lived credentials; it is a temporary four-digit pairing PIN. Never log it, persist it, or include it in shell history.
+
+**Test on an unpaired Moonlight client before shipping.** An already-paired device cannot prove the pairing path works. Check that no terminal is opened, the correct Wolf pending client is selected, Moonlight completes the certificate exchange, and subsequent launches require no PIN.

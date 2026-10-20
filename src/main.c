@@ -12,6 +12,7 @@
 #include <sys/file.h>
 #include <sys/types.h>
 #include <time.h>
+#include <sys/random.h>
 #include <pthread.h>
 #include <limits.h>
 #include <dirent.h>
@@ -758,20 +759,22 @@ static gboolean wolf_pair_request(const char*action,const char*payload,char*out,
  g_free(response);g_clear_error(&error);g_object_unref(process);
  return success;
 }
-static void wolf_pair_dialog(void){
+static void wolf_pair_dialog(const char*generated_pin){
  GtkWidget*d=gtk_dialog_new_with_buttons("Pair Moonlight",GTK_WINDOW(win),GTK_DIALOG_MODAL,
   "Cancel",GTK_RESPONSE_CANCEL,"Refresh clients",1,"Authorize PIN",GTK_RESPONSE_OK,NULL);
  GtkWidget*content=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*hint=gtk_label_new("Start Moonlight pairing on this device. Then refresh, select the pending client and enter its PIN.");
+ GtkWidget*hint=gtk_label_new("NOW has started Moonlight pairing with the PIN below. Refresh pending clients, then authorize the correct device.");
  gtk_label_set_line_wrap(GTK_LABEL(hint),TRUE);
  gtk_box_pack_start(GTK_BOX(content),hint,FALSE,FALSE,8);
  GtkWidget*clients=gtk_combo_box_text_new();
  gtk_box_pack_start(GTK_BOX(content),clients,FALSE,FALSE,6);
  GtkWidget*pin_entry=gtk_entry_new();
  gtk_entry_set_placeholder_text(GTK_ENTRY(pin_entry),"Moonlight PIN");
+ gtk_entry_set_text(GTK_ENTRY(pin_entry),generated_pin);
+ gtk_editable_set_editable(GTK_EDITABLE(pin_entry),FALSE);
  gtk_entry_set_max_length(GTK_ENTRY(pin_entry),12);
  gtk_box_pack_start(GTK_BOX(content),pin_entry,FALSE,FALSE,6);
- GtkWidget*status=gtk_label_new("Click Refresh clients after Moonlight displays a PIN.");
+ GtkWidget*status=gtk_label_new("Click Refresh clients when Moonlight connects. No PIN copying is needed.");
  gtk_label_set_line_wrap(GTK_LABEL(status),TRUE);
  gtk_box_pack_start(GTK_BOX(content),status,FALSE,FALSE,6);
  char addresses[100][64];int request_indices[100];int count=0;
@@ -795,7 +798,7 @@ static void wolf_pair_dialog(void){
    }
    g_strfreev(lines);
    if(count)gtk_combo_box_set_active(GTK_COMBO_BOX(clients),0);
-   gtk_label_set_text(GTK_LABEL(status),count?"Choose client and enter its PIN.":"No pending Moonlight clients. Start pairing, then refresh.");
+   gtk_label_set_text(GTK_LABEL(status),count?"Choose your Moonlight client and click Authorize PIN.":"No pending Moonlight clients. Start pairing, then refresh.");
    continue;
   }
   int selected=gtk_combo_box_get_active(GTK_COMBO_BOX(clients));
@@ -803,7 +806,7 @@ static void wolf_pair_dialog(void){
   size_t length=strlen(pin);gboolean valid=length>=4&&length<=12;
   for(size_t i=0;i<length;i++)if(pin[i]<'0'||pin[i]>'9')valid=FALSE;
   if(selected<0||selected>=count||!valid){
-   gtk_label_set_text(GTK_LABEL(status),"Select a pending client and enter its numeric PIN.");continue;
+   gtk_label_set_text(GTK_LABEL(status),"Select a pending client to authorize.");continue;
   }
   char request[256],result[256]={0};
   snprintf(request,sizeof request,"{\"index\":%d,\"client_ip\":\"%s\",\"pin\":\"%s\"}",request_indices[selected],addresses[selected],pin);
@@ -819,15 +822,24 @@ static void wolf_pair_dialog(void){
 }
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
- if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
- char *native[]={"moonlight","pair",cfg[0],NULL};
- char *appimage[]={(char*)find_appimage(),"pair",cfg[0],NULL};
- char *flat[]={"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],NULL};
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER IN SETTINGS");return;}
+ unsigned int random_value=0;
+ if(getrandom(&random_value,sizeof random_value,0)!=(ssize_t)sizeof random_value){say("CANNOT GENERATE PAIRING PIN");return;}
+ char pin[5];snprintf(pin,sizeof pin,"%04u",random_value%10000);
+ const char*appimage=find_appimage();
+ const gchar*native[]={"moonlight","pair",cfg[0],"--pin",pin,NULL};
+ const gchar*portable[]={appimage,"pair",cfg[0],"--pin",pin,NULL};
+ const gchar*flat[]={"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],"--pin",pin,NULL};
  int mode=moonlight_mode();
- if(terminal_launch(mode==1?appimage:mode==2?native:flat)){
-   say("MOONLIGHT PAIRING STARTED");
-   wolf_pair_dialog();
- }
+ const gchar*const*args=mode==1?portable:mode==2?native:flat;
+ GError*error=NULL;
+ GSubprocess*process=g_subprocess_newv(args,G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ if(!process){g_clear_error(&error);say("MOONLIGHT PAIRING COULD NOT START");memset(pin,0,sizeof pin);return;}
+ say("MOONLIGHT PAIRING STARTED");
+ wolf_pair_dialog(pin);
+ memset(pin,0,sizeof pin);
+ /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
+ g_object_unref(process);
 }
 static void on_games_action(void*w,void*arg){(void)w;
  int resp=(int)(long)arg;

@@ -64,7 +64,7 @@ static int instance_fd = -1;
 static int tray_restoring = 0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
 static GtkWidget *model_heading=NULL;
-static GtkWidget *metric_cpu,*metric_gpu,*metric_free,*drive_combo;
+static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_network,*metric_free,*drive_combo;
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
@@ -353,7 +353,7 @@ static void setup_tailscale(void) {
  else browser_open("https://tailscale.com/download/linux");
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -425,8 +425,11 @@ static gboolean finish_on_main(void *arg) {
    gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"online");gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"offline");gtk_style_context_remove_class(GTK_STYLE_CONTEXT(sty),"pair");
    gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),r->success==1?"online":r->success==2?"pair":"offline");
    gtk_label_set_text(GTK_LABEL(status_detail),r->success==1?"":r->message);
-   if(metric_cpu){char val[70];snprintf(val,sizeof val,"CPU   %s",*r->cpu?r->cpu:"--");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
-   if(metric_gpu){char val[70];snprintf(val,sizeof val,"GPU   %s",*r->gpu?r->gpu:"--");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
+   if(metric_cpu){char val[110];snprintf(val,sizeof val,"CPU   %s  %s",*r->cpu_load?r->cpu_load:"--",*r->cpu?r->cpu:"");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
+   if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
+   if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
+   if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
+   if(metric_network)gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  CONNECTED":"TAILSCALE  DISCONNECTED");
    update_drives(r);
    if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;
@@ -527,6 +530,11 @@ static void *worker(void*arg){
       "printf 'CPU='; "
       "sensors 2>/dev/null | awk '/Package id 0:/ {print $4; exit}' | tr -d '+\r'; "
       "printf 'GPU='; nvidia-smi --query-gpu=temperature.gpu --format=csv,noheader,nounits 2>/dev/null | head -1; "
+      "printf 'CPU_LOAD='; awk 'NR==1 {total=0; for(i=2;i<=NF;i++)total+=$i; idle=$5+$6; print total,idle}' /proc/stat | "
+      "awk '{a=$1;b=$2; system(\"sleep 0.2\"); getline < \"/proc/stat\"; total=0; for(i=2;i<=NF;i++)total+=$i; idle=$5+$6; if(total>a)printf \"%.0f%%\\n\",100*(1-(idle-b)/(total-a)); else print \"--\"}' ; "
+      "printf 'RAM_USED='; awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if(t>0)printf \"%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; "
+      "printf 'GPU_LOAD='; nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | awk 'NF {print $1\"%\"}'; "
+      "printf 'VRAM_USED='; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | awk -F, 'NF>=2 {printf \"%.1f / %.1f GiB\\n\",$1/1024,$2/1024}'; "
       "printf 'DRIVES_BEGIN\n'; "
       "df -hPT -x tmpfs -x devtmpfs -x overlay -x squashfs -x zramfs 2>/dev/null "
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
@@ -539,6 +547,10 @@ static void *worker(void*arg){
        get_metric(r->model,sizeof r->model,stats,"MODEL=");
        get_metric(r->cpu,sizeof r->cpu,stats,"CPU=");
        get_metric(r->gpu,sizeof r->gpu,stats,"GPU=");
+       get_metric(r->cpu_load,sizeof r->cpu_load,stats,"CPU_LOAD=");
+       get_metric(r->gpu_load,sizeof r->gpu_load,stats,"GPU_LOAD=");
+       get_metric(r->ram_used,sizeof r->ram_used,stats,"RAM_USED=");
+       get_metric(r->vram_used,sizeof r->vram_used,stats,"VRAM_USED=");
        if(*r->gpu){strncat(r->gpu,"°C",sizeof r->gpu-strlen(r->gpu)-1);}
        const char*line=stats;
        while((line=strstr(line,"DRIVE=")) && r->drive_count<MAX_DRIVES){
@@ -1735,7 +1747,7 @@ int main(int argc,char**argv) {
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
- win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,505);
+ win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,350);
  gtk_window_set_icon_name(GTK_WINDOW(win),"optiplex-now");gtk_window_set_position(GTK_WINDOW(win),1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
@@ -1764,13 +1776,16 @@ int main(int argc,char**argv) {
  GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
  metric_cpu=label("CPU   --","metric");metric_gpu=label("GPU   --","metric");
  gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);
+  metric_ram=label("RAM   --","metric");metric_vram=label("VRAM   --","metric");
+  gtk_grid_attach(GTK_GRID(metrics),metric_ram,0,1,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_vram,1,1,1,1);
  GtkWidget*diskbox=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);gtk_widget_set_name(diskbox,"drivemetric");
  GtkWidget*diskhead=label("STORAGE","storagehead");add(diskbox,diskhead,0);
  drive_combo=gtk_combo_box_text_new();gtk_widget_set_name(drive_combo,"drivecombo");gtk_widget_set_hexpand(drive_combo,1);
  gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(drive_combo),"Checking drives...");gtk_combo_box_set_active(GTK_COMBO_BOX(drive_combo),0);
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
- gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,1);
+ gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,2);
+  metric_network=label("TAILSCALE  --","helper");add(body,metric_network,0);
  /* The dashboard prioritizes host state. Launchers live on Software page. */
  GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
  GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);

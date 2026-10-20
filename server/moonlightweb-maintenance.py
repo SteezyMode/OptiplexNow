@@ -13,6 +13,7 @@ import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import time
 
 NAME = "moonlightweb"
@@ -53,7 +54,7 @@ def volume_from(info):
     return name, Path(mount["Source"]), mount.get("Mode", "")
 
 
-def recreate_args(info, image_id):
+def recreate_args(info, image_id, env_file):
     """Build a replacement ONLY for the explicitly supported standalone shape."""
     host = info["HostConfig"]
     cfg = info["Config"]
@@ -91,9 +92,8 @@ def recreate_args(info, image_id):
     if mode:
         spec += ":" + mode
     args.extend(["--volume", spec])
-    # Container environment is explicitly preserved (including port overrides).
-    for item in cfg.get("Env") or []:
-        args.extend(["--env", item])
+    # Never expose PINs/tokens through Docker command-line arguments.
+    args.extend(["--env-file", str(env_file)])
     if cfg.get("User"):
         args.extend(["--user", cfg["User"]])
     if cfg.get("WorkingDir"):
@@ -108,6 +108,25 @@ def check_image_defaults(info):
     for field in ("Entrypoint", "Cmd"):
         if info["Config"].get(field) != original.get(field):
             raise RuntimeError("Custom " + field + " found; refusing changes")
+
+
+def write_private_env(info):
+    STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+    STATE.chmod(0o700)
+    fd, raw_path = tempfile.mkstemp(prefix=".moonlightweb-env-", dir=STATE)
+    path = Path(raw_path)
+    try:
+        with os.fdopen(fd, "w") as handle:
+            for item in info["Config"].get("Env") or []:
+                key, sep, _ = item.partition("=")
+                if (not sep or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key)
+                        or "\\n" in item or "\\r" in item):
+                    raise RuntimeError("Unsupported environment entry")
+                handle.write(item + "\\n")
+        return path
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
 
 
 def save_backup(source):
@@ -159,7 +178,8 @@ def update():
     if active_wolf_apps():
         raise RuntimeError("Wolf app session active. Update deferred to protect desktop state")
     old = inspect()
-    args_probe = recreate_args(old, old["Image"])
+    sentinel = STATE / ".never-written-preflight"
+    args_probe = recreate_args(old, old["Image"], sentinel)
     check_image_defaults(old)
     if not old["State"]["Running"]:
         raise RuntimeError("MoonlightWeb is not running; inspect before updating")
@@ -170,7 +190,7 @@ def update():
         print("Already running the current pulled image; no changes made.")
         return
     # Validate replacement arguments and inspect BEFORE any interruption.
-    args = recreate_args(old, new_id)
+    args = recreate_args(old, new_id, sentinel)
     if args_probe[:-1] != args[:-1]:
         raise RuntimeError("Unexpected recreation argument drift")
     if active_wolf_apps():
@@ -182,6 +202,7 @@ def update():
     created = False
     previous_policy = old["HostConfig"]["RestartPolicy"]["Name"]
     old_name = None
+    env_file = None
     try:
         docker("stop", "--time", "20", NAME)
         stopped = True
@@ -191,6 +212,8 @@ def update():
         docker("update", "--restart=no", NAME)
         docker("rename", NAME, old_name)
         renamed = True
+        env_file = write_private_env(old)
+        args = recreate_args(old, new_id, env_file)
         subprocess.run(args, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         created = True
         docker("start", NAME)
@@ -212,6 +235,9 @@ def update():
               "private data backup before downgrading after a schema migration.",
               file=sys.stderr)
         raise
+    finally:
+        if env_file is not None:
+            env_file.unlink(missing_ok=True)
 
 
 def menu():

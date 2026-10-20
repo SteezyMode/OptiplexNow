@@ -9,6 +9,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | Path | Responsibility |
 | --- | --- |
 | `src/main.c` | GTK3 UI, wizard, launcher, tray, state presentation and user-triggered actions |
+| `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
 | `src/process.c/.h` | Subprocess execution and executable lookup |
 | `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
 | `src/backup.c` | Explicit encrypted client identity/settings backup |
@@ -21,14 +22,16 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `Makefile`, `package.py`, `assets/` | Build, pinned embedded fonts, package manifest and icons |
 | `tests/`, `.github/workflows/` | Regression tests, CI and immutable release publishing |
 
-`src/main.c` is still a large single module. Refactor incrementally with tests; do not replace the entire GUI or break current configuration while cleaning architecture.
+`src/main.c` is still a large GTK controller, with shared indexed settings and synchronous onboarding operations. New modules should keep GTK widgets and remote I/O out of parsing/persistence code. Split one responsibility at a time with behavioral tests; do not replace the GUI or mix a large formatting-only diff with a functional change.
+
+A shared `.clang-format` defines four-space C indentation and a 100-column target. Format newly extracted or edited functions, not the entire legacy `main.c` in unrelated PRs. Preserve the existing serialized config index order, file path and legacy preset inputs.
 
 ## Local build
 
 Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Python 3, GTK3/fontconfig headers, OpenSSL headers, curl, Pillow and Xvfb/test GUI dependencies. A clean build downloads two fonts from pinned upstream revisions with integrity and size verification.
 
 ```sh
-make check-process check-presets
+make check-process check-presets check-config
 python3 -m unittest discover -s tests -v
 make package
 ```

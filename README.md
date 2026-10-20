@@ -4,7 +4,7 @@
 **Automated health checks:** Pull requests, changes to main and a weekly Monday 03:17 UTC run compile, package, and exercise the installed native GTK app on disposable Ubuntu runners. These checks never publish a release or modify the reference server; live Wolf/streaming functionality still needs separate acceptance.
 
 
-> **Current project/release status (2026-10-19):** See [Current Status](docs/CURRENT-STATUS.md) for the latest verified v1.13.0 release, unmerged UI PR #13, open reliability work, and the boundary between NOW and the independent OptiPlex Studio. The older [October 16 operations handoff](docs/operations-handoff.md) is a historical server snapshot, not a current release plan.
+> **Release status (2026-10-20):** 1.14.0 is the accepted release candidate, validated by GitHub CI and a Mac mini hands-on check. See [Current Status](docs/CURRENT-STATUS.md). The October 16 operations handoff is historical.
 
 
 **Remote development:** [Persistent SSH/Codex sessions with tmux](docs/remote-development-tmux.md) — survive client disconnects (not host reboots).
@@ -15,24 +15,24 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 **New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): the source map, build/test commands and safety boundaries. The [documentation index](docs/README.md) separates current implementation, proposed server work and archived design history. NOW owns server access/launching; the independent [Studio application](https://github.com/SteezyMode/OptiplexStudio) owns creative project and Codex workflows. The coordinating Suite documentation may be private and is not needed to build either application.
 
-**Latest published release: 1.13.0; the next release candidate is 1.14.0 (not yet published). Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+**Version 1.14.0: Streaming & Maintenance release. Requires an existing server; fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Long-term product architecture
 
 - [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
 - [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
 
-## Proposed Web Gaming maintenance (1.14.0 release candidate)
+## Web Gaming maintenance (1.14.0)
 
-A draft NOW-managed MoonlightWeb maintenance workflow is documented in [Web Gaming maintenance](docs/moonlightweb-maintenance.md). It adopts an existing standalone Docker installation, refuses updates while Wolf application sessions are active, and keeps the existing `/data` volume. The helper requires installation of a future tested NOW package on both the client and server. It has **not** been deployed or released. The public Caddy domain and Wolf are out of scope.
+An opt-in MoonlightWeb maintenance helper is documented in [Web Gaming maintenance](docs/moonlightweb-maintenance.md). It requires NOW on both the client and server, supports a narrow existing standalone Docker configuration, and refuses updates while Wolf application containers run. It has passed isolated rollback tests, but a live production upgrade and reconnect have not been validated. The public Caddy domain and Wolf daemon are out of scope.
 
 ## Development
 
-Version 1.13.0 adds opt-in Wolf maintenance, direct Desktop and Web Gaming actions, an SSH-backed Web Gaming Admin shortcut, and an optional Bruiser AI shortcut under Additional Services, automatically opening Open WebUI on the configured server's port 3000 unless overridden. Settings contains a separate Bruiser AI Admin shortcut. Settings now lets you choose any of the nine service actions as Primary Actions or move them into Additional Services, independently of tray shortcuts. Existing installs keep their previous eight featured actions; fresh installs start with six. Downloads still launches VueTorrent. Automated build checks do not replace on-device end-to-end tests. See [application structure](docs/application-design.md).
+Version 1.14.0 adds a streamlined Streaming Setup for Moonlight/Wolf, Web Gaming controls, and manual MoonlightWeb maintenance under Updates & Maintenance. Eight default services can be configured independently for Primary Actions and tray shortcuts. Bruiser remains an independent host application and is no longer shown in NOW; its legacy stored settings are retained for compatibility. Downloads continues to open VueTorrent. See [application structure](docs/application-design.md).
 
 ## Install
 
-[Download OptiPlex Now 1.13.0](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+[Download the latest OptiPlex NOW installer](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
 
 ```sh
 sudo apt install ./OptiPlex-Now_amd64.deb

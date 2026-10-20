@@ -15,14 +15,14 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 **New to this repository?** Start with [CONTRIBUTING.md](CONTRIBUTING.md): the source map, build/test commands and safety boundaries. The [documentation index](docs/README.md) separates current implementation, proposed server work and archived design history. NOW owns server access/launching; the independent [Studio application](https://github.com/SteezyMode/OptiplexStudio) owns creative project and Codex workflows. The coordinating Suite documentation may be private and is not needed to build either application.
 
-**Current version: 1.13.0. Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
+**Latest published release: 1.13.0; the next release candidate is 1.14.0 (not yet published). Requires an existing server. Fresh-server installation is not implemented.** The New Server Setup screen is a placeholder. Music profiles can be exported and imported into a staging folder, but importing does not install or start services.
 
 ## Long-term product architecture
 
 - [Turnkey server and upstream-first Wolf integration](docs/UPSTREAM-FIRST-WOLF-INTEGRATION.md): guided install and management, Wolf API adapter, version compatibility, safe updates and fork criteria. **Proposed strategy, not a shipped installer.**
 - [NOW 2.x multi-user desktop feasibility](docs/MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): Wolf stable/beta capability differences, user/device authentication and persistent storage design, safe isolation, staged experiment and acceptance criteria. **Review only; no live server changes.**
 
-## Proposed Web Gaming maintenance (not in v1.13.0)
+## Proposed Web Gaming maintenance (1.14.0 release candidate)
 
 A draft NOW-managed MoonlightWeb maintenance workflow is documented in [Web Gaming maintenance](docs/moonlightweb-maintenance.md). It adopts an existing standalone Docker installation, refuses updates while Wolf application sessions are active, and keeps the existing `/data` volume. The helper requires installation of a future tested NOW package on both the client and server. It has **not** been deployed or released. The public Caddy domain and Wolf are out of scope.
 

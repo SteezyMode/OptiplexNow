@@ -129,6 +129,9 @@ static const char *CSS =
 "#drivefree.warn {color:#e7aa82;}"
 "#drivecombo button {background:#1e211f;color:#ece8e0;border:1px solid #4d5650;border-radius:2px;padding:3px 7px;min-height:25px;font-size:11px;}"
 "#drivecombo button:hover {border-color:#c47d65;}"
+"#trayorder, #trayorder row {background:#1d211e;color:#ece8e0;}"
+"#trayorder row {border-bottom:1px solid #444b46;padding:3px;}"
+"#trayorder checkbutton, #trayorder checkbutton check {color:#ece8e0;}"
 "#tile {background:#1e211f;color:#ece8e0;border:1px solid #554840;border-radius:2px;padding:6px 8px;font-weight:800;font-size:12px;min-height:43px;border-bottom:2px solid #c47d65;}"
 "#tile:hover {background:#b96b5e;color:#101111;} #tile:active {background:#e6aa77;}"
 "#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
@@ -1186,6 +1189,21 @@ static void settings_link(GtkWidget *container,GtkWidget *stack,const char *capt
  g_signal_connect(b,"clicked",G_CALLBACK(settings_open_page),NULL);
  add(container,b,0);
 }
+/* XFCE-style list ordering: move the existing row, preserving its checkboxes. */
+static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
+ GtkWidget *row=gtk_widget_get_ancestor(button,GTK_TYPE_LIST_BOX_ROW);
+ if(!row)return;
+ GtkListBox *list=GTK_LIST_BOX(gtk_widget_get_parent(row));
+ int from=gtk_list_box_row_get_index(GTK_LIST_BOX_ROW(row));
+ int delta=GPOINTER_TO_INT(direction_ptr);
+ int to=from+delta;
+ if(to<0 || to>=8)return;
+ g_object_ref(row);
+ gtk_container_remove(GTK_CONTAINER(list),row);
+ gtk_list_box_insert(list,row,to);
+ g_object_unref(row);
+ gtk_widget_show_all(GTK_WIDGET(list));
+}
 static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
  /* A single resizable dialog with internal navigation; suitable for 1024x768. */
@@ -1256,29 +1274,46 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,desktop_caption_entry,0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[8],*tray_checks[8],*order_spins[8],*choices=gtk_grid_new();
- int current_order[8],positions[8];tray_order_load(current_order);
- for(int i=0;i<8;i++)positions[current_order[i]]=i+1;
- gtk_grid_set_row_spacing(GTK_GRID(choices),5);gtk_grid_set_column_spacing(GTK_GRID(choices),18);
- gtk_grid_attach(GTK_GRID(choices),label("SERVICE","storagehead"),0,0,1,1);
- gtk_grid_attach(GTK_GRID(choices),label("PRIMARY","storagehead"),1,0,1,1);
- gtk_grid_attach(GTK_GRID(choices),label("TRAY","storagehead"),2,0,1,1);
- gtk_grid_attach(GTK_GRID(choices),label("TRAY ORDER","storagehead"),3,0,1,1);
+ GtkWidget*featured_checks[8],*tray_checks[8];
+ GtkWidget*order_list=gtk_list_box_new();
+ gtk_list_box_set_selection_mode(GTK_LIST_BOX(order_list),GTK_SELECTION_NONE);
+ gtk_widget_set_name(order_list,"trayorder");
+ int current_order[8];tray_order_load(current_order);
+ GtkWidget*headers=gtk_grid_new();
+ gtk_grid_set_column_spacing(GTK_GRID(headers),12);
+ gtk_grid_attach(GTK_GRID(headers),label("SERVICE","storagehead"),0,0,1,1);
+ gtk_grid_attach(GTK_GRID(headers),label("PRIMARY","storagehead"),1,0,1,1);
+ gtk_grid_attach(GTK_GRID(headers),label("TRAY","storagehead"),2,0,1,1);
+ gtk_grid_attach(GTK_GRID(headers),label("MOVE","storagehead"),3,0,1,1);
+ add(col,headers,0);
  const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
- for(int i=0;i<8;i++){
-   gtk_grid_attach(GTK_GRID(choices),label(service_names[i],NULL),0,i+1,1,1);
-   featured_checks[i]=gtk_check_button_new_with_label("");
-   tray_checks[i]=gtk_check_button_new_with_label("");
+ for(int n=0;n<8;n++){
+   int i=current_order[n];
+   GtkWidget*row=gtk_list_box_row_new();
+   g_object_set_data(G_OBJECT(row),"service-id",GINT_TO_POINTER(i+1));
+   GtkWidget*line=gtk_grid_new();
+   gtk_grid_set_column_spacing(GTK_GRID(line),12);
+   gtk_container_add(GTK_CONTAINER(row),line);
+   GtkWidget*name=label(service_names[i],NULL);
+   gtk_widget_set_size_request(name,128,-1);
+   gtk_label_set_xalign(GTK_LABEL(name),0);
+   gtk_grid_attach(GTK_GRID(line),name,0,0,1,1);
+   featured_checks[i]=gtk_check_button_new();
+   tray_checks[i]=gtk_check_button_new();
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(featured_checks[i]),(fm&(1u<<i))!=0);
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
-   gtk_grid_attach(GTK_GRID(choices),featured_checks[i],1,i+1,1,1);
-   gtk_grid_attach(GTK_GRID(choices),tray_checks[i],2,i+1,1,1);
-   order_spins[i]=gtk_spin_button_new_with_range(1,8,1);
-   gtk_spin_button_set_value(GTK_SPIN_BUTTON(order_spins[i]),positions[i]);
-   gtk_grid_attach(GTK_GRID(choices),order_spins[i],3,i+1,1,1);
+   gtk_grid_attach(GTK_GRID(line),featured_checks[i],1,0,1,1);
+   gtk_grid_attach(GTK_GRID(line),tray_checks[i],2,0,1,1);
+   GtkWidget*arrows=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+   GtkWidget*up=button("↑","setting"),*down=button("↓","setting");
+   g_signal_connect(up,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(-1));
+   g_signal_connect(down,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(1));
+   add(arrows,up,0);add(arrows,down,0);
+   gtk_grid_attach(GTK_GRID(line),arrows,3,0,1,1);
+   gtk_list_box_insert(GTK_LIST_BOX(order_list),row,-1);
  }
- add(col,choices,0);
+ add(col,order_list,0);
  col=connection;
  add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
@@ -1313,12 +1348,10 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
     if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
       tray_desktop_caption_save(new_caption);
-    int ordered[8],ranks[8];
-    for(int i=0;i<8;i++){ranks[i]=gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(order_spins[i]));ordered[i]=current_order[i];}
-    /* Stable sort: ties preserve previous order. */
-    for(int i=1;i<8;i++){int key=ordered[i],j=i-1;
-      while(j>=0 && ranks[ordered[j]]>ranks[key]){ordered[j+1]=ordered[j];j--;}
-      ordered[j+1]=key;
+    int ordered[8];
+    for(int n=0;n<8;n++){
+      GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
+      ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
     }
     tray_order_save(ordered);
     config_save();/* Never destroy the activating tray menu from its own callback. */
@@ -1677,7 +1710,7 @@ static void tray_build_menu(void){
    /* AppIndicator/DBusMenu serializes the menu item label, not arbitrary
     * GtkBox children. Use a standard labeled item for both tray backends. */
    char caption[256];
-   snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);
+   snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);
    GtkWidget*item=gtk_menu_item_new_with_label(caption);
    g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);

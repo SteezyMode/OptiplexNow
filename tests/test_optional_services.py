@@ -21,7 +21,7 @@ class OptionalServiceTests(unittest.TestCase):
     def test_primary_and_tray_are_independently_selected(self):
         self.assertIn("#define TRAY_ALL_BUTTONS 255u", SOURCE)
         self.assertIn("#define TRAY_DEFAULT_BUTTONS 255u", SOURCE)
-        self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8],*order_spins[8]", SOURCE)
+        self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8]", SOURCE)
         self.assertIn('"PRIMARY","storagehead"', SOURCE)
         self.assertIn('"TRAY","storagehead"', SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
@@ -31,9 +31,11 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("int order[8];tray_order_load(order);", SOURCE)
         self.assertIn("if(!(mask & (1u<<i)))continue;", SOURCE)
         self.assertIn("tray_order_save(ordered);", SOURCE)
-        self.assertIn("gtk_spin_button_new_with_range(1,8,1)", SOURCE)
+        self.assertIn("G_CALLBACK(tray_order_move)", SOURCE)
+        self.assertIn("gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n)", SOURCE)
+        self.assertIn("gtk_list_box_insert(GTK_LIST_BOX(order_list),row,-1)", SOURCE)
         self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
-        self.assertIn('snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
+        self.assertIn('snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):

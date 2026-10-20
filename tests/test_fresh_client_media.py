@@ -29,6 +29,10 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('safe_copy(cfg[16],512,web_url);', SOURCE)
         self.assertIn('if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);', SOURCE)
         self.assertIn('browser_open(cfg[ix]);', SOURCE)
+        self.assertIn('browser_open(cfg[7]);', SOURCE)
+        self.assertNotIn('snprintf(cfg[6],512,"http://%s:8688"', SOURCE)
+        self.assertNotIn('snprintf(cfg[7],512,"http://%s:8085"', SOURCE)
+        self.assertNotIn('"Legacy Downloads URL (unused)"', SOURCE)
 
     def test_saved_urls_preserved_on_upgrade(self):
         loader = SOURCE[SOURCE.index("static void config_load(void)"):

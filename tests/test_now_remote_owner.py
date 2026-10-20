@@ -29,6 +29,38 @@ class PinnedOwnerTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     identity.parse_owner_user_id(value)
 
+    def test_trusted_server_tailscale_owner_needs_no_host_screen(self):
+        class Result:
+            returncode=0
+            stdout=json.dumps({"BackendState":"Running",
+                "Self":{"UserID":1042, "Tags":[], "TailscaleIPs":["100.85.8.2"]}})
+        commands=[]
+        def fake_run(args, **kw):
+            commands.append((args, kw))
+            return Result()
+        self.assertEqual(identity.owner_from_local_tailscale(runner=fake_run),"1042")
+        self.assertEqual(commands[0][0],["tailscale","status","--json"])
+        self.assertLessEqual(commands[0][1]["timeout"],3)
+
+    def test_automatic_owner_binding_rejects_tagged_or_unenrolled_server(self):
+        class Result:
+            returncode=0
+            stdout=""
+        for status in [
+            {"BackendState":"NeedsLogin","Self":{"UserID":1042,"TailscaleIPs":["100.85.8.2"]}},
+            {"BackendState":"Running","Self":{"UserID":0,"TailscaleIPs":["100.85.8.2"]}},
+            {"BackendState":"Running","Self":{"UserID":1042,"Tags":["tag:server"],"TailscaleIPs":["100.85.8.2"]}},
+            {"BackendState":"Running","Self":{"UserID":1042,"ShareeNode":True,"TailscaleIPs":["100.85.8.2"]}},
+            {"BackendState":"Running","Self":{"UserID":1042,"TailscaleIPs":["192.168.1.10"]}},
+        ]:
+            with self.subTest(status=status):
+                def runner(*args, **kwargs):
+                    r=Result()
+                    r.stdout=json.dumps(status)
+                    return r
+                with self.assertRaises(ValueError):
+                    identity.owner_from_local_tailscale(runner=runner)
+
     def test_pinned_owner_from_private_installer_file(self):
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/"owner-id"

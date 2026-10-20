@@ -1,6 +1,6 @@
 # Release process (NOW)
 
-Status: proposed workflow change in `cleanup/phase-1-release-safety`. This document governs future releases after that PR is reviewed and merged. It does not create a release.
+Status: active release process (2026-10-20). Validation on PRs and main is separate from publication.
 
 ## Normal development
 
@@ -21,4 +21,4 @@ If the tag mismatches the package, publishing **must fail**. Fix source on a new
 
 ## Non-goals
 
-This phase does not change installation prerequisites, package format, application logic, Wolf configuration, or the current v1.13.0 release. The future turnkey server installer is tracked separately.
+Publishing does not install or update the reference host, MoonlightWeb, Wolf, or user clients. Test manual operations independently. The future turnkey server installer is tracked separately.

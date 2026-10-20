@@ -10,11 +10,12 @@
 /* Original export/import formats are permanent migration inputs, even after renaming. */
 #define PRESET_HEADER_V1 "# OptiPlex Now server preset v1\n"
 #define PRESET_HEADER_V2 "# OptiPlex Now server preset v2\n"
+#define PRESET_HEADER_V3 "# OptiPlex Now server preset v3\n"
 #define PRESET_HEADER_V2_LEGACY "# OptiPlex Now server preset v2 (v1 imports supported)\n"
 
-/* Only these ten non-secret settings are exported. */
-#define PRESET_COUNT 10
-static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14};
+/* V3 adds optional Web Gaming URL. Stable indices keep all older fields. */
+#define PRESET_COUNT 11
+static const int preset_indices[PRESET_COUNT]={0,1,2,3,4,5,6,7,10,14,16};
 
 static void preset_copy(char *dest, size_t cap, const char *src) {
     snprintf(dest, cap, "%s", src ? src : "");
@@ -86,7 +87,7 @@ int now_preset_values_valid(char v[NOW_PRESET_CONFIG_COUNT][512]) {
     for (int i = 5; i <= 7; i++) {
         if (!now_safe_preset_url(v[i])) return 0;
     }
-    if(!now_safe_preset_url(v[14]))return 0;
+    if(!now_safe_preset_url(v[14]) || !now_safe_preset_url(v[16]))return 0;
     if (*v[10] && v[10][0] != '/') return 0;
 
     for (int i = 0; i < PRESET_COUNT; i++) {
@@ -107,17 +108,20 @@ int now_preset_read(const char *path, char v[NOW_PRESET_CONFIG_COUNT][512],
     }
     char staged[NOW_PRESET_CONFIG_COUNT][NOW_PRESET_VALUE_SIZE];
     memcpy(staged, v, sizeof staged);
+    /* Never carry a previous host\'s Web Gaming URL into an imported host. */
+    staged[16][0] = 0;
 
     char header[128];
     if (!fgets(header, sizeof header, f) ||
         (strcmp(header, PRESET_HEADER_V1) && strcmp(header, PRESET_HEADER_V2) &&
-         strcmp(header, PRESET_HEADER_V2_LEGACY))) {
+         strcmp(header, PRESET_HEADER_V2_LEGACY) && strcmp(header, PRESET_HEADER_V3))) {
         fclose(f);
         return 0;
     }
 
     char line[1024];
     int found_host = 0;
+    int is_v3 = strcmp(header, PRESET_HEADER_V3) == 0;
     while (fgets(line, sizeof line, f)) {
         if (strlen(line) > 900 || (!strchr(line, '\n') && !feof(f))) {
             fclose(f);
@@ -136,7 +140,7 @@ int now_preset_read(const char *path, char v[NOW_PRESET_CONFIG_COUNT][512],
         int match = 0;
         for (int i = 0; i < PRESET_COUNT; i++) {
             int j = preset_indices[i];
-            if (!strcmp(line, keys[j])) {
+            if (!strcmp(line, keys[j]) && (is_v3 || j != 16)) {
                 preset_copy(staged[j], NOW_PRESET_VALUE_SIZE, eq);
                 match = 1;
                 if (j == 0) {
@@ -173,7 +177,7 @@ int now_preset_write(const char *path, char v[NOW_PRESET_CONFIG_COUNT][512],
         close(fd);
         return 0;
     }
-    int ok = fprintf(f, "%s", PRESET_HEADER_V2) > 0;
+    int ok = fprintf(f, "%s", PRESET_HEADER_V3) > 0;
     for (int i = 0; i < PRESET_COUNT; i++) {
         int j = preset_indices[i];
         if (fprintf(f, "%s=%s\n", keys[j], v[j]) < 0) {

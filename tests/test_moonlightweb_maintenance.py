@@ -92,7 +92,7 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
              patch.object(mw, "inspect", return_value=original), \
              patch.object(mw, "check_image_defaults"), \
              patch.object(mw, "docker") as docker:
-            docker.side_effect = ["", '{"Id": "sha256:old"}']
+            docker.side_effect = ["", '[{"Id": "sha256:old"}]']
             mw.update()
             self.assertEqual(docker.call_args_list[0].args, ("pull", mw.IMAGE))
             self.assertFalse(any(call.args[0] in ("stop", "rename", "rm")

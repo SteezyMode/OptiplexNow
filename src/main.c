@@ -813,7 +813,7 @@ static void pair_wolf(void){
   return;
  }
  g_object_unref(process);
- say("MOONLIGHT PAIRING OPENED. HAVE SERVER OWNER APPROVE THE PIN");
+ say("MOONLIGHT PAIRING REQUEST STARTED. OWNER MUST APPROVE THE PIN");
  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),
    "Moonlight shows a PIN. Approve it on Wolf using the server's one-time pairing link.");
 }
@@ -824,8 +824,11 @@ static void on_games_action(void*w,void*arg){(void)w;
  else if(resp==105)choose_appimage();
  else if(resp==103)pair_wolf();
  else if(resp==104){
-   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-     if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHECK SERVER SETTINGS");
+   if(!now_valid_host(cfg[0])){
+     if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHOOSE A SERVER FIRST");
+   }else if(!now_valid_user(cfg[1])){
+     preset_alert(win,"Wolf approval",
+       "Moonlight pairing has started. The Wolf server owner must open Wolf's one-time pairing link and approve the PIN shown in Moonlight. SSH is NOT required to stream games.");
    }else{
      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"LOOKING FOR WOLF PAIRING PAGE");
      begin_job(5);
@@ -870,9 +873,9 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
  GtkWidget*choose=button("USE APPIMAGE","setupaction");
  g_signal_connect_data(choose,"clicked",(GCallback)on_games_action,(void*)(long)105,NULL,0);add(col,choose,0);
- GtkWidget*pairbutton=button("PAIR WOLF","setupaction");
+ GtkWidget*pairbutton=button("START PAIRING","setupaction");
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
- GtkWidget*pin=button("OPEN WOLF PIN","setupaction");
+ GtkWidget*pin=button("OPEN WOLF APPROVAL LINK (SSH OPTIONAL)","setupaction");
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
@@ -1467,7 +1470,12 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf();
- else if(!strcmp(n,"w_wolfpin"))begin_job(5);
+ else if(!strcmp(n,"w_wolfpin")){
+  if(!now_valid_host(cfg[0]))say("CHOOSE A SERVER FIRST");
+  else if(!now_valid_user(cfg[1]))preset_alert(c->assistant,"Wolf approval",
+    "The server owner must approve the PIN shown in Moonlight using Wolf's temporary pairing link. Streaming does not require SSH. Automatic remote owner approval is a separate server-side feature.");
+  else begin_job(5);
+ }
  else if(!strcmp(n,"w_profile")){
    char *args[]={"sudo","python3","/usr/lib/optiplex-now/server-profile.py",NULL};
    terminal_launch(args);
@@ -1558,8 +1566,8 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->games_page=four;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
- wizard_button(c,four,"PAIR WOLF","w_wolf");
- wizard_button(c,four,"OPEN WOLF PIN","w_wolfpin");
+ wizard_button(c,four,"START MOONLIGHT PAIRING","w_wolf");
+ wizard_button(c,four,"OPEN WOLF APPROVAL LINK (IF SSH CONFIGURED)","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL

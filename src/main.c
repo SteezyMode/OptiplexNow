@@ -1363,6 +1363,13 @@ static void wizard_save(Wizard*c){
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
 static void wizard_service_check(void*w,void*p);
+static void wizard_validate_web(void*w,void*p){
+ (void)w;Wizard*c=p;
+ if(!c->web_url || !c->services_page)return;
+ const char*value=gtk_entry_get_text(GTK_ENTRY(c->web_url));
+ gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->services_page,
+                                 now_safe_preset_url(value));
+}
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;(void)page;Wizard*c=p;
  gtk_label_set_text(GTK_LABEL(c->ts_state),client_tailscale_label());
@@ -1560,7 +1567,9 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
    gtk_grid_attach(GTK_GRID(rows),service_labels[i],2,i,1,1);
  }
  GtkWidget*check=button("CHECK SERVICES","setupaction");g_signal_connect_data(check,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,check,0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);
+ g_signal_connect_data(c->web_url,"changed",(GCallback)wizard_validate_web,c,NULL,0);
+ wizard_validate_web(NULL,c);
  /* Page 6: nothing else needed for existing clients. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("READY","modalheading"),0);

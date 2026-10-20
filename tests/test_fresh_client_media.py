@@ -37,6 +37,9 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),c->staged[i+5])',SOURCE)
         self.assertIn('if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);',SOURCE)
         self.assertNotIn("media.monumentrisk.com?",SOURCE)
+        # This is a demo-build default, not a replacement Web Gaming service.
+        self.assertIn('browser_open("https://games.monumentrisk.com/?launch=steam");',SOURCE)
+        self.assertIn('"featured_actions"',SOURCE)
 
 if __name__=="__main__":
     unittest.main()

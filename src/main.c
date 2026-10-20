@@ -982,6 +982,99 @@ cleanup:
  if(error)g_error_free(error);
  g_free(out);g_free(err_text);
 }
+/* Owner-only action on the machine RUNNING MoonlightWeb. This never runs
+ * Docker on the selected remote client host, and never opens an admin port. */
+static gboolean web_owner_pin_in_progress=FALSE;
+static void owner_pin_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,
+                                                  &out,NULL,&error);
+ web_owner_pin_in_progress=FALSE;
+ const char*prefix="NOW_OWNER_STATUS=";
+ const char*state=out?g_strstrip(out):"";
+ if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
+       && g_str_has_prefix(state,"NOW_OWNER_STATUS=pin:")){
+  const char*pin=state+strlen("NOW_OWNER_STATUS=pin:");
+  gboolean valid=strlen(pin)==6;
+  for(const char*p=pin;*p;p++)if(!g_ascii_isdigit(*p))valid=FALSE;
+  if(valid){
+   GtkWidget*dialog=gtk_dialog_new_with_buttons(
+      "Web Gaming access PIN",GTK_WINDOW(win),GTK_DIALOG_MODAL,
+      "CLOSE",GTK_RESPONSE_CLOSE,NULL);
+   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+   gtk_container_set_border_width(GTK_CONTAINER(area),20);
+   GtkWidget*intro=gtk_label_new(
+      "Give this single-use PIN to the new browser device.\n"
+      "The client opens https://games.monumentrisk.com and enters it.\n"
+      "No SSH, server password, or admin page is required on that client.");
+   gtk_label_set_line_wrap(GTK_LABEL(intro),TRUE);
+   gtk_box_pack_start(GTK_BOX(area),intro,FALSE,FALSE,6);
+   GtkWidget*value=gtk_label_new(pin);
+   PangoAttrList*attrs=pango_attr_list_new();
+   PangoAttribute*sz=pango_attr_scale_new(2.3);
+   pango_attr_list_insert(attrs,sz);
+   gtk_label_set_attributes(GTK_LABEL(value),attrs);
+   pango_attr_list_unref(attrs);
+   gtk_label_set_selectable(GTK_LABEL(value),TRUE);
+   gtk_box_pack_start(GTK_BOX(area),value,FALSE,FALSE,12);
+   gtk_widget_show_all(dialog);
+   gtk_dialog_run(GTK_DIALOG(dialog));
+   gtk_widget_destroy(dialog);
+   say("WEB GAMING PIN ISSUED ON THIS SERVER");
+   goto done;
+  }
+ }
+ if(g_str_has_prefix(state,prefix))state+=strlen(prefix);
+ const char*message="Could not issue a Web Gaming access PIN. Check the local MoonlightWeb server.";
+ if(!strcmp(state,"not_local_server"))message="This action only works on the machine running the MoonlightWeb Docker container. No remote administration is attempted.";
+ else if(!strcmp(state,"docker_missing"))message="Docker is not installed locally. Run this owner action on a configured server.";
+ else if(!strcmp(state,"docker_permission_denied"))message="This local account does not have Docker access. Sign into the server with an authorized owner account.";
+ else if(!strcmp(state,"moonlightweb_not_found"))message="The local MoonlightWeb container was not found. The streaming server may be a different computer.";
+ else if(!strcmp(state,"moonlightweb_not_running"))message="The local MoonlightWeb container is stopped.";
+ else if(!strcmp(state,"pin_output_unrecognized"))message="MoonlightWeb returned an unfamiliar PIN format. Nothing can be displayed safely; check server compatibility.";
+ else if(!strcmp(state,"pin_issuance_failed"))message="MoonlightWeb rejected the PIN issuance request. Check the container health.";
+ else if(!strcmp(state,"docker_timeout"))message="The local Docker operation timed out.";
+ else if(!strcmp(state,"docker_unavailable"))message="Cannot contact local Docker. Check the Docker service and your account permission.";
+ preset_alert(win,"Web Gaming PIN unavailable",message);
+ say("WEB GAMING PIN NOT ISSUED");
+done:
+ if(error)g_error_free(error);
+ g_free(out);
+}
+static void on_web_gaming_issue_pin(void*w,void*p){
+ (void)w;(void)p;
+ if(web_owner_pin_in_progress){say("A WEB GAMING PIN REQUEST IS ALREADY RUNNING");return;}
+ GtkWidget*confirm=gtk_message_dialog_new(GTK_WINDOW(win),GTK_DIALOG_MODAL,
+   GTK_MESSAGE_QUESTION,GTK_BUTTONS_NONE,
+   "Issue a new one-use Web Gaming access PIN on this server?");
+ gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(confirm),
+   "Only an authorized local Docker user can perform this action. "
+   "A previous unused PIN may be replaced. Existing signed-in devices are not revoked.");
+ gtk_dialog_add_buttons(GTK_DIALOG(confirm),"CANCEL",GTK_RESPONSE_CANCEL,
+                        "ISSUE PIN",GTK_RESPONSE_OK,NULL);
+ int response=gtk_dialog_run(GTK_DIALOG(confirm));
+ gtk_widget_destroy(confirm);
+ if(response!=GTK_RESPONSE_OK)return;
+ const char*helper="/usr/lib/optiplex-now/local-web-gaming-pin.py";
+ if(access(helper,R_OK)!=0){
+  preset_alert(win,"Web Gaming PIN unavailable","Local owner PIN helper is missing. Reinstall OptiPlex NOW.");
+  return;
+ }
+ GError*error=NULL;
+ GSubprocess*proc=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+   G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+   "/usr/bin/python3",helper,NULL);
+ if(!proc){
+  if(error)g_error_free(error);
+  preset_alert(win,"Web Gaming PIN unavailable","Could not start the local owner helper.");
+  return;
+ }
+ web_owner_pin_in_progress=TRUE;
+ say("ISSUING SINGLE-USE PIN ON THIS SERVER...");
+ g_subprocess_communicate_utf8_async(proc,NULL,NULL,owner_pin_finished,NULL);
+ g_object_unref(proc);
+}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
  if(web_admin_in_progress){say("WEB GAMING ADMIN IS ALREADY STARTING");return;}
@@ -1373,6 +1466,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
+ if(access("/var/run/docker.sock",F_OK)==0){
+  GtkWidget*ownerpin=button("ISSUE WEB GAMING ACCESS PIN (THIS SERVER)","setupaction");
+  g_signal_connect_data(ownerpin,"clicked",(GCallback)on_web_gaming_issue_pin,NULL,NULL,0);
+  add(col,ownerpin,0);
+ }
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  add(col,label("SERVICES","modalheading"),0);

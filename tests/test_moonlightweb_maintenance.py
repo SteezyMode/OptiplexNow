@@ -13,6 +13,7 @@ spec.loader.exec_module(mw)
 def sample():
     return {
         "Name": "/moonlightweb",
+        "Id": "sha256:original-container",
         "Image": "sha256:old",
         "Config": {
             "Image": mw.IMAGE,
@@ -237,7 +238,8 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
                     return '[{"Id": "sha256:new"}]'
                 return ""
             with patch.object(mw, "active_wolf_apps", return_value=[]), \
-                 patch.object(mw, "inspect", return_value=old), \
+                 patch.object(mw, "inspect", side_effect=[
+                     old, {"Id": "sha256:replacement-container"}]), \
                  patch.object(mw, "check_image_defaults"), \
                  patch.object(mw, "docker", side_effect=fake_docker) as docker, \
                  patch.object(mw, "save_backup", return_value=("teststamp", Path(directory) / "backup.tar.gz")), \
@@ -247,10 +249,39 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError, "backend failed"):
                     mw.update()
                 commands = [call.args for call in docker.call_args_list]
+                self.assertIn(("rm", "-f", "moonlightweb"), commands)
                 self.assertIn(("rename", "moonlightweb-preupdate-teststamp", "moonlightweb"), commands)
                 self.assertIn(("update", "--restart=unless-stopped", "moonlightweb"), commands)
                 self.assertIn(("start", "moonlightweb"), commands)
                 self.assertFalse(any(command[0] in ("volume", "rm", "rmi") for command in commands))
+
+    def test_partial_create_failure_cleans_replacement_before_rollback(self):
+        from tempfile import TemporaryDirectory
+        import subprocess
+        with TemporaryDirectory() as directory:
+            old = sample()
+            old["Mounts"][0]["Source"] = directory
+            env_file = Path(directory) / ".env"
+            env_file.write_text("TZ=Asia/Tokyo\n")
+            def fake_docker(*args):
+                if args[:2] == ("image", "inspect"):
+                    return '[{"Id": "sha256:new"}]'
+                return ""
+            with patch.object(mw, "active_wolf_apps", return_value=[]), \
+                 patch.object(mw, "inspect", side_effect=[
+                     old, {"Id": "sha256:replacement-container"}]), \
+                 patch.object(mw, "check_image_defaults"), \
+                 patch.object(mw, "docker", side_effect=fake_docker) as docker, \
+                 patch.object(mw, "save_backup", return_value=("teststamp", Path(directory) / "backup")), \
+                 patch.object(mw, "write_private_env", return_value=env_file), \
+                 patch.object(mw.subprocess, "run", side_effect=subprocess.CalledProcessError(1, "docker create")):
+                with self.assertRaises(subprocess.CalledProcessError):
+                    mw.update()
+                commands = [call.args for call in docker.call_args_list]
+                self.assertIn(("rm", "-f", "moonlightweb"), commands)
+                self.assertIn(("rename", "moonlightweb-preupdate-teststamp", "moonlightweb"), commands)
+                self.assertIn(("start", "moonlightweb"), commands)
+                self.assertFalse(any(command[0] == "volume" for command in commands))
 
     def test_status_does_not_print_secrets(self):
         with patch.object(mw, "inspect", return_value=sample()), \

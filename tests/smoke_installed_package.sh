@@ -13,6 +13,12 @@ sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
 test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
+test -x /usr/lib/optiplex-now/find-now-hosts.py
+test -x /usr/bin/optiplex-now-host-agent
+test -x /usr/lib/optiplex-now/now-host-agent
+# This only checks CLI help. Never start the host service on a CI runner.
+optiplex-now-host-agent --help >/dev/null
+python3 /usr/lib/optiplex-now/find-now-hosts.py --help >/dev/null
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

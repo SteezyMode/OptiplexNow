@@ -20,7 +20,7 @@ import sys
 
 SOCKET_NAME = "owner.sock"
 MAX_INPUT = 1024
-MAX_OUTPUT = 8192
+MAX_OUTPUT = 32768
 SOCKET_TIMEOUT = 2
 
 

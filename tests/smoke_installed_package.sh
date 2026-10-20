@@ -16,7 +16,13 @@ test -x /usr/lib/optiplex-now/optiplex-now-backup
 # Client setup helpers must be bundled; source-tree checks alone can miss them.
 test -r /usr/lib/optiplex-now/client_auth.py
 test -r /usr/lib/optiplex-now/tailscale_browser_login.py
-python3 -m py_compile /usr/lib/optiplex-now/client_auth.py /usr/lib/optiplex-now/tailscale_browser_login.py
+python3 - <<'PY'
+import ast
+from pathlib import Path
+for filename in ("client_auth.py", "tailscale_browser_login.py"):
+    source = Path("/usr/lib/optiplex-now") / filename
+    ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
+PY
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

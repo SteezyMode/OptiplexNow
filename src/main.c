@@ -24,6 +24,7 @@
 #include "presets.h"
 #include "config.h"
 #include "wolf_pairing.h"
+#include "wolf_transport.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -714,80 +715,217 @@ static void install_moonlight(void){
    if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"COMPLETE INSTALLATION IN THE TERMINAL");
  }
 }
-/* Host-side Wolf pairing is restricted to a fixed helper via trusted SSH. */
-static gboolean wolf_pair_request(const char*action,const char*payload,char*out,size_t cap){
- if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1]))return FALSE;
- const gchar*argv[]={"/usr/bin/python3","/usr/lib/optiplex-now/wolf-pair-client.py",action,cfg[0],cfg[1],NULL};
- GError*error=NULL;
- GSubprocess*process=g_subprocess_newv(argv,G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
- if(!process){g_clear_error(&error);return FALSE;}
- gchar*response=NULL;
- gboolean okay=g_subprocess_communicate_utf8(process,payload,NULL,&response,NULL,&error);
- gboolean success=okay&&g_subprocess_get_successful(process);
- if(out&&cap)g_strlcpy(out,response?response:"",cap);
- g_free(response);g_clear_error(&error);g_object_unref(process);
- return success;
+/* The bridge is host-local behind trusted SSH. Never block GTK while querying it. */
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *clients;
+    GtkWidget *pin_entry;
+    GtkWidget *status;
+    GtkWidget *refresh_button;
+    GtkWidget *authorize_button;
+    GCancellable *cancellable;
+    guint timeout_id;
+    gboolean busy;
+    gboolean closed;
+    gboolean pairing;
+    char host[512];
+    char user[512];
+    NowWolfPending pending[NOW_WOLF_MAX_PENDING];
+    int count;
+} WolfPairUI;
+
+static void wolf_ui_free(WolfPairUI *state)
+{
+    if (state->timeout_id) {
+        g_source_remove(state->timeout_id);
+    }
+    g_clear_object(&state->cancellable);
+    g_free(state);
 }
-static void wolf_pair_dialog(const char*generated_pin){
- GtkWidget*d=gtk_dialog_new_with_buttons("Connect to Game Host",GTK_WINDOW(win),GTK_DIALOG_MODAL,
-  "Cancel",GTK_RESPONSE_CANCEL,"Refresh clients",1,"Authorize PIN",GTK_RESPONSE_OK,NULL);
- GtkWidget*content=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*hint=gtk_label_new("NOW has started Moonlight pairing with the PIN below. Refresh pending clients, then authorize the correct device.");
- gtk_label_set_line_wrap(GTK_LABEL(hint),TRUE);
- gtk_box_pack_start(GTK_BOX(content),hint,FALSE,FALSE,8);
- GtkWidget*clients=gtk_combo_box_text_new();
- gtk_box_pack_start(GTK_BOX(content),clients,FALSE,FALSE,6);
- GtkWidget*pin_entry=gtk_entry_new();
- gtk_entry_set_placeholder_text(GTK_ENTRY(pin_entry),"Moonlight PIN");
- gtk_entry_set_text(GTK_ENTRY(pin_entry),generated_pin);
- gtk_editable_set_editable(GTK_EDITABLE(pin_entry),FALSE);
- gtk_entry_set_max_length(GTK_ENTRY(pin_entry),12);
- gtk_box_pack_start(GTK_BOX(content),pin_entry,FALSE,FALSE,6);
- GtkWidget*status=gtk_label_new("Click Refresh clients when Moonlight connects. No PIN copying is needed.");
- gtk_label_set_line_wrap(GTK_LABEL(status),TRUE);
- gtk_box_pack_start(GTK_BOX(content),status,FALSE,FALSE,6);
- NowWolfPending pending[NOW_WOLF_MAX_PENDING] = {0};
- int count=0;
- gtk_widget_show_all(d);
- for(;;){
-  gint response=gtk_dialog_run(GTK_DIALOG(d));
-  if(response!=1&&response!=GTK_RESPONSE_OK)break;
-  if(response==1){
-   count=0;
-   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(clients));
-   char output[8192]={0};
-   if(!wolf_pair_request("pending-text",NULL,output,sizeof output)){
-    gtk_label_set_text(GTK_LABEL(status),"Cannot reach pairing helper. Verify server SSH access.");continue;
-   }
-   count=now_wolf_parse_pending(output,pending,NOW_WOLF_MAX_PENDING);
-   if(count<0){
-    count=0;
-    gtk_label_set_text(GTK_LABEL(status),"Invalid or ambiguous pending client list. Refresh to retry.");
-    continue;
-   }
-   for(int i=0;i<count;i++)
-    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(clients),pending[i].client_ip);
-   if(count)gtk_combo_box_set_active(GTK_COMBO_BOX(clients),0);
-   gtk_label_set_text(GTK_LABEL(status),count?"Choose your Moonlight client and click Authorize PIN.":"No pending Moonlight clients. Start pairing, then refresh.");
-   continue;
-  }
-  int selected=gtk_combo_box_get_active(GTK_COMBO_BOX(clients));
-  const gchar*pin=gtk_entry_get_text(GTK_ENTRY(pin_entry));
-  char request[256]={0},result[256]={0};
-  if(selected<0||selected>=count||
-     !now_wolf_make_pair_payload(&pending[selected],pin,request,sizeof request)){
-   gtk_label_set_text(GTK_LABEL(status),"Select a valid pending client to authorize.");
-   continue;
-  }
-  gboolean success=wolf_pair_request("pair",request,result,sizeof result);
-  memset(request,0,sizeof request);
-  gtk_entry_set_text(GTK_ENTRY(pin_entry),"");
-  if(success&&(strstr(result,"\"success\": true")||strstr(result,"\"success\":true"))){
-   say("MOONLIGHT PAIRED");break;
-  }
-  gtk_label_set_text(GTK_LABEL(status),"Pairing failed or expired. Refresh pending clients and retry.");
- }
- gtk_widget_destroy(d);
+
+static void wolf_ui_close(WolfPairUI *state)
+{
+    if (state->closed) {
+        return;
+    }
+    state->closed = TRUE;
+    if (state->cancellable) {
+        g_cancellable_cancel(state->cancellable);
+    }
+    gtk_widget_destroy(state->dialog);
+
+    /* An outstanding GTask still owns a pointer to this state. */
+    if (!state->busy) {
+        wolf_ui_free(state);
+    }
+}
+
+static gboolean wolf_ui_timeout(gpointer data)
+{
+    WolfPairUI *state = data;
+    state->timeout_id = 0;
+    if (!state->closed && state->cancellable) {
+        g_cancellable_cancel(state->cancellable);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    WolfPairUI *state = data;
+    GError *error = NULL;
+    char *reply = now_wolf_request_finish(result, &error);
+    gboolean pairing = state->pairing;
+
+    state->busy = FALSE;
+    if (state->timeout_id) {
+        g_source_remove(state->timeout_id);
+        state->timeout_id = 0;
+    }
+    g_clear_object(&state->cancellable);
+
+    if (state->closed) {
+        g_free(reply);
+        g_clear_error(&error);
+        wolf_ui_free(state);
+        return;
+    }
+
+    gtk_widget_set_sensitive(state->refresh_button, TRUE);
+    gtk_widget_set_sensitive(state->authorize_button, TRUE);
+
+    if (!reply) {
+        gtk_label_set_text(GTK_LABEL(state->status),
+            g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
+            ? "Pairing request timed out or was cancelled. Refresh and retry."
+            : "Cannot reach pairing helper. Check SSH access and the host helper.");
+        if (pairing) {
+            state->count = 0;
+            gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
+        }
+        g_clear_error(&error);
+        return;
+    }
+
+    if (!pairing) {
+        state->count = now_wolf_parse_pending(reply, state->pending,
+                                               NOW_WOLF_MAX_PENDING);
+        if (state->count < 0) {
+            state->count = 0;
+            gtk_label_set_text(GTK_LABEL(state->status),
+                "Invalid or ambiguous pending clients. Refresh to retry.");
+        } else {
+            for (int i = 0; i < state->count; i++) {
+                gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(state->clients),
+                                                state->pending[i].client_ip);
+            }
+            if (state->count) {
+                gtk_combo_box_set_active(GTK_COMBO_BOX(state->clients), 0);
+            }
+            gtk_label_set_text(GTK_LABEL(state->status), state->count
+                ? "Choose the intended Moonlight device, then authorize."
+                : "No pending clients. Start Moonlight pairing, then refresh.");
+        }
+    } else {
+        /* The Python SSH bridge validates the host's success response and
+         * exits nonzero if authorization failed. Do not parse JSON by substring. */
+        gtk_entry_set_text(GTK_ENTRY(state->pin_entry), "");
+        g_free(reply);
+        say("MOONLIGHT PAIRED");
+        wolf_ui_close(state);
+        return;
+    }
+    g_free(reply);
+}
+
+static void wolf_ui_start(WolfPairUI *state, const char *action, const char *payload)
+{
+    if (state->closed || state->busy) {
+        return;
+    }
+    state->busy = TRUE;
+    state->pairing = strcmp(action, "pair") == 0;
+    state->cancellable = g_cancellable_new();
+    gtk_widget_set_sensitive(state->refresh_button, FALSE);
+    gtk_widget_set_sensitive(state->authorize_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(state->status),
+        state->pairing ? "Authorizing selected client..." : "Finding pending Moonlight clients...");
+
+    state->timeout_id = g_timeout_add_seconds(20, wolf_ui_timeout, state);
+    now_wolf_request_async("/usr/lib/optiplex-now/wolf-pair-client.py",
+                           action, state->host, state->user, payload,
+                           state->cancellable, wolf_ui_finished, state);
+}
+
+static void wolf_ui_response(GtkDialog *dialog, gint response, gpointer data)
+{
+    (void)dialog;
+    WolfPairUI *state = data;
+    if (response != 1 && response != GTK_RESPONSE_OK) {
+        wolf_ui_close(state);
+        return;
+    }
+    if (state->busy || state->closed) {
+        return;
+    }
+
+    if (response == 1) {
+        state->count = 0;
+        gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
+        wolf_ui_start(state, "pending-text", NULL);
+        return;
+    }
+
+    int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(state->clients));
+    const char *pin = gtk_entry_get_text(GTK_ENTRY(state->pin_entry));
+    char payload[256] = {0};
+    if (selected < 0 || selected >= state->count ||
+        !now_wolf_make_pair_payload(&state->pending[selected], pin,
+                                    payload, sizeof payload)) {
+        gtk_label_set_text(GTK_LABEL(state->status),
+                           "Select a valid pending Moonlight device.");
+        return;
+    }
+
+    wolf_ui_start(state, "pair", payload);
+    memset(payload, 0, sizeof payload);
+}
+
+static void wolf_pair_dialog(const char *generated_pin)
+{
+    WolfPairUI *state = g_new0(WolfPairUI, 1);
+    g_strlcpy(state->host, cfg[0], sizeof state->host);
+    g_strlcpy(state->user, cfg[1], sizeof state->user);
+
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "Connect to Game Host", GTK_WINDOW(win), GTK_DIALOG_MODAL,
+        "Cancel", GTK_RESPONSE_CANCEL, "Refresh clients", 1,
+        "Authorize PIN", GTK_RESPONSE_OK, NULL);
+    state->dialog = dialog;
+    state->refresh_button = gtk_dialog_get_widget_for_response(GTK_DIALOG(dialog), 1);
+    state->authorize_button =
+        gtk_dialog_get_widget_for_response(GTK_DIALOG(dialog), GTK_RESPONSE_OK);
+
+    GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *hint = gtk_label_new(
+        "NOW started Moonlight pairing. Refresh pending clients, select your "
+        "device, and authorize it. No PIN copying is needed.");
+    gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
+    gtk_box_pack_start(GTK_BOX(content), hint, FALSE, FALSE, 8);
+
+    state->clients = gtk_combo_box_text_new();
+    gtk_box_pack_start(GTK_BOX(content), state->clients, FALSE, FALSE, 6);
+    state->pin_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(state->pin_entry), generated_pin);
+    gtk_editable_set_editable(GTK_EDITABLE(state->pin_entry), FALSE);
+    gtk_box_pack_start(GTK_BOX(content), state->pin_entry, FALSE, FALSE, 6);
+    state->status = gtk_label_new("Waiting for pairing request.");
+    gtk_label_set_line_wrap(GTK_LABEL(state->status), TRUE);
+    gtk_box_pack_start(GTK_BOX(content), state->status, FALSE, FALSE, 6);
+
+    g_signal_connect(dialog, "response", G_CALLBACK(wolf_ui_response), state);
+    gtk_widget_show_all(dialog);
 }
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}

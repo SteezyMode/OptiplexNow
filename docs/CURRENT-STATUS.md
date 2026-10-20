@@ -38,7 +38,7 @@ New source changes after the v1.16.1 tag remove the reference-host video and Web
 | Host installer | Design issues and local helper contract exist | Fresh-host installer not implemented |
 | NOW-owned identity | Device approval requirement documented | Authentication service and emailed approval not implemented |
 
-Do not call a code path fully verified because CI passed. The next milestone is [Beta 1 acceptance](BETA-ACCEPTANCE.md). The [six-item engineering work order](PRODUCT.md#beta-1-engineering-execution-plan) is planning only: configuration extraction in `main` is implemented, but nonblocking Wolf pairing, the other module extractions and sanitizer diagnostics are **not** claimed implemented or device-tested.
+Do not call a code path fully verified because CI passed. The next milestone is [Beta 1 acceptance](BETA-ACCEPTANCE.md). The [six-item engineering work order](PRODUCT.md#beta-1-engineering-execution-plan) is planning only: configuration extraction in `main` is implemented, but the Wolf pending-client parser and asynchronous request transport have **source implementations and CI tests only**. Nonblocking UI behavior is not yet device-tested; Tailscale discovery, other module extractions and sanitizer diagnostics remain pending.
 
 ## Tracked roadmap
 

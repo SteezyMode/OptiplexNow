@@ -22,6 +22,7 @@ The Wolf sessions API can include encryption keys. Never log raw session respons
 | --- | --- |
 | GTK client | `src/main.c`: Moonlight predefined PIN, native pairing dialog, refresh/authorize action |
 | Pairing contract | `src/wolf_pairing.c/.h`: parse and reject malformed, duplicate or ambiguous pending-client lists and build validated PIN requests. No network I/O; still requires explicit client selection. |
+| Async transport | `src/wolf_transport.c/.h`: runs the existing SSH Python bridge through GIO off the GTK main thread, with cancellation and bounded UI waits. No new host API or permissions. |
 | Client transport | `src/wolf-pair-client.py`, installed at `/usr/lib/optiplex-now/wolf-pair-client.py`; runs a constrained SSH helper |
 | Host helper source | `src/wolf-pair-local.py`, manually installed on the reference host at `/usr/local/libexec/optiplex-now/wolf-pair-local` |
 | Moonlight client | External executable or AppImage/Flatpak, not a Wolf service |
@@ -31,7 +32,7 @@ The host helper resolves `pair_secret` locally after validating a selected pendi
 
 NOW generates a four-digit PIN with OS randomness, runs Moonlight's `pair HOST --pin ####` CLI option and uses the matching PIN for authorization. The temporary PIN is currently visible in the Moonlight process argv, even though it is not logged or stored in NOW settings. Do not describe this flow as eliminating all exposure.
 
-The pairing dialog still requires explicit refresh and authorization of the intended pending client. Parsing a list and constructing a request now use compiled, GTK-independent tests; this is not nonblocking pairing or automatic approval. It may open even when Moonlight has already paired. **Pairing is not automatically guaranteed on the Games button**, and existing pairing does not prove fresh-device enrollment.
+The pairing dialog still requires explicit refresh and authorization of the intended pending client. Parsing a list and constructing a request use GTK-independent compiled tests. Pending-client refresh and authorization now run off the GTK main thread using the existing SSH bridge; dialog cancellation prevents stale results from updating a destroyed widget. This does not make pairing automatic or grant host access. It may open even when Moonlight has already paired. **Pairing is not automatically guaranteed on the Games button**, and existing pairing does not prove fresh-device enrollment.
 
 ## Security requirements
 
@@ -52,7 +53,7 @@ The pairing dialog still requires explicit refresh and authorization of the inte
 - [ ] Verify wrong, expired or changed selection cannot authorize another device.
 - [ ] Verify client reconnect without a new PIN.
 - [ ] Verify Games streaming includes actual picture, audio and input after authorization.
-- [ ] Test timeouts, SSH trust failures and cancellation without a frozen GTK window.
+- [ ] Test timeouts, SSH trust failures and cancellation without a frozen GTK window on a real fresh client (the new mock transport CI test does not replace this observation).
 - [ ] Verify the final .deb on a client without prior NOW configuration.
 
 ## Future replacement

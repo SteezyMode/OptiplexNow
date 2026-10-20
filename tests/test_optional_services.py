@@ -21,14 +21,18 @@ class OptionalServiceTests(unittest.TestCase):
     def test_primary_and_tray_are_independently_selected(self):
         self.assertIn("#define TRAY_ALL_BUTTONS 255u", SOURCE)
         self.assertIn("#define TRAY_DEFAULT_BUTTONS 255u", SOURCE)
-        self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8]", SOURCE)
+        self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8],*order_spins[8]", SOURCE)
         self.assertIn('"PRIMARY","storagehead"', SOURCE)
         self.assertIn('"TRAY","storagehead"', SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)
         self.assertIn("snprintf(cfg[FEATURED_MASK_SETTING],512", SOURCE)
         self.assertIn("snprintf(cfg[TRAY_MASK_SETTING],512", SOURCE)
-        self.assertIn("for(int i=0;i<8;i++)if(mask & (1u<<i))tray_menu_item(captions[i],i);", SOURCE)
+        self.assertIn("int order[8];tray_order_load(order);", SOURCE)
+        self.assertIn("if(!(mask & (1u<<i)))continue;", SOURCE)
+        self.assertIn("tray_order_save(ordered);", SOURCE)
+        self.assertIn("gtk_spin_button_new_with_range(1,8,1)", SOURCE)
+        self.assertIn("gtk_label_set_attributes(GTK_LABEL(child),attrs)", SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):

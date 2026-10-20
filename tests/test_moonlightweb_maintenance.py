@@ -88,6 +88,15 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
         self.assertEqual(args[args.index("--security-opt") + 1], "no-new-privileges")
         self.assertIn("moonlightweb-test-data:/data", args)
 
+    def test_rejects_invalid_memory_swap_limits(self):
+        for value in (-2, 536870912):
+            with self.subTest(value=value):
+                info = sample()
+                info["HostConfig"]["Memory"] = 1073741824
+                info["HostConfig"]["MemorySwap"] = value
+                with self.assertRaisesRegex(RuntimeError, "Invalid Docker resource limits"):
+                    mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+
     def test_preserves_fractional_cpu_limits_without_float_rounding(self):
         info = sample()
         info["HostConfig"]["NanoCpus"] = 1250000000
@@ -97,7 +106,6 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
     def test_rejects_unhandled_resource_settings(self):
         for key, value in (
             ("CpuShares", 1024),
-            ("MemorySwap", -2),
             ("MemoryReservation", 134217728),
             ("CpuQuota", 50000),
             ("PidsLimit", 100),

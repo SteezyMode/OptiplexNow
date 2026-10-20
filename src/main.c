@@ -146,6 +146,9 @@ static const char *CSS =
 "#modalheading {font-size:17px;font-weight:800;color:#ece8e0;}"
 "#helper {font-size:11px;color:#b8b4ac;}"
 "#gameshint {font-size:12px;color:#ece8e0;}"
+"#statusmetric {font-size:13px;font-weight:700;color:#c5c7c1;padding:2px 5px;}"
+"#statusmetric.good {color:#84d9a7;}"
+"#statusmetric.bad {color:#eca29d;}"
 "#setupaction, .setupaction {background:#2c322d;color:#ece8e0;border:1px solid #5b665d;border-radius:2px;padding:8px 12px;font-size:11px;font-weight:700;}"
 "#setupaction:hover, .setupaction:hover {background:#2a9d8f;color:#101111;}"
 "#setupaction label, .setupaction label {color:#ece8e0;font-weight:800;}"
@@ -433,8 +436,13 @@ static gboolean finish_on_main(void *arg) {
    if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
    if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
    if(metric_network)gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  CONNECTED":"TAILSCALE  DISCONNECTED");
-   if(metric_vpn)gtk_label_set_text(GTK_LABEL(metric_vpn),r->success==1?(*r->vpn_state?r->vpn_state:"VPN  UNKNOWN"):"VPN  --");
-   if(metric_wolf)gtk_label_set_text(GTK_LABEL(metric_wolf),r->success==1?(*r->wolf_state?r->wolf_state:"WOLF  UNKNOWN"):"WOLF  --");
+   if(metric_vpn){gtk_label_set_text(GTK_LABEL(metric_vpn),r->success==1?(*r->vpn_state?r->vpn_state:"VPN  UNKNOWN"):"VPN  --");
+    GtkStyleContext*cs=gtk_widget_get_style_context(metric_vpn);gtk_style_context_remove_class(cs,"good");gtk_style_context_remove_class(cs,"bad");
+    if(r->success==1 && strstr(r->vpn_state,"VPN  HEALTHY"))gtk_style_context_add_class(cs,"good");
+    else if(r->success==1 && strstr(r->vpn_state,"VPN  UNHEALTHY"))gtk_style_context_add_class(cs,"bad");}
+   if(metric_wolf){gtk_label_set_text(GTK_LABEL(metric_wolf),r->success==1?(*r->wolf_state?r->wolf_state:"WOLF SERVICE  UNKNOWN"):"WOLF SERVICE  --");
+    GtkStyleContext*cs=gtk_widget_get_style_context(metric_wolf);gtk_style_context_remove_class(cs,"good");
+    if(r->success==1 && strstr(r->wolf_state,"WOLF SERVICE  running"))gtk_style_context_add_class(cs,"good");}
    update_drives(r);
    if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;
@@ -542,9 +550,9 @@ static void *worker(void*arg){
       "printf 'VRAM_USED='; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | awk -F, 'NF>=2 {printf \"%.1f / %.1f GiB\\n\",$1/1024,$2/1024}'; "
       "printf 'VPN_STATUS='; if command -v docker >/dev/null 2>&1; then "
       "docker inspect gluetun --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' 2>/dev/null | "
-      "awk -F'|' '{if($1!=\"running\")print \"GLUETUN  \" $1; else if($2==\"healthy\")print \"GLUETUN  HEALTHY\"; else if($2==\"unhealthy\")print \"GLUETUN  UNHEALTHY\"; else if($2==\"starting\")print \"GLUETUN  CHECKING\"; else print \"GLUETUN  RUNNING (UNVERIFIED)\"}'; "
+      "awk -F'|' '{if($1!=\"running\")print \"VPN  \" $1; else if($2==\"healthy\")print \"VPN  HEALTHY\"; else if($2==\"unhealthy\")print \"VPN  UNHEALTHY\"; else if($2==\"starting\")print \"VPN  CHECKING\"; else print \"VPN  RUNNING (UNVERIFIED)\"}'; "
       "else echo 'DOCKER UNAVAILABLE'; fi; "
-      "printf 'WOLF_STATUS='; if command -v docker >/dev/null 2>&1; then docker inspect wolf --format '{{.State.Status}}' 2>/dev/null | awk 'NF {printf \"WOLF  %s\\n\",$1}'; else echo 'DOCKER UNAVAILABLE'; fi; "
+      "printf 'WOLF_STATUS='; if command -v docker >/dev/null 2>&1; then docker inspect wolf --format '{{.State.Status}}' 2>/dev/null | awk 'NF {printf \"WOLF SERVICE  %s\\n\",$1}'; else echo 'DOCKER UNAVAILABLE'; fi; "
       "printf 'DRIVES_BEGIN\n'; "
       "df -hPT -x tmpfs -x devtmpfs -x overlay -x squashfs -x zramfs 2>/dev/null "
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
@@ -1290,10 +1298,14 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  int current_order[8];tray_order_load(current_order);
  GtkWidget*headers=gtk_grid_new();
  gtk_grid_set_column_spacing(GTK_GRID(headers),12);
- gtk_grid_attach(GTK_GRID(headers),label("SERVICE","storagehead"),0,0,1,1);
- gtk_grid_attach(GTK_GRID(headers),label("PRIMARY","storagehead"),1,0,1,1);
- gtk_grid_attach(GTK_GRID(headers),label("TRAY","storagehead"),2,0,1,1);
- gtk_grid_attach(GTK_GRID(headers),label("MOVE","storagehead"),3,0,1,1);
+ const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};
+ int widths[]={128,72,52,84};
+ for(int h=0;h<4;h++){
+  GtkWidget*heading=label(head_names[h],"storagehead");
+  gtk_widget_set_size_request(heading,widths[h],-1);
+  gtk_label_set_xalign(GTK_LABEL(heading),h==0?0.0f:0.5f);
+  gtk_grid_attach(GTK_GRID(headers),heading,h,0,1,1);
+ }
  add(col,headers,0);
  const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
  unsigned fm=featured_mask(),tm=tray_button_mask();
@@ -1312,9 +1324,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    tray_checks[i]=gtk_check_button_new();
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(featured_checks[i]),(fm&(1u<<i))!=0);
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
-   gtk_grid_attach(GTK_GRID(line),featured_checks[i],1,0,1,1);
-   gtk_grid_attach(GTK_GRID(line),tray_checks[i],2,0,1,1);
+   GtkWidget*primary_box=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
+   GtkWidget*tray_box=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
+   gtk_widget_set_size_request(primary_box,72,-1);
+   gtk_widget_set_size_request(tray_box,52,-1);
+   gtk_box_pack_start(GTK_BOX(primary_box),featured_checks[i],TRUE,FALSE,0);
+   gtk_box_pack_start(GTK_BOX(tray_box),tray_checks[i],TRUE,FALSE,0);
+   gtk_grid_attach(GTK_GRID(line),primary_box,1,0,1,1);
+   gtk_grid_attach(GTK_GRID(line),tray_box,2,0,1,1);
    GtkWidget*arrows=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+   gtk_widget_set_size_request(arrows,84,-1);
+   gtk_box_set_homogeneous(GTK_BOX(arrows),TRUE);
    GtkWidget*up=button("↑","setting"),*down=button("↓","setting");
    g_signal_connect(up,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(-1));
    g_signal_connect(down,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(1));
@@ -1827,9 +1847,9 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,2);
-  metric_network=label("TAILSCALE  --","helper");add(body,metric_network,0);
-  metric_vpn=label("GLUETUN  --","helper");add(body,metric_vpn,0);
-  metric_wolf=label("WOLF  --","helper");add(body,metric_wolf,0);
+  metric_network=label("TAILSCALE  --","statusmetric");add(body,metric_network,0);
+  metric_vpn=label("VPN  --","statusmetric");add(body,metric_vpn,0);
+  metric_wolf=label("WOLF SERVICE  --","statusmetric");add(body,metric_wolf,0);
  /* The dashboard prioritizes host state. Launchers live on Software page. */
  GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
  GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);
@@ -1847,7 +1867,7 @@ int main(int argc,char**argv) {
  gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(GTK_CONTAINER(extras),extras_grid);
  const char *names[]={"GAMES","VIDEOS","MUSIC","FILES","DOWNLOADS","TERMINAL","DESKTOP","WEB GAMING"};
  for(int i=0;i<8;i++){tiles[i]=button(names[i],"tile");g_signal_connect_data(tiles[i],"clicked",(GCallback)on_tile,(void*)(long)i,NULL,0);}
- GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("POWER","section"),1);add(body,sec,0);
+ GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("SERVER POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(power_grid),7);gtk_grid_set_row_spacing(GTK_GRID(power_grid),7);
  gtk_grid_set_column_homogeneous(GTK_GRID(power_grid),1);add(body,power_grid,0);
  const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};

@@ -23,6 +23,6 @@ Read in this order when joining development or starting a new review.
 
 ## Historical records
 
-`archive/` retains dated proposals and old session notes for traceability. [October 16 operations inventory](operations-handoff.md) is historical, not authoritative current deployment status. Do not use old version claims, IPs, container identifiers or release instructions without checking the live machine and current code. The former [next-session note](next-session.md) is a historical pointer only.
+`archive/` retains dated proposals and old session notes for traceability. [October 16 operations inventory](archive/2026-10-16-operations-handoff.md) is historical, not authoritative current deployment status. Do not use old version claims, IPs, container identifiers or release instructions without checking the live machine and current code. An [old next-session handoff](archive/2026-10-19-next-session.md) remains archived.
 
 **Rule:** Implementation is established by code and tests; release publication by GitHub Releases; working user flows by device tests. Plans belong in PRODUCT or tracked issues. Do not create another current-status or personal handoff document.

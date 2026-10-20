@@ -14,7 +14,7 @@ A person with a supported Linux PC should be able to make it a remotely streamab
 2. **Tailscale:** authenticates devices, establishes permitted private network connectivity and enforces tailnet access policy. Users control their own tailnets.
 3. **Moonlight plus Wolf or Sunshine:** streams games/desktops and performs its own client pairing. Website login does **not** confer Moonlight pairing or Linux administration rights.
 
-A NOW account should improve convenience but never be a prerequisite for local streaming or permanently prevent users from accessing their own data if Monument Risk's website is unavailable. Game video/audio/control streams must **not** pass through Monument Risk infrastructure. The Tailscale path may use Tailscale infrastructure for connectivity/relay when direct paths are unavailable; NOW does not guarantee direct peer-to-peer performance.
+A NOW account should improve convenience but never be a prerequisite for local streaming or permanently prevent users from accessing their own data if the optional NOW account service is unavailable. Game video/audio/control streams must **not** pass through the optional NOW registry service. The Tailscale path may use Tailscale infrastructure for connectivity/relay when direct paths are unavailable; NOW does not guarantee direct peer-to-peer performance.
 
 ## Release reality and platform scope (2026-10-20)
 
@@ -37,7 +37,7 @@ The first install target should be a tested subset of Ubuntu/Pop!_OS 24.04 and c
 
 ### B. Add a new client computer to the same account
 
-1. Install NOW and click **Sign in to NOW**. Authenticate through system browser with a standard public-client flow (authorization code + PKCE), or a secure device-code flow where callbacks are unavailable; exact auth provider TBD. The website could be hosted on an appropriate Monument Risk subdomain, but no deployment is implied here.
+1. Install NOW and click **Sign in to NOW**. Authenticate through system browser with a standard public-client flow (authorization code + PKCE), or a secure device-code flow where callbacks are unavailable; exact auth provider TBD. The website could be hosted on any temporary development hostname, but no deployment is implied here.
 2. NOW obtains an account-scoped server list over HTTPS and offers **My Gaming PC**, **Family Desktop**, etc. It auto-fills server identity, advertised apps, MagicDNS FQDN, and non-secret preferences. No manual IP or SSH username should be needed for first streaming.
 3. If Tailscale is already installed and authorized in the matching tailnet, check live reachability. If not, guide official Tailscale installation and user sign-in, with the right tailnet or Tailscale machine-share invitation. **NOW website login alone does not enroll a machine in Tailscale**.
 4. Resolve the server's full MagicDNS name, with an observed Tailscale address as an optional diagnostic fallback. Never use a hard-coded home LAN IP as the canonical server identity.
@@ -58,7 +58,7 @@ A household multi-user product is a later security milestone, not something guar
 
 ### D. Offline/no-account path
 
-**Connect to an existing server** must remain available for LAN-only use or privacy-conscious users. It can discover a host on reachable networks or accept a hostname manually. Pair through Moonlight and preserve local settings. NOW's core local and LAN streaming must continue when Monument Risk is offline.
+**Connect to an existing server** must remain available for LAN-only use or privacy-conscious users. It can discover a host on reachable networks or accept a hostname manually. Pair through Moonlight and preserve local settings. NOW's core local and LAN streaming must continue when the optional account service is offline.
 
 ## Architecture and trust boundaries
 
@@ -79,7 +79,7 @@ The website may display 'recently seen' using a signed, outbound server heartbea
 
 ## Tailscale decisions and caveats
 
-- **Default:** each customer keeps their own tailnet. NOW does not enroll all customers into a shared Monument Risk tailnet.
+- **Default:** each customer keeps their own tailnet. NOW does not enroll all customers into a shared developer-operated tailnet.
 - **Authentication:** initial login to Tailscale is a separate official user action on server and each client, unless the device is already enrolled. A NOW account cannot silently skip that step.
 - **Discovery:** prefer fully qualified MagicDNS name and a stable NOW server ID, not remembered Tailscale IPs. Device name changes and DNS issues should be handled gracefully. Tailscale generally assigns stable 100.x addresses across changes in physical networks, but network authorization is still required.
 - **Sharing:** Tailscale machine sharing is the candidate for invited external users. Share does not itself grant NOW or Moonlight application authorization. Accepting a share and owner policy are explicit.
@@ -88,6 +88,12 @@ The website may display 'recently seen' using a signed, outbound server heartbea
 - **Privacy:** opting into registry sync exposes limited server existence/name/last-seen data to the website; require consent and offer account/server deregistration without erasing local game or desktop data.
 
 References: [Tailscale quickstart](https://tailscale.com/kb/1017/install/), [Machine names/MagicDNS](https://tailscale.com/docs/concepts/machine-names), [Share your machines](https://tailscale.com/kb/1084/sharing), [Auth keys](https://tailscale.com/docs/features/access-control/auth-keys), [Device provisioning with OAuth apps — alpha/single-tailnet](https://tailscale.com/docs/features/oauth-apps/device-provisioning).
+
+## Temporary infrastructure and UI copy standards
+
+Any available website/domain used during development is **temporary hosting infrastructure only**. It is **not** the product identity, company identity, identity-provider design, or brand. Do not embed a temporary domain, owner company, or assumed future brand in UI strings, package names, protocols, docs or screenshots. The address must be configurable, with production migration and a no-account mode supported.
+
+A development login screen should be strictly utilitarian. Suggested labels: **Sign in**, **Email**, **Continue**, **My servers**, **Add server**, **Connect**, **Sign out**. Display necessary privacy/security disclosures in a factual style. Avoid promotional taglines, AI-written marketing paragraphs, stock imagery, invented testimonials, brand grandstanding or a sales landing page. Sign-in should focus on selecting and authorizing the user's device, not selling the product.
 
 ## Engineering roadmap (documentation only)
 

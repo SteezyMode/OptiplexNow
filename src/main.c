@@ -351,15 +351,35 @@ static int client_tailscale_state(void) {
  if(!strcmp(out,"missing\n"))return 4;
  return 0;
 }
+static const char *client_tailscale_label(void) {
+ switch(client_tailscale_state()){
+  case 1: return "TAILSCALE CONNECTED";
+  case 2: return "TAILSCALE SIGN-IN REQUIRED";
+  case 3: return "TAILSCALE DISCONNECTED";
+  case 4: return "TAILSCALE NOT INSTALLED";
+  default: return "TAILSCALE STATUS UNAVAILABLE";
+ }
+}
+/* Prefer Tailscale's own on-device web interface, available on modern
+ * desktop clients at the reserved local address. Authentication remains
+ * upstream: NOW never receives the account password or node keys. */
 static void setup_tailscale(void) {
  int status=client_tailscale_state();
- if(status==1){say("TAILSCALE IS ALREADY CONNECTED");return;}
+ if(status==1){say("TAILSCALE ALREADY CONNECTED");return;}
  if(status==4){browser_open("https://tailscale.com/download/linux");return;}
- if(status==0){say("CANNOT CHECK TAILSCALE. CHECK THAT THE SERVICE IS RUNNING");return;}
- /* The official Tailscale CLI owns login; no password goes into NOW.
-  * Future milestone: present its browser/device flow inside this wizard. */
+ if(status==0){say("TAILSCALE UNAVAILABLE. CHECK THE LOCAL SERVICE");return;}
+ browser_open("http://100.100.100.100");
+ say("TAILSCALE WEB INTERFACE OPENED. RETURN TO NOW AND REFRESH STATUS");
+}
+/* Older Tailscale versions may lack the local web interface. The legacy
+ * one-time CLI path remains an explicit user choice, not the default. */
+static void tailscale_cli_fallback(void) {
+ if(client_tailscale_state()==1){say("TAILSCALE ALREADY CONNECTED");return;}
+ if(!now_program_exists("tailscale")){
+  browser_open("https://tailscale.com/download/linux");return;
+ }
  char*args[]={"sudo","tailscale","up",NULL};
- if(terminal_launch(args))say("COMPLETE TAILSCALE SIGN-IN IN THE OPENED TERMINAL");
+ if(terminal_launch(args))say("FINISH TAILSCALE SIGN-IN IN THE TERMINAL");
 }
 
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
@@ -1336,15 +1356,7 @@ static void wizard_save(Wizard*c){
 static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;(void)page;Wizard*c=p;
- char text[160];
- switch(client_tailscale_state()){
-  case 1: snprintf(text,sizeof text,"TAILSCALE CONNECTED");break;
-  case 2: snprintf(text,sizeof text,"TAILSCALE SIGN-IN REQUIRED");break;
-  case 3: snprintf(text,sizeof text,"TAILSCALE DISCONNECTED");break;
-  case 4: snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");break;
-  default: snprintf(text,sizeof text,"TAILSCALE STATUS UNAVAILABLE");break;
- }
- gtk_label_set_text(GTK_LABEL(c->ts_state),text);
+ gtk_label_set_text(GTK_LABEL(c->ts_state),client_tailscale_label());
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);
  if(page==c->games_page){
@@ -1413,6 +1425,8 @@ static void wizard_action(void*w,void*p){
  if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
+ else if(!strcmp(n,"w_ts_cli"))tailscale_cli_fallback();
+ else if(!strcmp(n,"w_ts_refresh"))gtk_label_set_text(GTK_LABEL(c->ts_state),client_tailscale_label());
  else if(!strcmp(n,"w_pair"))pair(0);
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
@@ -1467,7 +1481,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
+ add(one,label("Tailscale opens its local sign-in page in your browser. Return here to refresh the status.","helper"),0);
+ wizard_button(c,one,"OPEN TAILSCALE SIGN-IN","w_ts");
+ wizard_button(c,one,"REFRESH CONNECTION STATUS","w_ts_refresh");
+ wizard_button(c,one,"TERMINAL FALLBACK (OLDER TAILSCALE)","w_ts_cli");
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
  wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
  c->preset_notice=label("","helper");add(one,c->preset_notice,0);

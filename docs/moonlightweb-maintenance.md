@@ -35,7 +35,7 @@ The reference host (Oct 20, 2026) uses:
 | Memory + swap cap | 2147483648 bytes (2 GiB combined), preserved with `--memory-swap 2147483648b` |
 | CPU cap | 1000000000 nanocpus (1 CPU), preserved with `--cpus 1` |
 | Security | `--cap-drop ALL`, `--security-opt no-new-privileges` |
-| Public URL | `https://games.monumentrisk.com` via existing Caddy |
+| Public URL | the configured HTTPS gaming hostname via existing Caddy |
 
 The manager inspects actual Docker state; only this narrow configuration family
 is accepted. It refuses additional mounts, privileged/custom device settings,

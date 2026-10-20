@@ -17,6 +17,11 @@ There is **one released application (NOW), one separate Studio application, and 
 
 ## Planned, not shipped
 
+- [Architecture](ARCHITECTURE.md): one NOW package, client/server/both modes, service boundaries and planned safe provisioning.
+- [Roadmap](ROADMAP.md): sequenced MVP, optional services and verification gates.
+- [ADR-001](adr/001-single-package-modular-provisioning.md): why one installer and independent optional service adapters.
+- [Agent guidance](../AGENTS.md): development rules for Codex and other contributors.
+
 - [NOW server manager and upstream-first Wolf strategy](UPSTREAM-FIRST-WOLF-INTEGRATION.md): installation/provisioning concept and supported ownership boundary.
 - [Persistent multi-user desktop feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): streaming authorization and profile/session acceptance requirements.
 

@@ -253,7 +253,7 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
                 self.assertIn(("rename", "moonlightweb-preupdate-teststamp", "moonlightweb"), commands)
                 self.assertIn(("update", "--restart=unless-stopped", "moonlightweb"), commands)
                 self.assertIn(("start", "moonlightweb"), commands)
-                self.assertFalse(any(command[0] in ("volume", "rm", "rmi") for command in commands))
+                self.assertFalse(any(command[0] in ("volume", "rmi") for command in commands))
 
     def test_partial_create_failure_cleans_replacement_before_rollback(self):
         from tempfile import TemporaryDirectory

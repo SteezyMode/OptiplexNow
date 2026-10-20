@@ -68,6 +68,44 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
         self.assertNotIn("--cap-add", args)
         self.assertIn("ALL", args)
 
+    def test_preserves_reference_memory_and_cpu_limits(self):
+        info = sample()
+        info["HostConfig"].update({
+            "CapAdd": None,
+            "CapDrop": ["ALL"],
+            "SecurityOpt": ["no-new-privileges"],
+            "Binds": ["moonlightweb-test-data:/data"],
+            "Memory": 1073741824,
+            "NanoCpus": 1000000000,
+            "CpuShares": 0,
+        })
+        info["Mounts"][0]["Mode"] = ""
+        args = mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+        self.assertEqual(args[args.index("--memory") + 1], "1073741824b")
+        self.assertEqual(args[args.index("--cpus") + 1], "1")
+        self.assertEqual(args[args.index("--security-opt") + 1], "no-new-privileges")
+        self.assertIn("moonlightweb-test-data:/data", args)
+
+    def test_preserves_fractional_cpu_limits_without_float_rounding(self):
+        info = sample()
+        info["HostConfig"]["NanoCpus"] = 1250000000
+        args = mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+        self.assertEqual(args[args.index("--cpus") + 1], "1.25")
+
+    def test_rejects_unhandled_resource_settings(self):
+        for key, value in (
+            ("CpuShares", 1024),
+            ("MemorySwap", 2147483648),
+            ("MemoryReservation", 134217728),
+            ("CpuQuota", 50000),
+            ("PidsLimit", 100),
+        ):
+            with self.subTest(key=key):
+                info = sample()
+                info["HostConfig"][key] = value
+                with self.assertRaisesRegex(RuntimeError, "resource limits"):
+                    mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
+
     def test_rejects_unrecognized_security_options(self):
         for value in (["apparmor=unconfined"], ["no-new-privileges", "label=disable"],
                       ["no-new-privileges=false"]):

@@ -36,7 +36,9 @@ The reference host (Oct 20, 2026) uses:
 The manager inspects actual Docker state; only this narrow configuration family
 is accepted. It refuses additional mounts, privileged/custom device settings,
 Compose management, custom entrypoints, unknown capabilities and unsupported
-restart policies rather than silently dropping Docker options. Do not assume
+restart policies rather than silently dropping Docker options. The reference
+host's observed `SecurityOpt=["no-new-privileges"]` is explicitly retained
+with `--security-opt no-new-privileges`; unknown security options are rejected. Do not assume
 that every MoonlightWeb deployment has this shape.
 
 ## Install/operate

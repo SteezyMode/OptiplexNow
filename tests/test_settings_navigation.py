@@ -14,7 +14,7 @@ class SettingsNavigationTests(unittest.TestCase):
         section = SOURCE.split("static void on_settings(void*w,void*p)", 1)[1].split("/* Setup assistant.", 1)[0]
         self.assertEqual(section.count('gtk_dialog_new_with_buttons("OptiPlex Now | Settings"'), 1)
         self.assertIn('GtkWidget*stack=gtk_stack_new();', section)
-        for category in ("gaming", "services", "connection"):
+        for category in ("gaming", "preferences", "connection"):
             self.assertIn(f'settings_page(stack,"{category}")', section)
         self.assertIn('settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home")', section)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");', section)

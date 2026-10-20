@@ -62,7 +62,7 @@ def main():
                     ipaddress.ip_address(address)
                 except ValueError:
                     continue
-                print(f"{index}\\t{address}")
+                print(f"{index}\t{address}")
     else:
         print(json.dumps(response))
 

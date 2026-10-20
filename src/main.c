@@ -1222,6 +1222,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
    gtk_grid_attach(GTK_GRID(choices),featured_checks[i],1,i+1,1,1);
    gtk_grid_attach(GTK_GRID(choices),tray_checks[i],2,i+1,1,1);
+   order_spins[i]=gtk_spin_button_new_with_range(1,8,1);
+   gtk_spin_button_set_value(GTK_SPIN_BUTTON(order_spins[i]),positions[i]);
+   gtk_grid_attach(GTK_GRID(choices),order_spins[i],3,i+1,1,1);
  }
  add(col,choices,0);
  add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
@@ -1256,6 +1259,14 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
     if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
       tray_desktop_caption_save(new_caption);
+    int ordered[8],ranks[8];
+    for(int i=0;i<8;i++){ranks[i]=gtk_spin_button_get_value_as_int(GTK_SPIN_BUTTON(order_spins[i]));ordered[i]=current_order[i];}
+    /* Stable sort: ties preserve previous order. */
+    for(int i=1;i<8;i++){int key=ordered[i],j=i-1;
+      while(j>=0 && ranks[ordered[j]]>ranks[key]){ordered[j+1]=ordered[j];j--;}
+      ordered[j+1]=key;
+    }
+    tray_order_save(ordered);
     config_save();tray_build_menu();
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
     reflow(dimensions.width>0?dimensions.width:660);

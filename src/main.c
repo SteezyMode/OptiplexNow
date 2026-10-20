@@ -78,6 +78,8 @@ static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
 static char appimage_found[PATH_MAX];
 static void tray_build_menu(void);
+/* Defer menu replacement until the Settings activation has unwound. */
+static gboolean tray_rebuild_after_settings(gpointer unused){(void)unused;tray_build_menu();return G_SOURCE_REMOVE;}
 static void tray_desktop_caption(char *out,size_t cap);
 static void tray_desktop_caption_save(const char *value);
 static void tray_order_load(int out[8]);
@@ -1307,7 +1309,8 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
       ordered[j+1]=key;
     }
     tray_order_save(ordered);
-    config_save();tray_build_menu();
+    config_save();/* Never destroy the activating tray menu from its own callback. */
+    g_timeout_add(200,tray_rebuild_after_settings,NULL);
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
     reflow(dimensions.width>0?dimensions.width:660);
     say("SETTINGS SAVED");refresh();
@@ -1659,18 +1662,11 @@ static void tray_build_menu(void){
   char desktop[128];tray_desktop_caption(desktop,sizeof desktop);
   int order[8];tray_order_load(order);
   for(int j=0;j<8;j++){int i=order[j];if(!(mask & (1u<<i)))continue;
-   /* Explicit label columns keep separators aligned under variable-width themes. */
-   GtkWidget*item=gtk_menu_item_new();
-   GtkWidget*line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
-   GtkWidget*name=gtk_label_new(names[i]),*bar=gtk_label_new("|");
-   GtkWidget*detail=gtk_label_new(i==6?desktop:descriptions[i]);
-   gtk_widget_set_size_request(name,115,-1);
-   gtk_label_set_xalign(GTK_LABEL(name),0.0f);
-   gtk_label_set_xalign(GTK_LABEL(detail),0.0f);
-   gtk_box_pack_start(GTK_BOX(line),name,FALSE,FALSE,0);
-   gtk_box_pack_start(GTK_BOX(line),bar,FALSE,FALSE,0);
-   gtk_box_pack_start(GTK_BOX(line),detail,FALSE,FALSE,0);
-   gtk_container_add(GTK_CONTAINER(item),line);
+   /* AppIndicator/DBusMenu serializes the menu item label, not arbitrary
+    * GtkBox children. Use a standard labeled item for both tray backends. */
+   char caption[256];
+   snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);
+   GtkWidget*item=gtk_menu_item_new_with_label(caption);
    g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
   }

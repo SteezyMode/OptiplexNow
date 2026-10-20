@@ -17,6 +17,7 @@ shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
 shutil.copy2(root/'src/client_auth.py',pkg/'usr/lib/optiplex-now/client_auth.py')
+shutil.copy2(root/'src/tailscale_browser_login.py',pkg/'usr/lib/optiplex-now/tailscale_browser_login.py')
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
 shutil.copy2(root/'server/wolf-driver-maintenance.py',pkg/'usr/lib/optiplex-now/wolf-driver-maintenance')
 (pkg/'usr/lib/optiplex-now/wolf-driver-maintenance').chmod(0o755)

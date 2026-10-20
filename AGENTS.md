@@ -5,7 +5,7 @@ Read [README.md](README.md), [docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md), [
 ## Truth and scope
 - Existing shipped behavior is established by source, tests, tagged artifacts and documented hands-on verification—not by proposals. Check versions independently. The current NOW 1.x client expects an already configured server; the fresh-server wizard is not implemented.
 - NOW manages personal Linux streaming/server access. Studio is a separate local-first creative project application. Do not add Studio project/Codex internals to NOW.
-- The planned NOW 2.x direction is **one native Debian package** with client/server/both workflows and independently selectable, externally installed service adapters. Wolf game/desktop streaming is the initial server provisioning target; Moonlight Web, Jellyfin and DroppedNeedle are optional, independent integrations.
+- The planned NOW 2.x direction is **one native Debian package** with client/server/both workflows and independently selectable, externally installed service adapters. Wolf game/desktop streaming is the initial server provisioning target; Moonlight Web, Jellyfin and DroppedNeedle are optional integrations. An advanced optional Downloads & Music category covers qBittorrent/VueTorrent, slskd, and Gluetun where selected. ListenBrainz/Last.fm are optional DroppedNeedle account connections, not servers NOW installs. None are Wolf MVP prerequisites.
 - Existing client features and configured services must remain functional during the transition. Preserve user profiles and backward compatibility unless a reviewed migration explicitly changes them.
 - Do not present proposed integrations, server provisioning, security, multi-user isolation or rollback as shipped.
 
@@ -15,7 +15,7 @@ Read [README.md](README.md), [docs/CURRENT-STATUS.md](docs/CURRENT-STATUS.md), [
 - Service adapters must support read-only discovery first; never claim ownership of an existing installation by default.
 - All privileged/provisioning changes require clear preview, user confirmation, narrow privileges, idempotent execution, actionable errors, and defined recovery/rollback limits. Never auto-open public ports, replace working containers, reset pairing, or delete user data.
 - Separate client UI from server-side privileged execution. Do not expose Docker/Wolf sockets to web clients or untrusted containers; keep secrets out of Git, logs and diagnostics.
-- Changes to NOW must not modify running Wolf, Caddy, Jellyfin, DroppedNeedle, Moonlight Web, Tailscale, unrelated containers, or the reference host without explicit task-specific authorization.
+- Changes to NOW must not modify running Wolf, Caddy, Jellyfin, DroppedNeedle, qBittorrent, VueTorrent, slskd, Gluetun, Moonlight Web, Tailscale, unrelated containers, or the reference host without explicit task-specific authorization.
 - Work on isolated branches, make focused changes, run relevant unit/build/package/GTK tests and report what was actually verified versus still untested. No release tags or deployment without explicit request.
 - Keep README, CURRENT-STATUS and roadmap aligned when milestones change. Record significant new decisions in ADRs; do not retroactively rewrite historical records.
 

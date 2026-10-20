@@ -2,10 +2,55 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <unistd.h>
 
 static int fail(const char *reason) {
     fprintf(stderr, "process helper test failed: %s\n", reason);
     return 1;
+}
+
+/* Exercise exactly the command lookup NOW uses with GUI environments that
+ * omit /snap/bin, without touching real system Snap installations. */
+static int test_resolve_moonlight(void) {
+    const char *name = "now-test-moonlight-lookup";
+    char folder[] = "/tmp/now-moonlight-XXXXXX";
+    if (!mkdtemp(folder)) return fail("cannot create lookup fixture");
+    char path_command[PATH_MAX], fallback[PATH_MAX], actual[PATH_MAX];
+    snprintf(path_command, sizeof path_command, "%s/%s", folder, name);
+    snprintf(fallback, sizeof fallback, "%s/fallback", folder);
+    if (symlink("/bin/sh", path_command) || symlink("/bin/sh", fallback)) {
+        return fail("cannot create lookup executables");
+    }
+    const char *oldpath = getenv("PATH");
+    char *saved = oldpath ? strdup(oldpath) : NULL;
+    int failed = 0;
+    if (setenv("PATH", folder, 1)) failed = 1;
+    if (!failed && (!now_resolve_executable(name, fallback, actual, sizeof actual)
+            || strcmp(actual, path_command))) failed = 2;
+    if (!failed && setenv("PATH", "/this-directory-does-not-exist", 1)) failed = 3;
+    if (!failed && (!now_resolve_executable(name, fallback, actual, sizeof actual)
+            || strcmp(actual, fallback))) failed = 4;
+    if (!failed && (now_resolve_executable(name, fallback, actual, 2)
+            || actual[0] != '\0')) failed = 5;
+    if (!failed && (now_resolve_executable(name, "/not/a/real/moonlight", actual, sizeof actual)
+            || actual[0] != '\0')) failed = 6;
+    if (!failed && now_resolve_executable("../unsafe", fallback, actual, sizeof actual)) failed = 7;
+    if (!failed && now_resolve_executable(name, "relative/fallback", actual, sizeof actual)) failed = 8;
+    if (!failed && now_resolve_executable(NULL, fallback, actual, sizeof actual)) failed = 9;
+    if (saved) setenv("PATH", saved, 1);
+    else unsetenv("PATH");
+    free(saved);
+    unlink(path_command);
+    unlink(fallback);
+    rmdir(folder);
+    if (failed) {
+        char reason[80];
+        snprintf(reason, sizeof reason, "executable path / Snap fallback case %d", failed);
+        return fail(reason);
+    }
+    return 0;
 }
 
 int main(void) {
@@ -13,6 +58,7 @@ int main(void) {
     char *const ok[] = {"/bin/sh", "-c", "printf hello", NULL};
     char *const nonzero[] = {"/bin/sh", "-c", "exit 7", NULL};
 
+    if (test_resolve_moonlight()) return 1;
     if (!now_program_exists("/bin/sh")) return fail("absolute executable");
     if (!now_program_exists("sh")) return fail("PATH executable");
     if (now_program_exists(NULL) || now_program_exists("")) return fail("invalid executable name");

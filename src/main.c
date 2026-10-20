@@ -709,18 +709,65 @@ static void launch_torrents(void){
  char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
  browser_open(url);
 }
+/* User-consented, asynchronous installation. No terminal, root shell or
+ * arbitrary package installation; Flatpak runs in the current user's scope. */
+static void moonlight_install_completed(GObject *source,GAsyncResult *result,gpointer stage) {
+ GError *error=NULL;
+ gboolean completed=g_subprocess_wait_check_finish(G_SUBPROCESS(source),result,&error);
+ if(!completed){
+  if(error)g_error_free(error);
+  say("MOONLIGHT INSTALL FAILED. CHECK FLATPAK AND RETRY");
+  return;
+ }
+ if(GPOINTER_TO_INT(stage)==1){
+  GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE |
+      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+      "flatpak","install","--user","--noninteractive","--assumeyes",
+      "flathub","com.moonlight_stream.Moonlight",NULL);
+  if(!process){
+   if(error)g_error_free(error);
+   say("COULD NOT START MOONLIGHT INSTALL");
+   return;
+  }
+  say("INSTALLING MOONLIGHT FOR THIS USER...");
+  g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(2));
+  g_object_unref(process);
+  return;
+ }
+ if(flatpak_has("com.moonlight_stream.Moonlight")){
+  say("MOONLIGHT INSTALLED. CONTINUE IN SETUP");
+ }else say("MOONLIGHT INSTALL NOT DETECTED. RETRY INSTALL");
+}
 static void install_moonlight(void){
  if(!now_program_exists("flatpak")){
-   say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   return;
+  say("FLATPAK NOT INSTALLED. INSTALL FLATPAK USING YOUR DISTRO PACKAGE MANAGER");
+  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS NEEDED FOR AUTOMATIC MOONLIGHT INSTALL");
+  return;
  }
- /* The action is explicitly user initiated. Flatpak asks to install the remote and package. */
- char*args[]={"sh","-c","flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install --user flathub com.moonlight_stream.Moonlight; printf '\\nPress Enter to close...'; read _",NULL};
- if(terminal_launch(args)){
-   say("COMPLETE INSTALLATION IN THE TERMINAL");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"COMPLETE INSTALLATION IN THE TERMINAL");
+ GtkWidget *dialog=gtk_message_dialog_new(GTK_WINDOW(win),GTK_DIALOG_MODAL,
+     GTK_MESSAGE_QUESTION,GTK_BUTTONS_NONE,
+     "Install Moonlight for this Linux user through Flathub?");
+ gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+     "OptiPlex NOW will add the official Flathub remote if missing and install Moonlight. "
+     "Existing Moonlight installations are not replaced. No server changes are made.");
+ gtk_dialog_add_buttons(GTK_DIALOG(dialog),"CANCEL",GTK_RESPONSE_CANCEL,
+                        "INSTALL MOONLIGHT",GTK_RESPONSE_OK,NULL);
+ int response=gtk_dialog_run(GTK_DIALOG(dialog));
+ gtk_widget_destroy(dialog);
+ if(response!=GTK_RESPONSE_OK)return;
+ GError *error=NULL;
+ GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE |
+     G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+     "flatpak","remote-add","--user","--if-not-exists","flathub",
+     "https://flathub.org/repo/flathub.flatpakrepo",NULL);
+ if(!process){
+  if(error)g_error_free(error);
+  say("COULD NOT CONFIGURE FLATHUB");
+  return;
  }
+ say("PREPARING FLATHUB...");
+ g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(1));
+ g_object_unref(process);
 }
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}

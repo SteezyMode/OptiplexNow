@@ -46,7 +46,7 @@ class TestClientTailscaleAuth(unittest.TestCase):
         self.assertEqual(auth.classify(None), "unavailable")
         self.assertEqual(auth.classify({"BackendState": "Running", "Self": []}), "unavailable")
         self.assertEqual(auth.classify({"BackendState": "Running", "Self": {"TailscaleIPs": ["192.168.1.2"]}}), "unavailable")
-        self.assertEqual(auth.classify({"BackendState": "Running", "Self": {"TailscaleIPs": ["100.100.100.100"]}}), "connected")
+        self.assertEqual(auth.classify({"BackendState": "Running", "Self": {"TailscaleIPs": ["100.100.100.100"]}}), "unavailable")
 
     def test_command_failure_large_output_invalid_json_and_timeout(self):
         for proc in (

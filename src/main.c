@@ -1398,7 +1398,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
-typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; } Wizard;
+typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; guint tailscale_poll_id; } Wizard;
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
  int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
@@ -1424,6 +1424,20 @@ static void wizard_save(Wizard*c){
  if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
  if(!*cfg[7])snprintf(cfg[7],512,"http://%s:8085",cfg[0]);
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+}
+static gboolean wizard_tailscale_poll(gpointer data){
+ Wizard*c=data;
+ if(!c->assistant || !gtk_widget_get_visible(c->assistant))return G_SOURCE_CONTINUE;
+ if(!now_program_exists("tailscale")){
+   gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE NOT INSTALLED — USE CONNECT TAILSCALE");
+   return G_SOURCE_CONTINUE;
+ }
+ char address[128]={0};
+ char*args[]={"tailscale","ip","-4",NULL};
+ if(now_run(args,address,sizeof address,2)==0 && g_str_has_prefix(address,"100.")){
+   gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE CONNECTED — CONTINUE TO SERVER");
+ }else gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE NOT CONNECTED — SIGN IN, THEN WAIT HERE");
+ return G_SOURCE_CONTINUE;
 }
 static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
@@ -1546,7 +1560,7 @@ static void wizard_service_check(void*w,void*p){
  if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
  else {services_inflight=0;free(r);}
 }
-static void wizard_destroy(void*w,void*p){(void)w;wizard_wolf_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
+static void wizard_destroy(void*w,void*p){(void)w;Wizard*c=p;if(c->tailscale_poll_id)g_source_remove(c->tailscale_poll_id);wizard_wolf_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
 static void on_wizard(void*w,void*p){(void)w;(void)p;
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
@@ -1558,6 +1572,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
  wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
+ add(one,label("Sign in with your approved account. Connection status updates automatically.","helper"),0);
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
  wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
  c->preset_notice=label("","helper");add(one,c->preset_notice,0);
@@ -1565,6 +1580,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
     add(one,label("EXISTING CONNECTION FOUND","helper"),0);
     wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
  }
+ c->tailscale_poll_id=g_timeout_add_seconds(5,wizard_tailscale_poll,c);
  gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"TAILSCALE");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
  /* Page 2: choose your server. All values are prefilled from saved configuration. */
  GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);

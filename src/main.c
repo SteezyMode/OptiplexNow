@@ -21,6 +21,7 @@
 #include <poll.h>
 #include "process.h"
 #include "presets.h"
+#include "server_preflight_ui.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -1355,13 +1356,8 @@ static void wizard_action(void*w,void*p){
    terminal_launch(args);
  }
  else if(!strcmp(n,"w_future")){
-   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
-   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
-   gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,0);
-   add(box,label("NEW SERVER SETUP","modalheading"),0);
-   GtkWidget*l=label("Automated server provisioning is not included yet.\nFor now, install Tailscale and SSH on the new server,\nthen use this wizard to connect.","helper");
-   gtk_label_set_line_wrap(GTK_LABEL(l),1);add(box,l,0);
-   gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
+   /* Local-only, read-only inventory. Never run server installation here. */
+   now_preflight_open(GTK_WINDOW(c->assistant));
  }
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
 }
@@ -1419,7 +1415,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
  wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
- wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
+ wizard_button(c,two,"CHECK THIS COMPUTER (READ-ONLY)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
  /* Page 3: pair SSH keys once. Relay is optional. */
  GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);

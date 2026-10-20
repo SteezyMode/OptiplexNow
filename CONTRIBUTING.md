@@ -30,7 +30,7 @@ The separate `src/now_discovery_ui.c/.h` and `src/server_preflight_ui.c/.h` own 
 
 The separate `server/now_pairing_requests.py` module implements only in-memory, owner-approved, single-use authorization decisions. It **must not** be imported into an untrusted HTTP handler as an approval operation and does not call native Moonlight pairing APIs. See [pairing authorization](docs/pairing-authorization.md).
 
-**Primary NOW client goal:** the owner shares one configured OptiPlex with invited guests using their own Tailscale identity, not the owner's login. Guests see Games/Jellyfin/approved services without host-admin controls. See [guest client UX](docs/guest-client-experience.md). The standalone `server/now_pairing_identity.py` and `server/now_pairing_broker.py` are opt-in, request-only experiments; no production auto-service, no owner decision on HTTP, and no native Moonlight pairing.
+**Client product direction:** NOW is a general-purpose self-hosted client for any compatible server on user-owned or authorized hardware. Retain the existing GTK tray GUI, configurable actions, service links, Moonlight/Wolf launching, SSH/SFTP and configuration formats. The development OptiPlex is only a reference host. The immediate beta demo is to install the current client on another compatible machine, complete Tailscale authorization, select the existing host, and reuse its current GUI with minimal further setup. No new tile dashboard or guest portal is planned. See [client connection demo](docs/client-connect-demo.md). The separate `server/now_pairing_identity.py` and `server/now_pairing_broker.py` are deferred opt-in experimental host-side components, not prerequisites for the initial demo.
 
 ## Build/test on a disposable development machine
 

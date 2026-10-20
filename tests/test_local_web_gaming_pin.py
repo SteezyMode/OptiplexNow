@@ -89,6 +89,6 @@ class OwnerWebGamingPinTests(unittest.TestCase):
         self.assertNotIn("sudo",handler)
         self.assertNotIn('"ssh"',handler)
         self.assertIn('"https://games.monumentrisk.com"',MAIN)
-        self.assertIn("gtk_label_set_selectable",handler)
+        self.assertIn("gtk_label_set_selectable",MAIN[MAIN.index("static void owner_pin_finished("):start])
 
 if __name__=="__main__": unittest.main()

@@ -4,9 +4,10 @@ Updated: 2026-10-21 JST. GitHub Releases and CI are the authority for new public
 
 ## Release state
 
-- **Latest independently verified published release:** [v1.16.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.0). The GitHub release has a versioned amd64 .deb, a latest-name .deb, and SHA256SUMS.
-- **v1.16.1 source:** merged into `main` as commit `e6df6d06206b359bd4c219bf6c7e4f06db7de2d6`. It includes [#96](https://github.com/SteezyMode/OptiplexNow/pull/96) and [#97](https://github.com/SteezyMode/OptiplexNow/pull/97); the related PR CI passed.
-- **Publishing v1.16.1:** requires a new `v1.16.1` tag and a successful tag-triggered release workflow. At the time this document was updated, the tag/release had not been independently verified. Check [Releases](https://github.com/SteezyMode/OptiplexNow/releases), not this snapshot, for the latest published version.
+- **Published closed beta installer:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1). The tag points to `e6df6d06206b359bd4c219bf6c7e4f06db7de2d6`. The tag-triggered **Publish OptiPlex NOW** workflow completed successfully (run `39475111081`).
+- **Official assets:** `OptiPlex-Now_1.16.1_amd64.deb`, `OptiPlex-Now_amd64.deb`, and `SHA256SUMS`.
+- **Included fixes:** [#96](https://github.com/SteezyMode/OptiplexNow/pull/96) colors connected Tailscale and positive Wolf desktop states; [#97](https://github.com/SteezyMode/OptiplexNow/pull/97) detects the Gluetun image under a custom container name.
+- **Acceptance:** The artifact is published for **private closed beta testing**, but a clean-client install, first-time pairing and actual stream have not yet completed the Beta 1 checklist.
 
 Release publishing changes GitHub artifacts only. It does not modify the running reference server or upgrade installed clients.
 
@@ -25,7 +26,7 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 
 | Area | Evidence available | Still required |
 | --- | --- | --- |
-| Package | PR CI compiles, runs tests and package smoke checks | Final tagged v1.16.1 release verification and installation of that .deb |
+| Package | PR CI compiles, runs tests and package smoke checks | Official artifact published; install and device validation of that .deb still pending |
 | UI | Owner has installed and exercised earlier builds on Linux clients | Complete fresh-device usability test for this exact package |
 | Pairing | Host read-only helper and SSH transport tested; pairing UI implemented | Actual new-device Wolf authorization and repeat access without re-pairing |
 | Streaming | Known existing owner streaming paths used in development | Recorded Games and Videos acceptance on a clean client |

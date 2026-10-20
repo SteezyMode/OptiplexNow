@@ -1,4 +1,6 @@
-# NOW 2.x — Multi-User Virtual Desktops: engineering feasibility review
+# Multi-user desktops: feasibility review
+
+**Evidence update (2026-10-21):** This study compared specific upstream source branches on 2026-10-19. The reference host subsequently exposed a working local Wolf management API even though earlier stable-source notes below found no matching endpoint. Pin the deployed image digest and confirm API compatibility before deciding that any endpoint requires beta or a fork. This is research, not released account isolation.
 
 **Status:** Roadmap candidate; feasibility review only. **No implementation or release-scope change approved.**  
 **Reviewed:** 2026-10-19  
@@ -51,17 +53,17 @@ The proposed 'MVP' currently includes **a clean host installer plus two-user acc
 
 Separate its milestones:
 
-**Stage 0 — source/version proof (read-only):** Inventory pinned Wolf stable image/API/schema and data mapping, beta comparison and upgrade/revert path. Threat model and hardware budget. No production changes.
+**Stage 0 : source/version proof (read-only):** Inventory pinned Wolf stable image/API/schema and data mapping, beta comparison and upgrade/revert path. Threat model and hardware budget. No production changes.
 
-**Stage 1 — isolated provisioning proof:** On a spare host/VM where streaming is supported, provision a second **Standard Desktop**, unique name, independent controlled home, launch and remove (preserve data), with lifecycle checks. Human-controlled read-only discovery preferred; test transactions with safe rollback. No commercial claims or secure account promises.
+**Stage 1 : isolated provisioning proof:** On a spare host/VM where streaming is supported, provision a second **Standard Desktop**, unique name, independent controlled home, launch and remove (preserve data), with lifecycle checks. Human-controlled read-only discovery preferred; test transactions with safe rollback. No commercial claims or secure account promises.
 
-**Stage 2 — multi-user security gate:** Two human accounts; two separately paired devices; user-specific desktop access **enforced on the native Moonlight path**, not merely hidden in NOW GUI. Attempt unauthorized profile/app listing, direct stream start, session hijack, path traversal, cross-home file access, unauthorized stop/delete and stolen/revoked device reconnection. If any cross-user access succeeds, **stop: this is not multi-user MVP-ready**.
+**Stage 2 : multi-user security gate:** Two human accounts; two separately paired devices; user-specific desktop access **enforced on the native Moonlight path**, not merely hidden in NOW GUI. Attempt unauthorized profile/app listing, direct stream start, session hijack, path traversal, cross-home file access, unauthorized stop/delete and stolen/revoked device reconnection. If any cross-user access succeeds, **stop: this is not multi-user MVP-ready**.
 
-**Stage 3 — persistence and concurrency gate:** Same user logs in through device B and reaches the **same logical desktop data**, irrespective of device certificate; test disconnect, stop, reboot, container recreate, data restore, concurrent two 720p/30 lightweight streams, admission-control rejection, encoder failure and safe cleanup.
+**Stage 3 : persistence and concurrency gate:** Same user logs in through device B and reaches the **same logical desktop data**, irrespective of device certificate; test disconnect, stop, reboot, container recreate, data restore, concurrent two 720p/30 lightweight streams, admission-control rejection, encoder failure and safe cleanup.
 
-**Stage 4 — simple NOW GUI and template installer:** After gates 1–3 pass, implement Create Desktop / Owner / Template / Start / Stop / Connect / Remove in NOW. Support only Standard Desktop initially; Gaming Desktop after Steam licensing/account/proton/host capacity policy is documented. Provide an actual supported-host setup and recovery wizard with redacted logs and upgrade compatibility checks. Avoid duplicating Wolf UI or building a virtualization dashboard.
+**Stage 4 : simple NOW GUI and template installer:** After gates 1–3 pass, implement Create Desktop / Owner / Template / Start / Stop / Connect / Remove in NOW. Support only Standard Desktop initially; Gaming Desktop after Steam licensing/account/proton/host capacity policy is documented. Provide an actual supported-host setup and recovery wizard with redacted logs and upgrade compatibility checks. Avoid duplicating Wolf UI or building a virtualization dashboard.
 
-**Stage 5 — outside-household validation:** Two real users, separate devices, fresh supported machine; record onboarding time, admin intervention, stream/session stability, account isolation results, maintenance burden and willingness to pay before broad commercial planning.
+**Stage 5 : outside-household validation:** Two real users, separate devices, fresh supported machine; record onboarding time, admin intervention, stream/session stability, account isolation results, maintenance burden and willingness to pay before broad commercial planning.
 
 ## Suggested objective acceptance (not acceptance of current code)
 

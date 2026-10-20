@@ -31,8 +31,8 @@ class TailscaleBrowserLoginTests(unittest.TestCase):
         url = "https://login.tailscale.com/a/0123456789abcdef"
         raw = (json.dumps({"AuthURL": url, "QR": "data:image/png;base64,AAAA",
                            "BackendState": "NeedsLogin"}, indent=2)
-               + "\\n" + json.dumps({"BackendState": "Running"}, indent=2)
-               + "\\n")
+               + "\n" + json.dumps({"BackendState": "Running"}, indent=2)
+               + "\n")
         stream = mod.JSONMessageStream()
         found = []
         for byte in raw.encode("utf-8"):
@@ -44,7 +44,7 @@ class TailscaleBrowserLoginTests(unittest.TestCase):
 
     def test_multiple_objects_in_one_chunk_and_error_is_bounded(self):
         stream = mod.JSONMessageStream()
-        rows = stream.feed(b'{"AuthURL":"https://login.tailscale.com/a/abc"}\\n{"BackendState":"Running"}')
+        rows = stream.feed(b'{"AuthURL":"https://login.tailscale.com/a/abc"}\n{"BackendState":"Running"}')
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[1]["BackendState"], "Running")
         with self.assertRaises(ValueError):
@@ -57,7 +57,7 @@ class TailscaleBrowserLoginTests(unittest.TestCase):
         first = json.dumps({"AuthURL": url, "QR": "data:image/png;base64,ABCD",
                             "BackendState": "NeedsLogin"}, indent=2)
         last = json.dumps({"BackendState": "Running"}, indent=2)
-        output = first + "\\n" + last + "\\n"
+        output = first + "\n" + last + "\n"
         script = "import sys;sys.stdout.write(" + repr(output) + ");sys.stdout.flush()"
         seen = []
         def fake_popen(args, **kwargs):

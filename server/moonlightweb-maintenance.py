@@ -86,8 +86,9 @@ def recreate_args(info, image_id, env_file):
     if host.get("CpuShares") or any(host.get(key) for key in (
             "CpuPeriod", "CpuQuota", "CpuRtPeriod", "CpuRtRuntime",
             "CpusetCpus", "CpusetMems", "MemoryReservation", "MemorySwap",
-            "MemorySwappiness", "PidsLimit", "OomKillDisable",
-            "CgroupParent", "BlkioWeight")):
+            "PidsLimit", "OomKillDisable", "CgroupParent", "BlkioWeight")
+            ) or host.get("MemorySwappiness") not in (None, -1):
+        # -1 is Docker's default (unspecified) swappiness.
         raise RuntimeError("Unsupported additional resource limits; refusing changes")
     binds = host.get("Binds") or []
     if len(binds) > 1 or (binds and binds[0].split(":")[:2] != [volume, "/data"]):

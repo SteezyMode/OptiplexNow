@@ -92,7 +92,7 @@ static void on_wizard(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 static char config_path[PATH_MAX];
-#define CONFIG_COUNT 16
+#define CONFIG_COUNT 17
 #define FEATURED_MASK_SETTING 15
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
@@ -100,12 +100,12 @@ static char config_path[PATH_MAX];
 #define TRAY_MASK_SETTING 13
 #define TRAY_ALL_BUTTONS 255u
 #define TRAY_DEFAULT_BUTTONS 255u
-static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions"};
-static const char *defaults[]={"","optiplex","","","","","","","system","","/","","","255","","207"};
+static const char *keys[]={"host","user","relay","relay_user","wake_command","videos","music","downloads","browser","moonlight_appimage","storage_path","model_host","model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"};
+static const char *defaults[]={"","","","","","","","","system","","/","","","255","","207",""};
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
- return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "OptiPlex";
+ return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
 static void update_model_heading(void){
  if(model_heading)gtk_label_set_text(GTK_LABEL(model_heading),current_model());
@@ -176,11 +176,8 @@ static void config_load(void) {
  config_location();for(int i=0;i<CONFIG_COUNT;i++)safe_copy(cfg[i],512,defaults[i]);
  FILE*f=fopen(config_path,"r");if(!f){
    first_run=1;
-   /* Personal beta: offer the known home media service on a clean client.
-    * Never override an existing config.ini (including an intentionally
-    * blank Videos URL). Tailscale enrollment is network access, not a
-    * substitute for any Jellyfin login the host requires. */
-   safe_copy(cfg[5],512,"https://media.monumentrisk.com");
+   /* A fresh client has no host-specific URLs. Existing config.ini settings,
+    * including saved media links and deliberately blank fields, are preserved. */
    return;
  }
  int has_featured=0;
@@ -703,7 +700,7 @@ static void refresh(void){gtk_label_set_text(GTK_LABEL(indicator),"● CHECKING"
 static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n>0){const char*names[]={"","Sleep","Restart","Shut down"};
    GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
-   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
+   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s server?",names[n]);
    GtkWidget*l=label(msg,"modalheading");gtk_widget_set_margin_start(l,22);gtk_widget_set_margin_end(l,22);
    gtk_widget_set_margin_top(l,16);gtk_widget_set_margin_bottom(l,12);add(area,l,0);gtk_widget_show_all(d);
    int resp=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);if(resp!=GTK_RESPONSE_OK)return;
@@ -733,9 +730,8 @@ static void launch_wolf_app(const char *app){
 static void launch_steam(void){launch_wolf_app("Steam");}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
- if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
- char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
- browser_open(url);
+ if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
+ browser_open(cfg[7]);
 }
 static void install_moonlight(void){
  if(!now_program_exists("flatpak")){
@@ -869,13 +865,13 @@ static void on_restart_streaming(void *w, void *parent) {
  (void)w;
  void *owner=parent?parent:win;
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-   preset_alert(owner,"Server settings needed","Set the OptiPlex host and SSH user in Settings first.");return;
+   preset_alert(owner,"Server settings needed","Set the host and SSH user in Settings first.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",GTK_WINDOW(owner),1,
    "Cancel",GTK_RESPONSE_CANCEL,"Restart streaming",GTK_RESPONSE_OK,NULL);
  gtk_dialog_set_default_response(GTK_DIALOG(d),GTK_RESPONSE_CANCEL);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The OptiPlex itself will stay on.");
+ GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The server itself will stay on.");
  gtk_container_set_border_width(GTK_CONTAINER(area),20);gtk_label_set_line_wrap(GTK_LABEL(msg),1);gtk_container_add(GTK_CONTAINER(area),msg);
  gtk_widget_show_all(d);int response=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  if(response!=GTK_RESPONSE_OK)return;
@@ -932,7 +928,14 @@ static void open_remote_files(void){
  if(now_program_exists("gio")){char*args[]={"gio","open",url,NULL};now_launch(args);say("OPENING SFTP LOCATION");return;}
  say("NO SFTP-CAPABLE FILE MANAGER FOUND");
 }
-static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;browser_open("https://games.monumentrisk.com/settings");}
+static void open_web_gaming_path(const char*suffix){
+  if(!*cfg[16] || !now_safe_preset_url(cfg[16])){say("SET WEB GAMING URL IN SETTINGS");return;}
+  size_t n=strlen(cfg[16]);while(n>0 && cfg[16][n-1]=='/')n--;
+  char url[768];
+  if(snprintf(url,sizeof url,"%.*s%s",(int)n,cfg[16],suffix)>=(int)sizeof url){say("WEB GAMING URL TOO LONG");return;}
+  browser_open(url);
+}
+static void on_web_gaming_settings(void*w,void*p){(void)w;(void)p;open_web_gaming_path("/settings");}
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.
  * The client has no Docker privileges and does not manage Wolf itself. */
 static void on_web_gaming_maintenance(void*w,void*p){
@@ -991,7 +994,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
- else if(n==7)browser_open("https://games.monumentrisk.com/?launch=steam");
+ else if(n==7)open_web_gaming_path("/?launch=steam");
  else if(n==8)on_bruiser_ai(NULL,NULL);
  
 }
@@ -1344,7 +1347,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Legacy Downloads URL (unused)"};
+ const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads URL"};
  GtkWidget*fields[8];
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
@@ -1373,6 +1376,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,label("STREAMING","modalheading"),0);
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
  g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
+ add(col,label("WEB GAMING URL (OPTIONAL)","helper"),0);
+ GtkWidget*web_url_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(web_url_entry),"https://your-streaming-host.example");
+ gtk_entry_set_text(GTK_ENTRY(web_url_entry),cfg[16]);add(col,web_url_entry,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
@@ -1479,6 +1485,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
       ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
     }
     tray_order_save(ordered);
+    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
+    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
+    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
     config_save();/* Never destroy the activating tray menu from its own callback. */
     g_timeout_add(200,tray_rebuild_after_settings,NULL);
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
@@ -1505,14 +1514,12 @@ static void wizard_save(Wizard*c){
    if(strchr(values[i],'\n')||strchr(values[i],'\r'))return;
    safe_copy(cfg[i],512,values[i]);
  }
- if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
+ if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);safe_copy(cfg[16],512,c->staged[16]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
  }
- /* For a fresh installation, make basic services follow the selected server. */
- if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
- if(!*cfg[7])snprintf(cfg[7],512,"http://%s:8085",cfg[0]);
+ /* Optional services use user-entered URLs, never reference-host ports. */
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
 static gboolean wizard_tailscale_poll(gpointer data){
@@ -1681,7 +1688,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
  add(two,label("SSH USER","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"optiplex");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
+ c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"SSH username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);

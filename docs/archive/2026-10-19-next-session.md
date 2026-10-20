@@ -17,7 +17,7 @@ Updated: **2026-10-19 JST**. This replaces the obsolete Oct 16 assertion that v1
 1. **Do not restart running Wolf/game streams merely to inspect the repo.** Check PR #13 (proposed UI labels **Studio** and **Streaming Settings**) and verify live packaging/UI behavior before merging. The Wolf application target remains **OptiPlex Studio Desktop**.
 2. Review old PR #1 carefully against released v1.13.0 and other merged changes. It is still open despite a 1.12.0 title; it may be stale, but do **not** close/merge it without diff review.
 3. Reproduce unresolved Web Gaming Admin/Tailscale authentication paths on a real outside-LAN Linux client. Do not conflate native Moonlight pairing with MoonlightWeb certificate token.
-4. Maintain working Caddy/public HTTPS `games.monumentrisk.com` alongside Tailscale SSH and optional web admin. Don't disable authentication or broadly reroute existing services.
+4. Maintain working Caddy/public HTTPS `configured reference-host Web Gaming domain` alongside Tailscale SSH and optional web admin. Don't disable authentication or broadly reroute existing services.
 5. For actual host maintenance, read service versions and config before changing them. Preserve Docker/Wolf volumes, Jellyfin, music/VPN/download services, backups and credentials.
 6. Keep heavy AI task/session integration in **Studio**, using [ADR-001](https://github.com/SteezyMode/OptiplexStudio/blob/main/docs/ADR-001-LOCAL-FIRST-SHARED-STUDIO-RUNTIME.md). NOW may expose a *connection* to a persistent Studio workspace; it must not create duplicate host Codex sessions.
 

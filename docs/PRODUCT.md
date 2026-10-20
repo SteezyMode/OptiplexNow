@@ -13,7 +13,7 @@ The primary audience is an individual or household using a self-managed Linux ho
 1. **One clear path.** Normal setup must not require users to understand Moonlight, Wolf, Docker, SSH, ports, VPN topology, or certificates. Technical controls belong in diagnostics.
 2. **Fast reconnection.** A previously approved device opens its authorized host without repeating pairing. Never silently authorize an unknown device.
 3. **Low-end clients matter.** Test older laptops and modest networks. Offer measured 720p/30 and other profiles when appropriate, without promising frame rates or codecs on unsupported hardware.
-4. **Host independence.** The owner's OptiPlex is a reference fixture, not a baked-in dependency. Host address, services, credentials, and deployment layout must be configurable.
+4. **Host independence.** The owner's OptiPlex is a reference fixture, not a baked-in dependency. Host address, services, credentials, and deployment layout must be configurable. Distribution builds must not prefill the maintainer's usernames, private addresses, or service domains.
 5. **Preserve user systems.** NOW may manage components it explicitly installs. It must not modify unrelated Docker stacks, host services, user files, or active streams without an explicit operation.
 6. **Truthful status.** Separate reachable, running, healthy, paired, and active-session states. Unknown is not healthy.
 7. **Upstream first.** Integrate supported APIs and interfaces. Fork only to solve measured, otherwise blocked user needs.
@@ -29,6 +29,13 @@ The primary audience is an individual or household using a self-managed Linux ho
 | Independent user desktops | Logical user-to-desktop ownership, persistent data, device authorization, tested isolation and reconnect policy | Feasibility only, [#85](https://github.com/SteezyMode/OptiplexNow/issues/85) |
 
 Beta 1 uses a small group of preapproved Tailscale accounts. It does **not** include NOW-owned accounts, email approval, Headscale, zero-touch game pairing, or automatic host deployment. Those are separate milestones.
+
+## Portable client configuration
+
+- A clean install must not default to the maintainer's Tailscale host, SSH account, or media and gaming domains.
+- User-entered service URLs are optional; unavailable music/download/browser gaming services must not be fabricated from the server address and a guessed port.
+- Saved client settings, portable presets, and encrypted backups retain their existing compatibility guarantees. A host can have a different gaming, video, and download endpoint.
+- The private reference environment may be documented as an explicitly labeled test fixture. It is not a hosted NOW backend.
 
 ## Target first-run flows
 

@@ -42,6 +42,7 @@ The current beta uses Tailscale peer access, SSH trust and native Moonlight/Wolf
 - `.onb` backups are encrypted and may include SSH/Moonlight identity; protect them like credentials and test restore on a trusted spare client.
 - Primary action and tray action selections are separate masks. Migration must retain both.
 - Existing host services and user data are outside the client's installation lifecycle unless explicitly opted into an owned management operation.
+- Optional Videos, Music, Downloads, and Web Gaming URL settings belong to the user's host and are never hardcoded to the development server. Adding a new optional key to config and portable presets must preserve older config and v1/v2 preset imports.
 
 ## Health and capability contracts
 

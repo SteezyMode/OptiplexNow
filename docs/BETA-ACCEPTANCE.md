@@ -18,6 +18,8 @@ Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the
 - [ ] From **Connect to Game Host**, pair a **genuinely unpaired** Moonlight client with Wolf. Verify that a wrong or stale request cannot authorize a different client.
 - [ ] Open Games, launch Steam, and confirm *actual video, input, and audio*, not just a container state or process spawn.
 - [ ] Disconnect and reconnect. No PIN dialog for an already-paired device.
+- [ ] Confirm a truly clean generic client has no maintainer domain, default SSH username, or assumed music/download endpoint. Enter the test media URL explicitly or import a trusted preset.
+- [ ] Configure a Web Gaming URL if that optional browser feature is in scope; confirm Web Gaming settings and Steam launch use that URL rather than an embedded owner domain.
 - [ ] Open Videos at the configured URL and reach the actual media login or library.
 - [ ] Restart the app and then upgrade the package. Verify settings, user URLs, device pairing, and shortcuts survive.
 - [ ] Show accurate disconnected/offline and recovered states without blocking the GTK interface.

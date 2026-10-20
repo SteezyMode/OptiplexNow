@@ -76,12 +76,14 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
             "SecurityOpt": ["no-new-privileges"],
             "Binds": ["moonlightweb-test-data:/data"],
             "Memory": 1073741824,
+            "MemorySwap": 2147483648,
             "NanoCpus": 1000000000,
             "CpuShares": 0,
         })
         info["Mounts"][0]["Mode"] = ""
         args = mw.recreate_args(info, "sha256:new", Path("/tmp/mw-secret.env"))
         self.assertEqual(args[args.index("--memory") + 1], "1073741824b")
+        self.assertEqual(args[args.index("--memory-swap") + 1], "2147483648b")
         self.assertEqual(args[args.index("--cpus") + 1], "1")
         self.assertEqual(args[args.index("--security-opt") + 1], "no-new-privileges")
         self.assertIn("moonlightweb-test-data:/data", args)
@@ -95,7 +97,7 @@ class MoonlightWebMaintenanceTests(unittest.TestCase):
     def test_rejects_unhandled_resource_settings(self):
         for key, value in (
             ("CpuShares", 1024),
-            ("MemorySwap", 2147483648),
+            ("MemorySwap", -2),
             ("MemoryReservation", 134217728),
             ("CpuQuota", 50000),
             ("PidsLimit", 100),

@@ -827,18 +827,14 @@ static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer dat
                 ? "Choose the intended Moonlight device, then authorize."
                 : "No pending clients. Start Moonlight pairing, then refresh.");
         }
-    } else if (strstr(reply, "\"success\": true") ||
-               strstr(reply, "\"success\":true")) {
+    } else {
+        /* The Python SSH bridge validates the host's success response and
+         * exits nonzero if authorization failed. Do not parse JSON by substring. */
         gtk_entry_set_text(GTK_ENTRY(state->pin_entry), "");
         g_free(reply);
         say("MOONLIGHT PAIRED");
         wolf_ui_close(state);
         return;
-    } else {
-        state->count = 0;
-        gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
-        gtk_label_set_text(GTK_LABEL(state->status),
-            "Pairing failed or expired. Refresh pending clients before retrying.");
     }
     g_free(reply);
 }

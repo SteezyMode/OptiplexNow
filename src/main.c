@@ -814,6 +814,11 @@ static void remote_owner_decision_finished(GObject*source,GAsyncResult*result,gp
  gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,&out,NULL,&error);
  remote_owner_busy=FALSE;
  if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
+       && out && !strcmp(g_strstrip(out),"NOW_OWNER_STATUS=trusted_account")){
+  say("HOUSEHOLD ACCOUNT TRUSTED. FUTURE DEVICES AUTO-APPROVED");
+  preset_alert(win,"Household account trusted",
+    "This Tailscale account will be approved automatically on its next device. Streaming service pairing still requires its own first-use authorization.");
+ }else if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
        && out && !strcmp(g_strstrip(out),"NOW_OWNER_STATUS=decision_recorded")){
   say("OWNER DECISION RECORDED. WAIT FOR STREAMING PAIRING TO COMPLETE");
   preset_alert(win,"Pairing approval","Decision recorded. Native Wolf/Moonlight pairing is not complete until that service confirms the connection.");
@@ -846,7 +851,8 @@ static void remote_owner_list_finished(GObject*source,GAsyncResult*result,gpoint
  GtkWidget*dialog=gtk_dialog_new_with_buttons(
     "Pending device approvals",GTK_WINDOW(win),GTK_DIALOG_MODAL,
     "CANCEL",GTK_RESPONSE_CANCEL,
-    "DENY DEVICE",2,"APPROVE DEVICE",3,NULL);
+    "DENY DEVICE",2,"APPROVE ONCE",3,
+    "APPROVE + TRUST ACCOUNT",4,NULL);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
  gtk_container_set_border_width(GTK_CONTAINER(area),16);
  GtkWidget*hint=gtk_label_new(
@@ -881,16 +887,17 @@ static void remote_owner_list_finished(GObject*source,GAsyncResult*result,gpoint
  int choice=gtk_dialog_run(GTK_DIALOG(dialog));
  gchar*request=g_strdup(gtk_combo_box_get_active_id(GTK_COMBO_BOX(choices)));
  gtk_widget_destroy(dialog);
- if((choice==2||choice==3) && request && !remote_owner_busy){
+ if((choice==2||choice==3||choice==4) && request && !remote_owner_busy){
   const char*helper="/usr/lib/optiplex-now/now-owner-approvals.py";
   GError*spawn_error=NULL;
   GSubprocess*proc=g_subprocess_new(
     G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
     &spawn_error,"/usr/bin/python3",helper,cfg[0],
-    choice==3?"approve":"deny",request,NULL);
+    choice==4?"trust":choice==3?"approve":"deny",request,NULL);
   if(proc){
    remote_owner_busy=TRUE;
-   say(choice==3?"REQUESTING OWNER APPROVAL...":"REQUESTING OWNER DENIAL...");
+   say(choice==4?"TRUSTING THIS TAILSCALE ACCOUNT...":
+       choice==3?"REQUESTING OWNER APPROVAL...":"REQUESTING OWNER DENIAL...");
    g_subprocess_communicate_utf8_async(proc,NULL,NULL,remote_owner_decision_finished,NULL);
    g_object_unref(proc);
   }else{
@@ -990,6 +997,98 @@ static void on_remote_owner_approvals(void*w,void*p){
  say("CHECKING PENDING REQUESTS ON YOUR SERVER...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,remote_owner_list_finished,NULL);
  g_object_unref(proc);
+}
+/* Household mode is configured remotely, never from the host console.
+ * The server only honors this request from its WhoIs-verified owner. */
+static gboolean household_busy=FALSE;
+static void household_update_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,
+                                                  &out,NULL,&error);
+ household_busy=FALSE;
+ const char*state=out?g_strstrip(out):"";
+ if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
+       && (!strcmp(state,"NOW_OWNER_STATUS=owner_on") ||
+           !strcmp(state,"NOW_OWNER_STATUS=owner_off"))){
+  say(!strcmp(state,"NOW_OWNER_STATUS=owner_on")?
+      "OWNER ACCOUNT AUTO-APPROVAL ENABLED":"OWNER ACCOUNT AUTO-APPROVAL DISABLED");
+  preset_alert(win,"Household Tailscale access",
+      !strcmp(state,"NOW_OWNER_STATUS=owner_on")?
+      "Future devices signed into your server-owner Tailscale account will be approved automatically. Native streaming authentication is separate.":
+      "New owner devices will now require an explicit approval request.");
+ }else preset_alert(win,"Household Tailscale access",
+      "Could not update household auto-approval. Check that NOW Server's pairing broker is active and this device uses the registered owner Tailscale account.");
+ if(error)g_error_free(error);
+ g_free(out);
+}
+static void household_status_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,
+                                                  &out,NULL,&error);
+ household_busy=FALSE;
+ const char*state=out?g_strstrip(out):"";
+ if(!ok || !g_subprocess_get_successful(G_SUBPROCESS(source)) ||
+    (strcmp(state,"NOW_OWNER_STATUS=owner_on") &&
+     strcmp(state,"NOW_OWNER_STATUS=owner_off"))){
+  preset_alert(win,"Household Tailscale access",
+    "Could not read owner approval settings. Finish NOW Server setup and connect to its Tailscale address.");
+  goto end;
+ }
+ GtkWidget*dialog=gtk_message_dialog_new(GTK_WINDOW(win),GTK_DIALOG_MODAL,
+   GTK_MESSAGE_QUESTION,GTK_BUTTONS_NONE,
+   "Auto-approve devices using the server-owner Tailscale account?");
+ gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+   "Currently: %s. Only your registered Tailscale account qualifies. "
+   "Other household accounts can be trusted once from Pending Device Approvals.",
+   !strcmp(state,"NOW_OWNER_STATUS=owner_on")?"ON":"OFF");
+ gtk_dialog_add_buttons(GTK_DIALOG(dialog),"CANCEL",GTK_RESPONSE_CANCEL,
+                        "TURN OFF",2,"TURN ON",3,NULL);
+ int answer=gtk_dialog_run(GTK_DIALOG(dialog));
+ gtk_widget_destroy(dialog);
+ if(answer==2||answer==3){
+  GError*spawn_error=NULL;
+  GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+     G_SUBPROCESS_FLAGS_STDERR_SILENCE,&spawn_error,
+     "/usr/bin/python3","/usr/lib/optiplex-now/now-owner-approvals.py",
+     cfg[0],answer==3?"owner-enable":"owner-disable",NULL);
+  if(process){
+   household_busy=TRUE;
+   g_subprocess_communicate_utf8_async(process,NULL,NULL,
+                                       household_update_finished,NULL);
+   g_object_unref(process);
+  }else{
+   if(spawn_error)g_error_free(spawn_error);
+   preset_alert(win,"Household Tailscale access","Could not launch the settings helper.");
+  }
+ }
+end:
+ if(error)g_error_free(error);
+ g_free(out);
+}
+static void on_household_settings(void*w,void*p){
+ (void)w;(void)p;
+ if(household_busy){say("HOUSEHOLD SETTINGS ALREADY LOADING");return;}
+ if(!now_valid_host(cfg[0])){
+  preset_alert(win,"Household Tailscale access",
+               "Choose the NOW server's Tailscale IP in Settings first.");
+  return;
+ }
+ GError*error=NULL;
+ GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+   G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error,
+   "/usr/bin/python3","/usr/lib/optiplex-now/now-owner-approvals.py",
+   cfg[0],"owner-status",NULL);
+ if(!process){
+  if(error)g_error_free(error);
+  preset_alert(win,"Household Tailscale access","Could not launch the owner settings helper.");
+  return;
+ }
+ household_busy=TRUE;
+ say("CHECKING OWNER TAILSCALE AUTO-APPROVAL...");
+ g_subprocess_communicate_utf8_async(process,NULL,NULL,household_status_finished,NULL);
+ g_object_unref(process);
 }
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
@@ -1372,6 +1471,9 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*access_request=button("REQUEST GAMING ACCESS TO SERVER","setupaction");
  g_signal_connect_data(access_request,"clicked",(GCallback)on_now_request_access,NULL,NULL,0);
  add(col,access_request,0);
+ GtkWidget*household=button("HOUSEHOLD TAILSCALE AUTO-APPROVAL","setupaction");
+ g_signal_connect_data(household,"clicked",(GCallback)on_household_settings,NULL,NULL,0);
+ add(col,household,0);
  GtkWidget*owner_inbox=button("PENDING DEVICE APPROVALS (REMOTE OWNER)","setupaction");
  g_signal_connect_data(owner_inbox,"clicked",(GCallback)on_remote_owner_approvals,NULL,NULL,0);
  add(col,owner_inbox,0);
@@ -1540,6 +1642,7 @@ static void wizard_action(void*w,void*p){
  if(!strcmp(n,"w_now_find"))now_discovery_open(GTK_WINDOW(c->assistant),GTK_ENTRY(c->host),GTK_LABEL(c->notice));
  else if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
+ else if(!strcmp(n,"w_household"))on_household_settings(w,NULL);
  else if(!strcmp(n,"w_pair"))pair(0);
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
@@ -1632,6 +1735,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->games_page=four;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
+ wizard_button(c,four,"HOUSEHOLD TAILSCALE AUTO-APPROVAL","w_household");
  wizard_button(c,four,"PAIR WOLF","w_wolf");
  wizard_button(c,four,"OPEN WOLF PIN","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);

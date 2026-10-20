@@ -18,6 +18,15 @@ shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profi
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
 shutil.copy2(root/'src/find-now-hosts.py',pkg/'usr/lib/optiplex-now/find-now-hosts.py')
 shutil.copy2(root/'src/now-owner-approvals.py',pkg/'usr/lib/optiplex-now/now-owner-approvals.py')
+# Opt-in host pairing broker components: shipped but NOT auto-started, granted
+# owner identity, given Docker access, or bound to any network by installation.
+pairing=pkg/'usr/lib/optiplex-now/pairing'
+pairing.mkdir(exist_ok=True)
+for script in ('now_pairing_broker.py','now_pairing_identity.py',
+               'now_pairing_requests.py','now_pairing_owner.py',
+               'now_pairing_owner_identity.py'):
+ shutil.copy2(root/'server'/script,pairing/script)
+(pairing/'now_pairing_broker.py').chmod(0o755)
 (pkg/'usr/lib/optiplex-now/find-now-hosts.py').chmod(0o755)
 shutil.copy2(root/'server/now-host-agent.py',pkg/'usr/lib/optiplex-now/now-host-agent')
 (pkg/'usr/lib/optiplex-now/now-host-agent').chmod(0o755)

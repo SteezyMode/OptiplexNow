@@ -33,7 +33,7 @@ class WolfPairLocalTests(unittest.TestCase):
         ]}
         with mock.patch.object(bridge, "call_api", side_effect=[pending, {"success": True}]) as call:
             with mock.patch.object(sys, "argv", ["wolf-pair-local", "pair"]):
-                with mock.patch("sys.stdin", io.StringIO('{"index":1,"pin":"1234"}')):
+                with mock.patch("sys.stdin", io.StringIO('{"index":1,"client_ip":"100.1.2.3","pin":"1234"}')):
                     with mock.patch("sys.stdout", new_callable=io.StringIO) as output:
                         bridge.main()
         self.assertEqual(call.call_args_list[1].args, ("POST", "/api/v1/pair/client", {"pair_secret": "chosen", "pin": "1234"}))

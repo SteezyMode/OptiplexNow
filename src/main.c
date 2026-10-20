@@ -105,7 +105,7 @@ static const char *defaults[]={"","","","","","","","","system","","/","","","25
 static char cfg[CONFIG_COUNT][512];
 static int first_run=0;
 static const char *current_model(void){
- return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "OptiPlex";
+ return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
 static void update_model_heading(void){
  if(model_heading)gtk_label_set_text(GTK_LABEL(model_heading),current_model());
@@ -700,7 +700,7 @@ static void refresh(void){gtk_label_set_text(GTK_LABEL(indicator),"● CHECKING"
 static void on_power(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n>0){const char*names[]={"","Sleep","Restart","Shut down"};
    GtkWidget*d=gtk_dialog_new_with_buttons("Confirm",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"CONFIRM",GTK_RESPONSE_OK,NULL);
-   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s OptiPlex?",names[n]);
+   GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));char msg[128];snprintf(msg,sizeof msg,"%s server?",names[n]);
    GtkWidget*l=label(msg,"modalheading");gtk_widget_set_margin_start(l,22);gtk_widget_set_margin_end(l,22);
    gtk_widget_set_margin_top(l,16);gtk_widget_set_margin_bottom(l,12);add(area,l,0);gtk_widget_show_all(d);
    int resp=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);if(resp!=GTK_RESPONSE_OK)return;
@@ -730,9 +730,8 @@ static void launch_wolf_app(const char *app){
 static void launch_steam(void){launch_wolf_app("Steam");}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
- if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
- char url[700];snprintf(url,sizeof url,"http://%s:8085",cfg[0]);
- browser_open(url);
+ if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
+ browser_open(cfg[7]);
 }
 static void install_moonlight(void){
  if(!now_program_exists("flatpak")){
@@ -866,13 +865,13 @@ static void on_restart_streaming(void *w, void *parent) {
  (void)w;
  void *owner=parent?parent:win;
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-   preset_alert(owner,"Server settings needed","Set the OptiPlex host and SSH user in Settings first.");return;
+   preset_alert(owner,"Server settings needed","Set the host and SSH user in Settings first.");return;
  }
  GtkWidget*d=gtk_dialog_new_with_buttons("Restart streaming service?",GTK_WINDOW(owner),1,
    "Cancel",GTK_RESPONSE_CANCEL,"Restart streaming",GTK_RESPONSE_OK,NULL);
  gtk_dialog_set_default_response(GTK_DIALOG(d),GTK_RESPONSE_CANCEL);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The OptiPlex itself will stay on.");
+ GtkWidget*msg=gtk_label_new("This will disconnect active streaming sessions.\nSave your game first. The server itself will stay on.");
  gtk_container_set_border_width(GTK_CONTAINER(area),20);gtk_label_set_line_wrap(GTK_LABEL(msg),1);gtk_container_add(GTK_CONTAINER(area),msg);
  gtk_widget_show_all(d);int response=gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  if(response!=GTK_RESPONSE_OK)return;
@@ -1348,7 +1347,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Legacy Downloads URL (unused)"};
+ const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads URL"};
  GtkWidget*fields[8];
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
@@ -1520,9 +1519,7 @@ static void wizard_save(Wizard*c){
    const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
  }
- /* For a fresh installation, make basic services follow the selected server. */
- if(!*cfg[6])snprintf(cfg[6],512,"http://%s:8688",cfg[0]);
- if(!*cfg[7])snprintf(cfg[7],512,"http://%s:8085",cfg[0]);
+ /* Optional services use user-entered URLs, never reference-host ports. */
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
 static gboolean wizard_tailscale_poll(gpointer data){

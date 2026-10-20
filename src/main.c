@@ -828,7 +828,12 @@ static void on_web_gaming_settings(void*w,void*p){
  (void)w;(void)p;
  if(!*cfg[16]||!now_safe_preset_url(cfg[16])){say("CONFIGURE WEB GAMING URL IN SETTINGS");return;}
  char url[640];
- if(snprintf(url,sizeof url,"%s%s",cfg[16],strchr(cfg[16],'?')?"&settings=1":"/settings")>=(int)sizeof url){say("WEB GAMING URL TOO LONG");return;}
+ /* Only append the documented relative settings path to a base URL.
+  * A custom query URL is opened unchanged, not silently rewritten. */
+ const char*suffix=strchr(cfg[16],'?')?"":"/settings";
+ size_t n=strlen(cfg[16]);
+ if(n>0 && cfg[16][n-1]=='/')suffix=*suffix? "settings":"";
+ if(snprintf(url,sizeof url,"%s%s",cfg[16],suffix)>=(int)sizeof url){say("WEB GAMING URL TOO LONG");return;}
  browser_open(url);
 }
 /* Opens a deliberately interactive, SSH-backed server maintenance menu.

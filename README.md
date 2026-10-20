@@ -19,7 +19,7 @@ A personal Linux launcher for a home server: games through Moonlight, video and 
 
 ## Planned direction (not shipped)
 
-NOW is intended to become **one Linux `.deb` with client, server and combined workflows**. A guided server wizard will provision a verified Wolf gaming/desktop host on supported Linux hardware; **Moonlight Web, Jellyfin and DroppedNeedle remain independently optional services**, installed or adopted only with user approval. Existing NOW 1.x releases remain clients for previously configured servers, not turnkey host installers.
+NOW is intended to become **one Linux `.deb` with client, server and combined workflows**. A guided server wizard will provision a verified Wolf gaming/desktop host on supported Linux hardware; **Moonlight Web, Jellyfin and DroppedNeedle remain optional services; advanced Downloads & Music integration may include qBittorrent, VueTorrent, slskd and Gluetun**, installed or adopted only with user approval. Existing NOW 1.x releases remain clients for previously configured servers, not turnkey host installers.
 
 Read [Architecture](docs/ARCHITECTURE.md), [Roadmap](docs/ROADMAP.md), [ADR-001: modular provisioning](docs/adr/001-single-package-modular-provisioning.md) and [AGENTS.md](AGENTS.md) for the accepted direction, limits and agent development rules.
 

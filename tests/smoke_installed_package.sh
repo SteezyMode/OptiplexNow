@@ -13,6 +13,9 @@ sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
 test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
+test -x /usr/bin/optiplex-now-preflight
+test -x /usr/lib/optiplex-now/server-preflight
+optiplex-now-preflight --json | python3 -c 'import json,sys; data=json.load(sys.stdin); assert data["scope"] == "this_computer_read_only"; assert data["streaming_ready"] == "not_tested"; assert data["changes_made"] is False'
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

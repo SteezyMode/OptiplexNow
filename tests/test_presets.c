@@ -9,7 +9,7 @@
 static const char *const fields[NOW_PRESET_CONFIG_COUNT] = {
     "host","user","relay","relay_user","wake_command","videos","music",
     "downloads","browser","moonlight_appimage","storage_path","model_host",
-    "model_name","tray_buttons","ai_url","featured_actions"
+    "model_name","tray_buttons","ai_url","featured_actions","web_gaming_url"
 };
 
 static int fail(const char *why) {
@@ -36,6 +36,7 @@ int main(void) {
     strcpy(values[1],"alice");
     strcpy(values[5],"https://media.example.local");
     strcpy(values[14],"https://ai.example.local");
+    strcpy(values[16],"https://games.example.local");
     strcpy(values[9],"/private/device-specific/moonlight.AppImage");
 
     if(!now_preset_write(path,values,fields))goto end;
@@ -48,7 +49,7 @@ int main(void) {
     fclose(fp);
     if(!v2)goto end;
     if(!now_preset_read(path,imported,fields))goto end;
-    if(strcmp(imported[0],"example.local")||strcmp(imported[14],"https://ai.example.local"))goto end;
+    if(strcmp(imported[0],"example.local")||strcmp(imported[14],"https://ai.example.local")||strcmp(imported[16],"https://games.example.local"))goto end;
     if(imported[9][0])goto end; /* Device-specific path must never be in a portable preset. */
 
     memset(imported,0,sizeof imported);

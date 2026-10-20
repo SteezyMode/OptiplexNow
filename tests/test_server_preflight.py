@@ -183,7 +183,7 @@ class ServerPreflightTests(unittest.TestCase):
             responses={
                 preflight.READ_COMMANDS[3]: "Docker version",
                 preflight.READ_COMMANDS[4]: "wolf|ghcr.io/games-on-whales/wolf:stable",
-                preflight.READ_COMMANDS[5]: "active\\n",
+                preflight.READ_COMMANDS[5]: "active\n",
             })
         plan = preflight.build_install_plan(inventory, "sunshine")
         steps = {item["id"]: item for item in plan["steps"]}

@@ -12,7 +12,7 @@ def candidates(status):
     rows = []
     seen = set()
     peers = status.get('Peer') or {}
-    nodes = [(True, status.get('Self') or {})] + [(False, x) for x in peers.values()]
+    nodes = [(False, x) for x in peers.values()]
     for local, node in nodes:
         if not isinstance(node, dict):
             continue
@@ -31,8 +31,8 @@ def candidates(status):
         seen.add(address)
         name = node.get('HostName') or node.get('DNSName') or address
         name = ''.join(c if c.isprintable() and c not in '\t\r\n' else ' ' for c in str(name))[:120]
-        state = 'This computer' if local else ('Online' if node.get('Online') else 'Offline')
-        rows.append((0 if node.get('Online') or local else 1, name.casefold(), address, f'{name} — {state} — {address}'))
+        state = 'Online' if node.get('Online') else 'Offline'
+        rows.append((0 if node.get('Online') else 1, name.casefold(), address, f'{name} — {state} — {address}'))
     return [(address, label) for _, _, address, label in sorted(rows)[:200]]
 
 
@@ -43,7 +43,7 @@ def main():
             raise ValueError('Tailscale is unavailable. Check that it is running and signed in.')
         rows = candidates(json.loads(result.stdout))
         if not rows:
-            raise ValueError('No Tailscale devices found. You can still enter an address manually.')
+            raise ValueError('No other Tailscale devices found. You can still enter a server address manually.')
         for address, label in rows:
             print(address + '\t' + label)
         return 0

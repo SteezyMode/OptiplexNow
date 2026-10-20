@@ -1,6 +1,8 @@
 #ifndef OPTIPLEX_NOW_PRESETS_H
 #define OPTIPLEX_NOW_PRESETS_H
 
+#include <stddef.h>
+
 /* Keep legacy keys and headers stable: a public rebrand must not discard .onp data. */
 #define NOW_PRESET_CONFIG_COUNT 17
 #define NOW_PRESET_VALUE_SIZE 512

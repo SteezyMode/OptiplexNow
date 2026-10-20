@@ -918,14 +918,65 @@ static void on_web_gaming_maintenance(void*w,void*p){
  if(terminal_launch(args))say("WEB MAINTENANCE OPENED IN TERMINAL. SERVER HELPER REQUIRED.");
  else preset_alert(win,"Maintenance unavailable","No terminal emulator found. Install a terminal and retry.");
 }
+/* Advanced admin action. Routine pairing must not depend on this tunnel.
+ * Unlike now_launch(), GSubprocess preserves the helper's exit status and
+ * delivers a bounded, non-sensitive result to the existing NOW interface. */
+static gboolean web_admin_in_progress=FALSE;
+static void web_admin_finished(GObject*source,GAsyncResult*result,gpointer unused){
+ (void)unused;
+ char*out=NULL,*err_text=NULL;GError*error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(G_SUBPROCESS(source),result,
+                                                  &out,&err_text,&error);
+ web_admin_in_progress=FALSE;
+ const char*code=out?g_strstrip(out):"";
+ const char*message="WEB GAMING ADMIN COULD NOT OPEN. VERIFY CLIENT SETUP";
+ if(ok && g_subprocess_get_successful(G_SUBPROCESS(source))
+       && !strcmp(code,"NOW_ADMIN_STATUS=browser_handoff_requested")){
+  say("ADMIN BROWSER REQUESTED. LOCAL HTTPS TRUST MAY STILL NEED CONFIGURATION");
+  goto cleanup;
+ }
+ if(g_str_has_prefix(code,"NOW_ADMIN_STATUS="))code+=strlen("NOW_ADMIN_STATUS=");
+ if(!strcmp(code,"invalid_settings"))message="Set a valid server address and SSH user in Settings.";
+ else if(!strcmp(code,"ssh_not_installed"))message="OpenSSH client is missing. Reinstall NOW dependencies.";
+ else if(!strcmp(code,"ssh_not_authorized"))message="SSH permission denied or host identity not trusted. Owner must authorize SSH separately.";
+ else if(!strcmp(code,"server_unreachable"))message="Cannot reach the selected server over SSH. Check Tailscale, server and port 22.";
+ else if(!strcmp(code,"server_name_invalid"))message="Cannot resolve the selected server. Check the hostname and Tailscale.";
+ else if(!strcmp(code,"local_port_unavailable"))message="Local admin tunnel port is occupied. Check for stale SSH tunnels.";
+ else if(!strcmp(code,"admin_tunnel_unreachable"))message="SSH returned, but local admin tunnel is unavailable. Check the host's MoonlightWeb service.";
+ else if(!strcmp(code,"browser_not_installed"))message="No xdg-open desktop browser handler found. Configure a default browser.";
+ else if(!strcmp(code,"browser_launch_failed"))message="Default browser did not accept the admin URL. Check xdg-open configuration.";
+ else if(!strcmp(code,"ssh_tunnel_timeout"))message="SSH admin tunnel timed out. Verify server reachability and SSH authorization.";
+ else if(!strcmp(code,"local_configuration_error"))message="Cannot create the local private SSH control directory.";
+ else if(!strcmp(code,"ssh_tunnel_failed"))message="SSH admin tunnel failed. Check SSH trust, credentials, and server availability.";
+ else if(!strcmp(code,"admin_launch_error"))message="Unable to start the admin helper or browser.";
+ else if(error)message="Web Gaming Admin launcher failed unexpectedly.";
+ say("WEB GAMING ADMIN FAILED. SEE DETAILS");
+ preset_alert(win,"Web Gaming Admin unavailable",message);
+cleanup:
+ if(error)g_error_free(error);
+ g_free(out);g_free(err_text);
+}
 static void on_web_gaming_admin(void*w,void*p){
  (void)w;(void)p;
- if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER AND SSH USER IN SETTINGS");return;}
+ if(web_admin_in_progress){say("WEB GAMING ADMIN IS ALREADY STARTING");return;}
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  preset_alert(win,"Web Gaming Admin","Set a valid server and SSH user in Settings. Regular game streaming does not require SSH.");
+  return;
+ }
  const char*helper="/usr/lib/optiplex-now/open-web-gaming-admin";
  if(access(helper,X_OK)!=0){say("WEB ADMIN HELPER MISSING. REINSTALL OPTIPLEX NOW");return;}
- char*args[]={(char*)helper,cfg[0],cfg[1],NULL};
- now_launch(args);
- say("OPENING WEB GAMING ADMIN VIA SSH");
+ GError*error=NULL;
+ GSubprocess*process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_PIPE,
+                                      &error,helper,cfg[0],cfg[1],NULL);
+ if(!process){
+  if(error)g_error_free(error);
+  preset_alert(win,"Web Gaming Admin unavailable","Could not launch the packaged admin helper. Reinstall OptiPlex NOW.");
+  return;
+ }
+ web_admin_in_progress=TRUE;
+ say("CHECKING WEB GAMING ADMIN TUNNEL AND BROWSER...");
+ g_subprocess_communicate_utf8_async(process,NULL,NULL,web_admin_finished,NULL);
+ g_object_unref(process);
 }
 /* Open WebUI is the Bruiser front end; Ollama and SearXNG remain separate.
  * Default to the user's configured host, not a machine-specific fixed IP. */

@@ -2,7 +2,7 @@
 #define OPTIPLEX_NOW_PRESETS_H
 
 /* Keep legacy keys and headers stable: a public rebrand must not discard .onp data. */
-#define NOW_PRESET_CONFIG_COUNT 16
+#define NOW_PRESET_CONFIG_COUNT 17
 #define NOW_PRESET_VALUE_SIZE 512
 
 int now_valid_host(const char *host);

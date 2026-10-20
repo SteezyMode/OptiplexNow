@@ -13,7 +13,7 @@ import threading
 
 from now_pairing_identity import own_tailnet_ipv4, verify_tailscale_peer
 from now_pairing_owner import OwnerControl
-from now_pairing_owner_identity import load_pinned_owner
+from now_pairing_owner_identity import load_pinned_owner, owner_from_local_tailscale
 from now_pairing_requests import PairingRequests
 
 PORT = 18792
@@ -207,8 +207,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Experimental NOW pairing broker")
     parser.add_argument("--serve", action="store_true",
                         help="Explicitly start tailnet requests and local owner socket")
-    parser.add_argument("--owner-id-file",
+    owner_config = parser.add_mutually_exclusive_group()
+    owner_config.add_argument("--owner-id-file",
                         help="Trusted installer-registered mode-0600 Tailscale owner account ID")
+    owner_config.add_argument("--owner-from-local-tailnet", action="store_true",
+                        help="At explicit server activation, identify owner as the enrolled Tailscale server account")
     parser.add_argument("--socket-dir",
                         help="Existing mode-0700 directory owned by this Unix user")
     args = parser.parse_args(argv)
@@ -216,8 +219,8 @@ def main(argv=None):
         parser.error("--socket-dir is only used with --serve")
     if args.serve and not args.socket_dir:
         parser.error("--serve requires --socket-dir")
-    if args.owner_id_file is not None and not args.serve:
-        parser.error("--owner-id-file requires --serve")
+    if (args.owner_id_file is not None or args.owner_from_local_tailnet) and not args.serve:
+        parser.error("Owner binding requires --serve")
     try:
         address = own_tailnet_ipv4()
         if not args.serve:
@@ -227,7 +230,9 @@ def main(argv=None):
 
         # Remote owner operations are disabled unless server installation
         # has pinned the verified owner account in a private local file.
-        owner_user_id = load_pinned_owner(args.owner_id_file) if args.owner_id_file else None
+        owner_user_id = (load_pinned_owner(args.owner_id_file) if args.owner_id_file
+                         else owner_from_local_tailscale() if args.owner_from_local_tailnet
+                         else None)
         queue = PairingRequests()
         # Both sockets live in THIS process and use precisely the same queue.
         with PairingHTTPServer((address, PORT), make_handler(queue, owner_user_id=owner_user_id)) as server:

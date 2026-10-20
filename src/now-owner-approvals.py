@@ -87,12 +87,55 @@ def query_owner(host, action, request_id=None, *, connection=http.client.HTTPCon
         client.close()
 
 
+
+def request_access(host, backend="wolf", *, connection=http.client.HTTPConnection):
+    """Submit one idempotent first-client pairing request without SSH."""
+    if not valid_host(host):
+        return False, "invalid_host"
+    if backend not in BACKEND:
+        return False, "invalid_action"
+    client = connection(host, PORT, timeout=4)
+    try:
+        client.request("POST", "/v1/pairing/requests",
+                       body=json.dumps({"backend":backend}).encode(),
+                       headers={"Content-Type":"application/json",
+                                "Accept":"application/json"})
+        response = client.getresponse()
+        data = response.read(MAX_BYTES + 1)
+        if len(data) > MAX_BYTES:
+            return False, "invalid_response"
+        if response.status == 403:
+            return False, "device_not_authorized_on_tailnet"
+        if response.status != 202:
+            return False, "server_unavailable"
+        result = json.loads(data)
+        if not isinstance(result,dict):
+            return False, "invalid_response"
+        rid = result.get("request_id")
+        state = result.get("owner_status")
+        if not isinstance(rid,str) or not REQUEST_ID.fullmatch(rid):
+            return False, "invalid_response"
+        if state not in ("pending","approved","denied"):
+            return False, "invalid_response"
+        return True, state
+    except (OSError, ValueError, json.JSONDecodeError, TimeoutError):
+        return False, "server_unavailable"
+    finally:
+        client.close()
+
 def main(argv):
     if len(argv) not in (2, 3):
         print(PREFIX + "invalid_action")
         return 2
     host, action = argv[0], argv[1]
     request_id = argv[2] if len(argv) == 3 else None
+    if action == "request":
+        if request_id is not None or len(argv) != 2:
+            print(PREFIX + "invalid_action")
+            return 2
+        success, state = request_access(host)
+        print(PREFIX + (("access_" + state) if success else state))
+        return 0 if success else 1
     success, response = query_owner(host, action, request_id)
     if not success:
         print(PREFIX + response)

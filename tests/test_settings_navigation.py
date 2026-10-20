@@ -23,6 +23,14 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIn('gtk_window_set_default_size(GTK_WINDOW(d),680,550);', SOURCE)
         self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC)', SOURCE)
 
+    def test_dashboard_and_software_are_internal_pages(self):
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),shell,"dashboard");', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
+        self.assertIn('settings_link(tools,main_pages,"SOFTWARE","software");', SOURCE)
+        self.assertIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard");', SOURCE)
+        self.assertIn('add(software,grid,0);', SOURCE)
+        self.assertIn('add(software,extras,0);', SOURCE)
+
     def test_existing_save_path_and_admin_actions(self):
         section = SOURCE.split("static void on_settings(void*w,void*p)", 1)[1].split("/* Setup assistant.", 1)[0]
         for expected in ('gtk_dialog_run(GTK_DIALOG(d))', 'if(resp==GTK_RESPONSE_OK)', 'config_save();tray_build_menu();',

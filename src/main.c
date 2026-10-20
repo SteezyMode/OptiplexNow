@@ -1746,7 +1746,11 @@ int main(int argc,char**argv) {
  g_signal_connect_data(win,"window-state-event",(GCallback)minimize_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
  GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),1,1);gtk_container_add(GTK_CONTAINER(win),sc);
- GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");gtk_container_add(GTK_CONTAINER(sc),shell);
+ GtkWidget*main_pages=gtk_stack_new();
+ gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+ gtk_container_add(GTK_CONTAINER(sc),main_pages);
+ GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");
+ gtk_stack_add_named(GTK_STACK(main_pages),shell,"dashboard");
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
@@ -1771,10 +1775,18 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,1);
- add(body,label("PRIMARY ACTIONS","section"),0);
+ /* The dashboard prioritizes host state. Launchers live on Software page. */
+ GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
+ GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(software_scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_container_add(GTK_CONTAINER(software_scroll),software);
+ gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");
+ settings_link(tools,main_pages,"SOFTWARE","software");
+ settings_link(software,main_pages,"‹ DASHBOARD","dashboard");
+ add(software,label("SOFTWARE","section"),0);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(grid),1);gtk_grid_set_row_spacing(GTK_GRID(grid),7);gtk_grid_set_column_spacing(GTK_GRID(grid),7);
- gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
+ gtk_widget_set_hexpand(grid,1);add(software,grid,0);
+ GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(software,extras,0);
  extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(extras_grid),1);
  gtk_grid_set_row_spacing(GTK_GRID(extras_grid),7);gtk_grid_set_column_spacing(GTK_GRID(extras_grid),7);
  gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(GTK_CONTAINER(extras),extras_grid);

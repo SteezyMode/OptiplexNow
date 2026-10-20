@@ -17,6 +17,7 @@ There is **one released application (NOW), one separate Studio application, and 
 - [Local server preflight](server-preflight.md): development-only read-only host compatibility CLI and verification steps; not a fresh-server installer.
 - [NOW Host discovery](now-host-discovery.md): opt-in tailnet-only read-only host endpoint, client picker, and isolated contract tests.
 - [Owner-approved pairing core](pairing-authorization.md): non-networked request/approval state machine and its trusted-host integration boundaries; native Moonlight pairing not implemented.
+- [Guest access to one OptiPlex](guest-client-experience.md): owner-issued Tailscale machine shares, scoped Games/Jellyfin/service launchers and first-use authentication.
 - [One-sign-in onboarding design](SERVER-ONBOARDING-AND-TAILSCALE.md): proposal for account-free Tailscale-first discovery and owner-approved Moonlight pairing.
 
 ## Planned, not shipped

@@ -77,3 +77,7 @@ Verified in upstream Moonlight Qt `app/cli/commandlineparser.cpp`: `moonlight pa
 Implementation on this branch: PIN is generated with Linux `getrandom()`, passed to Moonlight CLI using `--pin`, shown in a read-only NOW entry, and later sent to Wolf over the already-defined SSH helper. Moonlight must stay running to finish certificate exchange after Wolf accepts the PIN. Current dialog still needs a Refresh and explicit Authorize action; unattended pairing is **not yet built or proven**. PIN appears in the local process's command arguments while pairing, so this is **not** a general solution for handling long-lived credentials; it is a temporary four-digit pairing PIN. Never log it, persist it, or include it in shell history.
 
 **Test on an unpaired Moonlight client before shipping.** An already-paired device cannot prove the pairing path works. Check that no terminal is opened, the correct Wolf pending client is selected, Moonlight completes the certificate exchange, and subsequent launches require no PIN.
+
+## 2026-10-21 first-run UI clarification
+
+The normal setup wizard exposes **Connect to Game Host** on its Games page; technical Wolf pairing controls are labeled as advanced help. This is discoverability work, **not yet auto-pairing**: clicking Games does not automatically detect an unpaired client and initiate onboarding, and a shared login does not grant server or Moonlight access. For a production-ready experience, account authorization and host provisioning must precede pairing; the manual pairing control is a fallback.

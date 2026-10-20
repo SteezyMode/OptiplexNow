@@ -760,7 +760,7 @@ static gboolean wolf_pair_request(const char*action,const char*payload,char*out,
  return success;
 }
 static void wolf_pair_dialog(const char*generated_pin){
- GtkWidget*d=gtk_dialog_new_with_buttons("Pair Moonlight",GTK_WINDOW(win),GTK_DIALOG_MODAL,
+ GtkWidget*d=gtk_dialog_new_with_buttons("Connect to Game Host",GTK_WINDOW(win),GTK_DIALOG_MODAL,
   "Cancel",GTK_RESPONSE_CANCEL,"Refresh clients",1,"Authorize PIN",GTK_RESPONSE_OK,NULL);
  GtkWidget*content=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*hint=gtk_label_new("NOW has started Moonlight pairing with the PIN below. Refresh pending clients, then authorize the correct device.");
@@ -1696,14 +1696,15 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  gtk_assistant_append_page(GTK_ASSISTANT(a),three);gtk_assistant_set_page_title(GTK_ASSISTANT(a),three,"ACCESS");gtk_assistant_set_page_type(GTK_ASSISTANT(a),three,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),three,1);
  /* Page 4: reuse the existing installed Moonlight, including AppImages. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
- add(four,label("GAMES","modalheading"),0);
+ add(four,label("CONNECT TO GAME HOST","modalheading"),0);
+ add(four,label("Connect once during setup, then play from Games.","helper"),0);
  c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
  c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
  c->games_page=four;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
- wizard_button(c,four,"PAIR WOLF","w_wolf");
- wizard_button(c,four,"OPEN WOLF PIN","w_wolfpin");
+ wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
+ wizard_button(c,four,"ADVANCED PAIRING HELP","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL

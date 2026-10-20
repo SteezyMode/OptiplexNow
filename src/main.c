@@ -823,6 +823,14 @@ static void on_games_action(void*w,void*arg){(void)w;
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
  else if(resp==103)pair_wolf();
+ else if(resp==106){
+  /* Login belongs to MoonlightWeb's normal HTTPS client, NOT its admin page.
+   * The server owner supplies the one-time device access PIN separately. */
+  browser_open("https://games.monumentrisk.com");
+  say("WEB GAMING LOGIN REQUESTED. ENTER THE ACCESS PIN FROM THE SERVER OWNER");
+  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),
+    "Enter the one-time Web Gaming access PIN issued by the server owner. No SSH or admin tunnel is needed on this client.");
+ }
  else if(resp==104){
    if(!now_valid_host(cfg[0])){
      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHOOSE A SERVER FIRST");
@@ -877,6 +885,8 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
  GtkWidget*pin=button("OPEN WOLF APPROVAL LINK (SSH OPTIONAL)","setupaction");
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
+ GtkWidget*web_login=button("PAIR WEB GAMING IN BROWSER","setupaction");
+ g_signal_connect_data(web_login,"clicked",(GCallback)on_games_action,(void*)(long)106,NULL,0);add(col,web_login,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
  games_notice=label("","gameshint");add(col,games_notice,0);
@@ -1521,6 +1531,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf();
+ else if(!strcmp(n,"w_webgaming")){browser_open("https://games.monumentrisk.com");say("WEB GAMING LOGIN REQUESTED. SERVER OWNER MUST PROVIDE AN ACCESS PIN");}
  else if(!strcmp(n,"w_wolfpin")){
   if(!now_valid_host(cfg[0]))say("CHOOSE A SERVER FIRST");
   else if(!now_valid_user(cfg[1]))preset_alert(c->assistant,"Wolf approval",
@@ -1619,6 +1630,9 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"START MOONLIGHT PAIRING","w_wolf");
  wizard_button(c,four,"OPEN WOLF APPROVAL LINK (IF SSH CONFIGURED)","w_wolfpin");
+ add(four,label("WEB GAMING (BROWSER CLIENT) — SEPARATE FROM NATIVE MOONLIGHT PAIRING","helper"),0);
+ wizard_button(c,four,"PAIR WEB GAMING IN BROWSER","w_webgaming");
+ add(four,label("Use the existing secure Web Gaming site. The server owner supplies the one-time Web Gaming access PIN. Advanced administration is not required on the client.","helper"),0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL

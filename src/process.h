@@ -13,4 +13,11 @@ void now_launch(char *const argv[]);
 /* Check whether a program is executable (absolute path or PATH lookup). */
 int now_program_exists(const char *name);
 
+/* Resolve an executable on PATH to its actual launchable path, or use a
+ * caller-supplied absolute fallback (e.g. /snap/bin/moonlight when the desktop
+ * environment omits /snap/bin). No shell invocation, no package changes.
+ * Return 1 only if the complete executable path fits in out. */
+int now_resolve_executable(const char *name, const char *fallback,
+                           char *out, size_t cap);
+
 #endif

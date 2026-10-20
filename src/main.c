@@ -1710,7 +1710,7 @@ static void tray_build_menu(void){
    /* AppIndicator/DBusMenu serializes the menu item label, not arbitrary
     * GtkBox children. Use a standard labeled item for both tray backends. */
    char caption[256];
-   snprintf(caption,sizeof caption,"%-13s | %s",names[i],i==6?desktop:descriptions[i]);
+   snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);
    GtkWidget*item=gtk_menu_item_new_with_label(caption);
    g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
    gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);

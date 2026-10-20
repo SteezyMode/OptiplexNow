@@ -1099,12 +1099,13 @@ static void on_system_info(void*w,void*p){
  spec_status=NULL;gtk_widget_destroy(d);
 }
 
-typedef struct {GtkWidget*parent,*fields[8],*disk;} PresetExportContext;
+typedef struct {GtkWidget*parent,*fields[8],*disk,*web;} PresetExportContext;
 static void export_preset(void*w,void*p){
  (void)w;PresetExportContext*c=p;char v[CONFIG_COUNT][512];
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,cfg[i]);
  for(int i=0;i<8;i++)safe_copy(v[i],512,gtk_entry_get_text(GTK_ENTRY(c->fields[i])));
  safe_copy(v[10],512,gtk_entry_get_text(GTK_ENTRY(c->disk)));
+ if(c->web)safe_copy(v[16],512,gtk_entry_get_text(GTK_ENTRY(c->web)));
  if(!now_preset_values_valid(v)){
   preset_alert(c->parent,"Preset not saved","Check server, relay, URL, and wake script fields. Presets cannot contain URL passwords or tokens.");return;
  }
@@ -1259,7 +1260,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
  g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
  add(col,advanced,0);
- PresetExportContext export_context={.parent=d,.disk=diskentry};
+ PresetExportContext export_context={.parent=d,.disk=diskentry,.web=web_entry};
  for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
  GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
  g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,&export_context,NULL,0);add(col,export_btn,0);
@@ -1312,7 +1313,7 @@ static void wizard_save(Wizard*c){
    if(strchr(values[i],'\n')||strchr(values[i],'\r'))return;
    safe_copy(cfg[i],512,values[i]);
  }
- if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);}
+ if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);safe_copy(cfg[16],512,c->staged[16]);}
  for(int i=0;i<3;i++)if(c->service_inputs[i]){
    const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
    if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);

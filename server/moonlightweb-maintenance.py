@@ -75,8 +75,20 @@ def recreate_args(info, image_id, env_file):
     # Preserve it exactly; reject other/unrecognized security overrides.
     if security_opts not in ([], ["no-new-privileges"]):
         raise RuntimeError("Unsupported Docker security options; refusing to drop them")
-    if host.get("Memory", 0) or host.get("NanoCpus", 0) or host.get("CpuShares", 0):
-        raise RuntimeError("Custom resource limits found; refusing changes")
+    # Preserve supported memory and fractional CPU quotas exactly.
+    # Docker reports the memory limit in bytes and CPU quota in nanocpus.
+    memory = host.get("Memory") or 0
+    nano_cpus = host.get("NanoCpus") or 0
+    if (type(memory) is not int or memory < 0
+            or type(nano_cpus) is not int or nano_cpus < 0):
+        raise RuntimeError("Invalid Docker resource limits")
+    # Avoid silently dropping other resource controls we don't yet recreate.
+    if host.get("CpuShares") or any(host.get(key) for key in (
+            "CpuPeriod", "CpuQuota", "CpuRtPeriod", "CpuRtRuntime",
+            "CpusetCpus", "CpusetMems", "MemoryReservation", "MemorySwap",
+            "MemorySwappiness", "PidsLimit", "OomKillDisable",
+            "CgroupParent", "BlkioWeight")):
+        raise RuntimeError("Unsupported additional resource limits; refusing changes")
     binds = host.get("Binds") or []
     if len(binds) > 1 or (binds and binds[0].split(":")[:2] != [volume, "/data"]):
         raise RuntimeError("Unsupported Docker volume binding")
@@ -95,6 +107,12 @@ def recreate_args(info, image_id, env_file):
         args.extend(["--cap-add", cap])
     for option in security_opts:
         args.extend(["--security-opt", option])
+    if memory:
+        args.extend(["--memory", str(memory) + "b"])
+    if nano_cpus:
+        # Format without floating-point rounding; 1_000_000_000 == 1 CPU.
+        cpu_limit = ("%d.%09d" % divmod(nano_cpus, 1_000_000_000)).rstrip("0").rstrip(".")
+        args.extend(["--cpus", cpu_limit])
     spec = volume + ":/data"
     if mode:
         spec += ":" + mode

@@ -782,21 +782,40 @@ static void install_moonlight(void){
  g_subprocess_wait_check_async(process,NULL,moonlight_install_completed,GINT_TO_POINTER(1));
  g_object_unref(process);
 }
+/* Moonlight Qt's 'pair' subcommand has its OWN graphical PIN dialog.
+ * Never wrap this in a terminal: users should not need an SSH account or CLI.
+ * Approval must still be granted by the owner of the chosen Wolf server. */
 static void pair_wolf(void){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
- if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
- char executable[PATH_MAX];
- if(moonlight_mode()==2 && !find_native_moonlight(executable,sizeof executable)){
+ if(!now_valid_host(cfg[0])){say("CHOOSE A SERVER BEFORE PAIRING");return;}
+ char executable[PATH_MAX]={0};
+ int mode=moonlight_mode();
+ if(mode==2 && !find_native_moonlight(executable,sizeof executable)){
   say("MOONLIGHT EXECUTABLE MISSING");return;
  }
- char *native[]={executable,"pair",cfg[0],NULL};
- char *appimage[]={(char*)find_appimage(),"pair",cfg[0],NULL};
- char *flat[]={"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],NULL};
- int mode=moonlight_mode();
- if(terminal_launch(mode==1?appimage:mode==2?native:flat)){
-   say("ENTER THE PIN ON WOLF'S PAIRING PAGE");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"AFTER PAIRING STARTS, CLICK OPEN WOLF PIN");
+ const char*appimage=mode==1?find_appimage():NULL;
+ if(mode==1 && !appimage){say("MOONLIGHT APPIMAGE NOT FOUND");return;}
+ GError*error=NULL;
+ GSubprocess*process=NULL;
+ if(mode==1){
+  process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+    &error,appimage,"pair",cfg[0],NULL);
+ }else if(mode==2){
+  process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+    &error,executable,"pair",cfg[0],NULL);
+ }else if(mode==3){
+  process=g_subprocess_new(G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+    &error,"flatpak","run","com.moonlight_stream.Moonlight","pair",cfg[0],NULL);
  }
+ if(!process){
+  if(error)g_error_free(error);
+  say("COULD NOT OPEN MOONLIGHT PAIRING. CHECK INSTALLATION");
+  return;
+ }
+ g_object_unref(process);
+ say("MOONLIGHT PAIRING OPENED. HAVE SERVER OWNER APPROVE THE PIN");
+ if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),
+   "Moonlight shows a PIN. Approve it on Wolf using the server's one-time pairing link.");
 }
 static void on_games_action(void*w,void*arg){(void)w;
  int resp=(int)(long)arg;

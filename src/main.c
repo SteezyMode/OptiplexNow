@@ -161,7 +161,15 @@ static void config_location(void) {
 }
 static void config_load(void) {
  config_location();for(int i=0;i<CONFIG_COUNT;i++)safe_copy(cfg[i],512,defaults[i]);
- FILE*f=fopen(config_path,"r");if(!f){first_run=1;return;}
+ FILE*f=fopen(config_path,"r");if(!f){
+   first_run=1;
+   /* Personal beta: offer the known home media service on a clean client.
+    * Never override an existing config.ini (including an intentionally
+    * blank Videos URL). Tailscale enrollment is network access, not a
+    * substitute for any Jellyfin login the host requires. */
+   safe_copy(cfg[5],512,"https://media.monumentrisk.com");
+   return;
+ }
  int has_featured=0;
  char line[1024]; while(fgets(line,sizeof line,f)){
    line[strcspn(line,"\r\n")]=0;char *eq=strchr(line,'=');if(!eq)continue;*eq++=0;

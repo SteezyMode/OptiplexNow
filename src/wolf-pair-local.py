@@ -22,10 +22,10 @@ body = sys.stdin.buffer.read(4096) if method == "POST" else b""
 sock = socket.socket(socket.AF_UNIX)
 sock.settimeout(5)
 sock.connect("/run/user/wolf/wolf.sock")
-request = (method + " " + path + " HTTP/1.0\\r\\nHost: localhost\\r\\nConnection: close\\r\\n").encode()
+request = (method + " " + path + " HTTP/1.0\r\nHost: localhost\r\nConnection: close\r\n").encode()
 if body:
-    request += ("Content-Type: application/json\\r\\nContent-Length: " + str(len(body)) + "\\r\\n").encode()
-sock.sendall(request + b"\\r\\n" + body)
+    request += ("Content-Type: application/json\r\nContent-Length: " + str(len(body)) + "\r\n").encode()
+sock.sendall(request + b"\r\n" + body)
 response = bytearray()
 while True:
     chunk = sock.recv(16384)
@@ -35,8 +35,8 @@ while True:
     if len(response) > 65536:
         raise ValueError("Wolf response too large")
 sock.close()
-headers, sep, payload = bytes(response).partition(b"\\r\\n\\r\\n")
-if not sep or b" 200 " not in headers.split(b"\\r\\n", 1)[0]:
+headers, sep, payload = bytes(response).partition(b"\r\n\r\n")
+if not sep or b" 200 " not in headers.split(b"\r\n", 1)[0]:
     raise RuntimeError("Wolf API returned an error")
 print(payload.decode("utf-8"))
 '''

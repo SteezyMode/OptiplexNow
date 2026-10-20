@@ -85,6 +85,30 @@ class RemoteOwnerClientTests(unittest.TestCase):
             self.assertEqual(client.query_owner("100.85.22.1","approve",invalid),
                              (False,"invalid_request"))
 
+    def test_new_client_can_request_access_without_ssh_or_host_console(self):
+        req="n"*32
+        fake=StubConnection(StubResponse(202,{"request_id":req,
+                            "owner_status":"pending","moonlight_paired":False}))
+        answer=client.request_access("100.85.22.1",
+                connection=lambda host,port,timeout:fake)
+        self.assertEqual(answer,(True,"pending"))
+        self.assertEqual(fake.method,"POST")
+        self.assertEqual(fake.path,"/v1/pairing/requests")
+        self.assertEqual(json.loads(fake.body),{"backend":"wolf"})
+        self.assertNotIn("Authorization",fake.headers)
+        self.assertEqual(client.request_access("127.0.0.1"),
+                         (False,"invalid_host"))
+        self.assertTrue(fake.closed)
+
+    def test_server_does_not_advertise_pairing_success_from_owner_approval(self):
+        fake=StubConnection(StubResponse(202,{"request_id":"n"*32,
+                            "owner_status":"approved","moonlight_paired":False}))
+        self.assertEqual(client.request_access("100.85.22.1",
+                    connection=lambda *args,**kw:fake),(True,"approved"))
+        self.assertIn('REQUEST GAMING ACCESS TO SERVER',GTK)
+        self.assertIn('static void on_now_request_access(',GTK)
+        self.assertIn('SERVER OWNER APPROVED. COMPLETE NATIVE MOONLIGHT PAIRING',GTK)
+
     def test_errors_are_fixed_and_status_is_not_approval(self):
         self.assertEqual(self.invoke(status=403)[0],(False,"owner_not_authorized"))
         self.assertEqual(self.invoke(status=409)[0],(False,"request_expired"))

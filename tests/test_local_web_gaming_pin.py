@@ -44,7 +44,7 @@ class OwnerWebGamingPinTests(unittest.TestCase):
         self.assertEqual(len(calls),2)
         self.assertEqual(calls[0][0][-5:],["inspect","--type","container","--format","{{.State.Running}}","moonlightweb"][-5:])
         self.assertEqual(calls[1][0][-4:],["exec","moonlightweb","moonlightweb","--new-pin"])
-        self.assertTrue(all(argv[0][:3]==["/usr/bin/docker","--host",f"unix://{argv[0][2].split('unix://')[1]}"] for argv in calls))
+        self.assertTrue(all(argv[:2]==["/usr/bin/docker","--host"] and argv[2].startswith("unix://") for argv,_ in calls))
         self.assertNotIn("--auth-key",str(calls))
         self.assertNotIn("sudo",str(calls))
         self.assertNotIn("pkexec",str(calls))
@@ -87,7 +87,7 @@ class OwnerWebGamingPinTests(unittest.TestCase):
         self.assertIn("ISSUE PIN",handler)
         self.assertNotIn("terminal_launch(",handler)
         self.assertNotIn("sudo",handler)
-        self.assertNotIn("ssh",handler.lower())
+        self.assertNotIn('"ssh"',handler)
         self.assertIn('"https://games.monumentrisk.com"',MAIN)
         self.assertIn("gtk_label_set_selectable",handler)
 

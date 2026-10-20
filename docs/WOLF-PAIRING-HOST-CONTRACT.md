@@ -21,6 +21,7 @@ The Wolf sessions API can include encryption keys. Never log raw session respons
 | Component | Location / action |
 | --- | --- |
 | GTK client | `src/main.c`: Moonlight predefined PIN, native pairing dialog, refresh/authorize action |
+| Pairing contract | `src/wolf_pairing.c/.h`: parse and reject malformed, duplicate or ambiguous pending-client lists and build validated PIN requests. No network I/O; still requires explicit client selection. |
 | Client transport | `src/wolf-pair-client.py`, installed at `/usr/lib/optiplex-now/wolf-pair-client.py`; runs a constrained SSH helper |
 | Host helper source | `src/wolf-pair-local.py`, manually installed on the reference host at `/usr/local/libexec/optiplex-now/wolf-pair-local` |
 | Moonlight client | External executable or AppImage/Flatpak, not a Wolf service |
@@ -30,7 +31,7 @@ The host helper resolves `pair_secret` locally after validating a selected pendi
 
 NOW generates a four-digit PIN with OS randomness, runs Moonlight's `pair HOST --pin ####` CLI option and uses the matching PIN for authorization. The temporary PIN is currently visible in the Moonlight process argv, even though it is not logged or stored in NOW settings. Do not describe this flow as eliminating all exposure.
 
-The pairing dialog still requires explicit refresh and authorization of the intended pending client. It may open even when Moonlight has already paired. **Pairing is not automatically guaranteed on the Games button**, and existing pairing does not prove fresh-device enrollment.
+The pairing dialog still requires explicit refresh and authorization of the intended pending client. Parsing a list and constructing a request now use compiled, GTK-independent tests; this is not nonblocking pairing or automatic approval. It may open even when Moonlight has already paired. **Pairing is not automatically guaranteed on the Games button**, and existing pairing does not prove fresh-device enrollment.
 
 ## Security requirements
 

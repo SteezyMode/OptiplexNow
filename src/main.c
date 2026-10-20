@@ -1771,10 +1771,24 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,1);
- add(body,label("PRIMARY ACTIONS","section"),0);
+ /* Keep everyday host diagnostics on the landing page. Service buttons live
+  * in Software instead of consuming most of the default window. */
+ GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
+ GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(software_scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_container_add(GTK_CONTAINER(software_scroll),software);
+ GtkWidget*software_window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+ gtk_window_set_title(GTK_WINDOW(software_window),"OptiPlex NOW | Software");
+ gtk_window_set_default_size(GTK_WINDOW(software_window),550,480);
+ gtk_container_add(GTK_CONTAINER(software_window),software_scroll);
+ g_signal_connect(software_window,"delete-event",G_CALLBACK(gtk_widget_hide_on_delete),NULL);
+ GtkWidget*software_open=button("SOFTWARE & SHORTCUTS","setting");
+ g_signal_connect_swapped(software_open,"clicked",G_CALLBACK(gtk_widget_show_all),software_window);
+ add(tools,software_open,0);
+ add(software,label("SOFTWARE","section"),0);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(grid),1);gtk_grid_set_row_spacing(GTK_GRID(grid),7);gtk_grid_set_column_spacing(GTK_GRID(grid),7);
- gtk_widget_set_hexpand(grid,1);add(body,grid,0);
- GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(body,extras,0);
+ gtk_widget_set_hexpand(grid,1);add(software,grid,0);
+ GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(software,extras,0);
  extras_grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(extras_grid),1);
  gtk_grid_set_row_spacing(GTK_GRID(extras_grid),7);gtk_grid_set_column_spacing(GTK_GRID(extras_grid),7);
  gtk_widget_set_hexpand(extras_grid,1);gtk_container_add(GTK_CONTAINER(extras),extras_grid);

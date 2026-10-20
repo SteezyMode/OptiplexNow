@@ -32,6 +32,7 @@ The reference host (Oct 20, 2026) uses:
 | Network | host |
 | Volume | `moonlightweb-test-data:/data` (reference bind); `/data` volume mount mode checked |
 | Memory cap | 1073741824 bytes (1 GiB), preserved with `--memory 1073741824b` |
+| Memory + swap cap | 2147483648 bytes (2 GiB combined), preserved with `--memory-swap 2147483648b` |
 | CPU cap | 1000000000 nanocpus (1 CPU), preserved with `--cpus 1` |
 | Security | `--cap-drop ALL`, `--security-opt no-new-privileges` |
 | Public URL | `https://games.monumentrisk.com` via existing Caddy |
@@ -41,7 +42,7 @@ is accepted. It refuses additional mounts, privileged/custom device settings,
 Compose management, custom entrypoints, unknown capabilities and unsupported
 restart policies rather than silently dropping Docker options. The reference
 host's observed `SecurityOpt=["no-new-privileges"]` is explicitly retained
-with `--security-opt no-new-privileges`; its 1 GiB memory and 1 CPU quotas
+with `--security-opt no-new-privileges`; its 1 GiB RAM cap, 2 GiB combined memory/swap cap and 1 CPU quotas
 are recreated exactly. Unknown security options and additional unhandled
 resource controls are rejected rather than silently discarded. Do not assume
 that every MoonlightWeb deployment has this shape.

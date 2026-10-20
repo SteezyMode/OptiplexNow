@@ -55,6 +55,10 @@ def verified_peer_from_whois(source_ip, whois):
     if (isinstance(node_id, bool) or not isinstance(node_id, (int, str))
             or isinstance(user_id, bool) or not isinstance(user_id, (int, str))):
         return None
+    # User IDs are positive numeric Tailscale IDs, never an email/login name
+    # or arbitrary user-provided identifier.
+    if not str(user_id).isdigit() or int(user_id) <= 0:
+        return None
     # If provided, node.User must be the exact WhoIs user profile, too.
     owner_id = node.get("User")
     if owner_id is not None and str(owner_id) != str(user_id):

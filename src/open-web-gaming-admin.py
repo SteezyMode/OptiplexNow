@@ -2,8 +2,9 @@
 """Open the existing MoonlightWeb owner admin UI over a client-side SSH tunnel.
 
 This is an advanced owner-only action, NOT a routine gaming pairing mechanism.
-Emit fixed, non-sensitive machine-readable statuses so NOW's GTK GUI can
-truthfully report failures. Never log SSH stderr, credentials or browser URLs.
+Emit fixed, non-sensitive machine-readable statuses (and local port) so NOW's
+GTK GUI can launch the browser and report failures. Never log SSH stderr,
+credentials or browser URLs.
 """
 from __future__ import annotations
 
@@ -93,25 +94,10 @@ def open_admin(host: str, user: str, home: Path) -> int:
             report("admin_tunnel_unreachable")
             return 1
 
-        opener = shutil.which("xdg-open")
-        if not opener:
-            report("browser_not_installed")
-            return 1
-        browser = subprocess.Popen(
-            [opener, f"https://127.0.0.1:{port}/admin"],
-            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL, start_new_session=True)
-        try:
-            result = browser.wait(timeout=2)
-            if result != 0:
-                report("browser_launch_failed")
-                return 1
-        except subprocess.TimeoutExpired:
-            # Some launchers continue running as long as their browser stays open.
-            pass
-        # This is only a browser handoff, NOT evidence that the page loaded,
-        # TLS was trusted, or a user completed authentication.
-        report("browser_handoff_requested")
+        # Only the GTK parent opens the URL. This helper returns a bounded
+        # loopback port, not a browser window or an authentication credential.
+        # GTK can then observe its own browser/portal-launch failures.
+        report(f"tunnel_ready:{port}")
         return 0
     except subprocess.TimeoutExpired:
         report("ssh_tunnel_timeout")

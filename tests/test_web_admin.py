@@ -27,8 +27,10 @@ class AdminTunnelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch.object(admin, "checked_run", return_value=SimpleNamespace(returncode=0)) as run, \
                  patch.object(admin.socket, "create_connection") as connect, \
-                 patch.object(admin.subprocess, "Popen") as opener:
+                 patch.object(admin.subprocess, "Popen") as opener, \
+                 patch.object(admin.shutil, "which", return_value="/usr/bin/xdg-open"):
                 connect.return_value.__enter__.return_value = None
+                opener.return_value.wait.return_value = 0
                 self.assertEqual(admin.open_admin("100.121.156.34", "optiplex", Path(tmp)), 0)
                 self.assertEqual(run.call_count, 1)
                 self.assertIn("-O", run.call_args.args[0])
@@ -43,7 +45,9 @@ class AdminTunnelTests(unittest.TestCase):
                 SimpleNamespace(returncode=0),
             ]) as run, \
                  patch.object(admin.socket, "create_connection"), \
-                 patch.object(admin.subprocess, "Popen"):
+                 patch.object(admin.subprocess, "Popen") as opener, \
+                 patch.object(admin.shutil, "which", return_value="/usr/bin/xdg-open"):
+                opener.return_value.wait.return_value = 0
                 self.assertEqual(admin.open_admin("100.121.156.34", "optiplex", Path(tmp)), 0)
                 cmd = run.call_args_list[1].args[0]
                 self.assertEqual(cmd[0], "ssh")

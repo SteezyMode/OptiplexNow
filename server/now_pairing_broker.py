@@ -13,6 +13,7 @@ import threading
 
 from now_pairing_identity import own_tailnet_ipv4, verify_tailscale_peer
 from now_pairing_owner import OwnerControl
+from now_pairing_owner_identity import load_pinned_owner, owner_from_local_tailscale
 from now_pairing_requests import PairingRequests
 
 PORT = 18792
@@ -20,9 +21,13 @@ MAX_BODY = 128
 MAX_THREADS = 12
 REQUEST_ROUTE = "/v1/pairing/requests"
 REQUEST_ROUTE_WITH_ID = re.compile(r"/v1/pairing/requests/([A-Za-z0-9_-]{24,96})\Z")
+OWNER_LIST = "/v1/owner/pairing/requests"
+OWNER_DECISION = re.compile(
+    r"/v1/owner/pairing/requests/([A-Za-z0-9_-]{24,96})/(approve|deny)\Z")
+OWNER_CLIENT_HEADER = "X-NOW-Owner-Client"
 
 
-def make_handler(queue, verify=verify_tailscale_peer):
+def make_handler(queue, verify=verify_tailscale_peer, *, owner_user_id=None):
     """All network calls re-verify their actual source IP via WhoIs."""
     class RequestHandler(http.server.BaseHTTPRequestHandler):
         server_version = "NOW-Pairing-Prototype"
@@ -51,7 +56,34 @@ def make_handler(queue, verify=verify_tailscale_peer):
                 return None
             return verify(self.client_address[0])
 
+        def _owner(self):
+            # The trusted installer pins the owner; HTTP clients cannot.
+            # Require exact literal tailnet address to resist DNS rebinding.
+            if owner_user_id is None:
+                return False
+            bind_ip, bind_port = self.server.server_address[:2]
+            if self.headers.get("Host") != f"{bind_ip}:{bind_port}":
+                return False
+            if self.headers.get(OWNER_CLIENT_HEADER) != "desktop-v1":
+                return False
+            peer = self._peer()
+            return peer is not None and peer.user_id == owner_user_id
+
         def do_POST(self):
+            decision = OWNER_DECISION.fullmatch(self.path)
+            if decision:
+                if not self._owner():
+                    self._send(403, {"error": "owner_only"})
+                    return
+                if self.headers.get("Content-Length", "") != "0":
+                    self._send(400, {"error": "body_not_allowed"})
+                    return
+                request_id, action = decision.groups()
+                recorded = queue.owner_decide(request_id, approve=action == "approve")
+                self._send(200 if recorded else 409,
+                           {"decision_recorded": bool(recorded),
+                            "moonlight_paired": False})
+                return
             if self.path != REQUEST_ROUTE:
                 self._send(404, {"error": "not_found"})
                 return
@@ -95,6 +127,18 @@ def make_handler(queue, verify=verify_tailscale_peer):
             })
 
         def do_GET(self):
+            if self.path == OWNER_LIST:
+                if not self._owner():
+                    self._send(403, {"error": "owner_only"})
+                    return
+                rows = [{"request_id": entry.request_id,
+                         "device_id": entry.peer.node_id,
+                         "account_id": entry.peer.user_id,
+                         "backend": entry.backend,
+                         "expires_in_seconds": entry.expires_in_seconds}
+                        for entry in queue.owner_pending()]
+                self._send(200, {"pending": rows, "moonlight_paired": False})
+                return
             matched = REQUEST_ROUTE_WITH_ID.fullmatch(self.path)
             if not matched:
                 self._send(404, {"error": "not_found"})
@@ -163,6 +207,11 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Experimental NOW pairing broker")
     parser.add_argument("--serve", action="store_true",
                         help="Explicitly start tailnet requests and local owner socket")
+    owner_config = parser.add_mutually_exclusive_group()
+    owner_config.add_argument("--owner-id-file",
+                        help="Trusted installer-registered mode-0600 Tailscale owner account ID")
+    owner_config.add_argument("--owner-from-local-tailnet", action="store_true",
+                        help="At explicit server activation, identify owner as the enrolled Tailscale server account")
     parser.add_argument("--socket-dir",
                         help="Existing mode-0700 directory owned by this Unix user")
     args = parser.parse_args(argv)
@@ -170,6 +219,8 @@ def main(argv=None):
         parser.error("--socket-dir is only used with --serve")
     if args.serve and not args.socket_dir:
         parser.error("--serve requires --socket-dir")
+    if (args.owner_id_file is not None or args.owner_from_local_tailnet) and not args.serve:
+        parser.error("Owner binding requires --serve")
     try:
         address = own_tailnet_ipv4()
         if not args.serve:
@@ -177,9 +228,14 @@ def main(argv=None):
             print("No listeners opened, credentials created or services changed.")
             return 0
 
+        # Remote owner operations are disabled unless server installation
+        # has pinned the verified owner account in a private local file.
+        owner_user_id = (load_pinned_owner(args.owner_id_file) if args.owner_id_file
+                         else owner_from_local_tailscale() if args.owner_from_local_tailnet
+                         else None)
         queue = PairingRequests()
         # Both sockets live in THIS process and use precisely the same queue.
-        with PairingHTTPServer((address, PORT), make_handler(queue)) as server:
+        with PairingHTTPServer((address, PORT), make_handler(queue, owner_user_id=owner_user_id)) as server:
             with OwnerControl(args.socket_dir, queue) as owner:
                 worker = threading.Thread(target=owner.serve_forever,
                                           kwargs={"poll_interval": 0.2}, daemon=True)

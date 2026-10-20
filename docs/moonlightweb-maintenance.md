@@ -57,10 +57,11 @@ On the host, the equivalent explicit commands are:
 
 ```sh
 sudo /usr/lib/optiplex-now/moonlightweb-maintenance status
+sudo /usr/lib/optiplex-now/moonlightweb-maintenance preflight
 sudo /usr/lib/optiplex-now/moonlightweb-maintenance menu
 ```
 
-The menu asks for `UPDATE` before changing anything. **Do not update while
+The menu includes a read-only preflight that checks the supported container configuration and persistent volume. It does not download images or stop services. The menu asks for `UPDATE` before changing anything. **Do not update while
 someone is streaming**, especially from a Wolf Studio Desktop. The script checks
 for running Wolf application containers again immediately before stopping
 MoonlightWeb, but session detection is conservative and not exhaustive.
@@ -92,6 +93,10 @@ and a tested rollback using a disposable duplicate of the persistent volume.
 Then test web-stream reconnect with a fresh Wolf Studio desktop before enabling
 updates on the production server. No update, service restart or new .deb
 deployment was performed simply by merging this code.
+
+## Wolf desktop persistence caveat
+
+Upstream stable Wolf documents `WOLF_STOP_CONTAINER_ON_EXIT=TRUE` as its default, which can end a desktop application container when streaming stops. The updater deliberately refuses to update while Wolf application containers are running. It therefore **does not yet** deliver an uninterrupted live desktop across a MoonlightWeb update. Preserving Studio project files and Wolf application home directories is a separate guarantee from preserving running GUI programs and unsaved edits. Confirm the actual Wolf setting and test a disconnect/reconnect before changing update policy.
 
 ## Future milestones
 

@@ -21,7 +21,7 @@ There is **one released application (NOW), one separate Studio application, and 
 - [Turnkey server onboarding + optional NOW account/Tailscale discovery](SERVER-ONBOARDING-AND-TAILSCALE.md): proposed fresh-server and new-client login flow; website registry is optional, not a shipped account service.
 - [Persistent multi-user desktop feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): streaming authorization and profile/session acceptance requirements.
 
-Neither represents a released, tested fresh-server wizard or commercial multi-tenant security capability.
+These are proposals only. None is a released, tested fresh-server wizard, hosted NOW account service, or commercial multi-tenant security capability.
 
 ## Historical or environment-specific information
 

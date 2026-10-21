@@ -30,6 +30,8 @@ typedef struct {
     GCancellable *cancel;
     gboolean closing;
     gboolean running;
+    guint settings_revision;
+    guint eligibility_revision;
     unsigned step;
 } HostSetupUI;
 
@@ -174,6 +176,7 @@ static void invalidate_install(GtkWidget *widget, gpointer data)
 {
     (void)widget;
     HostSetupUI *ui = data;
+    ui->settings_revision++;
     ui->eligible = FALSE;
     gtk_widget_set_sensitive(ui->install_button, FALSE);
     if (!ui->installing)
@@ -192,8 +195,16 @@ static void eligibility_done(GObject *source, GAsyncResult *result, gpointer dat
     if (!ui->closing) {
         ui->running = FALSE;
         gtk_widget_set_sensitive(ui->eligible_button, TRUE);
-        if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source)) ||
-            !out || strlen(out) > MAX_RESULT) {
+        if (ui->eligibility_revision != ui->settings_revision) {
+            /* The user edited the settings after this check started.
+             * Never apply a previous machine/configuration result. */
+            append_result(ui, "\nSettings changed while eligibility was being checked. Recheck.\n");
+            ui->eligible = FALSE;
+            gtk_widget_set_sensitive(ui->install_button, FALSE);
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                "SETTINGS CHANGED. CHECK ELIGIBILITY AGAIN.");
+        } else if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source)) ||
+                   !out || strlen(out) > MAX_RESULT) {
             append_result(ui, "\nHost installation eligibility check failed.\n");
             gtk_label_set_text(GTK_LABEL(ui->status), "INSTALLATION CHECK FAILED.");
         } else {
@@ -221,6 +232,7 @@ static void on_eligibility(GtkButton *button, gpointer data)
         return;
     ui->eligible = FALSE;
     gtk_widget_set_sensitive(ui->install_button, FALSE);
+    ui->eligibility_revision = ui->settings_revision;
     ui->running = TRUE;
     gtk_widget_set_sensitive(ui->eligible_button, FALSE);
     const gchar *argv[] = {

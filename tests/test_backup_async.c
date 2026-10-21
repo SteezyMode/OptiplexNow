@@ -51,12 +51,17 @@ static int run_case(const char *helper, const char *path, const char *mode,
     g_setenv("NOW_BACKUP_TEST_MODE", mode, TRUE);
     now_backup_run_async(helper, restore, path, "correct-horse-battery",
                          completed, &run);
-    g_idle_add(mark_responsive, &run);
+    guint idle = g_idle_add(mark_responsive, &run);
     guint timeout = g_timeout_add_seconds(7, deadline, &run);
     g_main_loop_run(run.loop);
     if (g_main_context_find_source_by_id(NULL, timeout))
         g_source_remove(timeout);
-    int ok = run.done && run.responsive && run.success == success &&
+    /* An immediate validation failure can complete before any idle callback.
+     * Remove that source before the stack-based fixture goes out of scope. */
+    if (g_main_context_find_source_by_id(NULL, idle))
+        g_source_remove(idle);
+    int ok = run.done && (run.responsive || !success) &&
+             run.success == success &&
              (success ? run.error == NULL :
               g_error_matches(run.error, G_IO_ERROR, err));
     if (!ok) {

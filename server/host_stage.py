@@ -19,6 +19,7 @@ STAGE_SCHEMA = 1
 IMAGE_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 RENDER_RE = re.compile(r"^/dev/dri/renderD[0-9]{3,5}$")
 PROFILE = "now-manual-review-required"
+DRIVER_VOLUME = "now-nvidia-driver-vol"
 PROTECTED_ROOTS = ("/etc", "/var", "/usr", "/run", "/dev", "/proc", "/sys", "/boot")
 
 
@@ -58,12 +59,12 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
             "network_mode": "host",
             "restart": "no",
             "environment": {
-                "NVIDIA_DRIVER_CAPABILITIES": "all",
-                "NVIDIA_VISIBLE_DEVICES": "all",
+                "NVIDIA_DRIVER_VOLUME_NAME": DRIVER_VOLUME,
                 "WOLF_RENDER_NODE": render,
             },
             "volumes": [
                 "./wolf:/etc/wolf:rw",
+                DRIVER_VOLUME + ":/usr/nvidia:rw",
                 "/var/run/docker.sock:/var/run/docker.sock:rw",
                 "/dev:/dev:rw",
                 "/run/udev:/run/udev:rw",
@@ -71,16 +72,22 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
             "devices": [
                 "/dev/dri:/dev/dri", "/dev/uinput:/dev/uinput",
                 "/dev/uhid:/dev/uhid",
+                "/dev/nvidia0:/dev/nvidia0",
+                "/dev/nvidiactl:/dev/nvidiactl",
+                "/dev/nvidia-modeset:/dev/nvidia-modeset",
+                "/dev/nvidia-uvm:/dev/nvidia-uvm",
+                "/dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools",
+                "/dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1",
+                "/dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2",
             ],
             "device_cgroup_rules": ["c 13:* rmw"],
-            "deploy": {"resources": {"reservations": {"devices": [
-                {"driver": "nvidia", "count": "all", "capabilities": ["gpu"]}
-            ]}}},
+
             "labels": {
                 "io.optiplex-now.managed": "prototype",
                 "io.optiplex-now.role": "streaming",
             },
         }},
+        "volumes": {DRIVER_VOLUME: {"external": True}},
     }
     manifest = {
         "schema_version": STAGE_SCHEMA,
@@ -90,6 +97,9 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
         "changes_to_host_services": False,
         "image": image,
         "render_node": render,
+        "nvidia_method": "manual_external_driver_volume",
+        "driver_volume": DRIVER_VOLUME,
+        "driver_volume_prepared": False,
         "managed_compose_project": compose["name"],
         "managed_paths": ["./wolf"],
         "unmanaged_containers_may_be_adopted": False,
@@ -100,6 +110,7 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
     readme = """# NOW Host staged Wolf container (NOT INSTALLED)
 
 This directory contains a review-only Docker Compose prototype.
+It uses the NVIDIA MANUAL DRIVER VOLUME method.
 Staging does not pull images, install Docker or Wolf, start containers,
 modify drivers, manage networks, change user credentials or approve devices.
 
@@ -109,12 +120,18 @@ working reference server or a host with unrelated services.
 The digest is supplied by the operator: staging validates its shape but
 DOES NOT verify its registry provenance, platform or integrity.
 A trusted operator must verify the exact upstream digest, hardware encoder,
-render node, NVIDIA Container Toolkit, input devices and open ports separately.
+render node, all required NVIDIA devices, input devices and open ports separately.
 
 To validate Compose syntax only:
     docker compose -f compose.yaml config --quiet
 
 Do NOT run compose up, start, pull, or an active profile yet.
+Wolf's recommended NVIDIA manual method requires a separately built driver
+image and a populated, version-matched external Docker volume named
+now-nvidia-driver-vol. This generator DOES NOT create or rebuild that volume.
+Rebuild must use a pinned driver-image recipe after any host NVIDIA driver
+update, without deleting unrelated or user-created Docker volumes.
+
 Wolf requires write access to the host Docker socket to spawn applications:
 such access is effectively host-administrative power and remains a security
 review blocker. The owner-approved restricted enrollment broker is unfinished.

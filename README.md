@@ -2,22 +2,23 @@
 
 [![Validate NOW](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
 
-**Your games. Your movies. Your music. Your own server.**
+**Your own private game-streaming and media server.**
 
-OptiPlex NOW aims to make a compatible computer your private alternative to cloud gaming and media subscriptions: **a personal GeForce NOW-style game host, Netflix-style media library, and Spotify-style music library**, using software and content you control. These are product comparisons, not affiliations, supplied media catalogs, or claims that NOW provides licensed content.
+OptiPlex NOW aims to turn a compatible personal computer into **your own GeForce NOW-style game host and Netflix-style media library**. Keep the hardware and content under your control, while accessing them from another device. These comparisons describe the experience, not affiliations, bundled game licenses, or provided media catalogs.
 
 ### The product we're building
 
-| Experience | Intended result |
+| Core capability | Intended experience |
 | --- | --- |
-| **Independent gaming** | Play remotely in a separate Wolf-managed session while the host's physical desktop stays usable. Shared GPU/CPU resources still limit simultaneous workloads. |
-| **Movies and files** | Stream your own Jellyfin library, browse/manage server files remotely, and queue lawful downloads on the home server while watching from another device. |
-| **Music** | Discover, request, organize and play your own collection with optional tools such as [DroppedNeedle](https://github.com/DroppedNeedle/DroppedNeedle), slskd and compatible media players. |
-| **Private operation** | Keep ordinary gaming, media playback and file access on normal server networking, while routing configured download clients through their own VPN gateway. Verify isolation rather than assuming a green VPN indicator proves it. |
+| **Independent remote games** | Start a Wolf-managed game session on your own GPU while the host's physical screen and desktop remain usable. GPU and CPU resources are shared, so concurrent performance depends on hardware. |
+| **Your media, everywhere** | Stream your own Jellyfin library, browse and organize server files, and remotely queue lawful downloads on the home server, even while viewing another title. |
+| **VPN-isolated downloads** | Route the selected downloader's traffic through a dedicated VPN gateway, without routing Jellyfin, gaming or the host's whole network through that VPN. Keep service access private and verify the isolation. |
 
-**Goal:** On supported, OS-ready host and client machines, approximately **15 minutes from installing NOW on both to a working private remote stream**, without requiring Docker, VPN, certificate or pairing knowledge. No NOW-operated website or central cloud service should be necessary for basic self-hosted use. The owner's existing services may still expose private web UIs; native controls can replace repetitive browser steps over time.
+**Target:** About **15 minutes from installing on two OS-ready, supported computers to an authenticated remote stream**, without manually configuring Docker, VPNs or streaming/pairing servers. Optional gaming, video and download components should not be forced on every user.
 
-**Platform direction:** Linux host and client first; **Windows clients planned**, **Windows hosts a longer-term goal** with a separate technical and licensing feasibility gate for independent sessions. macOS is not promised. The initial implementation must not force every user to install gaming, Jellyfin, music and download stacks together.
+**Platform direction:** Linux host/client first. **Windows clients are planned**; **Windows hosts remain a longer-term target**, with independent-session technical and licensing feasibility still to establish. No Windows implementation is claimed today.
+
+**Music, later if warranted:** A self-hosted music library and tools such as DroppedNeedle are optional exploratory integrations, not a third core pillar or a bundled Spotify replacement. Their usability, maintenance and license obligations must be checked before inclusion.
 
 **Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 
@@ -40,11 +41,11 @@ sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
 
-## Today's media and download integrations
+## Existing media and download workflow
 
-NOW already opens owner-configured Videos, Music and Downloads services and offers SFTP access to remote files. On an existing home server, a useful optional configuration is **Jellyfin for normal-network streaming**, **qBittorrent behind a dedicated Gluetun VPN gateway**, and **DroppedNeedle with slskd** for music discovery, requesting and organizing. The reference server has a Gluetun/slskd/qBittorrent arrangement; this is **not automatically installed or independently VPN-leak-tested** by NOW.
+NOW already opens **owner-configured** video and download interfaces, provides remote SFTP file access, and shows a Gluetun container health status. On the reference host, Jellyfin streaming stays on ordinary home-server networking while qBittorrent runs through a separate Gluetun VPN gateway; remote queue management works through the configured browser interface. **NOW does not yet deploy that media stack, provide a native qBittorrent UI, or independently confirm VPN exit IP and leak protection.**
 
-**Future native integration:** use authenticated service APIs to manage download queues, music requests, library availability and file operations within NOW, without requiring a NOW website. This must be optional and must not expose Docker admin access, bypass service authentication, promise uninterrupted Jellyfin playback under heavy load, or silently route all home-server traffic through the download VPN.
+Long-term, optional managed media modules can provide install/repair workflows and native API controls for download queues, library organization and bandwidth limits. These can use private authenticated connections without a NOW-operated public website. Files and playback must remain available independently of the downloader VPN.
 
 ## Unreleased development: NOW Host pilot
 

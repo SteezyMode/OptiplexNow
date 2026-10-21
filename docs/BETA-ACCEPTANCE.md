@@ -21,6 +21,12 @@ Download the artifact ZIP from a successful PR run while signed into GitHub, ext
 
 After the tested code lands on main, use the documented version bump and tag-only release process to publish a new official artifact. Protect existing saved NOW and Moonlight identity; never delete either to manufacture a clean client.
 
+## Simulated cross-process onboarding test
+
+CI also runs `tests/test_onboarding_flow.py`, which executes the **real** Tailscale status/discovery scripts, SSH authorization bridge, Wolf SSH client and Wolf host helper as separate subprocesses. Only the external Tailscale CLI, SSH/ssh-copy-id and Docker API endpoints are simulated using executable stand-ins in an automatically deleted home directory. It covers signed-out/connected transitions, host selection, SSH key creation/reuse, pending/paired Wolf state, refusal, stale selection, unavailable SSH and recovery.
+
+This is protocol integration evidence, **not** proof of the GTK wizard, PolicyKit, actual fingerprint/password prompts, live Tailscale enrollment or video/audio/controller streaming. The full real-device checklist below remains unchanged.
+
 ## Required end-to-end test
 
 Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the existing known-good client for regression testing.

@@ -65,6 +65,12 @@ Tray selection masks, saved action order, Desktop caption preferences and servic
 
 The GTK tray controller now delegates action-ID interpretation to a GTK-free `tray_actions.c/.h` dispatcher with explicit host-UI callback hooks. The ordered behaviors are preserved: opening NOW before Settings/System Info, displaying NOW before launching Games when Moonlight is unavailable, and direct restart/quit commands. Unknown or stale action IDs are ignored rather than passed to a service launcher. Native and sanitizer behavior tests exercise all eight service IDs, five utility IDs, missing callbacks and invalid IDs. GTK/AppIndicator creation and icon/minimize/restore logic remain in the controller; this is not full tray extraction. Real desktop regression is still pending.
 
+## Cross-process onboarding simulation (development CI)
+
+The Beta 1 regression suite now drives actual Tailscale discovery, SSH enrollment and both Wolf pairing helper processes together through synthetic command-line endpoints. The temporary fixture verifies first-run identity creation and reuse, selected-host and pairing identity behavior, reconnection and negative-path recovery without touching any real host, tailnet or user profile. Only the external command implementations are simulated. See `tests/test_onboarding_flow.py` and `tests/fixtures/onboarding_mock_cli.py`.
+
+This test does not interact with GTK, verify true system authentication prompts, enroll a real Tailscale account or stream a game. Those still require a supported physical client. The host installation and device-approval backend remain future milestones.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

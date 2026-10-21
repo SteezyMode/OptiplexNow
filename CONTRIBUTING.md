@@ -43,6 +43,7 @@ Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Pytho
 
 ```sh
 make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
+make check-sanitizers  # ASan + UBSan, separate binaries; no release flag changes
 python3 -m unittest discover -s tests -v
 make package
 ```

@@ -53,6 +53,51 @@ class HostStageTests(unittest.TestCase):
         self.assertNotIn("container_name", wolf)
         self.assertEqual(list(compose["services"]), ["wolf"])
 
+
+    def test_amd_and_intel_use_standard_drm_without_nvidia_volume(self):
+        for gpu in ("amd", "intel"):
+            with self.subTest(gpu=gpu):
+                files = host_stage.make_bundle(
+                    BLOCKED_PLAN, digest=DUMMY_DIGEST, render_node=RENDER,
+                    gpu_vendor=gpu)
+                compose = json.loads("\n".join(files["compose.yaml"].splitlines()[1:]))
+                wolf = compose["services"]["wolf"]
+                manifest = json.loads(files["manifest.json"])
+                self.assertEqual(manifest["gpu_vendor"], gpu)
+                self.assertIsNone(manifest["driver_volume"])
+                self.assertIsNone(manifest["nvidia_method"])
+                self.assertFalse(manifest["driver_volume_prepared"])
+                self.assertNotIn("volumes", compose)
+                self.assertNotIn("NVIDIA_DRIVER_VOLUME_NAME", wolf["environment"])
+                self.assertNotIn("/usr/nvidia", " ".join(wolf["volumes"]))
+                self.assertNotIn("/dev/nvidia", " ".join(wolf["devices"]))
+                self.assertIn("/dev/dri:/dev/dri", wolf["devices"])
+                self.assertIn("/dev/uinput:/dev/uinput", wolf["devices"])
+                self.assertIn("/dev/uhid:/dev/uhid", wolf["devices"])
+                self.assertEqual(wolf["environment"]["WOLF_RENDER_NODE"], RENDER)
+                self.assertFalse(manifest["deploy_supported"])
+
+    def test_gpu_backend_validation_and_multigpu_render_node_match(self):
+        with self.assertRaises(ValueError):
+            host_stage.make_bundle(BLOCKED_PLAN, digest=DUMMY_DIGEST,
+                                   render_node=RENDER, gpu_vendor="unknown")
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            vendor_file = root / "class/drm/renderD129/device/vendor"
+            vendor_file.parent.mkdir(parents=True)
+            vendor_file.write_text("0x10de\n")
+            host_stage.check_render_vendor("nvidia", RENDER, root)
+            with self.assertRaises(ValueError):
+                host_stage.check_render_vendor("amd", RENDER, root)
+            with self.assertRaises(ValueError):
+                host_stage.check_render_vendor("intel", RENDER, root)
+            vendor_file.write_text("0x1002\n")
+            host_stage.check_render_vendor("amd", RENDER, root)
+            with self.assertRaises(ValueError):
+                host_stage.check_render_vendor("nvidia", RENDER, root)
+            vendor_file.write_text("0x8086\n")
+            host_stage.check_render_vendor("intel", RENDER, root)
+
     def test_manifest_forbids_installation_and_implicit_adoption(self):
         manifest = json.loads(self.bundle()["manifest.json"])
         self.assertFalse(manifest["deploy_supported"])

@@ -14,6 +14,8 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
 | `src/tailscale-status.py` | Read-only Tailscale JSON status normalization for wizard; never performs sign-in or enrollment |
+| `src/tailscale_install.c/.h` | Unprivileged GTK-independent GIO wrapper invoking PolicyKit to request a specific root installation operation |
+| `src/tailscale-install.py` | Opt-in signed upstream apt repository installer with a finite Debian/Ubuntu release allowlist; never invoked on an existing Tailscale installation |
 | `src/process.c/.h` | Subprocess execution and executable lookup |
 | `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
 | `src/backup.c` | Explicit encrypted client identity/settings backup |

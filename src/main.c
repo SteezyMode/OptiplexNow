@@ -1694,7 +1694,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
-   if(safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
+   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
    safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
         unsigned selected=0,featured=0;
     for(int i=0;i<8;i++){

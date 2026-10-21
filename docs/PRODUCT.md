@@ -34,13 +34,15 @@ Linux hosts/clients are first. Windows **client** builds are planned; Windows **
 
 | Phase | Purpose | Status |
 | --- | --- | --- |
-| **Existing-host closed client beta** | GUI launch, Moonlight/Tailscale/SSH onboarding, Videos/Downloads links, SFTP and diagnostics | Published v1.17.0, fresh-client physical acceptance pending |
+| **Existing-host closed client beta** | GUI launch, Moonlight/Tailscale/SSH onboarding, Videos/Downloads links, SFTP and diagnostics | Published v1.18.0; October 21 physical Mint client run partially passed, game streaming and UX/persistence remain open |
 | **Clean-host gaming technical alpha** | Start a NOW-managed Wolf instance and prove independent video/audio/controller stream on real hardware | Development installer exists; physical end-to-end test and recovery pending |
 | **Public alpha: three pillars** | Guided gaming, Jellyfin and VPN-isolated qBittorrent, plus admin downloads/files and restricted viewers | **Product requirement**, not implemented as a single supported installation; [acceptance](PUBLIC-ALPHA.md) |
 | **Product hardening** | First-run usability, owned-service repair, upgrades, removal, diagnostics, real external testers | Not yet accepted |
 | **Windows client** | Access the same Linux host without requiring a Linux client | Planned, not implemented |
 | **Windows host** | Comparable independent game session on a Windows PC | Longer-term feasibility/licensing work |
 | **Optional modules/business** | Music, books, comics, referrals and potentially an optional branded VPN | Research only; none is a prerequisite for public alpha |
+
+**Video onboarding requirement:** For public alpha, an ordinary owner should not need to know a Jellyfin URL or have Jellyfin preinstalled. NOW must offer guided clean-host Jellyfin provisioning or safe existing-server connection and propagate an authorized endpoint to approved clients. Manual URL entry remains advanced-only. This is tracked by [#148](https://github.com/SteezyMode/OptiplexNow/issues/148) and is distinct from the v1.18.0 wizard persistence defect [#147](https://github.com/SteezyMode/OptiplexNow/issues/147). The [October 21 physical beta report](QA-MACBOOK-2026-10-21.md) records what was actually tested.
 
 **Scope boundary:** the current Wolf host pilot is **not** a Jellyfin or Gluetun/qBittorrent installer. The reference PC's media/download/VPN stack is user-built. NOW currently opens its URLs and offers SFTP/health diagnostics; there is no verified native qBittorrent admin interface, server-side member role enforcement, automatic VPN kill-switch certification or one-login experience.
 

@@ -151,7 +151,7 @@ class HostPreflightTests(unittest.TestCase):
             self.assertEqual(result["memory_available_bytes"], 8123456 * 1024)
             self.assertEqual(by_id(preflight.evaluate(result))["wolf_ports"]["status"], "attention")
             self.assertNotIn("hostname", json.dumps(preflight.evaluate(result)))
-            self.assertNotIn("user", json.dumps(preflight.evaluate(result)))
+            self.assertNotIn("ssh", json.dumps(preflight.evaluate(result)))
 
     def test_cli_json_contract_and_no_privileged_actions(self):
         process = subprocess.run(

@@ -32,7 +32,7 @@ Beta 1 uses a small group of preapproved Tailscale accounts. It does **not** inc
 
 ## Beta 1 engineering execution plan
 
-**Next development session: October 22, 2026 (JST).** This is the engineering work order for the existing Beta 1 client, not a new product phase. The five product priorities remain: **(1) finish Wolf pairing, (2) improve Tailscale sign-in, (3) simplify device authorization, (4) complete fresh-client acceptance, (5) build a standardized host installer later**. See [Beta acceptance](BETA-ACCEPTANCE.md) for the actual release gate and [Architecture](application-design.md) for implementation boundaries.
+**Engineering checklist adopted October 21, 2026 (JST).** This is the continuing engineering standard for the existing Beta 1 client, not a new product phase. The five product priorities remain: **(1) finish Wolf pairing, (2) improve Tailscale sign-in, (3) simplify device authorization, (4) complete fresh-client acceptance, (5) build a standardized host installer later**. See [Beta acceptance](BETA-ACCEPTANCE.md) for the actual release gate and [Architecture](application-design.md) for implementation boundaries.
 
 The October 21 configuration extraction in [PR #103](https://github.com/SteezyMode/OptiplexNow/pull/103) establishes the starting pattern. It does not mean the rest of `main.c` is modular or that pairing is nonblocking.
 
@@ -45,14 +45,22 @@ The October 21 configuration extraction in [PR #103](https://github.com/SteezyMo
 | **5. Upgrade test quality** | Every related PR | Add unit/behavior tests using simulated host responses and failure cases. Replace source-text assertions when the affected subsystem is extracted, not through a separate testing rewrite. | Tests demonstrate decisions and results (wrong/stale pairing request, failed SSH, timeout, cancellation, config compatibility); CI still runs package and GTK smoke tests. |
 | **6. Add stricter diagnostics** | After affected modules are stable | Introduce an opt-in or separate CI sanitizer build for suitable native C tests (AddressSanitizer and UndefinedBehaviorSanitizer), then tighten warnings in the modules that are clean. | Diagnostic job runs reliably and is actionable; default package and release build are unchanged; pre-existing third-party/GTK warnings do not become a blanket release blocker. |
 
-### First session: one narrow Wolf slice
+### Six-item progress register
 
-1. Verify the new `main` baseline and reproduce the native Wolf pairing path without removing any already paired client. Identify where `wolf_pair_request()`, the pairing dialog, and `find_server()` call bounded **synchronous** commands from GTK callbacks.
-2. Create a focused Wolf PR: start with a small transport/parsing boundary and tests for zero, one, multiple, changed or malformed pending clients. Keep the existing host helper and Moonlight protocol.
-3. In a second PR only when the first is validated, make the Wolf pending/authorize flow asynchronous, with main-thread UI completion, timeouts and cancellation/lifetime handling. Do not silently authorize an unrecognized device.
-4. Run the existing CI and package smoke checks. If an actual unpaired test client is available, record the first-time PIN authorization and video/audio/input result. Otherwise explicitly mark the device check **not run** and carry it forward.
+The six engineering improvements are a permanent review checklist, not work that disappears when an individual feature is merged.
 
-**Stop condition:** if step 2 or 3 is not finished and verified, leave it in a reviewable PR and resume that work next session. Do not begin a tray extraction just to claim more roadmap progress.
+| Improvement | Evidence in `main` | Next incomplete work |
+| --- | --- | --- |
+| **1. Nonblocking I/O** | Wolf pending/authorize transport [#106](https://github.com/SteezyMode/OptiplexNow/pull/106) | Tailscale status/discovery (current PR); then remaining synchronous SSH/setup actions |
+| **2. Modular responsibilities** | Config [#103](https://github.com/SteezyMode/OptiplexNow/pull/103), Wolf parsing [#105](https://github.com/SteezyMode/OptiplexNow/pull/105), Wolf transport [#106](https://github.com/SteezyMode/OptiplexNow/pull/106) | Tailscale status/transport (current PR); later monitoring and tray |
+| **3. Readable C** | New extracted modules follow `.clang-format` | Format only touched legacy functions; `main.c` still needs incremental cleanup |
+| **4. Monitoring and tray separation** | Existing worker status pipeline | Extract status normalization/probes from GTK, then tray actions; no large rewrite |
+| **5. Behavioral tests** | Native config/Wolf tests, simulated failures [#109](https://github.com/SteezyMode/OptiplexNow/pull/109), disposable GUI smoke | Tailscale signed-out/offline/timeout/peer checks (current PR), more UI cancellation and real-device evidence |
+| **6. Stronger diagnostics** | Compiler warnings and native tests already run in CI | Separate opt-in AddressSanitizer/UndefinedBehaviorSanitizer tests, then tighter warnings |
+
+**Current delivery sequence:** finish and verify Tailscale async/discovery; simplify SSH authorization without exposing server administration; validate one real unpaired Moonlight connection and new-client onboarding; then take the monitoring/tray and sanitizer work as small, measured PRs. The standardized host installer remains a later product milestone, not a prerequisite for the current client test.
+
+**Stop condition:** do not call a system accepted merely because GitHub CI is green. Record source, simulated, installed-package and physical-device evidence separately. Do not start a speculative new subsystem while an active slice has failed tests.
 
 ### Scope controls
 

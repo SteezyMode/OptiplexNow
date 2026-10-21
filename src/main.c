@@ -25,6 +25,7 @@
 #include "config.h"
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
+#include "tailscale_async.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -1603,7 +1604,23 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  tailscale_label=NULL;gtk_widget_destroy(d);
 }
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
-typedef struct {GtkWidget *assistant,*server_page,*games_page,*services_page,*host,*user,*relay,*relayuser,*wake,*ts_state,*game_state,*wolf_state,*notice,*preset_notice,*service_inputs[3]; char staged[CONFIG_COUNT][512]; int preset_loaded,closing; guint tailscale_poll_id; } Wizard;
+typedef struct {
+    GtkWidget *assistant, *server_page, *games_page, *services_page;
+    GtkWidget *host, *user, *relay, *relayuser, *wake;
+    GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
+    GtkWidget *find_button, *tailscale_button, *service_inputs[3];
+    char staged[CONFIG_COUNT][512];
+    int preset_loaded, closing, references;
+    guint tailscale_poll_id, status_timeout_id, discovery_timeout_id;
+    GCancellable *tailscale_cancel, *discovery_cancel;
+} Wizard;
+
+static void wizard_unref(Wizard *wizard)
+{
+    if (--wizard->references == 0) {
+        free(wizard);
+    }
+}
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
  int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
@@ -1628,30 +1645,82 @@ static void wizard_save(Wizard*c){
  /* Optional services use user-entered URLs, never reference-host ports. */
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
-static gboolean wizard_tailscale_poll(gpointer data){
- Wizard*c=data;
- if(!c->assistant || !gtk_widget_get_visible(c->assistant))return G_SOURCE_CONTINUE;
- if(!now_program_exists("tailscale")){
-   gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE NOT INSTALLED — USE CONNECT TAILSCALE");
-   return G_SOURCE_CONTINUE;
- }
- char address[128]={0};
- char*args[]={"tailscale","ip","-4",NULL};
- if(now_run(args,address,sizeof address,2)==0 && g_str_has_prefix(address,"100.")){
-   gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE CONNECTED — CONTINUE TO SERVER");
- }else gtk_label_set_text(GTK_LABEL(c->ts_state),"TAILSCALE NOT CONNECTED — SIGN IN, THEN WAIT HERE");
- return G_SOURCE_CONTINUE;
+static gboolean wizard_status_timeout(gpointer data)
+{
+    Wizard *wizard = data;
+    wizard->status_timeout_id = 0;
+    if (wizard->tailscale_cancel) {
+        g_cancellable_cancel(wizard->tailscale_cancel);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean wizard_discovery_timeout(gpointer data)
+{
+    Wizard *wizard = data;
+    wizard->discovery_timeout_id = 0;
+    if (wizard->discovery_cancel) {
+        g_cancellable_cancel(wizard->discovery_cancel);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    Wizard *wizard = data;
+    GError *error = NULL;
+    char *status = now_tailscale_run_finish(result, &error);
+    g_clear_object(&wizard->tailscale_cancel);
+    if (wizard->status_timeout_id) {
+        g_source_remove(wizard->status_timeout_id);
+        wizard->status_timeout_id = 0;
+    }
+
+    if (wizard->assistant && !wizard->closing) {
+        const char *message = "TAILSCALE STATUS UNAVAILABLE — CHECK CONNECTION";
+        const char *action = "CONNECT TAILSCALE";
+        if (status) {
+            g_strstrip(status);
+            if (strcmp(status, "CONNECTED") == 0) {
+                message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
+                action = "TAILSCALE CONNECTED";
+            } else if (strcmp(status, "NOT_INSTALLED") == 0) {
+                message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
+                action = "INSTALL TAILSCALE";
+            } else if (strcmp(status, "SIGN_IN") == 0) {
+                message = "TAILSCALE NEEDS SIGN-IN — CONNECT TAILSCALE";
+            } else if (strcmp(status, "NOT_CONNECTED") == 0) {
+                message = "TAILSCALE DISCONNECTED — CONNECT TAILSCALE";
+            }
+        }
+        gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
+        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
+    }
+    g_free(status);
+    g_clear_error(&error);
+    wizard_unref(wizard);
+}
+
+static gboolean wizard_tailscale_poll(gpointer data)
+{
+    Wizard *wizard = data;
+    if (!wizard->assistant || wizard->closing ||
+        !gtk_widget_get_visible(wizard->assistant) || wizard->tailscale_cancel) {
+        return G_SOURCE_CONTINUE;
+    }
+
+    wizard->tailscale_cancel = g_cancellable_new();
+    wizard->references++;
+    wizard->status_timeout_id = g_timeout_add_seconds(9, wizard_status_timeout, wizard);
+    now_tailscale_run_async("/usr/lib/optiplex-now/tailscale-status.py",
+                            wizard->tailscale_cancel, wizard_tailscale_done, wizard);
+    return G_SOURCE_CONTINUE;
 }
 static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
- (void)a;(void)page;Wizard*c=p;
- char text[160];
- if(now_program_exists("tailscale")){
-   char out[128]={0};char*args[]={"tailscale","ip","-4",NULL};
-   if(now_run(args,out,sizeof out,4)==0 && strstr(out,"100."))snprintf(text,sizeof text,"TAILSCALE CONNECTED");
-   else snprintf(text,sizeof text,"TAILSCALE NOT CONNECTED");
- }else snprintf(text,sizeof text,"TAILSCALE NOT INSTALLED");
- gtk_label_set_text(GTK_LABEL(c->ts_state),text);
+ (void)a;Wizard*c=p;
+ wizard_tailscale_poll(c);
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);
  if(page==c->games_page){
@@ -1665,34 +1734,87 @@ static void wizard_prepare(void*a,void*page,void*p){
 static void picker_selection_changed(void *combo,void *accept){
  gtk_widget_set_sensitive(accept,gtk_combo_box_get_active(GTK_COMBO_BOX(combo))>=0);
 }
-static void find_server(Wizard*c){
- char output[65536]={0};
- char *args[]={"/usr/bin/python3","/usr/lib/optiplex-now/find-servers.py",NULL};
- if(now_run(args,output,sizeof output,6)!=0){
-   preset_alert(c->assistant,"Find server",*output?output:"Could not list devices. Check Tailscale, or enter an address manually.");return;
- }
- GtkWidget*d=gtk_dialog_new_with_buttons("Choose your server",GTK_WINDOW(c->assistant),1,"Cancel",GTK_RESPONSE_CANCEL,NULL);
- GtkWidget*accept=gtk_dialog_add_button(GTK_DIALOG(d),"Use this device",GTK_RESPONSE_OK);
- gtk_widget_set_sensitive(accept,0);
- GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));gtk_container_set_border_width(GTK_CONTAINER(area),18);
- GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);add(area,col,0);
- GtkWidget*hint=label("Choose the computer running your server.\nThese are your Tailscale devices; SSH and Wolf are checked separately.","helper");
- gtk_label_set_line_wrap(GTK_LABEL(hint),1);add(col,hint,0);
- GtkWidget*combo=gtk_combo_box_text_new();add(col,combo,0);
- char addresses[200][256];int count=0;char *save=NULL;
- for(char*line=strtok_r(output,"\n",&save);line&&count<200;line=strtok_r(NULL,"\n",&save)){
-   char*tab=strchr(line,'\t');if(!tab)continue;*tab++=0;
-   if(!now_valid_host(line))continue;
-   safe_copy(addresses[count++],256,line);gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo),tab);
- }
- g_signal_connect_data(combo,"changed",(GCallback)picker_selection_changed,accept,NULL,0);
- gtk_widget_show_all(d);
- int response=gtk_dialog_run(GTK_DIALOG(d)),selected=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
- if(response==GTK_RESPONSE_OK && selected>=0 && selected<count){
-   gtk_entry_set_text(GTK_ENTRY(c->host),addresses[selected]);
-   gtk_label_set_text(GTK_LABEL(c->notice),"ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
- }
- gtk_widget_destroy(d);
+static void wizard_discovery_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    Wizard *wizard = data;
+    GError *error = NULL;
+    char *output = now_tailscale_run_finish(result, &error);
+    g_clear_object(&wizard->discovery_cancel);
+    if (wizard->discovery_timeout_id) {
+        g_source_remove(wizard->discovery_timeout_id);
+        wizard->discovery_timeout_id = 0;
+    }
+
+    if (!wizard->assistant || wizard->closing) {
+        g_free(output);
+        g_clear_error(&error);
+        wizard_unref(wizard);
+        return;
+    }
+    gtk_widget_set_sensitive(wizard->find_button, TRUE);
+
+    NowTailscaleServer servers[NOW_TAILSCALE_MAX_SERVERS] = {0};
+    int count = output ? now_tailscale_parse_servers(
+        output, servers, NOW_TAILSCALE_MAX_SERVERS) : -1;
+    g_free(output);
+    g_clear_error(&error);
+
+    if (count <= 0) {
+        gtk_label_set_text(GTK_LABEL(wizard->notice), count < 0
+            ? "COULD NOT LIST DEVICES — CHECK TAILSCALE OR ENTER ADDRESS"
+            : "NO OTHER DEVICES FOUND — ENTER SERVER ADDRESS MANUALLY");
+        wizard_unref(wizard);
+        return;
+    }
+    gtk_label_set_text(GTK_LABEL(wizard->notice), "SELECT THE INTENDED HOST");
+
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        "Choose your server", GTK_WINDOW(wizard->assistant), GTK_DIALOG_MODAL,
+        "Cancel", GTK_RESPONSE_CANCEL, NULL);
+    GtkWidget *accept = gtk_dialog_add_button(GTK_DIALOG(dialog),
+                                              "Use this device", GTK_RESPONSE_OK);
+    gtk_widget_set_sensitive(accept, FALSE);
+    GtkWidget *area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(area), 18);
+    GtkWidget *column = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
+    add(area, column, 0);
+    GtkWidget *hint = label("Select the computer running your server.\n"
+        "Being on Tailscale does not authorize SSH or Wolf.", "helper");
+    gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
+    add(column, hint, 0);
+    GtkWidget *combo = gtk_combo_box_text_new();
+    add(column, combo, 0);
+    for (int i = 0; i < count; i++) {
+        gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo), servers[i].label);
+    }
+    g_signal_connect_data(combo, "changed",
+                          (GCallback)picker_selection_changed, accept, NULL, 0);
+    gtk_widget_show_all(dialog);
+    int response = gtk_dialog_run(GTK_DIALOG(dialog));
+    int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+    if (response == GTK_RESPONSE_OK && selected >= 0 && selected < count &&
+        wizard->assistant && !wizard->closing) {
+        gtk_entry_set_text(GTK_ENTRY(wizard->host), servers[selected].address);
+        gtk_label_set_text(GTK_LABEL(wizard->notice),
+            "ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+    }
+    gtk_widget_destroy(dialog);
+    wizard_unref(wizard);
+}
+
+static void find_server(Wizard *wizard)
+{
+    if (wizard->closing || !wizard->assistant || wizard->discovery_cancel) {
+        return;
+    }
+    wizard->discovery_cancel = g_cancellable_new();
+    wizard->references++;
+    wizard->discovery_timeout_id = g_timeout_add_seconds(9, wizard_discovery_timeout, wizard);
+    gtk_widget_set_sensitive(wizard->find_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(wizard->notice), "FINDING TAILSCALE DEVICES...");
+    now_tailscale_run_async("/usr/lib/optiplex-now/find-servers.py",
+                            wizard->discovery_cancel, wizard_discovery_done, wizard);
 }
 static void wizard_action(void*w,void*p){
  Wizard*c=p;
@@ -1764,9 +1886,39 @@ static void wizard_service_check(void*w,void*p){
  if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
  else {services_inflight=0;free(r);}
 }
-static void wizard_destroy(void*w,void*p){(void)w;Wizard*c=p;if(c->tailscale_poll_id)g_source_remove(c->tailscale_poll_id);wizard_wolf_label=NULL;for(int i=0;i<3;i++)service_labels[i]=NULL;free(p);}
+static void wizard_destroy(void *widget, void *data)
+{
+    (void)widget;
+    Wizard *wizard = data;
+    wizard->closing = 1;
+    wizard->assistant = NULL;
+    if (wizard->tailscale_poll_id) {
+        g_source_remove(wizard->tailscale_poll_id);
+        wizard->tailscale_poll_id = 0;
+    }
+    if (wizard->status_timeout_id) {
+        g_source_remove(wizard->status_timeout_id);
+        wizard->status_timeout_id = 0;
+    }
+    if (wizard->discovery_timeout_id) {
+        g_source_remove(wizard->discovery_timeout_id);
+        wizard->discovery_timeout_id = 0;
+    }
+    if (wizard->tailscale_cancel) {
+        g_cancellable_cancel(wizard->tailscale_cancel);
+    }
+    if (wizard->discovery_cancel) {
+        g_cancellable_cancel(wizard->discovery_cancel);
+    }
+    wizard_wolf_label = NULL;
+    for (int i = 0; i < 3; i++) {
+        service_labels[i] = NULL;
+    }
+    wizard_unref(wizard);
+}
 static void on_wizard(void*w,void*p){(void)w;(void)p;
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
+ c->references=1;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
  gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
@@ -1775,7 +1927,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- wizard_button(c,one,"SIGN IN WITH TAILSCALE","w_ts");
+ c->tailscale_button=wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
  wizard_button(c,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup");
  add(one,label("Connection status updates automatically after sign-in.","helper"),0);
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
@@ -1790,7 +1942,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  /* Page 2: choose your server. All values are prefilled from saved configuration. */
  GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
  add(two,label("FIND YOUR SERVER","modalheading"),0);
- wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
+ c->find_button=wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
  add(two,label("SSH USER","helper"),0);
@@ -1854,6 +2006,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(a,"close",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"destroy",(GCallback)wizard_destroy,c,NULL,0);
  gtk_widget_show_all(a);
+ wizard_tailscale_poll(c);
 }
 static gboolean first_setup(void*unused) { on_wizard(NULL,unused);return 0; }
 

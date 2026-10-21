@@ -39,6 +39,7 @@ jobs:
           make check-wolf-transport
           make check-tailscale
           make check-host-metrics
+          make check-host-job-target
           make check-tray-prefs
           make check-tray-actions
           make check-moonlight-install

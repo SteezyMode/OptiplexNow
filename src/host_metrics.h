@@ -22,4 +22,7 @@ void now_host_get_metric(char *dest, size_t size, const char *text,
 int now_host_parse_drives(const char *text, NowHostDrive *drives,
                           size_t capacity);
 
+/* Validate configured mount paths even when telemetry has not been fetched. */
+int now_host_safe_disk_path(const char *path);
+
 #endif

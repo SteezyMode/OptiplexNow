@@ -48,7 +48,10 @@ def peer_identity(connection: socket.socket) -> tuple[int, int]:
 
 def checked_generation(workspace: Path, generation: str) -> Path:
     """Require a prepared, owned workspace and exact active generation."""
-    root = tx._validate_workspace(workspace)
+    try:
+        root = tx._validate_workspace(workspace)
+    except (ValueError, OSError, AttributeError) as exc:
+        raise AuthorizationError("Invalid managed host workspace") from exc
     if root.is_symlink() or not root.is_dir():
         raise AuthorizationError("No managed host workspace")
     try:

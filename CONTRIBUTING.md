@@ -10,6 +10,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | --- | --- |
 | `src/main.c` | GTK3 UI, wizard, launcher, tray, state presentation and user-triggered actions |
 | `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
+| `src/host_metrics.c/.h` | Host telemetry key-value/disk parsing and mounted-drive filtering, independent of GTK/SSH |
 | `src/wolf_pairing.c/.h` | GTK-independent pending-client validation and PIN request generation; no SSH privilege or remote approval |
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |

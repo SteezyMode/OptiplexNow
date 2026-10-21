@@ -13,7 +13,6 @@ import json
 import os
 from pathlib import Path
 import shutil
-import stat
 import tempfile
 
 import host_stage
@@ -170,6 +169,17 @@ def prepare(source: Path, workspace: Path) -> dict:
     """Activate a NEW local configuration generation, never running Compose."""
     files = _input_bundle(source)
     root = _validate_workspace(workspace)
+    # The generated Compose file must bind the SAME persistent Wolf state
+    # on every generation. A relative ./wolf would point to each release.
+    raw_compose = files["compose.yaml"].decode("utf-8")
+    header, payload = raw_compose.split("\n", 1)
+    compose = json.loads(payload)
+    mounts = compose["services"]["wolf"]["volumes"]
+    if mounts.count("./wolf:/etc/wolf:rw") != 1:
+        raise ValueError("Missing expected persistent Wolf mount")
+    mounts[mounts.index("./wolf:/etc/wolf:rw")] = str(root / "wolf") + ":/etc/wolf:rw"
+    files["compose.yaml"] = (header + "\n" + json.dumps(
+        compose, indent=2, sort_keys=True) + "\n").encode("utf-8")
     created_root = False
     if not root.exists():
         root.mkdir(mode=0o700)
@@ -189,6 +199,16 @@ def prepare(source: Path, workspace: Path) -> dict:
                 {"tool": "now-host-transaction", "schema_version": SCHEMA}).encode())
             state = {"tool": "now-host-transaction", "schema_version": SCHEMA,
                      "runtime": "not_started", "active": None, "previous": None}
+            # A failure writing a later generation must leave a valid,
+            # recognizable workspace that can be safely retried.
+            _write_current(root, state)
+        if state.get("active") is not None:
+            # Never follow a swapped data-directory symlink during updates.
+            if (root / "wolf").is_symlink() or not (root / "wolf").is_dir():
+                raise ValueError("Persistent Wolf directory cannot be trusted")
+        else:
+            if (root / "wolf").is_symlink() or not (root / "wolf").is_dir():
+                raise ValueError("Persistent Wolf directory cannot be trusted")
         content_hash = hashlib.sha256()
         for name in INPUT_FILES:
             content_hash.update(name.encode() + b"\x00" + files[name] + b"\x00")

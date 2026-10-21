@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-host-metrics check-tray-prefs check-tray-actions check-sanitizers
+.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-host-metrics check-tray-prefs check-tray-actions check-moonlight-install check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/tray_prefs.c src/tray_actions.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
@@ -90,6 +90,11 @@ check-tray-actions: | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc tests/test_tray_actions.c src/tray_actions.c -o build/test-tray-actions
 	./build/test-tray-actions
 
+# Use a disposable fake flatpak binary; no root or network required.
+check-moonlight-install: | build
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_moonlight_install.c src/moonlight_install.c -o build/test-moonlight-install $(shell pkg-config --libs gio-2.0)
+	./build/test-moonlight-install
+
 # The GTK askpass program is a separate graphical process used by OpenSSH.
 build/now-ssh-askpass: src/ssh_askpass.c | build
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/ssh_askpass.c -o $@ $(GTK_LIBS)
@@ -120,6 +125,8 @@ check-sanitizers: | build
 	$(SAN_ENV) ./build/sanitized/test-tray-prefs
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_tray_actions.c src/tray_actions.c -o build/sanitized/test-tray-actions $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-tray-actions
+	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_moonlight_install.c src/moonlight_install.c -o build/sanitized/test-moonlight-install $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-moonlight-install
 	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_wolf_transport.c src/wolf_transport.c -o build/sanitized/test-wolf-transport $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-wolf-transport
 	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_tailscale_async.c src/tailscale_async.c -o build/sanitized/test-tailscale $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)

@@ -20,6 +20,8 @@ IMAGE_RE = re.compile(r"^sha256:[a-f0-9]{64}$")
 RENDER_RE = re.compile(r"^/dev/dri/renderD[0-9]{3,5}$")
 PROFILE = "now-manual-review-required"
 DRIVER_VOLUME = "now-nvidia-driver-vol"
+GPU_CHOICES = ("nvidia", "amd", "intel")
+GPU_VENDORS = {"nvidia": "0x10de", "amd": "0x1002", "intel": "0x8086"}
 PROTECTED_ROOTS = ("/etc", "/var", "/usr", "/run", "/dev", "/proc", "/sys", "/boot")
 
 
@@ -35,10 +37,31 @@ def validate_render_node(device: str) -> str:
     return device
 
 
-def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
+def check_render_vendor(gpu_vendor: str, render_node: str,
+                        sysfs_root: Path = Path("/sys")) -> None:
+    """Reject a known wrong GPU-to-render-node selection on a live machine.
+
+    The node path MUST be chosen by the operator. Unknown sysfs mapping remains
+    unverified, not automatically accepted for deployment (deployment disabled).
+    """
+    validate_render_node(render_node)
+    if gpu_vendor not in GPU_CHOICES:
+        raise ValueError("Invalid GPU vendor")
+    name = Path(render_node).name
+    id_file = sysfs_root / "class" / "drm" / name / "device" / "vendor"
+    vendor_id = host_preflight.read_small(id_file)
+    if vendor_id is not None and vendor_id.strip().lower() != GPU_VENDORS[gpu_vendor]:
+        raise ValueError(
+            "Selected render node is not associated with the selected GPU vendor")
+
+
+def make_bundle(plan: dict, *, digest: str, render_node: str,
+                gpu_vendor: str = "nvidia") -> dict[str, str]:
     """Build inert review artifacts based on a blocked planner result."""
     image = validate_digest(digest)
     render = validate_render_node(render_node)
+    if gpu_vendor not in GPU_CHOICES:
+        raise ValueError("GPU backend must be nvidia, amd or intel")
     if (not isinstance(plan, dict) or plan.get("tool") != "now-host-plan"
             or plan.get("schema_version") != host_plan.PLAN_SCHEMA
             or plan.get("mode") != "read_only_preview"
@@ -47,48 +70,48 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
             or plan.get("changes_performed") is not False):
         raise ValueError("Only a blocked NOW Host plan can be staged")
 
-    # JSON syntax is valid YAML 1.2; Docker Compose parses compose.yaml.
-    # Profile and pull_policy=never prevent accidental default startup/pull.
-    # No container_name: avoid colliding with unrelated 'wolf' installations.
-    compose = {
-        "name": "optiplex-now-host-pilot",
-        "services": {"wolf": {
-            "profiles": [PROFILE],
-            "image": image,
-            "pull_policy": "never",
-            "network_mode": "host",
-            "restart": "no",
-            "environment": {
-                "NVIDIA_DRIVER_VOLUME_NAME": DRIVER_VOLUME,
-                "WOLF_RENDER_NODE": render,
-            },
-            "volumes": [
-                "./wolf:/etc/wolf:rw",
-                DRIVER_VOLUME + ":/usr/nvidia:rw",
-                "/var/run/docker.sock:/var/run/docker.sock:rw",
-                "/dev:/dev:rw",
-                "/run/udev:/run/udev:rw",
-            ],
-            "devices": [
-                "/dev/dri:/dev/dri", "/dev/uinput:/dev/uinput",
-                "/dev/uhid:/dev/uhid",
-                "/dev/nvidia0:/dev/nvidia0",
-                "/dev/nvidiactl:/dev/nvidiactl",
-                "/dev/nvidia-modeset:/dev/nvidia-modeset",
-                "/dev/nvidia-uvm:/dev/nvidia-uvm",
-                "/dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools",
-                "/dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1",
-                "/dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2",
-            ],
-            "device_cgroup_rules": ["c 13:* rmw"],
-
-            "labels": {
-                "io.optiplex-now.managed": "prototype",
-                "io.optiplex-now.role": "streaming",
-            },
-        }},
-        "volumes": {DRIVER_VOLUME: {"external": True}},
+    # JSON syntax is valid YAML 1.2; Compose parses compose.yaml.
+    # The inactive profile and pull_policy=never prevent accidental default
+    # startup/pull. These are not a security boundary against deliberate use.
+    # No container_name: avoid collision with existing host installations.
+    wolf = {
+        "profiles": [PROFILE],
+        "image": image,
+        "pull_policy": "never",
+        "network_mode": "host",
+        "restart": "no",
+        "environment": {"WOLF_RENDER_NODE": render},
+        "volumes": [
+            "./wolf:/etc/wolf:rw",
+            "/var/run/docker.sock:/var/run/docker.sock:rw",
+            "/dev:/dev:rw",
+            "/run/udev:/run/udev:rw",
+        ],
+        "devices": [
+            "/dev/dri:/dev/dri",
+            "/dev/uinput:/dev/uinput",
+            "/dev/uhid:/dev/uhid",
+        ],
+        "device_cgroup_rules": ["c 13:* rmw"],
+        "labels": {
+            "io.optiplex-now.managed": "prototype",
+            "io.optiplex-now.role": "streaming",
+        },
     }
+    compose = {"name": "optiplex-now-host-pilot", "services": {"wolf": wolf}}
+    if gpu_vendor == "nvidia":
+        wolf["environment"]["NVIDIA_DRIVER_VOLUME_NAME"] = DRIVER_VOLUME
+        wolf["volumes"].append(DRIVER_VOLUME + ":/usr/nvidia:rw")
+        wolf["devices"].extend([
+            "/dev/nvidia0:/dev/nvidia0",
+            "/dev/nvidiactl:/dev/nvidiactl",
+            "/dev/nvidia-modeset:/dev/nvidia-modeset",
+            "/dev/nvidia-uvm:/dev/nvidia-uvm",
+            "/dev/nvidia-uvm-tools:/dev/nvidia-uvm-tools",
+            "/dev/nvidia-caps/nvidia-cap1:/dev/nvidia-caps/nvidia-cap1",
+            "/dev/nvidia-caps/nvidia-cap2:/dev/nvidia-caps/nvidia-cap2",
+        ])
+        compose["volumes"] = {DRIVER_VOLUME: {"external": True}}
     manifest = {
         "schema_version": STAGE_SCHEMA,
         "tool": "now-host-stage",
@@ -97,8 +120,10 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
         "changes_to_host_services": False,
         "image": image,
         "render_node": render,
-        "nvidia_method": "manual_external_driver_volume",
-        "driver_volume": DRIVER_VOLUME,
+        "gpu_vendor": gpu_vendor,
+        "nvidia_method": ("manual_external_driver_volume"
+                          if gpu_vendor == "nvidia" else None),
+        "driver_volume": DRIVER_VOLUME if gpu_vendor == "nvidia" else None,
         "driver_volume_prepared": False,
         "managed_compose_project": compose["name"],
         "managed_paths": ["./wolf"],
@@ -107,38 +132,35 @@ def make_bundle(plan: dict, *, digest: str, render_node: str) -> dict[str, str]:
         "approval": "not_granted",
         "reason": "No clean-host install/rollback or least-privilege pairing acceptance",
     }
-    readme = """# NOW Host staged Wolf container (NOT INSTALLED)
+    method = ("NVIDIA manual driver volume (not populated)"
+              if gpu_vendor == "nvidia" else
+              "standard Linux DRM render nodes (no NVIDIA driver volume)")
+    readme = f"""# NOW Host staged Wolf container (NOT INSTALLED)
 
-This directory contains a review-only Docker Compose prototype.
-It uses the NVIDIA MANUAL DRIVER VOLUME method.
-Staging does not pull images, install Docker or Wolf, start containers,
-modify drivers, manage networks, change user credentials or approve devices.
+GPU profile: {gpu_vendor.upper()}
+Container method: {method}
+Render node selected: {render}
+All GPU profiles are UNVALIDATED on clean physical host hardware.
 
-Only stage on a machine you own and NEVER launch this template on the
-working reference server or a host with unrelated services.
+Staging does not install Docker, start containers, modify drivers or ports,
+change credentials, authorize devices, adopt containers or touch user services.
+The Docker socket would grant host-administrative power if Wolf were started.
+DO NOT run docker compose up, pull, start, or enable the inactive profile.
 
-The digest is supplied by the operator: staging validates its shape but
-DOES NOT verify its registry provenance, platform or integrity.
-A trusted operator must verify the exact upstream digest, hardware encoder,
-render node, all required NVIDIA devices, input devices and open ports separately.
+The image digest must be separately verified against the upstream registry.
+A digest-shaped placeholder is NOT proof of origin or image correctness.
+For Intel/AMD, GPU render nodes and compatible hardware encoders still need
+a real-device streaming test. On multi-GPU machines, verify the render node
+actually belongs to the selected vendor.
 
-To validate Compose syntax only:
-    docker compose -f compose.yaml config --quiet
+For NVIDIA, an independent and driver-version-matched image and external
+Docker volume {DRIVER_VOLUME} must be prepared and safely refreshed when the
+host NVIDIA driver changes. This program does not create or overwrite it.
 
-Do NOT run compose up, start, pull, or an active profile yet.
-Wolf's recommended NVIDIA manual method requires a separately built driver
-image and a populated, version-matched external Docker volume named
-now-nvidia-driver-vol. This generator DOES NOT create or rebuild that volume.
-Rebuild must use a pinned driver-image recipe after any host NVIDIA driver
-update, without deleting unrelated or user-created Docker volumes.
+Wolf persistent config is empty. The owner authorization broker is unfinished.
+This is a review-only prototype, not a 15-minute production installer.
 
-Wolf requires write access to the host Docker socket to spawn applications:
-such access is effectively host-administrative power and remains a security
-review blocker. The owner-approved restricted enrollment broker is unfinished.
-
-The ./wolf directory is intentionally empty. A production-ready Wolf config,
-game application, profile persistence, backups and rollback are NOT provided.
-This is not a validated 15-minute host installer.
+Non-mutating Compose syntax check: docker compose -f compose.yaml config --quiet
 """
     return {
         "compose.yaml": "# OFFLINE REVIEW ONLY; NOT APPROVED FOR DEPLOYMENT\n"
@@ -182,13 +204,16 @@ def main() -> int:
     parser.add_argument("--image-digest", required=True,
                         help="Externally verified Wolf sha256 digest, not a tag")
     parser.add_argument("--render-node", required=True,
-                        help="Explicit NVIDIA /dev/dri/renderD###")
+                        help="Explicit /dev/dri/renderD### associated with the GPU")
+    parser.add_argument("--gpu", required=True, choices=GPU_CHOICES,
+                        help="GPU family for Wolf container devices; selection is never automatic")
     args = parser.parse_args()
     try:
         scan = host_preflight.evaluate(host_preflight.collect_snapshot())
         plan = host_plan.plan_from_preflight(scan)
+        check_render_vendor(args.gpu, args.render_node)
         files = make_bundle(plan, digest=args.image_digest,
-                            render_node=args.render_node)
+                            render_node=args.render_node, gpu_vendor=args.gpu)
         result = stage(args.output, files)
     except (OSError, ValueError) as error:
         parser.error(str(error))

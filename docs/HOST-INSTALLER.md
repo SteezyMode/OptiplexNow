@@ -78,13 +78,14 @@ plan, generating a **review-only** Wolf NVIDIA Container Toolkit configuration
 and an ownership manifest. It does **not** install or run Wolf. No `apply`,
 `start`, `repair` or `uninstall` command exists.
 
-This first pilot assumes NVIDIA, an explicitly chosen render device, a
-preverified immutable Wolf registry SHA256 image digest, Docker/Compose and
-one manually reviewable Wolf service. After checking upstream's current
-[Wolf quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html),
-the prototype now selects the **manual NVIDIA driver-volume method** rather
-than the less-stable Container Toolkit method. It declares an external,
-dedicated `now-nvidia-driver-vol` volume and the required NVIDIA devices.
+This prototype requires an explicitly chosen GPU backend and render device,
+an operator-verified immutable Wolf registry SHA256 image digest, Docker/Compose
+and one manually reviewable Wolf service. Wolf's
+[quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
+supports AMD and Intel through standard DRM device access, while NVIDIA uses
+the manual driver-volume method rather than the less-stable Container Toolkit.
+Only NVIDIA requires the external `now-nvidia-driver-vol` volume and
+NVIDIA-specific device nodes.
 It **does not populate the volume**: driver-volume construction needs a
 trusted/pinned Dockerfile and separate verification that the volume matches
 the current host driver. Rebuilding after NVIDIA driver updates is an
@@ -99,7 +100,7 @@ Example with an actual verified digest and explicitly selected render node:
 python3 server/host_stage.py \
   --output /tmp/now-wolf-review \
   --image-digest sha256:REPLACE_WITH_VERIFIED_64_LOWERCASE_HEX_DIGITS \
-  --render-node /dev/dri/renderD129
+  --render-node /dev/dri/renderD129 --gpu nvidia
 ```
 
 The example digest is a placeholder, not a valid image. Reviewers must verify
@@ -111,9 +112,9 @@ The new directory contains `compose.yaml`, `manifest.json`,
 `README.txt` and an initially empty `wolf/` configuration directory.
 
 The Compose definition is JSON-formatted YAML and follows Wolf's upstream
-NVIDIA manual driver-volume topology: host networking, external driver volume,
-NVIDIA/DRM/input devices and udev mounts, an explicit render node and a
-Docker socket mount. To reduce accidental
+vendor-specific topology: host networking, DRM/input/udev devices,
+an explicit render node and the Docker socket mount; NVIDIA additionally
+requires its external driver volume and NVIDIA device nodes. To reduce accidental
 deployment, its service is hidden behind an inactive Compose profile,
 `pull_policy=never`, `restart=no` and a unique Compose project; these
 settings are not a security boundary for a person who deliberately enables
@@ -130,6 +131,35 @@ Compose grammar without talking to the daemon.
 Reference: [Wolf upstream quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
 and [Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/).
 
+## AMD/Intel deployment profiles and multi-GPU selection
+
+Wolf's official quickstart provides a shared Intel/AMD Docker path based
+on `/dev/dri`, `/dev/uinput`, `/dev/uhid` and udev mounts. It requires
+no NVIDIA driver-volume creation. This reduces installation complexity,
+but does not establish hardware encoder compatibility or quality.
+
+`server/host_stage.py` now requires an explicit
+`--gpu nvidia|amd|intel` and `--render-node /dev/dri/renderD###`.
+When a sysfs mapping is readable, it rejects selecting a render node
+belonging to another GPU vendor. Missing mappings are unresolved, not
+evidence of compatibility. The resulting manifest names the selected
+backend; `host_transaction.py` validates that identity, Compose contents
+and vendor-specific mounts before preparing a generation.
+
+Example AMD staging (still nondeploying):
+
+```sh
+python3 server/host_stage.py \
+  --output /tmp/now-wolf-review-amd \
+  --image-digest sha256:REPLACE_WITH_VERIFIED_64_LOWERCASE_HEX_DIGITS \
+  --render-node /dev/dri/renderD128 --gpu amd
+```
+
+Intel uses `--gpu intel` and its own verified render node. On a dual-GPU
+host, GPU render node numbering varies: never infer the selected vendor
+from the number alone. All profiles still require clean GPU hardware
+validation, video/audio/input checks and an authorized host installer.
+
 ## Prototype configuration transactions (no container activation)
 
 `server/host_transaction.py` manages **configuration generations only** in a
@@ -138,7 +168,7 @@ unable to write to `/etc` or `/var/lib`, install system dependencies, invoke
 Docker, or start/stop Wolf. An operational host installer still needs a
 separately reviewed, privileged backend and hardware validation.
 
-Given a staged review bundle, `--prepare` creates owner-marked generations,
+Given a staged review bundle for any supported GPU backend, `--prepare` creates owner-marked generations,
 a `current.json` pointer, and a separate persistent `wolf/` directory.
 A second prepare of the same bundle is idempotent. A new generation becomes
 active through atomic pointer replacement. `--rollback` returns to the

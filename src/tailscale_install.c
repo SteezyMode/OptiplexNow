@@ -7,7 +7,7 @@ static void install_worker(GTask *task, gpointer source_object, gpointer task_da
     (void)task_data;
 
     const char *argv[] = {
-        "pkexec", "/usr/bin/python3",
+        "/usr/bin/pkexec", "/usr/bin/python3",
         "/usr/lib/optiplex-now/tailscale-install.py", NULL
     };
     GError *error = NULL;

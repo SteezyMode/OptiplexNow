@@ -64,11 +64,17 @@ def _docker(args: list[str], timeout: int = 30) -> str:
         raise InstallationError("Invalid Docker command output") from exc
 
 
-def _host_checks(gpu: str, render: str) -> dict:
+def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
     snapshot = host_preflight.collect_snapshot()
     report = host_preflight.evaluate(snapshot)
     statuses = {item["id"]: item["status"] for item in report["checks"]}
-    blockers = [key for key in REQUIRED_IDS if statuses.get(key) != "pass"]
+    # Ordinary desktop users should NOT join the Docker group just to check
+    # eligibility. Only the pkexec/root final check requires daemon access.
+    public_checks = tuple(key for key in REQUIRED_IDS if key != "container_runtime")
+    blockers = [key for key in public_checks if statuses.get(key) != "pass"]
+    needs_admin_verification = statuses.get("container_runtime") != "pass"
+    if privileged and needs_admin_verification:
+        blockers.append("container_runtime")
     if snapshot.get("os_id") not in ("ubuntu", "pop") or snapshot.get("os_version") != "24.04":
         blockers.append("only Ubuntu/Pop!_OS 24.04 pilot candidates")
     if gpu not in ("amd", "intel"):
@@ -100,25 +106,38 @@ def _host_checks(gpu: str, render: str) -> dict:
                 blockers.append(name + " is unavailable")
     if not Path("/usr/bin/docker").is_file():
         blockers.append("system Docker command not installed")
-    else:
+    if not snapshot.get("docker_socket"):
+        blockers.append("system Docker socket unavailable")
+    if Path("/usr/bin/docker").is_file():
         try:
             _docker(["compose", "version"], timeout=10)
-            project_ids = _docker(["ps", "--all", "--no-trunc",
-                                   "--filter", f"label=com.docker.compose.project={PROJECT}",
-                                   "--format", "{{.ID}}"], timeout=10)
-            if project_ids:
-                blockers.append("NOW Compose project exists; no adoption")
         except InstallationError:
-            blockers.append("local Docker/Compose access unavailable")
+            blockers.append("Docker Compose command unavailable")
+        else:
+            try:
+                project_ids = _docker(["ps", "--all", "--no-trunc",
+                                       "--filter", f"label=com.docker.compose.project={PROJECT}",
+                                       "--format", "{{.ID}}"], timeout=10)
+                if project_ids:
+                    blockers.append("NOW Compose project exists; no adoption")
+            except InstallationError:
+                if privileged:
+                    blockers.append("cannot verify existing Docker projects")
+                else:
+                    needs_admin_verification = True
     if WORKSPACE.exists() or WORKSPACE.is_symlink():
         blockers.append("NOW Host workspace exists; no overwrite or implicit retry")
-    return {"decision": "blocked" if blockers else "candidate",
+    decision = ("blocked" if blockers else
+                "candidate_after_admin_check" if needs_admin_verification else
+                "candidate")
+    return {"decision": decision,
             "gpu": gpu, "render_node": render,
             "os": snapshot.get("os_id"), "version": snapshot.get("os_version"),
             "blockers": sorted(set(blockers)),
             "notes": [
                 "A candidate is not verified as capable of streaming video.",
                 "No Linux packages, GPU drivers or existing services will be modified.",
+                "Docker permission is verified by the privileged installer, not granted to the user.",
                 "Host Docker socket access is administrative and Wolf needs it to launch apps.",
             ]}
 
@@ -181,7 +200,7 @@ def install(gpu: str, render: str, digest: str, confirmation: str) -> dict:
     fd = os.open(LOCK_PATH, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        scan = _host_checks(gpu, render)
+        scan = _host_checks(gpu, render, privileged=True)
         if scan["decision"] != "candidate":
             raise InstallationError("Installation blocked: " + ", ".join(scan["blockers"]))
         if ROOT.is_symlink() or WORKSPACE.exists() or WORKSPACE.is_symlink():

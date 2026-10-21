@@ -48,14 +48,21 @@ def _input_bundle(source: Path) -> dict[str, bytes]:
         compose = json.loads(lines[1] if len(lines) == 2 and lines[0].startswith(b"#") else raw["compose.yaml"])
     except (ValueError, UnicodeDecodeError) as exc:
         raise ValueError("Malformed staged manifest/Compose JSON") from exc
+    gpu = manifest.get("gpu_vendor")
+    if gpu not in host_stage.GPU_CHOICES:
+        raise ValueError("Unknown or missing GPU backend")
+    expected_nvidia = gpu == "nvidia"
+    if (manifest.get("nvidia_method") !=
+            ("manual_external_driver_volume" if expected_nvidia else None)
+            or manifest.get("driver_volume") !=
+            (host_stage.DRIVER_VOLUME if expected_nvidia else None)):
+        raise ValueError("GPU profile and driver-volume configuration disagree")
     if (manifest.get("tool") != "now-host-stage"
             or manifest.get("schema_version") != host_stage.STAGE_SCHEMA
             or manifest.get("mode") != "review_only"
             or manifest.get("deploy_supported") is not False
             or manifest.get("changes_to_host_services") is not False
             or manifest.get("approval") != "not_granted"
-            or manifest.get("nvidia_method") != "manual_external_driver_volume"
-            or manifest.get("driver_volume") != host_stage.DRIVER_VOLUME
             or manifest.get("driver_volume_prepared") is not False
             or manifest.get("unmanaged_containers_may_be_adopted") is not False
             or manifest.get("existing_data_may_be_deleted") is not False):
@@ -63,12 +70,14 @@ def _input_bundle(source: Path) -> dict[str, bytes]:
     service = compose.get("services", {}).get("wolf", {})
     if (compose.get("name") != manifest.get("managed_compose_project")
             or set(compose.get("services", {})) != {"wolf"}
-            or compose.get("volumes") != {host_stage.DRIVER_VOLUME: {"external": True}}
+            or compose.get("volumes") != (
+                {host_stage.DRIVER_VOLUME: {"external": True}} if expected_nvidia else None)
             or service.get("image") != manifest.get("image")
             or service.get("profiles") != [host_stage.PROFILE]
             or service.get("pull_policy") != "never"
             or service.get("restart") != "no"
-            or service.get("environment", {}).get("NVIDIA_DRIVER_VOLUME_NAME") != host_stage.DRIVER_VOLUME
+            or service.get("environment", {}).get("NVIDIA_DRIVER_VOLUME_NAME") != (
+                host_stage.DRIVER_VOLUME if expected_nvidia else None)
             or service.get("network_mode") != "host"):
         raise ValueError("Unrecognized or unsafe Compose staging contract")
     # Re-render from our validated template instead of trusting arbitrary
@@ -77,7 +86,7 @@ def _input_bundle(source: Path) -> dict[str, bytes]:
     clean = host_stage.make_bundle(
         {"tool": "now-host-plan", "schema_version": 1, "mode": "read_only_preview",
          "decision": "blocked", "may_apply": False, "changes_performed": False},
-        digest=digest, render_node=manifest["render_node"])
+        digest=digest, render_node=manifest["render_node"], gpu_vendor=gpu)
     for name in INPUT_FILES:
         if raw[name] != clean[name].encode("utf-8"):
             raise ValueError("Staged files do not match the known safe template")

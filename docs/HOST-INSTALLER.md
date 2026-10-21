@@ -22,6 +22,54 @@ The JSON contract is versioned (`schema_version=1`) and contains only bounded op
 
 Native Python tests construct disposable filesystem fixtures, exercise parsing and failures, assert no fixture modification, and run the JSON CLI. Tests run in normal CI; physical GPU and encoder acceptance is still outstanding. Wolf's installation requirements should be checked again when dependency versions are pinned.
 
+## First installation plan preview (source-only)
+
+The next step after preflight is `server/host_plan.py`. It consumes the
+versioned, redacted `host_preflight.py` results and generates a deterministic
+**non-executable** installation plan. It does not configure the host or generate
+a runnable Compose file. Both tools remain **development source only**, not
+features included in the v1.17.0 client .deb.
+
+From the checked-out repository on a Linux host:
+
+```sh
+python3 server/host_plan.py
+python3 server/host_plan.py --json
+python3 server/host_preflight.py --json > scan.json
+python3 server/host_plan.py --preflight-json scan.json --json
+```
+
+A saved scan is a diagnostic record. Avoid sharing it without reviewing its
+contents. The planner reads a maximum 64 KiB report and accepts only the
+expected scanner schema and enumerated check states; it does not propagate
+arbitrary diagnostic text into its output.
+
+The preview describes the **candidate** Ubuntu 24.04 x86-64/NVIDIA,
+single-owner Wolf streaming layout, proposed managed config and state roots,
+Docker project labels, required components, network ports, and lifecycle
+sequence. Jellyfin is optional. Every prospective mutating operation is
+marked *not implemented*. The plan always returns `may_apply=false` and
+`decision=blocked`, even if every scanner check passes.
+
+Why it always blocks: no Wolf image digest has been pinned and verified, real
+encoder and streaming tests are incomplete, the least-privilege enrollment
+broker is unimplemented, and rollback has not been validated on an independent
+clean host. No implicit Docker group/sudo permission, network configuration,
+port reassignment or host authorization is ever requested by these tools.
+
+**Existing host behavior:** occupied Wolf ports are a known potential conflict.
+On a reference host with Wolf already installed, the correct output is a
+blocked plan demanding explicit owner review, not another Wolf instance, a
+container restart, silent adoption, or a software downgrade. The scanner
+does not know which process owns the port; ownership cannot be inferred
+from port occupation. Pop!_OS 24.04 remains an unqualified distro until
+tested. The optional host-import route remains separate future work.
+
+Tests assert stable contract parsing, hostile/duplicate/missing checks,
+unknown encoder state, occupied-port behavior, preservation of unmanaged data,
+and no mutation of a disposable input file. These run in Python CI along
+with the earlier preflight suite.
+
 ## Initial supported scope
 
 Start with one explicitly supported Linux distribution and a verified hardware/driver matrix. Stream one Wolf application to one Moonlight device; optionally install Jellyfin with independent credentials. Add multi-desktop and multi-user features only after security and persistence gates pass.

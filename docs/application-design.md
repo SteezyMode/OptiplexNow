@@ -74,6 +74,14 @@ The six ordered engineering items and next-session stop condition live in [Produ
 
 For the first graphical installer target, NOW on Debian/Ubuntu-family systems delegates only an explicitly confirmed Tailscale install to `pkexec /usr/bin/python3 /usr/lib/optiplex-now/tailscale-install.py`. The root helper has no variable command arguments, uses upstream HTTPS resources on a distro/codename allowlist, validates a single signed apt source entry, then installs the `tailscale` package through apt and enables its daemon. An existing `tailscale` executable is left unchanged. Tailscale sign-in opens the device-local `http://100.100.100.100/` web interface (supported by modern Tailscale) without starting a root shell. An unavailable PolicyKit agent must fail visibly and direct the user to official instructions, not silently fall back to terminal commands. Only package installation requires elevated privileges, not ordinary NOW startup.
 
+## Graphical SSH access authorization
+
+The beta's SSH wizard now uses a user-initiated, GTK-controlled authorization flow rather than launching a terminal for `ssh-copy-id`. `src/ssh_authorize.c/.h` runs the fixed `ssh-authorize.py` bridge asynchronously, and the packaged `now-ssh-askpass` GTK binary is invoked by OpenSSH for the server password or explicit host-fingerprint decision. The user's private key remains in their home directory. An existing `~/.ssh/id_ed25519` key pair is reused; missing or symlinked halves are never overwritten. A newly created ED25519 private key is locally owned and unencrypted for unattended reconnect, so its file protection and backup handling remain important.
+
+OpenSSH retains `StrictHostKeyChecking=ask`. The user must explicitly approve an unfamiliar fingerprint; changed known-host keys are never automatically accepted. Passwords and passphrases are entered into a masked graphical prompt and are not placed in arguments or application config. `ssh-copy-id` can append the public key to the selected remote user's authorized_keys, after that user authenticates. This is **not** a zero-touch device enrollment system, a host-management permission broker, or an authorization to use Docker/Wolf as root. A nontechnical user still needs the correct host account credentials or owner assistance during Beta 1.
+
+A declined credential dialog, unreachable server, timeout or wizard closure cannot be reported as successful enrollment. The deployed GUI and authentication still require device-level acceptance; mocked Python and installed GTK smoke tests cover only simulated operation.
+
 ## Engineering gates
 
 GitHub CI compiles, checks packaging, runs unit checks and GTK smoke tests. The release workflow publishes only new version tags. Neither substitutes for fresh-client pairing, real gameplay, live audio/input, or backup restore.

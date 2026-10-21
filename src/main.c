@@ -27,6 +27,7 @@
 #include "wolf_transport.h"
 #include "tailscale_async.h"
 #include "tailscale_install.h"
+#include "ssh_authorize.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -307,23 +308,121 @@ static void launch_ssh(int relay) {
  if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){say("Check Settings");return;}
  char *args[]={"ssh","-l",cfg[u],cfg[h],NULL};terminal_launch(args);
 }
-static void pair(int relay) {
- int h=relay?2:0,u=relay?3:1;
- if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){say("Check server / relay settings");return;}
- if(!now_program_exists("ssh-copy-id")||!now_program_exists("ssh-keygen")){say("Install openssh-client to pair SSH");return;}
- char sshdir[PATH_MAX],pub[PATH_MAX],private[PATH_MAX];
- snprintf(sshdir,sizeof sshdir,"%s/.ssh",getenv("HOME")?getenv("HOME"):"/tmp");mkdir_safe(sshdir);
- snprintf(pub,sizeof pub,"%s/id_ed25519.pub",sshdir);snprintf(private,sizeof private,"%s/id_ed25519",sshdir);
- if(access(pub,F_OK)!=0){
-   if(access(private,F_OK)==0){say("Existing SSH key needs its .pub file");return;}
-   char*gen[]={"ssh-keygen","-q","-t","ed25519","-N","","-f",private,NULL};
-   if(now_run(gen,NULL,0,8)!=0){say("Couldn't prepare SSH key");return;}
- }
- char dest[400];snprintf(dest,sizeof dest,"%s@%s",cfg[u],cfg[h]);
- /* Provide a terminal for a one-time remote password prompt. */
- char*args[]={"ssh-copy-id","-i",pub,dest,NULL};
- if(terminal_launch(args))say(relay?"Authorize the relay in the terminal":"Authorize the server in the terminal");
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *message;
+    GtkWidget *cancel_button;
+    GCancellable *cancel;
+    gboolean pending;
+} SSHAuthorization;
+
+static SSHAuthorization *ssh_authorization = NULL;
+
+static void ssh_authorization_release(SSHAuthorization *state)
+{
+    if (ssh_authorization == state) {
+        ssh_authorization = NULL;
+    }
+    g_clear_object(&state->cancel);
+    g_free(state);
 }
+
+static void ssh_authorization_closed(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    SSHAuthorization *state = data;
+    state->dialog = NULL;
+    if (state->cancel) {
+        g_cancellable_cancel(state->cancel);
+    }
+    if (!state->pending) {
+        ssh_authorization_release(state);
+    }
+}
+
+static void ssh_authorization_response(GtkDialog *dialog, gint response, gpointer data)
+{
+    (void)response;
+    (void)data;
+    gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void ssh_authorization_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    SSHAuthorization *state = data;
+    GError *error = NULL;
+    gboolean success = now_ssh_authorize_finish(result, &error);
+    state->pending = FALSE;
+
+    if (state->dialog) {
+        gtk_label_set_text(GTK_LABEL(state->message), success
+            ? "SSH ACCESS AUTHORIZED. YOU CAN CONTINUE SETUP."
+            : g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
+                ? "SSH AUTHORIZATION CANCELLED."
+                : "COULD NOT AUTHORIZE SSH ACCESS. CHECK YOUR SERVER PASSWORD "
+                  "OR CONTACT THE SERVER OWNER.");
+        gtk_button_set_label(GTK_BUTTON(state->cancel_button), "Close");
+    } else {
+        ssh_authorization_release(state);
+    }
+    if (success) {
+        say("SERVER ACCESS AUTHORIZED.");
+    } else {
+        say("SERVER ACCESS NOT AUTHORIZED. RETRY FROM SETUP.");
+    }
+    g_clear_error(&error);
+}
+
+static void pair(int relay)
+{
+    int host_index = relay ? 2 : 0;
+    int user_index = relay ? 3 : 1;
+    if (!now_valid_host(cfg[host_index]) || !now_valid_user(cfg[user_index])) {
+        say("ENTER THE SERVER ADDRESS AND SSH USER IN SETTINGS.");
+        return;
+    }
+    if (ssh_authorization) {
+        say("SSH AUTHORIZATION IS ALREADY IN PROGRESS.");
+        return;
+    }
+    SSHAuthorization *state = g_new0(SSHAuthorization, 1);
+    state->cancel = g_cancellable_new();
+    state->pending = TRUE;
+    ssh_authorization = state;
+
+    GtkWindow *parent = GTK_WINDOW(active_setup_wizard ?
+                                   active_setup_wizard : win);
+    state->dialog = gtk_dialog_new_with_buttons(
+        relay ? "Authorize Wake Relay" : "Authorize Server",
+        parent, GTK_DIALOG_MODAL, "Cancel", GTK_RESPONSE_CANCEL, NULL);
+    state->cancel_button =
+        gtk_dialog_get_widget_for_response(GTK_DIALOG(state->dialog),
+                                           GTK_RESPONSE_CANCEL);
+    GtkWidget *area = gtk_dialog_get_content_area(GTK_DIALOG(state->dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(area), 20);
+    GtkWidget *instructions = gtk_label_new(
+        "NOW will install this device's SSH public key into your selected "
+        "server account. Approve the host fingerprint if it is correct, "
+        "then enter the server account password in the graphical prompt. "
+        "The private key stays on this computer.");
+    gtk_label_set_line_wrap(GTK_LABEL(instructions), TRUE);
+    gtk_box_pack_start(GTK_BOX(area), instructions, FALSE, FALSE, 8);
+
+    state->message = gtk_label_new("CONTACTING SERVER. WAIT FOR THE PASSWORD PROMPT...");
+    gtk_label_set_line_wrap(GTK_LABEL(state->message), TRUE);
+    gtk_box_pack_start(GTK_BOX(area), state->message, FALSE, FALSE, 8);
+
+    g_signal_connect(state->dialog, "response",
+                     G_CALLBACK(ssh_authorization_response), state);
+    g_signal_connect(state->dialog, "destroy",
+                     G_CALLBACK(ssh_authorization_closed), state);
+    gtk_widget_show_all(state->dialog);
+
+    now_ssh_authorize_async(cfg[host_index], cfg[user_index], state->cancel,
+                             ssh_authorization_done, state);
+}
+
 static gboolean tailscale_install_inflight = FALSE;
 
 static void tailscale_install_done(GObject *source, GAsyncResult *result, gpointer data)

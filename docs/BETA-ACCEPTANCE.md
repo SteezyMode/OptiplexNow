@@ -29,7 +29,7 @@ Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the
 - [ ] Install through the normal supported desktop/software flow. Launch NOW without a terminal.
 - [ ] Complete setup on the supported distribution and resolution. The client detects an existing Tailscale login or provides a clear sign-in path.
 - [ ] Discover the intended authorized host, exclude the current device, and confirm address and identity. Wrong or offline hosts show actionable errors. Mock tests must cover signed-out/missing Tailscale, invalid status JSON, duplicate peers, malformed discovery rows, process cancellation and wizard closure; none of these alone proves real enrollment.
-- [ ] Complete trusted SSH authorization where needed, without exposing long-term keys or bypassing host-key verification.
+- [ ] Complete trusted SSH authorization where needed, without exposing long-term keys or bypassing host-key verification. Confirm the native host fingerprint/password dialogs, wrong password, declined fingerprint, cancellation, timeout, and successful reconnect without terminal or repeated password prompts. Verify host keys are never silently accepted.
 - [ ] From **Connect to Game Host**, pair a **genuinely unpaired** Moonlight client with Wolf. Verify that a wrong or stale request cannot authorize a different client.
 - [ ] Open Games, launch Steam, and confirm *actual video, input, and audio*, not just a container state or process spawn.
 - [ ] Disconnect and reconnect. No PIN dialog for an already-paired device.

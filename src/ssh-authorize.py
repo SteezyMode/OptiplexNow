@@ -21,7 +21,7 @@ _child = None
 
 
 def validate(host, user):
-    if not host or len(host) > 250 or not re.fullmatch(r"[A-Za-z0-9._:-]+", host):
+    if not host or host.startswith("-") or len(host) > 250 or not re.fullmatch(r"[A-Za-z0-9._:-]+", host):
         raise ValueError("Invalid SSH host")
     if not user or len(user) > 100 or not re.fullmatch(r"[A-Za-z0-9._-]+", user):
         raise ValueError("Invalid SSH user")
@@ -72,10 +72,10 @@ def authorize(host, user, pubkey):
     global _child
     if not shutil.which("ssh-copy-id"):
         raise ValueError("SSH key installer not available")
-    if not Path(ASKPASS).is_file() or not os.access(ASKPASS, os.X_OK):
-        raise ValueError("Graphical SSH password dialog is unavailable")
     if not (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
         raise ValueError("A graphical desktop is required")
+    if not Path(ASKPASS).is_file() or not os.access(ASKPASS, os.X_OK):
+        raise ValueError("Graphical SSH password dialog is unavailable")
 
     env = os.environ.copy()
     env["SSH_ASKPASS"] = ASKPASS

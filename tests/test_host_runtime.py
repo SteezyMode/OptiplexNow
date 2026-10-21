@@ -92,9 +92,10 @@ class HostRuntimeTests(unittest.TestCase):
 
     def prepare(self, gpu="amd"):
         folder = self.input_root / ("bundle-" + gpu)
-        host_stage.stage(folder, host_stage.make_bundle(
-            PLAN, digest=DIGEST, render_node="/dev/dri/renderD128",
-            gpu_vendor=gpu))
+        if not folder.exists():
+            host_stage.stage(folder, host_stage.make_bundle(
+                PLAN, digest=DIGEST, render_node="/dev/dri/renderD128",
+                gpu_vendor=gpu))
         tx.prepare(folder, self.workspace)
         return folder
 

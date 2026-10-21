@@ -44,6 +44,10 @@ static void report_complete(HostSetupUI *ui, const char *message)
     if (ui->closing)
         return;
     gtk_label_set_text(GTK_LABEL(ui->status), message);
+    gtk_window_set_title(GTK_WINDOW(ui->window),
+        strstr(message, "COMPLETE.") ?
+        "OptiPlex NOW | Server Review Complete" :
+        "OptiPlex NOW | Server Review Incomplete");
     gtk_widget_set_sensitive(ui->run_button, TRUE);
 }
 
@@ -138,6 +142,10 @@ static void on_window_destroy(GtkWidget *window, gpointer data)
 
 int main(int argc, char **argv)
 {
+    /* Useful for an actual end-to-end installed-package GUI check. */
+    gboolean auto_check = argc == 2 && strcmp(argv[1], "--check-on-open") == 0;
+    if (auto_check)
+        argc = 1;
     gtk_init(&argc, &argv);
 
     HostSetupUI *ui = g_new0(HostSetupUI, 1);
@@ -200,6 +208,8 @@ int main(int argc, char **argv)
                              G_CALLBACK(gtk_widget_destroy), ui->window);
 
     gtk_widget_show_all(ui->window);
+    if (auto_check)
+        on_check_clicked(GTK_BUTTON(ui->run_button), ui);
     gtk_main();
     return 0;
 }

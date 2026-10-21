@@ -34,6 +34,9 @@ jobs:
           test "$version" != "$GITHUB_REF_NAME"
           make check-process
           make check-presets
+          make check-config
+          make check-wolf-pairing
+          make check-wolf-transport
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

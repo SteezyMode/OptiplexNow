@@ -80,11 +80,18 @@ and an ownership manifest. It does **not** install or run Wolf. No `apply`,
 
 This first pilot assumes NVIDIA, an explicitly chosen render device, a
 preverified immutable Wolf registry SHA256 image digest, Docker/Compose and
-one manually reviewable Wolf service. Upstream Wolf requires privileged
-access to the host Docker socket to spawn its application containers.
-The template records this requirement but **is not approved for deployment**.
-A restricted host broker and clean installation/rollback remain essential
-before customer distribution.
+one manually reviewable Wolf service. After checking upstream's current
+[Wolf quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html),
+the prototype now selects the **manual NVIDIA driver-volume method** rather
+than the less-stable Container Toolkit method. It declares an external,
+dedicated `now-nvidia-driver-vol` volume and the required NVIDIA devices.
+It **does not populate the volume**: driver-volume construction needs a
+trusted/pinned Dockerfile and separate verification that the volume matches
+the current host driver. Rebuilding after NVIDIA driver updates is an
+explicit unresolved host-upgrade requirement, never an automatic volume wipe.
+Wolf also requires administrative host Docker-socket access to spawn
+application containers, so deploying it remains a security and hardware
+acceptance gate, not something clients may authorize themselves.
 
 Example with an actual verified digest and explicitly selected render node:
 
@@ -104,8 +111,9 @@ The new directory contains `compose.yaml`, `manifest.json`,
 `README.txt` and an initially empty `wolf/` configuration directory.
 
 The Compose definition is JSON-formatted YAML and follows Wolf's upstream
-NVIDIA Container Toolkit topology: host networking, device and udev mounts,
-explicit render node and a Docker socket mount. To reduce accidental
+NVIDIA manual driver-volume topology: host networking, external driver volume,
+NVIDIA/DRM/input devices and udev mounts, an explicit render node and a
+Docker socket mount. To reduce accidental
 deployment, its service is hidden behind an inactive Compose profile,
 `pull_policy=never`, `restart=no` and a unique Compose project; these
 settings are not a security boundary for a person who deliberately enables
@@ -121,6 +129,39 @@ Compose grammar without talking to the daemon.
 
 Reference: [Wolf upstream quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
 and [Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/).
+
+## Prototype configuration transactions (no container activation)
+
+`server/host_transaction.py` manages **configuration generations only** in a
+private workspace that must be a direct child of `/tmp`. It is intentionally
+unable to write to `/etc` or `/var/lib`, install system dependencies, invoke
+Docker, or start/stop Wolf. An operational host installer still needs a
+separately reviewed, privileged backend and hardware validation.
+
+Given a staged review bundle, `--prepare` creates owner-marked generations,
+a `current.json` pointer, and a separate persistent `wolf/` directory.
+A second prepare of the same bundle is idempotent. A new generation becomes
+active through atomic pointer replacement. `--rollback` returns to the
+previous **configuration** generation without deleting saved Wolf data or
+Docker volumes. It does not roll back a running Wolf container.
+
+```sh
+python3 server/host_transaction.py --prepare /tmp/now-wolf-review --workspace /tmp/now-host-fixture
+python3 server/host_transaction.py --rollback --workspace /tmp/now-host-fixture
+```
+
+The inputs must match the known staging template, including manual NVIDIA
+volume strategy. Invalid or altered bundles and foreign directories fail
+closed. Lock files prevent simultaneous modifications, and the journal remains
+available for manual investigation if an early write is interrupted. This is
+not a security boundary against a local administrator with access to the
+workspace.
+
+This is **real filesystem transaction code**, not a fully functioning Wolf
+installer. Existing server ports remain occupied, no second Wolf instance
+is allowed to start, and no actual NVIDIA volume provisioning, Docker Compose
+activation, host authorization or live streaming verification is implemented.
+Tests run entirely in disposable fixtures, including failures and rollback.
 
 ## Initial supported scope
 

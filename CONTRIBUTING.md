@@ -40,6 +40,12 @@ A shared `.clang-format` defines four-space C indentation and a 100-column targe
 
 The active [six-item Beta 1 engineering register](docs/PRODUCT.md#six-item-progress-register) is applied within existing product milestones. Continue extracting one narrow responsibility per PR and put behavior tests next to the owning module. Any worker result must return to the GTK main context, respect cancellation and dialog lifetime, and be checked against the intended client identity. Keep formatting-only changes out of behavioral PRs. Sanitizers belong to a separately tested diagnostic target, not a surprise change to release build flags.
 
+## Onboarding protocol integration tests
+
+The offline `tests/test_onboarding_flow.py` checks the real Tailscale, SSH and Wolf **helper chain** with external service executables replaced by stand-ins. Run `python3 -m unittest discover -s tests -p 'test_onboarding_flow.py' -v`. It needs Python 3 and `ssh-keygen` from OpenSSH, but does not need a Tailscale account, Docker, a host or privileges. Every fake executable is confined to an automatically deleted test directory.
+
+This does not automate the GTK setup wizard or authenticate a real server. CI GUI/package tests and the physical Beta 1 acceptance plan are separate requirements. Never reuse the fake commands outside this disposable test.
+
 ## Local build
 
 Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Python 3, GTK3/fontconfig headers, OpenSSL headers, curl, Pillow and Xvfb/test GUI dependencies. A clean build downloads two fonts from pinned upstream revisions with integrity and size verification.

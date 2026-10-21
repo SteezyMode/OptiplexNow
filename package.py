@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import shutil, subprocess
+import os, re, shutil, subprocess
+
+# Tagged releases use the committed version. PR validation can supply a
+# distinct Debian version so installation is not confused with a release.
+DEFAULT_VERSION = "1.16.1"
+version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
+if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
+    raise SystemExit("Invalid NOW_PACKAGE_VERSION")
+
 root=Path(__file__).resolve().parent
 out=root/'dist'; out.mkdir(exist_ok=True)
-pkg=root/'build/pkg/optiplex-now_1.16.1_amd64'
+pkg=root/f'build/pkg/optiplex-now_{version}_amd64'
 if pkg.exists(): shutil.rmtree(pkg)
 for sub in ('DEBIAN','usr/bin','usr/lib/optiplex-now','usr/share/applications','usr/share/doc/optiplex-now'):
  (pkg/sub).mkdir(parents=True,exist_ok=True)
@@ -53,11 +61,11 @@ StartupNotify=true
 ''')
 (pkg/'usr/share/applications/optiplex-desk.desktop').write_text((pkg/'usr/share/applications/optiplex-now.desktop').read_text()+'NoDisplay=true\n')
 shutil.copy2(root/'OFL-1.1.txt',pkg/'usr/share/doc/optiplex-now/OFL-1.1.txt')
-(pkg/'DEBIAN/control').write_text('''Package: optiplex-now
+(pkg/'DEBIAN/control').write_text(f'''Package: optiplex-now
 Replaces: optiplex-desk
 Conflicts: optiplex-desk
 Provides: optiplex-desk
-Version: 1.16.1
+Version: {version}
 Section: utils
 Priority: optional
 Architecture: amd64
@@ -67,4 +75,4 @@ Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, direct Steam streaming, live hardware info and encrypted backup.
 ''')
-subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/'OptiPlex-Now_1.16.1_amd64.deb')],check=True)
+subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/f'OptiPlex-Now_{version}_amd64.deb')],check=True)

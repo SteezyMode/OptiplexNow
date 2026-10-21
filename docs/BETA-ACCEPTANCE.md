@@ -1,6 +1,6 @@
 # Beta 1 acceptance
 
-Status: test plan. An unchecked item is **not** validated by GitHub CI.
+Status: test plan for the **older, narrower private Linux client beta**, not the three-pillar public product alpha. An unchecked item is **not** validated by GitHub CI. The future [Public alpha](PUBLIC-ALPHA.md) also requires a managed gaming host, Jellyfin, VPN-isolated qBittorrent, admin-only downloads/file management and restricted member playback. Do not conflate these release gates.
 
 ## Scope
 

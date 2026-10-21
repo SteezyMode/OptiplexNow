@@ -15,6 +15,9 @@ test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
 test -x /usr/lib/optiplex-now/now-ssh-askpass
 test -r /usr/lib/optiplex-now/ssh-authorize.py
+test -x /usr/lib/optiplex-now/now-host-setup
+test -r /usr/lib/optiplex-now/host_preflight.py
+test -r /usr/lib/optiplex-now/host_plan.py
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop
@@ -24,4 +27,5 @@ NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_gtk.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_fresh_layout.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_instance.sh
 NOW_ASKPASS=/usr/lib/optiplex-now/now-ssh-askpass bash tests/smoke_ssh_askpass.sh
+bash tests/smoke_host_readiness.sh
 echo "NOW installed-package acceptance passed: Debian install, desktop files, GUI and lock."

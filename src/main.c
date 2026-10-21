@@ -26,6 +26,7 @@
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
 #include "tailscale_async.h"
+#include "wizard_network.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -1873,8 +1874,8 @@ typedef struct {
     GtkWidget *find_button, *tailscale_button, *service_inputs[3];
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
-    guint tailscale_poll_id, status_timeout_id, discovery_timeout_id;
-    GCancellable *tailscale_cancel, *discovery_cancel;
+    guint tailscale_poll_id;
+    NowWizardNetwork *network;
 } Wizard;
 
 static void wizard_unref(Wizard *wizard)
@@ -1907,62 +1908,8 @@ static void wizard_save(Wizard*c){
  /* Optional services use user-entered URLs, never reference-host ports. */
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
-static gboolean wizard_status_timeout(gpointer data)
-{
-    Wizard *wizard = data;
-    wizard->status_timeout_id = 0;
-    if (wizard->tailscale_cancel) {
-        g_cancellable_cancel(wizard->tailscale_cancel);
-    }
-    return G_SOURCE_REMOVE;
-}
-
-static gboolean wizard_discovery_timeout(gpointer data)
-{
-    Wizard *wizard = data;
-    wizard->discovery_timeout_id = 0;
-    if (wizard->discovery_cancel) {
-        g_cancellable_cancel(wizard->discovery_cancel);
-    }
-    return G_SOURCE_REMOVE;
-}
-
-static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointer data)
-{
-    (void)source;
-    Wizard *wizard = data;
-    GError *error = NULL;
-    char *status = now_tailscale_run_finish(result, &error);
-    g_clear_object(&wizard->tailscale_cancel);
-    if (wizard->status_timeout_id) {
-        g_source_remove(wizard->status_timeout_id);
-        wizard->status_timeout_id = 0;
-    }
-
-    if (wizard->assistant && !wizard->closing) {
-        const char *message = "TAILSCALE STATUS UNAVAILABLE — CHECK CONNECTION";
-        const char *action = "CONNECT TAILSCALE";
-        if (status) {
-            g_strstrip(status);
-            if (strcmp(status, "CONNECTED") == 0) {
-                message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
-                action = "TAILSCALE CONNECTED";
-            } else if (strcmp(status, "NOT_INSTALLED") == 0) {
-                message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
-                action = "INSTALL TAILSCALE";
-            } else if (strcmp(status, "SIGN_IN") == 0) {
-                message = "TAILSCALE NEEDS SIGN-IN — CONNECT TAILSCALE";
-            } else if (strcmp(status, "NOT_CONNECTED") == 0) {
-                message = "TAILSCALE DISCONNECTED — CONNECT TAILSCALE";
-            }
-        }
-        gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
-        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
-    }
-    g_free(status);
-    g_clear_error(&error);
-    wizard_unref(wizard);
-}
+static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
+                                  const char *reply, const GError *error);
 
 static gboolean wizard_tailscale_poll(gpointer data)
 {
@@ -1976,15 +1923,11 @@ static gboolean wizard_tailscale_poll(gpointer data)
                            "INSTALLING TAILSCALE — APPROVE THE SYSTEM PASSWORD PROMPT");
         return G_SOURCE_CONTINUE;
     }
-    if (wizard->tailscale_cancel) {
-        return G_SOURCE_CONTINUE;
+    if (!now_wizard_network_busy(wizard->network, NOW_WIZARD_NET_STATUS)) {
+        now_wizard_network_start(
+            wizard->network, NOW_WIZARD_NET_STATUS,
+            "/usr/lib/optiplex-now/tailscale-status.py");
     }
-
-    wizard->tailscale_cancel = g_cancellable_new();
-    wizard->references++;
-    wizard->status_timeout_id = g_timeout_add_seconds(9, wizard_status_timeout, wizard);
-    now_tailscale_run_async("/usr/lib/optiplex-now/tailscale-status.py",
-                            wizard->tailscale_cancel, wizard_tailscale_done, wizard);
     return G_SOURCE_CONTINUE;
 }
 static void wizard_service_check(void*w,void*p);
@@ -2004,36 +1947,65 @@ static void wizard_prepare(void*a,void*page,void*p){
 static void picker_selection_changed(void *combo,void *accept){
  gtk_widget_set_sensitive(accept,gtk_combo_box_get_active(GTK_COMBO_BOX(combo))>=0);
 }
-static void wizard_discovery_done(GObject *source, GAsyncResult *result, gpointer data)
+static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
+                                  const char *reply, const GError *error)
 {
-    (void)source;
-    Wizard *wizard = data;
-    GError *error = NULL;
-    char *output = now_tailscale_run_finish(result, &error);
-    g_clear_object(&wizard->discovery_cancel);
-    if (wizard->discovery_timeout_id) {
-        g_source_remove(wizard->discovery_timeout_id);
-        wizard->discovery_timeout_id = 0;
-    }
-
-    if (!wizard->assistant || wizard->closing) {
-        g_free(output);
-        g_clear_error(&error);
+    Wizard *wizard = context;
+    /* Nested GTK dialogs may destroy the assistant. Keep Wizard valid
+     * until this handler returns, independently from the network job. */
+    wizard->references++;
+    if (wizard->closing || !wizard->assistant) {
         wizard_unref(wizard);
         return;
     }
+    if (kind == NOW_WIZARD_NET_STATUS) {
+        const char *message = "TAILSCALE STATUS UNAVAILABLE — CHECK CONNECTION";
+        const char *action = "CONNECT TAILSCALE";
+        if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)) {
+            message = "TAILSCALE CHECK TIMED OUT — RETRY CONNECTION";
+        } else if (!error && reply) {
+            if (g_str_has_prefix(reply, "CONNECTED")) {
+                message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
+                action = "TAILSCALE CONNECTED";
+            } else if (g_str_has_prefix(reply, "NOT_INSTALLED")) {
+                message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
+                action = "INSTALL TAILSCALE";
+            } else if (g_str_has_prefix(reply, "SIGN_IN")) {
+                message = "TAILSCALE NEEDS SIGN-IN — CONNECT TAILSCALE";
+            } else if (g_str_has_prefix(reply, "NOT_CONNECTED")) {
+                message = "TAILSCALE DISCONNECTED — CONNECT TAILSCALE";
+            }
+        }
+        gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
+        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
+        wizard_unref(wizard);
+        return;
+    }
+    if (kind != NOW_WIZARD_NET_DISCOVERY) {
+        wizard_unref(wizard);
+        return;
+    }
+
     gtk_widget_set_sensitive(wizard->find_button, TRUE);
+    int current_page = gtk_assistant_get_current_page(GTK_ASSISTANT(wizard->assistant));
+    GtkWidget *current = gtk_assistant_get_nth_page(
+        GTK_ASSISTANT(wizard->assistant), current_page);
+    if (current != wizard->server_page) {
+        wizard_unref(wizard);
+        return;
+    }
 
     NowTailscaleServer servers[NOW_TAILSCALE_MAX_SERVERS] = {0};
-    int count = output ? now_tailscale_parse_servers(
-        output, servers, NOW_TAILSCALE_MAX_SERVERS) : -1;
-    g_free(output);
-    g_clear_error(&error);
-
+    int count = (!error && reply)
+        ? now_tailscale_parse_servers(reply, servers, NOW_TAILSCALE_MAX_SERVERS)
+        : -1;
     if (count <= 0) {
-        gtk_label_set_text(GTK_LABEL(wizard->notice), count < 0
-            ? "COULD NOT LIST DEVICES — CHECK TAILSCALE OR ENTER ADDRESS"
-            : "NO OTHER DEVICES FOUND — ENTER SERVER ADDRESS MANUALLY");
+        const char *message = count == 0
+            ? "NO OTHER DEVICES FOUND — ENTER SERVER ADDRESS MANUALLY"
+            : (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
+                ? "SERVER SEARCH TIMED OUT — RETRY OR ENTER ADDRESS"
+                : "COULD NOT LIST DEVICES — CHECK TAILSCALE OR ENTER ADDRESS";
+        gtk_label_set_text(GTK_LABEL(wizard->notice), message);
         wizard_unref(wizard);
         return;
     }
@@ -2075,16 +2047,18 @@ static void wizard_discovery_done(GObject *source, GAsyncResult *result, gpointe
 
 static void find_server(Wizard *wizard)
 {
-    if (wizard->closing || !wizard->assistant || wizard->discovery_cancel) {
+    if (wizard->closing || !wizard->assistant ||
+        now_wizard_network_busy(wizard->network, NOW_WIZARD_NET_DISCOVERY)) {
         return;
     }
-    wizard->discovery_cancel = g_cancellable_new();
-    wizard->references++;
-    wizard->discovery_timeout_id = g_timeout_add_seconds(9, wizard_discovery_timeout, wizard);
     gtk_widget_set_sensitive(wizard->find_button, FALSE);
     gtk_label_set_text(GTK_LABEL(wizard->notice), "FINDING TAILSCALE DEVICES...");
-    now_tailscale_run_async("/usr/lib/optiplex-now/find-servers.py",
-                            wizard->discovery_cancel, wizard_discovery_done, wizard);
+    if (!now_wizard_network_start(
+        wizard->network, NOW_WIZARD_NET_DISCOVERY,
+        "/usr/lib/optiplex-now/find-servers.py")) {
+        gtk_widget_set_sensitive(wizard->find_button, TRUE);
+        gtk_label_set_text(GTK_LABEL(wizard->notice), "SERVER SEARCH FAILED TO START");
+    }
 }
 static void wizard_action(void*w,void*p){
  Wizard*c=p;
@@ -2168,20 +2142,8 @@ static void wizard_destroy(void *widget, void *data)
         g_source_remove(wizard->tailscale_poll_id);
         wizard->tailscale_poll_id = 0;
     }
-    if (wizard->status_timeout_id) {
-        g_source_remove(wizard->status_timeout_id);
-        wizard->status_timeout_id = 0;
-    }
-    if (wizard->discovery_timeout_id) {
-        g_source_remove(wizard->discovery_timeout_id);
-        wizard->discovery_timeout_id = 0;
-    }
-    if (wizard->tailscale_cancel) {
-        g_cancellable_cancel(wizard->tailscale_cancel);
-    }
-    if (wizard->discovery_cancel) {
-        g_cancellable_cancel(wizard->discovery_cancel);
-    }
+    now_wizard_network_close(wizard->network);
+    wizard->network = NULL;
     wizard_wolf_label = NULL;
     for (int i = 0; i < 3; i++) {
         service_labels[i] = NULL;
@@ -2189,8 +2151,14 @@ static void wizard_destroy(void *widget, void *data)
     wizard_unref(wizard);
 }
 static void on_wizard(void*w,void*p){(void)w;(void)p;
+ if (active_setup_wizard) {
+     gtk_window_present(GTK_WINDOW(active_setup_wizard));
+     return;
+ }
  Wizard*c=calloc(1,sizeof *c);if(!c)return;
  c->references=1;
+ c->network=now_wizard_network_new(wizard_network_result,c,9000);
+ if(!c->network){free(c);return;}
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
  active_setup_wizard=a;

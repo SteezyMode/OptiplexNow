@@ -1,425 +1,68 @@
-# Future NOW Host installer
-
-**Status:** a guarded clean AMD/Intel/NVIDIA installation pilot is implemented in development source; the complete turnkey host setup is not shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
-
-## Clean-host pilot: real Docker installation (development package)
-
-\`server/host_install.py\` and the **Advanced Clean-Host Install** section in
-the installed native Server Setup window implement a first genuine, opt-in
-Wolf installation operation. It is a **narrow developer/alpha pilot**, not
-a turnkey host setup. The Python helper can actually pull an immutable Wolf
-image and start the dedicated \`optiplex-now-host-pilot\` Compose project.
-
-This pilot accepts **Ubuntu 24.04 or Pop!_OS 24.04 on x86-64**, with an
-explicitly verified **AMD, Intel or NVIDIA** DRM render node. A graphics device's
-presence is not evidence of encoder readiness. The installer requires
-Docker and Compose already installed, \`/dev/uinput\`, \`/dev/uhid\`, udev,
-sufficient disk/memory, usable local Docker access, no Wolf port binds,
-no prior NOW-managed host directory, and no existing Compose project with
-the dedicated name. Missing prerequisites **block installation**, rather
-than modifying drivers, boot configuration or other services.
-
-The GUI checks eligibility first. Only a candidate host can enable
-the Install button. The owner must provide a previously verified upstream
-\`sha256:\` Wolf image digest, explicitly accept the change in a GTK
-confirmation dialog, and authenticate through the OS's \`pkexec\` policy
-agent. The privileged installer then repeats all host checks before doing
-anything. It is not accessible through a remote management endpoint.
-
-On a candidate, the installer creates a private
-\`/var/lib/optiplex-now/host\` directory containing an immutable-image
-Compose file, dedicated \`wolf/\` persistent state, ownership descriptor
-and a durably written phase journal. It pulls only the specified digest,
-starts one dedicated Wolf service and checks the exact full container ID,
-image, Compose labels and running state. The reported result is
-\`running_stream_unverified\`; video, audio, controller input, pairing,
-reboot/recovery and reliable GPU encoding are **not yet certified**.
-Interrupted or incomplete operations leave an auditable journal and block
-unattended repeats. The pilot has no uninstall, repair, upgrade or
-automatic cleanup; it never runs \`docker compose down\`, adopts unrelated
-services or deletes existing volumes.
-
-**NVIDIA pilot:** Pop!_OS 24.04 NVIDIA Edition is the recommended
-first NVIDIA test platform, but it remains only a host-driver baseline. NOW
-detects the loaded kernel driver and its exact version, checks that DRM
-modesetting is enabled, verifies the GPU render node and required character
-devices, and **refuses** to proceed when any prerequisite is missing.
-
-The owner must enter (1) a verified immutable Wolf OCI digest and (2) the
-64-hex SHA256 of NVIDIA's official .run installer for the installed kernel
-driver version. NOW's bundled, upstream-derived MIT-licensed Dockerfile
-downloads that exact version from NVIDIA over HTTPS and checks the SHA256
-*before executing the installer in the Docker build*. NOW then creates a
-new named Docker volume containing the userspace driver files. Its name is
-bound to the version and checksum; older and foreign Docker volumes are
-never adopted, overwritten, or automatically deleted. It does not install
-drivers on the host, run modprobe, modify boot configuration, or grant the
-desktop user Docker access. Failed operations leave owner state for review.
-
-**Important remaining gate:** this is a first-install path only. It has not
-been verified on physical GPU hardware. A host NVIDIA driver update can
-invalidate an installed Wolf driver volume. The current build does not
-automatically migrate the live Compose service to a fresh volume or provide
-safe repair/rollback. Do not claim upgrade/reboot reliability or commercial
-alpha readiness until driver-change recovery and real Moonlight streaming
-have been tested. The Dockerfile's Ubuntu 22.04 base and apt repositories
-are not yet image-digest/snapshot pinned, so this build is version-specific
-and checksummed, but is not a byte-for-byte reproducible build.
-
-All applicable test-package checks run on temporary CI runner machines.
-CI runs the real installed --check and starts the GTK screen, but does
-**not** invoke --install or certify a successful stream. Never test
---install on an existing working server. Even on Pop!_OS, kernel driver
-updates and Docker socket privileges require independent operational review.
-
-## First implemented host preflight (source-only)
-
-`server/host_preflight.py` provides a read-only, unprivileged host inventory.
-This is **not** a server installation action and is not included in the v1.17.0 client .deb. From a checked-out repository on the intended host:
-
-```sh
-python3 server/host_preflight.py
-python3 server/host_preflight.py --json
-```
-
-It reads local OS/architecture, PCI graphics vendors and render nodes, controller devices, the NVIDIA kernel version and DRM mode setting where relevant, memory, disk availability and local socket tables. It also invokes `docker info --format '{{.ServerVersion}}'` with a three-second timeout when the Docker CLI is present. This is a read-only daemon query; it does not launch containers, inspect private volume data, modify memberships or elevate privileges. No Docker access means an attention state, not permission expansion.
-
-The reported Wolf TCP/UDP ports are based on upstream's documented defaults: 47984/tcp, 47989/tcp, 48010/tcp, 47999/udp, 48100/udp and 48200/udp. A detected socket bind is a **potential conflict**, not evidence that the bound service is incompatible or unauthorized. An empty socket table does not establish remote reachability, firewall rules or future availability. The scanner never opens sockets or probes the network.
-
-The first host pilot is a **candidate Ubuntu 24.04 amd64 configuration**, not an already-validated support promise. Other distributions stay unknown until tested. Missing controller nodes, old NVIDIA driver and known port binds require attention. Encoder support, actual GPU container access, Wolf readiness and successful video/audio/controller streaming are **always unknown** until separate real host testing.
-
-The JSON contract is versioned (`schema_version=1`) and contains only bounded operational findings, no user file contents, SSH keys, host names, network addresses, auth tokens or full container lists. Each check uses `pass`, `attention`, `unsupported`, or `unknown`; `overall` is `unsupported`, `requires_attention`, or `unknown`. This stage deliberately never reports `compatible` or `verified_streaming=true`. A subsequent plan/apply component must not treat a clean preflight as authorization to install or alter services.
-
-Native Python tests construct disposable filesystem fixtures, exercise parsing and failures, assert no fixture modification, and run the JSON CLI. Tests run in normal CI; physical GPU and encoder acceptance is still outstanding. Wolf's installation requirements should be checked again when dependency versions are pinned.
-
-## First installation plan preview (source-only)
-
-The next step after preflight is `server/host_plan.py`. It consumes the
-versioned, redacted `host_preflight.py` results and generates a deterministic
-**non-executable** installation plan. It does not configure the host or generate
-a runnable Compose file. Both tools remain **development source only**, not
-features included in the v1.17.0 client .deb.
-
-From the checked-out repository on a Linux host:
-
-```sh
-python3 server/host_plan.py
-python3 server/host_plan.py --json
-python3 server/host_preflight.py --json > scan.json
-python3 server/host_plan.py --preflight-json scan.json --json
-```
-
-A saved scan is a diagnostic record. Avoid sharing it without reviewing its
-contents. The planner reads a maximum 64 KiB report and accepts only the
-expected scanner schema and enumerated check states; it does not propagate
-arbitrary diagnostic text into its output.
-
-The preview describes the **candidate** Ubuntu 24.04 x86-64/NVIDIA,
-single-owner Wolf streaming layout, proposed managed config and state roots,
-Docker project labels, required components, network ports, and lifecycle
-sequence. Jellyfin is optional. Every prospective mutating operation is
-marked *not implemented*. The plan always returns `may_apply=false` and
-`decision=blocked`, even if every scanner check passes.
-
-Why it always blocks: no Wolf image digest has been pinned and verified, real
-encoder and streaming tests are incomplete, the least-privilege enrollment
-broker is unimplemented, and rollback has not been validated on an independent
-clean host. No implicit Docker group/sudo permission, network configuration,
-port reassignment or host authorization is ever requested by these tools.
-
-**Existing host behavior:** occupied Wolf ports are a known potential conflict.
-On a reference host with Wolf already installed, the correct output is a
-blocked plan demanding explicit owner review, not another Wolf instance, a
-container restart, silent adoption, or a software downgrade. The scanner
-does not know which process owns the port; ownership cannot be inferred
-from port occupation. Pop!_OS 24.04 remains an unqualified distro until
-tested. The optional host-import route remains separate future work.
-
-Tests assert stable contract parsing, hostile/duplicate/missing checks,
-unknown encoder state, occupied-port behavior, preservation of unmanaged data,
-and no mutation of a disposable input file. These run in Python CI along
-with the earlier preflight suite.
-
-## Compose deployment prototype (source only, never auto-run)
-
-`server/host_stage.py` is the first concrete Docker Compose staging
-artifact. It builds on the read-only preflight and blocked installation
-plan, generating a **review-only** Wolf NVIDIA Container Toolkit configuration
-and an ownership manifest. It does **not** install or run Wolf. No `apply`,
-`start`, `repair` or `uninstall` command exists.
-
-This prototype requires an explicitly chosen GPU backend and render device,
-an operator-verified immutable Wolf registry SHA256 image digest, Docker/Compose
-and one manually reviewable Wolf service. Wolf's
-[quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
-supports AMD and Intel through standard DRM device access, while NVIDIA uses
-the manual driver-volume method rather than the less-stable Container Toolkit.
-Only NVIDIA requires the external `now-nvidia-driver-vol` volume and
-NVIDIA-specific device nodes.
-It **does not populate the volume**: driver-volume construction needs a
-trusted/pinned Dockerfile and separate verification that the volume matches
-the current host driver. Rebuilding after NVIDIA driver updates is an
-explicit unresolved host-upgrade requirement, never an automatic volume wipe.
-Wolf also requires administrative host Docker-socket access to spawn
-application containers, so deploying it remains a security and hardware
-acceptance gate, not something clients may authorize themselves.
-
-Example with an actual verified digest and explicitly selected render node:
-
-```sh
-python3 server/host_stage.py \
-  --output /tmp/now-wolf-review \
-  --image-digest sha256:REPLACE_WITH_VERIFIED_64_LOWERCASE_HEX_DIGITS \
-  --render-node /dev/dri/renderD129 --gpu nvidia
-```
-
-The example digest is a placeholder, not a valid image. Reviewers must verify
-the digest against the correct Wolf image/architecture and inspect their
-actual render device first. The script performs only bounded read-only
-host inspection and **writes files into a new, explicitly selected staging
-directory**. It refuses overwrites, symlink destinations and system folders.
-The new directory contains `compose.yaml`, `manifest.json`,
-`README.txt` and an initially empty `wolf/` configuration directory.
-
-The Compose definition is JSON-formatted YAML and follows Wolf's upstream
-vendor-specific topology: host networking, DRM/input/udev devices,
-an explicit render node and the Docker socket mount; NVIDIA additionally
-requires its external driver volume and NVIDIA device nodes. To reduce accidental
-deployment, its service is hidden behind an inactive Compose profile,
-`pull_policy=never`, `restart=no` and a unique Compose project; these
-settings are not a security boundary for a person who deliberately enables
-the profile. No separate container named `wolf` is created during staging,
-and no existing daemon resource is adopted or restarted.
-
-Run `docker compose -f compose.yaml config --quiet` **only for syntax
-validation**. It does not prove that the Wolf image is valid, the GPU encoder
-works, a stream starts, or that server authorization is secure. Automated
-tests inspect the generated model, protect existing files, enforce
-strict inputs and (where Docker Compose is present) validate the actual
-Compose grammar without talking to the daemon.
-
-Reference: [Wolf upstream quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
-and [Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/).
-
-## AMD/Intel deployment profiles and multi-GPU selection
-
-Wolf's official quickstart provides a shared Intel/AMD Docker path based
-on `/dev/dri`, `/dev/uinput`, `/dev/uhid` and udev mounts. It requires
-no NVIDIA driver-volume creation. This reduces installation complexity,
-but does not establish hardware encoder compatibility or quality.
-
-`server/host_stage.py` now requires an explicit
-`--gpu nvidia|amd|intel` and `--render-node /dev/dri/renderD###`.
-When a sysfs mapping is readable, it rejects selecting a render node
-belonging to another GPU vendor. Missing mappings are unresolved, not
-evidence of compatibility. The resulting manifest names the selected
-backend; `host_transaction.py` validates that identity, Compose contents
-and vendor-specific mounts before preparing a generation.
-
-Example AMD staging (still nondeploying):
-
-```sh
-python3 server/host_stage.py \
-  --output /tmp/now-wolf-review-amd \
-  --image-digest sha256:REPLACE_WITH_VERIFIED_64_LOWERCASE_HEX_DIGITS \
-  --render-node /dev/dri/renderD128 --gpu amd
-```
-
-Intel uses `--gpu intel` and its own verified render node. On a dual-GPU
-host, GPU render node numbering varies: never infer the selected vendor
-from the number alone. All profiles still require clean GPU hardware
-validation, video/audio/input checks and an authorized host installer.
-
-## Prototype configuration transactions (no container activation)
-
-`server/host_transaction.py` manages **configuration generations only** in a
-private workspace that must be a direct child of `/tmp`. It is intentionally
-unable to write to `/etc` or `/var/lib`, install system dependencies, invoke
-Docker, or start/stop Wolf. An operational host installer still needs a
-separately reviewed, privileged backend and hardware validation.
-
-Given a staged review bundle for any supported GPU backend, `--prepare` creates owner-marked generations,
-a `current.json` pointer, and a separate persistent `wolf/` directory.
-A second prepare of the same bundle is idempotent. A new generation becomes
-active through atomic pointer replacement. `--rollback` returns to the
-previous **configuration** generation without deleting saved Wolf data or
-Docker volumes. It does not roll back a running Wolf container.
-
-```sh
-python3 server/host_transaction.py --prepare /tmp/now-wolf-review --workspace /tmp/now-host-fixture
-python3 server/host_transaction.py --rollback --workspace /tmp/now-host-fixture
-```
-
-The inputs must match the known staging template, including manual NVIDIA
-volume strategy. Invalid or altered bundles and foreign directories fail
-closed. Lock files prevent simultaneous modifications, and the journal remains
-available for manual investigation if an early write is interrupted. This is
-not a security boundary against a local administrator with access to the
-workspace.
-
-This is **real filesystem transaction code**, not a fully functioning Wolf
-installer. Existing server ports remain occupied, no second Wolf instance
-is allowed to start, and no actual NVIDIA volume provisioning, Docker Compose
-activation, host authorization or live streaming verification is implemented.
-Tests run entirely in disposable fixtures, including failures and rollback.
-
-## First-start controller and Docker boundary (simulated, not shipped)
-
-`server/host_docker.py` provides a small local Docker adapter. All commands
-use argument arrays without shell interpolation, the system Unix socket
-(`/var/run/docker.sock`), a fixed Compose project and service, bounded
-timeouts, and errors that do not print daemon output. Docker context and
-host environment overrides are excluded. Only expected immutable Wolf image
-references and NOW driver volume names are accepted. The adapter inventories
-existing project containers, verifies Docker/Compose ownership labels and
-inspects running/health status. If cleanup is ever necessary, it targets
-an explicitly verified container ID, **never** `docker compose down` or
-a global volume removal.
-
-`server/host_runtime.py` implements the first-start state machine against an
-injected Docker interface. Simulated approval must come from the
-local `host_owner.py` authority, which verifies Linux kernel peer
-credentials, requires a host-controlled confirmation callback, and issues
-a one-use ticket bound to the workspace, operation and active generation.
-This is authenticated *local process identity*, not yet production-proof
-owner consent or a running privileged host service.
-The controller also requires a checksum-verified prepared configuration
-generation and fully passing
-preflight statuses, an empty Compose project, a locally cached pinned
-Wolf image and compatible GPU prerequisites. It writes an exclusive and
-durable `deployment.json` attempt journal before attempting startup.
-A successful mock start reports `started_unverified_stream`, **not**
-verified gaming, and does not modify the configuration-generation pointer.
-Any subsequent attempt is blocked until the previous journal is explicitly
-investigated.
-
-On a simulated start, an exact, full-length Docker container ID and pinned
-image must be verified and **durably recorded before cleanup is eligible**.
-Even a matching Compose project and NOW labels are insufficient on their own.
-A Compose start that errors before identity journaling can leave a partial
-container; that container is **not automatically deleted**, even if it looks
-like NOW. Once the exact ID is journaled, an unhealthy/stopped container can
-be removed only if its current full ID, image digest and labels still match
-and it remains the only project container. Otherwise leave all resources
-untouched with `manual_recovery_required`. A read-only
-`review_attempt` operation compares a journaled attempt to observed Docker
-state without restarting, removing or adopting anything. Interrupted attempts
-always require authenticated human/broker recovery; the simulator cannot
-unblock or overwrite its own journal. No media, game libraries, other containers
-or existing volumes are adopted, deleted, or changed.
-
-**Critical activation gate:** there is no public apply/start CLI or GTK
-integration for this controller, and `host_runtime.simulate_first_start`
-explicitly rejects the real `LocalDocker` adapter regardless of approval.
-All automated lifecycle tests inject a fake Docker backend. The real adapter
-has never been run against the reference host. In particular, NVIDIA
-driver-volume version attestation, live hardware-encoder verification,
-actual Wolf sessions and crash-safe end-to-end daemon recovery are not done.
-The source is a tested execution boundary and state machine for later
-review, **not a usable Wolf installer**. Production enabling requires a
-separate code review and an isolated supported physical host.
-
-This approach deliberately avoids adding a general-purpose container
-dashboard, CasaOS/Runtipi dependency, or shell scripts with uncontrolled
-system privileges.
-
-## Local owner authorization boundary (source-only, no live service)
-
-\`server/host_owner.py\` introduces a deliberately small Linux-local protocol
-for authorizing one **simulated** Wolf first-start. It uses \`AF_UNIX\` with
-kernel \`SO_PEERCRED\` to obtain peer UID/PID, rather than trusting a client
-JSON username or SSH identity. The configured owner UID must match; remote
-TCP connections are refused. A bounded, versioned single-request protocol
-accepts only \`start_wolf\`, the candidate workspace and the active generation.
-No generic Docker commands or arbitrary path operations are exposed.
-
-A **trusted local owner confirmation callback** is required and must return
-the literal Boolean \`True\` after verifying the operation, workspace and
-generation. Refusals, missing callbacks or exceptions cannot issue a grant.
-This callback belongs inside a future trusted host GUI/polkit broker and
-**must not** be selected or supplied by the requesting client.
-
-The authority issues a 60-second, 256-bit random, single-use ticket held in
-memory, bound to the peer's kernel UID/PID, operation, exact workspace and
-current generation. Consumption removes the ticket even on a mismatch;
-expired grants and stale configurations fail closed. No ticket is stored in
-a Docker label, user configuration, journal or long-term credential file.
-The bounded local handler responds once and redacts denial details.
-
-\`host_runtime.simulate_first_start\` now requires that ticket and invokes
-the authority to consume it before querying the simulated Docker adapter.
-The old forgeable \`owner_confirmed=True\`/caller-supplied approval dictionary
-is no longer accepted. Linux socket tests cover kernel peer credentials,
-mismatched UID, callback refusal, replay, expiration, incorrect generation,
-protocol injection, too-large requests and UNIX stream replies.
-
-**Security and usability limits:** the module has no installed Unix socket
-listener, systemd service, privilege elevation, GUI consent screen, owner
-registration, revocation workflow or Tailscale client-enrollment endpoint.
-It is an authorization *core*, not a deployed security boundary. A Linux UID
-identifies a local process but cannot distinguish legitimate consent from
-malware running as the same user. Future production authorization requires
-a correctly privileged service, an independently trusted interactive owner
-confirmation mechanism, and a documented threat model. No approval ticket
-enables actual Docker commands in this branch; the real Docker adapter remains
-blocked and the host installer is not shipped.
-
-## Initial supported scope
-
-Start with one explicitly supported Linux distribution and a verified hardware/driver matrix. Stream one Wolf application to one Moonlight device; optionally install Jellyfin with independent credentials. Add multi-desktop and multi-user features only after security and persistence gates pass.
-
-VPN, qBittorrent, slskd, music, Caddy and Studio are optional. They must not be installed automatically for basic gaming or video service access.
-
-## Installation contract
-
-1. **Preflight:** OS/architecture, network interfaces, GPU codec/encoder, driver stack, available storage, ports, Docker/runtime presence, filesystem permissions, existing services and conflict report. Never claim compatibility from a device name alone.
-2. **Plan:** show exact packages, images, paths, networks, ports, accounts, secrets and service interruptions before changes. Preserve unrelated resources.
-3. **Ownership:** use a dedicated managed namespace/root directory for manifests, configuration, state, backups and logs. Track service IDs and installed versions in a versioned manifest with ownership metadata, not incidental container names.
-4. **Deployment:** pin upstream images and install only selected services. Use explicit service dependency ordering and documented networks. No unreviewed privileged mounts or public admin endpoints.
-5. **Identity:** register host ownership, local restricted management agent and permitted actions. Pair Moonlight devices through host-local Wolf APIs, never direct remote access to Wolf/Docker sockets. Future device approval should require owner confirmation without repeated manual SSH.
-6. **Verification:** test that the service starts, a supported game/desktop stream launches with input and audio, optional media login works, and client status/health reports match observed state.
-7. **Lifecycle:** offer safe plan/apply/retry/repair/update/rollback/uninstall. Preserve personal media, games, profiles, pairings and backups by default. Clearly separate removing software from deleting user data.
-
-## Proposed organization
-
-Paths and identifiers below are **candidate conventions**, not installed artifacts:
-
-| Category | Candidate |
-| --- | --- |
-| Managed system configuration | `/etc/optiplex-now/host/` |
-| Persistent app-managed data | `/var/lib/optiplex-now/host/` |
-| Operator logs and diagnostics | systemd journal plus `/var/log/optiplex-now/` only when needed |
-| Agent executable | `/usr/libexec/optiplex-now/` or distribution-standard libexec path |
-| Versioned service manifest | `/var/lib/optiplex-now/host/manifest.json` |
-| Managed Docker/Compose objects | `optiplex-now.*` labels and explicit service IDs; never rely on fixed display names |
-
-Verify Debian conventions, permissions and backup semantics before adopting these paths. Secrets must be root/agent accessible only, absent from diagnostics and Git. User library paths must remain configurable and outside auto-deletion.
-
-## Host health contract
-
-A future host agent should return explicit versioned states for:
-
-- Reachability and trusted identity.
-- Wolf daemon health, API compatibility, available apps and active sessions.
-- GPU codec/encoder availability and resource pressure.
-- Optional media readiness and login endpoint.
-- Optional VPN gateway health, with separate tunnel/external-route verification if actually implemented.
-- Managed image versions, failed upgrades, migrations and pending repairs.
-
-**Running**, **healthy**, **connected**, **paired**, and **currently streaming** must remain different values. Missing healthchecks do not imply a healthy tunnel.
-
-## Existing host import
-
-A host with existing `music-vpn` Gluetun, Wolf, Jellyfin or qBittorrent cannot be assumed to follow managed naming or directory conventions. Provide a read-only inventory, explicit ownership selection and non-destructive adoption path. Otherwise use the existing setup without taking control of it. Do not rewrite container networks or volumes merely to standardize display names.
-
-## Acceptance before release
-
-- Disposable fresh-host install and clean removal, then repeat to prove idempotence.
-- Failed/partial install, rollback and retry without damaged data.
-- Upgrade across two supported pinned versions without lost settings or credentials.
-- Non-interference with separately installed and running unrelated services.
-- Least-privilege review of the pairing/management agent.
-- Fresh client can reach, pair with and use a working stream without the operator editing Compose or shell scripts.
-- Diagnostics expose no SSH key, Moonlight certificate private key, VPN password, Wolf pair secret or token.
-
-See [Wolf integration](UPSTREAM-FIRST-WOLF-INTEGRATION.md) for API and fork decisions; see [Multi-user feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md) for later user isolation.
+# NOW Host installer
+
+**State: development-only installation candidate.** The [published v1.17.0 client](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) does not contain this installer. On current source, an opt-in, privileged installation path exists for *clean* Ubuntu 24.04 and Pop!_OS 24.04 amd64 hosts with AMD, Intel or NVIDIA graphics. A complete installation and working game stream have **not** been validated on independent physical hardware. Track completion in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
+
+This document is the authoritative engineering contract for **new NOW-managed hosts**, not a general Wolf tutorial or a guide for importing an existing server. [Product scope](PRODUCT.md), [current verification](CURRENT-STATUS.md), and [client Beta 1 acceptance](BETA-ACCEPTANCE.md) cover separate questions.
+
+## Implemented path
+
+The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.
+
+1. **Review:** unprivileged read-only `host_preflight.py` and `host_plan.py` display detected prerequisites, conflicts and unknown capabilities. They make no system changes.
+2. **Advanced pilot:** choose AMD, Intel or NVIDIA, provide the correct `/dev/dri/renderD###` and a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
+3. **Check:** `host_install.py --check` inspects real hardware, runtime prerequisites, occupied Wolf ports, driver/DRM state and existing managed paths. Non-root users need not join the Docker group; inaccessible daemon state requires a privileged recheck.
+4. **Authorize:** explicit GTK confirmation and OS `pkexec` authentication precede `host_install.py --install`. The root helper rechecks eligibility and refuses existing NOW-managed workspace/project state. There is no network-facing installation API.
+5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
+6. **Report:** `running_stream_unverified` means only that the inspected container is running. It does **not** mean Moonlight pairing, encoding, video, audio, input or reconnection succeeded.
+
+Docker and Docker Compose must already be installed. This pilot does **not** configure the user's package repositories, kernel drivers, boot settings, firewall, Tailscale account, Jellyfin or unrelated services. It is not yet the promised 15-minute, terminal-free consumer host installation.
+
+## Supported candidates and hard stops
+
+| GPU | Clean-host pilot | Known gate |
+| --- | --- | --- |
+| AMD | Ubuntu/Pop!_OS 24.04 amd64 | DRM render node must map to an AMD GPU; encoder and session unverified |
+| Intel | Ubuntu/Pop!_OS 24.04 amd64 | DRM render node must map to an Intel GPU; encoder and session unverified |
+| NVIDIA | Ubuntu/Pop!_OS 24.04 amd64; Pop!_OS NVIDIA Edition preferred first test | Loaded driver, DRM modesetting, device nodes and verified NVIDIA installer SHA256 required |
+
+The helper checks architecture, OS, selected GPU vendor and render node, virtual input devices (`/dev/uinput`, `/dev/uhid`), udev, disk/memory, Docker/Compose and Wolf port bindings. Missing or unknown *required* evidence must block installation, not be interpreted as compatibility. GPU presence by itself is not a hardware-encoder test.
+
+**Never run the installation action on the developer's existing OptiPlex or another working Wolf server.** The ordinary **Check This PC** action is read-only and is safe to use for observing existing-host conflicts. No adoption, overwrite or implicit retry of an existing NOW workspace/project is supported.
+
+### NVIDIA driver-volume implementation
+
+`server/host_nvidia.py` and `server/nvidia-driver.Dockerfile` implement Wolf's upstream manual userspace-driver technique. The recipe is derived from [Games on Whales](https://github.com/games-on-whales/gow/blob/a1fbf9af2babfe2065d3af55e30ecf0bcb2dcd63/images/nvidia-driver/Dockerfile), with its MIT notice in `server/LICENSE-nvidia-driver-upstream.txt`.
+
+- NOW checks the loaded NVIDIA driver version, DRM state, device nodes and chosen vendor-matched render device.
+- The owner supplies the **exact NVIDIA installer SHA256** independently. Docker downloads that version's installer from NVIDIA and verifies its complete SHA256 *before executing it inside a build container*. This does not install or load host kernel modules.
+- It creates a **new** NOW-labeled volume whose name includes driver version and checksum; Docker's volume copy-up populates the userspace files. No older/foreign driver volume is adopted or deleted.
+- The generated Wolf Compose definition refers to the verified versioned volume rather than the staging placeholder, and the host driver version is rechecked before startup.
+
+**After a host NVIDIA driver update:** the existing volume may no longer match. Automated volume recreation, migration of the running Wolf service and rollback are **not implemented**. Do not claim unattended updates or reboot reliability. The base build image and apt packages are not digest/snapshot pinned, so this process is not yet byte-for-byte reproducible despite its pinned driver version and checksum.
+
+## Safety and implementation boundaries
+
+- **Source of authority:** only the local, owner-confirmed, administrator-authorized installer performs Docker changes. An ordinary NOW client, its Tailscale login and a paired Moonlight device do **not** receive Docker-admin rights.
+- **Host isolation:** target exactly one dedicated Compose project. Reject known Wolf port conflicts, preexisting NOW-managed data and unmanaged project conflicts. Do not call broad `docker compose down`, delete volumes or rewrite other stacks.
+- **Recoverable evidence:** `/var/lib/optiplex-now/host` contains a private configuration, persistent `wolf/` state, owner record and installation phase journal. An interrupted attempt cannot be silently repeated. **Automatic repair, rollback, uninstall and upgrades are not complete.**
+- **Security caveat:** Wolf's documented Docker socket/device access is privileged. Root-authorized installation does not make arbitrary workloads safe. Treat official images, installer downloads and volume content as security-sensitive and retain least-privilege enrollment boundaries.
+- **Historical prototypes:** `host_stage.py`, `host_transaction.py`, `host_runtime.py`, `host_docker.py` and `host_owner.py` contain review-only configuration generations, simulated startup/cleanup and local owner-ticket experiments. **They are not the live installation controller**, and their passing tests are not proof of deployment. Do not enable or wire them into production merely to increase feature count.
+
+## What CI proves
+
+The GitHub workflow builds the real Debian package, installs it on disposable runners, opens the actual GTK host review under Xvfb, executes **read-only host checks**, verifies refusal cases and runs Python/native tests and sanitizers. The last checked host PR ([#134](https://github.com/SteezyMode/OptiplexNow/pull/134)) passed **200 Python tests** and both CI jobs.
+
+**CI has not** invoked a successful `--install` on a physical AMD, Intel or NVIDIA server, proven hardware encoding, or verified a Moonlight session. Do not label a host or GPU supported because the GUI says candidate or CI passes.
+
+## Physical host acceptance before alpha sign-off
+
+- [ ] Install the exact test `.deb` on a clean, independently controlled Ubuntu/Pop!_OS 24.04 amd64 host; preserve a separate working reference server.
+- [ ] Demonstrate GPU/render selection, driver prerequisites, explicit owner confirmation and legitimate OS elevation. Wrong, unsupported or occupied hosts must refuse safely.
+- [ ] Install Wolf to the dedicated project; verify server container identity, GPU access, encoder logs and persisted configuration without damaging unrelated services.
+- [ ] Connect a genuinely unpaired second client; verify *video, audio, controller input and session termination*.
+- [ ] Restart host and client; verify recovery, preserved pairing, accurate status and reconnection.
+- [ ] Interrupt install, deny authorization and test network/image failures; inspect phase journal, preserve unrelated data, and establish safe documented recovery.
+- [ ] On NVIDIA, verify clean volume build, driver-version alignment and behavior after a host driver update. Do not accept automatic upgrade claims until the update/recovery path exists.
+- [ ] Record exact OS, GPU/driver, Docker, Wolf digest, NOW package, network conditions and pass/fail evidence in [Current status](CURRENT-STATUS.md).
+
+**Release rule:** a proven clean-host install and stream is the next priority. Do not add more simulated infrastructure or speculative service scope before completing this test. The separate existing-host client checklist remains in [Beta acceptance](BETA-ACCEPTANCE.md).

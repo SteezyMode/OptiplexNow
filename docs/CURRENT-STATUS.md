@@ -51,7 +51,7 @@ This removes a **normal first-run terminal requirement** but does not grant prea
 
 ## Native-code diagnostics (development CI)
 
-An independent `native-sanitizers` job is being added to test the extracted C modules under AddressSanitizer (memory access) and UndefinedBehaviorSanitizer, with stricter warnings on the graphical SSH/Tailscale helper modules. It runs on disposable GitHub runners, does not need the streaming host, and **does not modify the packaged binary, users' systems, or release compiler flags**. GLib/GIO process-global leak detection is disabled for these runs; memory bounds and undefined-behavior checking remain enabled. The still-large legacy GTK `main.c` is not covered by this isolated instrumented test target, and real end-to-end device validation remains required.
+An independent `native-sanitizers` CI job tests the extracted C modules under AddressSanitizer (memory access) and UndefinedBehaviorSanitizer, with stricter warnings on the graphical SSH/Tailscale helper modules. It runs on disposable GitHub runners, does not need the streaming host, and **does not modify the packaged binary, users' systems, or release compiler flags**. GLib/GIO process-global leak detection is disabled for these runs; memory bounds and undefined-behavior checking remain enabled. The still-large legacy GTK `main.c` is not covered by this isolated instrumented test target, and real end-to-end device validation remains required.
 
 ## Host monitoring refactor (development source)
 
@@ -77,7 +77,7 @@ The GTK tray controller now delegates action-ID interpretation to a GTK-free `tr
 | Host installer | Design issues and local helper contract exist | Fresh-host installer not implemented |
 | NOW-owned identity | Device approval requirement documented | Authentication service and emailed approval not implemented |
 
-Do not call a code path fully verified because CI passed. The next milestone is [Beta 1 acceptance](BETA-ACCEPTANCE.md). The [six-item engineering work order](PRODUCT.md#beta-1-engineering-execution-plan) is planning only: configuration extraction in `main` is implemented, but the Wolf pending-client parser and asynchronous request transport have **source implementations and CI tests only**. Nonblocking UI behavior is not yet device-tested; Tailscale discovery, other module extractions and sanitizer diagnostics remain pending.
+CI passing is not device acceptance. The six-item [engineering progress register](PRODUCT.md#six-item-progress-register) tracks implemented config, Wolf, Tailscale, SSH, monitoring, tray and sanitizer improvements separately from physical verification. The current source has substantial modularization, but GTK `main.c` still contains tightly coupled state and UI actions. The next release gate is the [Beta 1 end-to-end checklist](BETA-ACCEPTANCE.md): graphical Tailscale sign-in, trusted SSH enrollment, initial Wolf pairing, Games/Videos and repeat reconnect on an actual fresh client. None of those outcomes may be inferred solely from simulation or CI.
 
 ## Tracked roadmap
 

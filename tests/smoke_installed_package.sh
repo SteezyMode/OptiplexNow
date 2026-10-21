@@ -19,5 +19,6 @@ desktop-file-validate /usr/share/applications/optiplex-desk.desktop
 
 # Run the actual installed binary under disposable Xvfb/DBus/home/runtime directories.
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_gtk.sh
+NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_fresh_layout.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_instance.sh
 echo "NOW installed-package acceptance passed: Debian install, desktop files, GUI and lock."

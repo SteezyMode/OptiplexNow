@@ -1,6 +1,6 @@
 # Future NOW Host installer
 
-**Status:** a guarded clean AMD/Intel host installation pilot is implemented in development source; the complete turnkey host setup is not shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
+**Status:** a guarded clean AMD/Intel/NVIDIA installation pilot is implemented in development source; the complete turnkey host setup is not shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
 
 ## Clean-host pilot: real Docker installation (development package)
 
@@ -11,7 +11,7 @@ a turnkey host setup. The Python helper can actually pull an immutable Wolf
 image and start the dedicated \`optiplex-now-host-pilot\` Compose project.
 
 This pilot accepts **Ubuntu 24.04 or Pop!_OS 24.04 on x86-64**, with an
-explicitly verified **AMD or Intel** DRM render node. A graphics device's
+explicitly verified **AMD, Intel or NVIDIA** DRM render node. A graphics device's
 presence is not evidence of encoder readiness. The installer requires
 Docker and Compose already installed, \`/dev/uinput\`, \`/dev/uhid\`, udev,
 sufficient disk/memory, usable local Docker access, no Wolf port binds,
@@ -39,16 +39,32 @@ unattended repeats. The pilot has no uninstall, repair, upgrade or
 automatic cleanup; it never runs \`docker compose down\`, adopts unrelated
 services or deletes existing volumes.
 
-**NVIDIA:** System76 publishes a separate Pop!_OS 24.04 NVIDIA image,
-recommended for NVIDIA GTX 16-series and newer. Prefer this distribution
-for first NVIDIA alpha candidates, but understand that preinstalled drivers
-are only host-side preparation. Wolf's currently preferred *manual*
-NVIDIA method needs a driver-version-matched container volume rebuilt
-after host driver updates. This component remains **not implemented**.
-NOW shows an explicit NVIDIA block rather than attempting an untrusted
-volume/image build or silently substituting the less-stable toolkit path.
-NVIDIA can be enabled only after that exact lifecycle is implemented and
-verified on a separate clean machine.
+**NVIDIA pilot:** Pop!_OS 24.04 NVIDIA Edition is the recommended
+first NVIDIA test platform, but it remains only a host-driver baseline. NOW
+detects the loaded kernel driver and its exact version, checks that DRM
+modesetting is enabled, verifies the GPU render node and required character
+devices, and **refuses** to proceed when any prerequisite is missing.
+
+The owner must enter (1) a verified immutable Wolf OCI digest and (2) the
+64-hex SHA256 of NVIDIA's official .run installer for the installed kernel
+driver version. NOW's bundled, upstream-derived MIT-licensed Dockerfile
+downloads that exact version from NVIDIA over HTTPS and checks the SHA256
+*before executing the installer in the Docker build*. NOW then creates a
+new named Docker volume containing the userspace driver files. Its name is
+bound to the version and checksum; older and foreign Docker volumes are
+never adopted, overwritten, or automatically deleted. It does not install
+drivers on the host, run modprobe, modify boot configuration, or grant the
+desktop user Docker access. Failed operations leave owner state for review.
+
+**Important remaining gate:** this is a first-install path only. It has not
+been verified on physical GPU hardware. A host NVIDIA driver update can
+invalidate an installed Wolf driver volume. The current build does not
+automatically migrate the live Compose service to a fresh volume or provide
+safe repair/rollback. Do not claim upgrade/reboot reliability or commercial
+alpha readiness until driver-change recovery and real Moonlight streaming
+have been tested. The Dockerfile's Ubuntu 22.04 base and apt repositories
+are not yet image-digest/snapshot pinned, so this build is version-specific
+and checksummed, but is not a byte-for-byte reproducible build.
 
 All applicable test-package checks run on temporary CI runner machines.
 CI runs the real installed --check and starts the GTK screen, but does

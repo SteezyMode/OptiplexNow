@@ -207,10 +207,12 @@ an explicitly verified container ID, **never** `docker compose down` or
 a global volume removal.
 
 `server/host_runtime.py` implements the first-start state machine against an
-injected Docker interface. Simulated approval is now bound to the exact
-workspace, operation and configuration generation, so stale approvals fail
-before Docker access. **This test record is not authentication**: only a
-future privileged host broker can attest the real owner's identity.
+injected Docker interface. Simulated approval must come from the
+local `host_owner.py` authority, which verifies Linux kernel peer
+credentials, requires a host-controlled confirmation callback, and issues
+a one-use ticket bound to the workspace, operation and active generation.
+This is authenticated *local process identity*, not yet production-proof
+owner consent or a running privileged host service.
 The controller also requires a checksum-verified prepared configuration
 generation and fully passing
 preflight statuses, an empty Compose project, a locally cached pinned

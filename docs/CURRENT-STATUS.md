@@ -4,10 +4,12 @@ Updated: 2026-10-21 JST. GitHub Releases and CI are the authority for new public
 
 ## Release state
 
-- **Published closed beta installer:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1). The tag points to `e6df6d06206b359bd4c219bf6c7e4f06db7de2d6`. The tag-triggered **Publish OptiPlex NOW** workflow completed successfully (run `39475111081`).
-- **Official assets:** `OptiPlex-Now_1.16.1_amd64.deb`, `OptiPlex-Now_amd64.deb`, and `SHA256SUMS`.
-- **Included fixes:** [#96](https://github.com/SteezyMode/OptiplexNow/pull/96) colors connected Tailscale and positive Wolf desktop states; [#97](https://github.com/SteezyMode/OptiplexNow/pull/97) detects the Gluetun image under a custom container name.
-- **Acceptance:** The artifact is published for **private closed beta testing**, but a clean-client install, first-time pairing and actual stream have not yet completed the Beta 1 checklist.
+- **Current release candidate:** v1.17.0 **Closed Beta**, pending an explicit tag and successful tagged release workflow. A merged PR alone is not a published installer. It is deliberately marked as a GitHub prerelease, not `Latest`, while real-device acceptance remains incomplete.
+- **Previously published release:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1), tag `e6df6d06206b359bd4c219bf6c7e4f06db7de2d6`, successful release workflow `39475111081`.
+- **Planned v1.17.0 release assets:** `OptiPlex-Now_1.17.0_amd64.deb`, `OptiPlex-Now_amd64.deb`, and `SHA256SUMS`. These are official only if [the versioned prerelease](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) exists and the tagged workflow succeeds.
+- **Included in previous v1.16.1:** [#96](https://github.com/SteezyMode/OptiplexNow/pull/96) colors connected Tailscale and positive Wolf desktop states; [#97](https://github.com/SteezyMode/OptiplexNow/pull/97) detects the Gluetun image under a custom container name.
+- **New in v1.17.0 candidate:** GUI Tailscale setup, graphical SSH enrollment and Moonlight installation, wizard network lifecycle improvements, host-selection snapshots, responsive encrypted backup, modular C helpers and expanded CI. See [release notes](releases/v1.17.0.md).
+- **Acceptance:** Source/package CI passes, but a clean-client install, first-time pairing and actual streaming have not yet completed the [Beta 1 checklist](BETA-ACCEPTANCE.md). The new release exists for that testing.
 
 Release publishing changes GitHub artifacts only. It does not modify the running reference server or upgrade installed clients.
 
@@ -22,9 +24,9 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 - Read-only VPN status lookup by Gluetun Docker image, not container name. Tailscale and running Wolf desktop indicators use active-state coloring.
 - Optional reference-host-specific maintenance helpers. These are not a server installer.
 
-## Portable defaults (development source, not v1.16.1)
+## Portable defaults (included in v1.17.0 candidate)
 
-New source changes after the v1.16.1 tag remove the reference-host video and Web Gaming domain defaults, the reference SSH username, and automatically guessed optional service ports. Web Gaming and Downloads use user-configured URLs. Previously saved client URLs stay unchanged, but existing users must configure a Web Gaming URL after installing a future release because the old fixed domain was never saved to their config. **The published v1.16.1 installer is unchanged and still has the historical household defaults.** Verify the new code through CI and a clean-client test before making a new release.
+New source changes after the v1.16.1 tag remove the reference-host video and Web Gaming domain defaults, the reference SSH username, and automatically guessed optional service ports. Web Gaming and Downloads use user-configured URLs. Previously saved client URLs stay unchanged, but existing users must configure a Web Gaming URL after installing a future release because the old fixed domain was never saved to their config. **The previous v1.16.1 installer is unchanged and still has the historical household defaults.** v1.17.0 includes the portable behavior for real-client beta acceptance testing.
 
 ## Isolated fresh-profile GUI simulation (not device acceptance)
 

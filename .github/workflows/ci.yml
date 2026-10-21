@@ -64,6 +64,7 @@ jobs:
           make check-tray-actions
           make check-moonlight-install
           make check-wizard-network
+          make check-service-probe
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

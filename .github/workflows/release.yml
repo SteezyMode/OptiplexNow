@@ -74,11 +74,15 @@ jobs:
             echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite published assets" >&2
             exit 1
           fi
+          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          test -f "$notes" || { echo "Missing curated release notes: $notes" >&2; exit 1; }
           gh release create "$GITHUB_REF_NAME" \
             "dist/OptiPlex-Now_${version}_amd64.deb" \
             dist/OptiPlex-Now_amd64.deb \
             dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
-            --title "OptiPlex NOW ${GITHUB_REF_NAME}" \
-            --generate-notes \
-            --latest
+            --verify-tag \
+            --title "OptiPlex NOW ${GITHUB_REF_NAME} Closed Beta" \
+            --notes-file "$notes" \
+            --prerelease \
+            --latest=false

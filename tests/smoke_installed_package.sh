@@ -23,4 +23,5 @@ desktop-file-validate /usr/share/applications/optiplex-desk.desktop
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_gtk.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_fresh_layout.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_instance.sh
+NOW_ASKPASS=/usr/lib/optiplex-now/now-ssh-askpass bash tests/smoke_ssh_askpass.sh
 echo "NOW installed-package acceptance passed: Debian install, desktop files, GUI and lock."

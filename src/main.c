@@ -998,6 +998,8 @@ typedef struct {
     GtkWidget *authorize_button;
     GCancellable *cancellable;
     guint timeout_id;
+    guint auto_refresh_id;
+    gint64 auto_refresh_deadline;
     gboolean busy;
     gboolean closed;
     gboolean pairing;
@@ -1012,6 +1014,9 @@ static void wolf_ui_free(WolfPairUI *state)
     if (state->timeout_id) {
         g_source_remove(state->timeout_id);
     }
+    if (state->auto_refresh_id) {
+        g_source_remove(state->auto_refresh_id);
+    }
     g_clear_object(&state->cancellable);
     g_free(state);
 }
@@ -1022,6 +1027,10 @@ static void wolf_ui_close(WolfPairUI *state)
         return;
     }
     state->closed = TRUE;
+    if (state->auto_refresh_id) {
+        g_source_remove(state->auto_refresh_id);
+        state->auto_refresh_id = 0;
+    }
     if (state->cancellable) {
         g_cancellable_cancel(state->cancellable);
     }
@@ -1086,19 +1095,30 @@ static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer dat
                                                NOW_WOLF_MAX_PENDING);
         if (state->count < 0) {
             state->count = 0;
+            gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
             gtk_label_set_text(GTK_LABEL(state->status),
                 "Invalid or ambiguous pending clients. Refresh to retry.");
         } else {
+            /* A refreshed index can refer to a different client. Clear old
+             * selection and require approval of the current candidate list. */
+            GtkComboBox *combo = GTK_COMBO_BOX(state->clients);
+            gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
             for (int i = 0; i < state->count; i++) {
                 gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(state->clients),
                                                 state->pending[i].client_ip);
             }
-            if (state->count) {
-                gtk_combo_box_set_active(GTK_COMBO_BOX(state->clients), 0);
+            if (state->count == 1) {
+                gtk_combo_box_set_active(combo, 0);
+            } else {
+                gtk_combo_box_set_active(combo, -1);
+            }
+            if (state->count && state->auto_refresh_id) {
+                g_source_remove(state->auto_refresh_id);
+                state->auto_refresh_id = 0;
             }
             gtk_label_set_text(GTK_LABEL(state->status), state->count
-                ? "Choose the intended Moonlight device, then authorize."
-                : "No pending clients. Start Moonlight pairing, then refresh.");
+                ? "Select the intended Moonlight device, then authorize."
+                : "Waiting for Moonlight device. Searching automatically...");
         }
     } else {
         /* The Python SSH bridge validates the host's success response and
@@ -1129,6 +1149,29 @@ static void wolf_ui_start(WolfPairUI *state, const char *action, const char *pay
     now_wolf_request_async("/usr/lib/optiplex-now/wolf-pair-client.py",
                            action, state->host, state->user, payload,
                            state->cancellable, wolf_ui_finished, state);
+}
+
+/* Poll only while awaiting a candidate, for at most three minutes. Requests
+ * are serialized by wolf_ui_start and approval always requires the owner. */
+static gboolean wolf_ui_auto_refresh(gpointer data)
+{
+    WolfPairUI *state = data;
+    if (state->closed) {
+        state->auto_refresh_id = 0;
+        return G_SOURCE_REMOVE;
+    }
+    if (g_get_monotonic_time() >= state->auto_refresh_deadline) {
+        state->auto_refresh_id = 0;
+        if (!state->busy && state->count == 0) {
+            gtk_label_set_text(GTK_LABEL(state->status),
+                "No client found. Use Refresh Now to search again.");
+        }
+        return G_SOURCE_REMOVE;
+    }
+    if (!state->busy && state->count == 0) {
+        wolf_ui_start(state, "pending-text", NULL);
+    }
+    return G_SOURCE_CONTINUE;
 }
 
 static void wolf_ui_response(GtkDialog *dialog, gint response, gpointer data)
@@ -1165,16 +1208,16 @@ static void wolf_ui_response(GtkDialog *dialog, gint response, gpointer data)
     memset(payload, 0, sizeof payload);
 }
 
-static void wolf_pair_dialog(const char *generated_pin)
+static void wolf_pair_dialog(const char *generated_pin, GtkWindow *parent)
 {
     WolfPairUI *state = g_new0(WolfPairUI, 1);
     g_strlcpy(state->host, cfg[0], sizeof state->host);
     g_strlcpy(state->user, cfg[1], sizeof state->user);
 
     GtkWidget *dialog = gtk_dialog_new_with_buttons(
-        "Connect to Game Host", GTK_WINDOW(win), GTK_DIALOG_MODAL,
-        "Cancel", GTK_RESPONSE_CANCEL, "Refresh clients", 1,
-        "Authorize PIN", GTK_RESPONSE_OK, NULL);
+        "Connect to Game Host", parent ? parent : GTK_WINDOW(win), GTK_DIALOG_MODAL,
+        "Cancel", GTK_RESPONSE_CANCEL, "Refresh Now", 1,
+        "Authorize Device", GTK_RESPONSE_OK, NULL);
     state->dialog = dialog;
     state->refresh_button = gtk_dialog_get_widget_for_response(GTK_DIALOG(dialog), 1);
     state->authorize_button =
@@ -1182,8 +1225,8 @@ static void wolf_pair_dialog(const char *generated_pin)
 
     GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
     GtkWidget *hint = gtk_label_new(
-        "NOW started Moonlight pairing. Refresh pending clients, select your "
-        "device, and authorize it. No PIN copying is needed.");
+        "NOW is searching for this device. Select it when it appears and "
+        "approve it here. Refresh Now is available if needed.");
     gtk_label_set_line_wrap(GTK_LABEL(hint), TRUE);
     gtk_box_pack_start(GTK_BOX(content), hint, FALSE, FALSE, 8);
 
@@ -1198,9 +1241,16 @@ static void wolf_pair_dialog(const char *generated_pin)
     gtk_box_pack_start(GTK_BOX(content), state->status, FALSE, FALSE, 6);
 
     g_signal_connect(dialog, "response", G_CALLBACK(wolf_ui_response), state);
+    /* Temporary pairing dialog only: avoid being buried behind Moonlight's
+     * PIN window. The hint ends as soon as pairing is approved or cancelled. */
+    gtk_window_set_keep_above(GTK_WINDOW(dialog), TRUE);
     gtk_widget_show_all(dialog);
+    gtk_window_present(GTK_WINDOW(dialog));
+    state->auto_refresh_deadline = g_get_monotonic_time() + 3 * 60 * G_USEC_PER_SEC;
+    state->auto_refresh_id = g_timeout_add_seconds(3, wolf_ui_auto_refresh, state);
+    wolf_ui_start(state, "pending-text", NULL);
 }
-static void pair_wolf(void){
+static void pair_wolf(GtkWidget *origin){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER IN SETTINGS");return;}
  unsigned int random_value=0;
@@ -1216,17 +1266,18 @@ static void pair_wolf(void){
  GSubprocess*process=g_subprocess_newv(args,G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
  if(!process){g_clear_error(&error);say("MOONLIGHT PAIRING COULD NOT START");memset(pin,0,sizeof pin);return;}
  say("MOONLIGHT PAIRING STARTED");
- wolf_pair_dialog(pin);
+ GtkWidget *toplevel = origin ? gtk_widget_get_toplevel(origin) : win;
+ wolf_pair_dialog(pin, GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : GTK_WINDOW(win));
  memset(pin,0,sizeof pin);
  /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
 }
-static void on_games_action(void*w,void*arg){(void)w;
+static void on_games_action(void*w,void*arg){
  int resp=(int)(long)arg;
  if(resp==101){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
- else if(resp==103)pair_wolf();
+ else if(resp==103)pair_wolf(w);
  else if(resp==104){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHECK SERVER SETTINGS");
@@ -1274,7 +1325,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
  GtkWidget*choose=button("USE APPIMAGE","setupaction");
  g_signal_connect_data(choose,"clicked",(GCallback)on_games_action,(void*)(long)105,NULL,0);add(col,choose,0);
- GtkWidget*pairbutton=button("PAIR WOLF","setupaction");
+ GtkWidget*pairbutton=button("CONNECT TO GAME HOST","setupaction");
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
  GtkWidget*pin=button("OPEN WOLF PIN","setupaction");
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
@@ -1966,7 +2017,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 }
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
-    GtkWidget *assistant, *server_page, *games_page, *services_page;
+    GtkWidget *assistant, *server_page, *games_page, *services_page, *finish_page;
     GtkWidget *host, *user, *relay, *relayuser, *wake;
     GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
     GtkWidget *find_button, *tailscale_button, *service_check_button;
@@ -2034,6 +2085,9 @@ static gboolean wizard_tailscale_poll(gpointer data)
 static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;Wizard*c=p;
+ /* Moving past Services is an explicit Continue action. Commit the entered
+  * URLs now, even if the user closes the final summary without clicking Apply. */
+ if(page==c->finish_page)wizard_save(c);
  wizard_tailscale_poll(c);
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
  if(page==c->services_page)wizard_service_check(NULL,c);
@@ -2194,7 +2248,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
- else if(!strcmp(n,"w_wolf"))pair_wolf();
+ else if(!strcmp(n,"w_wolf"))pair_wolf(w);
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
@@ -2381,7 +2435,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->service_check_button=button("CHECK SERVICES","setupaction");g_signal_connect_data(c->service_check_button,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,c->service_check_button,0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
  /* Page 6: nothing else needed for existing clients. */
- GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(GTK_CONTAINER(six),24);
+ GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("READY","modalheading"),0);
  add(six,label("Saved settings carry over between updates.","helper"),0);
  add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);

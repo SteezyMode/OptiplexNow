@@ -6,14 +6,14 @@ Status: implemented client boundaries and future contracts. See [Current status]
 
 The installed package provides a GTK3 desktop launcher, supporting scripts, status/tray UI, and optional host-management helpers. NOW invokes separately installed Moonlight for streaming and configured browser/SSH/SFTP programs for other access. Tailscale provides a supported path to remote peers; Tailscale is not a NOW account service.
 
-The app is a client for an **already configured Linux host**. The New Server Setup surface does not provision Wolf, media software, credentials, containers or a VPN.
+The published v1.17.0 application is a client for an **already configured Linux host**. Unreleased development source includes a separate Server Setup GTK window and an owner-confirmed, privileged **clean-host Wolf installation pilot**. Its ordinary check is read-only; its advanced install can provision one dedicated Wolf Compose project, but cannot configure media software, NOW accounts, a VPN or arbitrary existing hosts. Physical installation and streaming are not yet accepted. See [Host installer](HOST-INSTALLER.md).
 
 ## Boundaries
 
 | Owner | Owns |
 | --- | --- |
 | NOW client | Connection/configuration UI, discovery, allowed host actions, status presentation, client backups |
-| NOW future host manager | Opt-in installation, service registry, config lifecycle, health/diagnostics, scoped enrollment, update/repair/backup |
+| NOW Host installation pilot (unreleased) | Owner-approved, root-rechecked clean-host Wolf deployment in a dedicated project; **not** yet full repair, upgrades, removal, service registry or client enrollment |
 | Wolf | Streaming server, application and desktop sessions, Moonlight protocol endpoints |
 | Moonlight | Video/audio/control client and device certificate identity |
 | Tailscale or a future supported alternative | Network membership and reachability |

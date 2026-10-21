@@ -31,6 +31,7 @@
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
+#include "host_job_target.h"
 #include "tray_prefs.h"
 #include "tray_actions.h"
 #include "moonlight_install.h"
@@ -495,7 +496,7 @@ static void setup_tailscale(void)
     now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160]; NowHostJobTarget target; char specs[7][160]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -550,13 +551,30 @@ static void update_drives(Result*r){
 }
 
 static gboolean finish_on_main(void *arg) {
- Result*r=arg; if(r->type==0){
-   if(strcmp(r->source_host,cfg[0])||strcmp(r->source_user,cfg[1])){
+ Result*r=arg;
+ /* Ignore results from a host that is no longer selected. The worker used
+  * the original immutable target, not values subsequently saved in Settings. */
+ if(r->type!=8){
+   int relay=r->type==1;
+   if(!now_host_job_target_matches(&r->target,
+                                   relay?cfg[2]:cfg[0],
+                                   relay?cfg[3]:cfg[1],
+                                   relay?cfg[4]:"")){
+     if(r->type==0)status_inflight=0;
+     else if(r->type==6)specs_inflight=0;
+     else power_inflight=0;
+     free(r);return G_SOURCE_REMOVE;
+   }
+ }else if(strcmp(r->message,*wolf_probe_host?wolf_probe_host:cfg[0])){
+   wolf_inflight=0;free(r);return G_SOURCE_REMOVE;
+ }
+ if(r->type==0){
+   if(strcmp(r->target.host,cfg[0])||strcmp(r->target.user,cfg[1])){
      status_inflight=0;free(r);return 0;
    }
    if(r->success==1 && *r->model &&
-      (strcmp(cfg[11],r->source_host)||strcmp(cfg[12],r->model))){
-     safe_copy(cfg[11],512,r->source_host);safe_copy(cfg[12],512,r->model);config_save();
+      (strcmp(cfg[11],r->target.host)||strcmp(cfg[12],r->model))){
+     safe_copy(cfg[11],512,r->target.host);safe_copy(cfg[12],512,r->model);config_save();
    }
    update_model_heading();
    const char *s=r->success==1?"● ONLINE":r->success==2?"● PAIR SSH":r->success==3?"● TAILSCALE OFF":"● OFFLINE";
@@ -641,7 +659,7 @@ static void *worker(void*arg){
                       g_str_has_prefix(out, "CONNECTED");
    }
    r->tail=tailscale_ok;
-   if(!now_valid_host(r->source_host)||!now_valid_user(r->source_user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
+   if(!now_valid_host(r->target.host)||!now_valid_user(r->target.user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
    else {
      /* Fixed, read-only remote telemetry. Mounted physical file systems. */
      const char*cmd=
@@ -669,7 +687,7 @@ static void *worker(void*arg){
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
       "printf 'DRIVES_END\n'";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->source_user,r->source_host,cmd,NULL};
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,cmd,NULL};
      int code=now_run(argv,stats,sizeof stats,9);
      if(code==0&&strstr(stats,"READY")){
        r->success=1;strcpy(r->message,"SERVER REACHABLE");
@@ -693,7 +711,7 @@ static void *worker(void*arg){
  }else if(r->type==8){
    r->success=tcp_reachable(r->message,"47989") || tcp_reachable(r->message,"47984");
  }else if(r->type==6){
-   if(now_valid_host(cfg[0])&&now_valid_user(cfg[1])){
+   if(now_valid_host(r->target.host)&&now_valid_user(r->target.user)){
      /* Read-only hardware inventory. No root privileges and no hardcoded specifications. */
      const char*cmd=
       "printf 'MODEL='; cat /sys/class/dmi/id/product_name 2>/dev/null | head -1; "
@@ -705,7 +723,7 @@ static void *worker(void*arg){
       "printf 'OS='; . /etc/os-release; printf '%s\\n' \"$PRETTY_NAME\"; "
       "printf 'DRIVER='; nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,(char*)cmd,NULL};
      if(now_run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
        const char *keys[]={"MODEL=","CPU_MODEL=","GPU_MODEL=","VRAM=","RAM=","OS=","DRIVER="};
        for(int i=0;i<7;i++)now_host_get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
@@ -713,10 +731,10 @@ static void *worker(void*arg){
      }
    }
  }else if(r->type==5){
-   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])) {strcpy(r->message,"CHECK SERVER SETTINGS");}
+   if(!now_valid_host(r->target.host)||!now_valid_user(r->target.user)) {strcpy(r->message,"CHECK SERVER SETTINGS");}
    else {
      char *args[]={"ssh","-o","BatchMode=yes","-o","ConnectTimeout=5","-o","StrictHostKeyChecking=yes",
-         "-l",cfg[1],cfg[0],
+         "-l",r->target.user,r->target.host,
          "docker logs --since 10m wolf 2>&1 | grep -oE 'http[^[:space:]]+/pin/#[0-9A-Fa-f]+' | tail -1",NULL};
      char logline[4096]={0};int c=now_run(args,logline,sizeof(logline),9);
      char *hash=strstr(logline,"/pin/#");
@@ -724,19 +742,19 @@ static void *worker(void*arg){
        hash+=6;char token[90];int i=0;
        while(isxdigit((unsigned char)hash[i])&&i<80){token[i]=hash[i];i++;}
        token[i]=0;
-       if(i>=6){snprintf(r->message,sizeof r->message,"http://%s:47989/pin/#%s",cfg[0],token);r->success=1;}
+       if(i>=6){snprintf(r->message,sizeof r->message,"http://%s:47989/pin/#%s",r->target.host,token);r->success=1;}
        else strcpy(r->message,"INVALID WOLF PIN LINK");
      }else strcpy(r->message,"START PAIR WOLF FIRST, THEN RETRY");
    }
  }else {
-   int kind=r->type-1; int relay=kind==0;int h=relay?2:0,u=relay?3:1;
-   if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){strcpy(r->message,"Invalid host or user. Check Settings.");}
+   int kind=r->type-1; int relay=kind==0;
+   if(!now_valid_host(r->target.host)||!now_valid_user(r->target.user)){strcpy(r->message,"Invalid host or user. Check Settings.");}
    else {
-     char*arg[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[u],cfg[h],NULL,NULL};
+     char*arg[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,NULL,NULL};
      char command[1024];
      if(relay) {
-       if(!*cfg[4]||!now_safe_wake_path(cfg[4])){strcpy(r->message,"Set a valid relay wake script in Settings");goto done;}
-       snprintf(command,sizeof command,"%s",cfg[4]);
+       if(!*r->target.wake_path||!now_safe_wake_path(r->target.wake_path)){strcpy(r->message,"Set a valid relay wake script in Settings");goto done;}
+       snprintf(command,sizeof command,"%s",r->target.wake_path);
      }else{
        const char*actions[]={"suspend","reboot","poweroff"};
        snprintf(command,sizeof command,"sudo -n /usr/bin/systemctl %s",actions[kind-1]);
@@ -757,10 +775,18 @@ static void begin_job(int type) {
  if(type==8&&wolf_inflight)return;
  if(type!=0&&type!=6&&type!=8&&power_inflight)return;
  if(type==0)status_inflight=1;else if(type==6)specs_inflight=1;else if(type==8)wolf_inflight=1;else power_inflight=1;
- Result*r=calloc(1,sizeof* r);r->type=type;
+ Result*r=calloc(1,sizeof* r);
+ int relay=type==1;
+ if(r)r->type=type;
+ if(!r || !now_host_job_target_capture(&r->target,
+                relay?cfg[2]:cfg[0],relay?cfg[3]:cfg[1],
+                relay?cfg[4]:"")){
+   free(r);
+   if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;
+   else if(type==8)wolf_inflight=0;else power_inflight=0;
+   return;
+ }
  if(type==8)safe_copy(r->message,sizeof r->message,*wolf_probe_host?wolf_probe_host:cfg[0]);
- safe_copy(r->source_host,sizeof r->source_host,cfg[0]);
- safe_copy(r->source_user,sizeof r->source_user,cfg[1]);
  pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
 }
 static gboolean periodic(void*unused){(void)unused;begin_job(0);return 1;}

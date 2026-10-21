@@ -15,7 +15,7 @@ import stat
 import subprocess
 
 MAX_RESULT = 32768
-ID_RE = re.compile(r"^[0-9a-f]{12,64}$")
+ID_RE = re.compile(r"^[0-9a-f]{64}$")
 PROJECT = "optiplex-now-host-pilot"
 PROFILE = "now-manual-review-required"
 OWNED = "prototype"
@@ -73,7 +73,7 @@ class LocalDocker:
 
     def project_ids(self) -> tuple[str, ...]:
         value = self._call(
-            ["ps", "--all", "--filter", f"label=com.docker.compose.project={PROJECT}",
+            ["ps", "--all", "--no-trunc", "--filter", f"label=com.docker.compose.project={PROJECT}",
              "--format", "{{.ID}}"])
         ids = [valid_id(x.strip()) for x in value.splitlines() if x.strip()]
         if len(ids) != len(set(ids)):
@@ -100,9 +100,28 @@ class LocalDocker:
             return False
         return output.strip() == name
 
-    def inspect_owned(self, container_id: str) -> dict:
-        """Validate ownership against Docker-provided *labels*, not a name."""
+    def inspect_owned(self, container_id: str, expected_image: str) -> dict:
+        """Require exact full ID, managed labels AND immutable image.
+
+        Labels are an organizational boundary, not proof against another
+        process with administrative Docker access. The caller must separately
+        match the full ID to its durable per-attempt journal.
+        """
         cid = valid_id(container_id)
+        if (not isinstance(expected_image, str) or
+                not re.fullmatch(
+                    r"ghcr\.io/games-on-whales/wolf@sha256:[0-9a-f]{64}",
+                    expected_image)):
+            raise DockerError("Expected pinned Wolf image is missing")
+        inspected_id = self._call([
+            "inspect", "--type", "container", "--format", "{{.Id}}", cid]).strip()
+        if inspected_id != cid:
+            raise DockerError("Full container identity changed")
+        actual_image = self._call([
+            "inspect", "--type", "container", "--format",
+            "{{.Config.Image}}", cid]).strip()
+        if actual_image != expected_image:
+            raise DockerError("Managed container image digest does not match")
         value = self._call([
             "inspect", "--type", "container", "--format",
             "{{json .Config.Labels}}", cid])
@@ -135,6 +154,7 @@ class LocalDocker:
             raise DockerError("Unrecognized Docker health status")
         return {
             "id": cid,
+            "image": actual_image,
             "running": state["Running"],
             "health": status if status is not None else "not_configured",
         }
@@ -149,8 +169,14 @@ class LocalDocker:
             "--no-build", "--no-recreate", "--pull", "never", "wolf",
         ], timeout=45)
 
-    def remove_owned(self, container_id: str) -> None:
-        """Cleanup of only a positively identified NOW-owned container ID."""
+    def remove_owned(self, container_id: str, expected_image: str) -> None:
+        """Cleanup of an exact journal-listed, positively identified ID only.
+
+        No volume deletion. Caller must hold the exclusive NOW transaction
+        lock, match the journal and prove this is the only current project ID.
+        """
         cid = valid_id(container_id)
-        self.inspect_owned(cid)
+        identity = self.inspect_owned(cid, expected_image)
+        if identity["id"] != cid or identity["image"] != expected_image:
+            raise DockerError("Unexpected container identity; refusing removal")
         self._call(["rm", "--force", cid], timeout=20)

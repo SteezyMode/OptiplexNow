@@ -15,11 +15,11 @@ Private Linux client beta against an **existing, owner-approved host**. Four pre
 
 ## Pre-release validation path
 
-For **unreleased changes on main**, a PR's passing `Validate OptiPlex NOW` workflow can provide a short-lived **unreleased PR test installer** under that run's Artifacts section. The packaged Debian version is `1.16.1+prNUMBER.RUN`, distinct from the immutable tagged v1.16.1 release. These packages expire after seven days and are **not official releases or general-user installers**.
+For **unreleased changes on main**, a PR's passing `Validate OptiPlex NOW` workflow can provide a short-lived **unreleased PR test installer** under that run's Artifacts section. The packaged Debian version is `CURRENT_VERSION+prNUMBER.RUN`, distinct from any immutable tagged version. These packages expire after seven days and are **not official releases or general-user installers**.
 
 Download the artifact ZIP from a successful PR run while signed into GitHub, extract the .deb and SHA256SUMS, and verify its checksum before installing on a spare test client. Installation and streaming observations apply only to that exact PR commit/build. Do not promote a PR artifact as a Beta 1 accepted release.
 
-After the tested code lands on main, use the documented version bump and tag-only release process to publish a new official artifact. Protect existing saved NOW and Moonlight identity; never delete either to manufacture a clean client.
+After the code lands on main, a tagged closed-beta prerelease may be published specifically for device acceptance tests. This is not evidence of completed Beta 1 acceptance. Use the documented version bump and tag-only release process. Protect existing saved NOW and Moonlight identity; never delete either to manufacture a clean client.
 
 ## Simulated cross-process onboarding test
 
@@ -31,7 +31,7 @@ This is protocol integration evidence, **not** proof of the GTK wizard, PolicyKi
 
 Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the existing known-good client for regression testing.
 
-- [ ] Download the latest tagged .deb and SHA256SUMS from GitHub Releases. Verify package metadata and checksum.
+- [ ] Download the exact versioned closed-beta .deb and SHA256SUMS from its tagged GitHub prerelease (not the `releases/latest` stable link). Verify package metadata and checksum.
 - [ ] Install through the normal supported desktop/software flow. Launch NOW without a terminal.
 - [ ] Complete setup on the supported distribution and resolution. The client detects an existing Tailscale login or provides a clear sign-in path.
 - [ ] Discover the intended authorized host, exclude the current device, and confirm address and identity. Wrong or offline hosts show actionable errors. Mock tests must cover signed-out/missing Tailscale, invalid status JSON, duplicate peers, malformed discovery rows, process cancellation and wizard closure; none of these alone proves real enrollment.

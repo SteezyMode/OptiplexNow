@@ -70,15 +70,15 @@ class FakeDocker:
             raise host_docker.DockerError("simulated failure before creation")
         self.ids = [CID, CID_OTHER] if self.ambiguous_after_start else [CID]
 
-    def inspect_owned(self, container_id):
-        self.events.append(("inspect", container_id))
+    def inspect_owned(self, container_id, expected_image):
+        self.events.append(("inspect", container_id, expected_image))
         if container_id not in self.ids:
             raise host_docker.DockerError("not owned")
-        return {"id": container_id, "running": self.running,
-                "health": self.health}
+        return {"id": container_id, "image": expected_image,
+                "running": self.running, "health": self.health}
 
-    def remove_owned(self, container_id):
-        self.events.append(("remove", container_id))
+    def remove_owned(self, container_id, expected_image):
+        self.events.append(("remove", container_id, expected_image))
         self.ids.remove(container_id)
 
 
@@ -102,18 +102,28 @@ class HostRuntimeTests(unittest.TestCase):
     def journal(self):
         return json.loads((self.workspace / rt.JOURNAL).read_text())
 
+    def grant(self):
+        return {
+            "operation": "start_wolf",
+            "workspace": str(self.workspace),
+            "generation": tx._state(self.workspace)["active"],
+            "source": "simulated_owner",
+        }
+
     def test_success_is_running_but_not_stream_verified(self):
         self.prepare()
         docker = FakeDocker()
         result = rt.simulate_first_start(
-            self.workspace, report(), docker, owner_confirmed=True)
+            self.workspace, report(), docker, approval=self.grant())
         self.assertEqual(result["result"], "simulated_start_only")
         self.assertFalse(result["stream_verified"])
         self.assertEqual(self.journal()["phase"], "started_unverified_stream")
         self.assertFalse(self.journal()["stream_verified"])
-        self.assertIn(("inspect", CID), docker.events)
+        self.assertEqual(self.journal()["container_id"], CID)
+        self.assertEqual(self.journal()["image"], "ghcr.io/games-on-whales/wolf@" + DIGEST)
+        self.assertIn(("inspect", CID, "ghcr.io/games-on-whales/wolf@" + DIGEST), docker.events)
         self.assertEqual(tx._state(self.workspace)["runtime"], "not_started")
-        self.assertNotIn(("remove", CID), docker.events)
+        self.assertNotIn(("remove", CID, "ghcr.io/games-on-whales/wolf@" + DIGEST), docker.events)
         self.assertFalse((self.workspace / tx.LOCK_FILE).exists())
 
     def test_explicit_owner_approval_required_before_docker(self):
@@ -121,9 +131,73 @@ class HostRuntimeTests(unittest.TestCase):
         docker = FakeDocker()
         with self.assertRaises(rt.ActivationBlocked):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=False)
+                                    approval=None)
         self.assertEqual(docker.events, [])
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
+
+    def test_stale_or_mismatched_generation_approval_is_refused(self):
+        self.prepare()
+        for change in (
+            {"generation": "b" * 64},
+            {"workspace": "/tmp/not-the-approved-workspace"},
+            {"operation": "remove_wolf"},
+            {"source": "unverified_client"},
+            {"unexpected": "extra"},
+        ):
+            with self.subTest(change=change):
+                approval = self.grant()
+                approval.update(change)
+                docker = FakeDocker()
+                with self.assertRaisesRegex(rt.ActivationBlocked, "approval"):
+                    rt.simulate_first_start(
+                        self.workspace, report(), docker, approval=approval)
+                self.assertEqual(docker.events, [])
+        self.assertFalse((self.workspace / rt.JOURNAL).exists())
+
+    def test_read_only_reconciliation_never_mutates_containers(self):
+        self.prepare()
+        docker = FakeDocker()
+        rt.simulate_first_start(
+            self.workspace, report(), docker, approval=self.grant())
+        before = list(docker.events)
+        review = rt.review_attempt(self.workspace, docker)
+        self.assertTrue(review["matches_recorded_identity"])
+        self.assertEqual(review["recorded_container_id"], CID)
+        self.assertEqual(review["observed_container_ids"], [CID])
+        self.assertEqual(review["action"], "manual_review_only")
+        self.assertFalse(review["stream_verified"])
+        self.assertEqual(docker.ids, [CID])
+        self.assertFalse(any(e[0] in ("remove", "start")
+                             for e in docker.events[len(before):]
+                             if isinstance(e, tuple)))
+        docker.ids = [CID_OTHER]
+        mismatch = rt.review_attempt(self.workspace, docker)
+        self.assertFalse(mismatch["matches_recorded_identity"])
+        self.assertEqual(mismatch["observed_container_ids"], [CID_OTHER])
+        self.assertEqual(docker.ids, [CID_OTHER])
+
+    def test_corrupt_or_symlink_journal_refused_for_review(self):
+        self.prepare()
+        docker = FakeDocker()
+        rt.simulate_first_start(
+            self.workspace, report(), docker, approval=self.grant())
+        path = self.workspace / rt.JOURNAL
+        path.write_text('{"phase":"starting"}')
+        with self.assertRaises(rt.ActivationBlocked):
+            rt.review_attempt(self.workspace, docker)
+        path.unlink()
+        path.symlink_to(self.workspace / tx.CURRENT_FILE)
+        with self.assertRaises(rt.ActivationBlocked):
+            rt.review_attempt(self.workspace, docker)
+
+    def test_live_docker_adapter_refused_even_for_read_only_reconciliation(self):
+        self.prepare()
+        docker = FakeDocker()
+        rt.simulate_first_start(
+            self.workspace, report(), docker, approval=self.grant())
+        real = object.__new__(host_docker.LocalDocker)
+        with self.assertRaisesRegex(rt.ActivationBlocked, "not enabled"):
+            rt.review_attempt(self.workspace, real)
 
     def test_live_docker_adapter_always_refused_even_if_approved(self):
         self.prepare()
@@ -131,7 +205,7 @@ class HostRuntimeTests(unittest.TestCase):
         real = object.__new__(host_docker.LocalDocker)
         with self.assertRaisesRegex(rt.ActivationBlocked, "not enabled"):
             rt.simulate_first_start(self.workspace, report(), real,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
 
     def test_unverified_encoder_and_occupied_wolf_ports_block_start(self):
@@ -145,7 +219,7 @@ class HostRuntimeTests(unittest.TestCase):
                 with self.assertRaises(rt.ActivationBlocked):
                     rt.simulate_first_start(
                         self.workspace, report(**changes), docker,
-                        owner_confirmed=True)
+                        approval=self.grant())
                 self.assertEqual(docker.events, [])
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
 
@@ -155,7 +229,7 @@ class HostRuntimeTests(unittest.TestCase):
         docker.ids = [CID]
         with self.assertRaisesRegex(rt.ActivationBlocked, "refuse adoption"):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertNotIn(("start", self.workspace), docker.events)
         self.assertEqual(docker.ids, [CID])
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
@@ -166,7 +240,7 @@ class HostRuntimeTests(unittest.TestCase):
         docker.image = False
         with self.assertRaisesRegex(rt.ActivationBlocked, "not present"):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertFalse(any(isinstance(x, tuple) and x[0] == "start"
                              for x in docker.events))
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
@@ -176,23 +250,23 @@ class HostRuntimeTests(unittest.TestCase):
         docker = FakeDocker()
         with self.assertRaisesRegex(rt.ActivationBlocked, "attestation"):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertIn(("volume", host_stage.DRIVER_VOLUME), docker.events)
         self.assertFalse(any(isinstance(x, tuple) and x[0] == "start"
                              for x in docker.events))
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
 
-    def test_start_failure_after_creation_removes_only_owned_new_container(self):
+    def test_failed_start_with_unjournaled_container_requires_manual_recovery(self):
         self.prepare(gpu="intel")
         docker = FakeDocker()
         docker.create_then_fail = True
         with self.assertRaises(host_docker.DockerError):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
-        self.assertEqual(docker.ids, [])
-        self.assertIn(("inspect", CID), docker.events)
-        self.assertIn(("remove", CID), docker.events)
-        self.assertEqual(self.journal()["phase"], "failed_cleaned")
+                                    approval=self.grant())
+        self.assertEqual(docker.ids, [CID])
+        self.assertNotIn(("remove", CID, "ghcr.io/games-on-whales/wolf@" + DIGEST), docker.events)
+        self.assertEqual(self.journal()["phase"], "manual_recovery_required")
+        self.assertIsNone(self.journal()["container_id"])
         self.assertFalse(self.journal()["stream_verified"])
         self.assertFalse((self.workspace / tx.LOCK_FILE).exists())
 
@@ -202,7 +276,7 @@ class HostRuntimeTests(unittest.TestCase):
         docker.raise_start = True
         with self.assertRaises(host_docker.DockerError):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertEqual(docker.ids, [])
         self.assertEqual(self.journal()["phase"], "manual_recovery_required")
         self.assertFalse(any(isinstance(x, tuple) and x[0] == "remove"
@@ -214,7 +288,7 @@ class HostRuntimeTests(unittest.TestCase):
         docker.ambiguous_after_start = True
         with self.assertRaisesRegex(rt.ActivationBlocked, "exactly one"):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertEqual(docker.ids, [CID, CID_OTHER])
         self.assertEqual(self.journal()["phase"], "manual_recovery_required")
         self.assertFalse(any(isinstance(x, tuple) and x[0] == "remove"
@@ -231,7 +305,7 @@ class HostRuntimeTests(unittest.TestCase):
                     setattr(docker, k, value)
                 with self.assertRaises(rt.ActivationBlocked):
                     rt.simulate_first_start(self.workspace, report(), docker,
-                                            owner_confirmed=True)
+                                            approval=self.grant())
                 self.assertEqual(docker.ids, [])
                 self.assertEqual(self.journal()["phase"], "failed_cleaned")
                 shutil.rmtree(self.workspace)
@@ -240,11 +314,11 @@ class HostRuntimeTests(unittest.TestCase):
         self.prepare()
         docker = FakeDocker()
         rt.simulate_first_start(self.workspace, report(), docker,
-                                owner_confirmed=True)
+                                approval=self.grant())
         another = FakeDocker()
         with self.assertRaisesRegex(rt.ActivationBlocked, "journal"):
             rt.simulate_first_start(self.workspace, report(), another,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertEqual(another.events, [])
 
     def test_modified_generation_refused_before_any_docker_call(self):
@@ -255,7 +329,7 @@ class HostRuntimeTests(unittest.TestCase):
         docker = FakeDocker()
         with self.assertRaises(rt.ActivationBlocked):
             rt.simulate_first_start(self.workspace, report(), docker,
-                                    owner_confirmed=True)
+                                    approval=self.grant())
         self.assertEqual(docker.events, [])
         self.assertFalse((self.workspace / rt.JOURNAL).exists())
 

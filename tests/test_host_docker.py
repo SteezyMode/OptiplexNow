@@ -35,7 +35,7 @@ class HostDockerTests(unittest.TestCase):
         self.assertEqual(argv[:3],
                          ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"])
         self.assertEqual(argv[3:],
-                         ["ps", "--all",
+                         ["ps", "--all", "--no-trunc",
                           "--filter", "label=com.docker.compose.project=optiplex-now-host-pilot",
                           "--format", "{{.ID}}"])
         self.assertFalse(run.call_args.kwargs["check"])
@@ -77,28 +77,62 @@ class HostDockerTests(unittest.TestCase):
             "io.optiplex-now.role": "streaming",
         }
         with patch.object(docker.subprocess, "run", side_effect=[
-            response(json.dumps(labels)), response(json.dumps(
+            response(CID), response(IMAGE), response(json.dumps(labels)),
+            response(json.dumps(
                 {"Running": True, "Health": {"Status": "healthy"}}))
         ]):
-            self.assertEqual(client.inspect_owned(CID)["health"], "healthy")
+            result = client.inspect_owned(CID, IMAGE)
+            self.assertEqual(result["health"], "healthy")
+            self.assertEqual(result["id"], CID)
+            self.assertEqual(result["image"], IMAGE)
         for key in labels:
             altered = dict(labels)
             altered[key] = "unrelated"
             with self.subTest(key=key), patch.object(
-                docker.subprocess, "run", return_value=response(json.dumps(altered))
+                docker.subprocess, "run", side_effect=[
+                    response(CID), response(IMAGE), response(json.dumps(altered))
+                ]
             ):
                 with self.assertRaises(docker.DockerError):
-                    client.inspect_owned(CID)
+                    client.inspect_owned(CID, IMAGE)
+
+    def test_full_id_and_image_are_required_for_container_identity(self):
+        client = adapter()
+        for malformed in (CID[:12], "not-a-container", CID + "x"):
+            with self.assertRaises(docker.DockerError):
+                client.inspect_owned(malformed, IMAGE)
+        with patch.object(docker.subprocess, "run", side_effect=[
+            response("c" * 64),
+        ]):
+            with self.assertRaisesRegex(docker.DockerError, "identity"):
+                client.inspect_owned(CID, IMAGE)
+        with patch.object(docker.subprocess, "run", side_effect=[
+            response(CID), response("ghcr.io/games-on-whales/wolf@sha256:" + "d" * 64),
+        ]):
+            with self.assertRaisesRegex(docker.DockerError, "image digest"):
+                client.inspect_owned(CID, IMAGE)
+        with self.assertRaises(docker.DockerError):
+            client.inspect_owned(CID, "stable")
+
+    def test_removal_refuses_changed_identity_even_with_matching_labels(self):
+        client = adapter()
+        with patch.object(client, "inspect_owned", return_value={
+            "id": "c" * 64, "image": IMAGE, "running": True
+        }):
+            with patch.object(docker.subprocess, "run") as run:
+                with self.assertRaises(docker.DockerError):
+                    client.remove_owned(CID, IMAGE)
+                run.assert_not_called()
 
     def test_remove_exact_id_only_after_label_check_without_volumes(self):
         client = adapter()
         with patch.object(client, "inspect_owned", return_value={
-            "id": CID, "running": True, "health": "healthy",
+            "id": CID, "image": IMAGE, "running": True, "health": "healthy",
         }) as inspect:
             with patch.object(docker.subprocess, "run",
                               return_value=response("")) as run:
-                client.remove_owned(CID)
-        inspect.assert_called_once_with(CID)
+                client.remove_owned(CID, IMAGE)
+        inspect.assert_called_once_with(CID, IMAGE)
         self.assertEqual(run.call_args.args[0],
                          client.base + ["rm", "--force", CID])
         self.assertNotIn("down", run.call_args.args[0])

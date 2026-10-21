@@ -207,8 +207,12 @@ an explicitly verified container ID, **never** `docker compose down` or
 a global volume removal.
 
 `server/host_runtime.py` implements the first-start state machine against an
-injected Docker interface. It requires explicit owner confirmation, a
-checksum-verified prepared configuration generation, fully passing
+injected Docker interface. Simulated approval is now bound to the exact
+workspace, operation and configuration generation, so stale approvals fail
+before Docker access. **This test record is not authentication**: only a
+future privileged host broker can attest the real owner's identity.
+The controller also requires a checksum-verified prepared configuration
+generation and fully passing
 preflight statuses, an empty Compose project, a locally cached pinned
 Wolf image and compatible GPU prerequisites. It writes an exclusive and
 durable `deployment.json` attempt journal before attempting startup.
@@ -217,12 +221,20 @@ verified gaming, and does not modify the configuration-generation pointer.
 Any subsequent attempt is blocked until the previous journal is explicitly
 investigated.
 
-On a simulated failure, only exactly one newly observed and positively
-NOW-labeled container may be removed. Unknown ownership, multiple containers,
-a failed cleanup or an interrupted operation leaves a
-`manual_recovery_required` journal rather than issuing broad Docker
-cleanup. No media, game libraries, other containers or existing volumes
-are adopted, deleted, or changed.
+On a simulated start, an exact, full-length Docker container ID and pinned
+image must be verified and **durably recorded before cleanup is eligible**.
+Even a matching Compose project and NOW labels are insufficient on their own.
+A Compose start that errors before identity journaling can leave a partial
+container; that container is **not automatically deleted**, even if it looks
+like NOW. Once the exact ID is journaled, an unhealthy/stopped container can
+be removed only if its current full ID, image digest and labels still match
+and it remains the only project container. Otherwise leave all resources
+untouched with `manual_recovery_required`. A read-only
+`review_attempt` operation compares a journaled attempt to observed Docker
+state without restarting, removing or adopting anything. Interrupted attempts
+always require authenticated human/broker recovery; the simulator cannot
+unblock or overwrite its own journal. No media, game libraries, other containers
+or existing volumes are adopted, deleted, or changed.
 
 **Critical activation gate:** there is no public apply/start CLI or GTK
 integration for this controller, and `host_runtime.simulate_first_start`

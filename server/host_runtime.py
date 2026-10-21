@@ -134,18 +134,107 @@ def _replace_journal(root: Path, value: dict) -> None:
             os.unlink(temporary)
 
 
-def simulate_first_start(workspace: Path, report: dict, docker: object,
-                         *, owner_confirmed: bool) -> dict:
-    """Exercise startup and targeted cleanup using a fake Docker implementation.
+def _require_simulated_approval(approval: dict | None, root: Path,
+                                generation: str) -> None:
+    """Bind a test-only approval to exactly one prepared generation.
 
-    DO NOT call from production code. A real LocalDocker object is rejected.
-    Once a journal exists, no implicit retry is permitted. Recovery needs
-    separate authenticated owner intervention and ownership inspection.
+    Caller-generated data is NOT authentication. A privileged host broker
+    must eventually prove the actual owner's identity and grant authority.
+    """
+    expected = {
+        "operation": "start_wolf",
+        "workspace": str(root),
+        "generation": generation,
+        "source": "simulated_owner",
+    }
+    if not isinstance(approval, dict) or approval != expected:
+        raise ActivationBlocked("Missing or stale generation-bound owner approval")
+
+
+def _read_journal(root: Path) -> dict:
+    path = root / JOURNAL
+    try:
+        if path.is_symlink():
+            raise ValueError("Journal is a symlink")
+        value = json.loads(tx._read_bounded_regular(path))
+    except (OSError, ValueError, TypeError) as exc:
+        raise ActivationBlocked("Missing or corrupt deployment journal") from exc
+    if (not isinstance(value, dict)
+            or value.get("schema_version") != JOURNAL_SCHEMA
+            or value.get("tool") != "now-host-runtime"
+            or value.get("mode") != "simulation_only"
+            or value.get("phase") not in (
+                "starting", "container_identified",
+                "started_unverified_stream", "failed_cleaned",
+                "manual_recovery_required")
+            or value.get("stream_verified") is not False):
+        raise ActivationBlocked("Invalid deployment journal")
+    identifier = value.get("container_id")
+    if identifier is not None:
+        try:
+            host_docker.valid_id(identifier)
+        except host_docker.DockerError as exc:
+            raise ActivationBlocked("Invalid recorded container ID") from exc
+    generation = value.get("generation")
+    if (not isinstance(generation, str) or len(generation) != 64
+            or any(c not in "0123456789abcdef" for c in generation)):
+        raise ActivationBlocked("Invalid journal generation")
+    return value
+
+
+def review_attempt(workspace: Path, docker: object) -> dict:
+    """Read-only reconciliation for interrupted/finished simulated attempts.
+
+    Does not retry, stop, remove, restart or authorize a container.
+    Any ambiguity is surfaced as manual recovery, never silently repaired.
+    """
+    if isinstance(docker, host_docker.LocalDocker):
+        raise ActivationBlocked("Live Docker access is not enabled")
+    root = tx._validate_workspace(workspace)
+    if root.is_symlink() or not root.is_dir():
+        raise ActivationBlocked("No managed workspace")
+    lock = tx._acquire_lock(root)
+    try:
+        journal = _read_journal(root)
+        project_ids = tuple(docker.project_ids())
+        recorded = journal.get("container_id")
+        result = {
+            "phase": journal["phase"],
+            "recorded_container_id": recorded,
+            "observed_container_ids": list(project_ids),
+            "stream_verified": False,
+            "action": "manual_review_only",
+            "matches_recorded_identity": False,
+        }
+        if recorded is not None and project_ids == (recorded,):
+            # Without a recorded image and a live matching Docker identity,
+            # this remains an unresolved operator task.
+            image = journal.get("image")
+            if isinstance(image, str):
+                try:
+                    candidate = docker.inspect_owned(recorded, image)
+                    result["matches_recorded_identity"] = (
+                        candidate.get("id") == recorded
+                        and candidate.get("image") == image)
+                    if result["matches_recorded_identity"]:
+                        result["running"] = candidate.get("running")
+                        result["health"] = candidate.get("health")
+                except host_docker.DockerError:
+                    pass
+        return result
+    finally:
+        tx._release_lock(root, lock)
+
+
+def simulate_first_start(workspace: Path, report: dict, docker: object,
+                         *, approval: dict | None) -> dict:
+    """Test-only startup and narrowly identified cleanup via a fake Docker.
+
+    No real Docker adapter is accepted. The approval structure is test data,
+    not a production identity proof; live use needs a privileged broker.
     """
     if isinstance(docker, host_docker.LocalDocker):
         raise ActivationBlocked("Live Docker deployment is not enabled")
-    if not owner_confirmed:
-        raise ActivationBlocked("Explicit owner approval required")
     root = tx._validate_workspace(workspace)
     if root.is_symlink() or not root.is_dir():
         raise ActivationBlocked("No safe managed workspace")
@@ -154,6 +243,8 @@ def simulate_first_start(workspace: Path, report: dict, docker: object,
         if (root / JOURNAL).exists() or (root / JOURNAL).is_symlink():
             raise ActivationBlocked("Prior start journal requires manual inspection")
         compose_file, manifest = _active_bundle(root)
+        generation = tx._state(root)["active"]
+        _require_simulated_approval(approval, root, generation)
         _readiness(report, manifest["gpu_vendor"])
         if docker.project_ids():
             raise ActivationBlocked("Existing Compose project: refuse adoption or restart")
@@ -162,52 +253,62 @@ def simulate_first_start(workspace: Path, report: dict, docker: object,
         if (manifest["gpu_vendor"] == "nvidia"
                 and not docker.has_driver_volume(host_stage.DRIVER_VOLUME)):
             raise ActivationBlocked("Version-matched NVIDIA driver volume is unverified")
-        # A volume's name alone is not sufficient proof of version matching.
         if manifest["gpu_vendor"] == "nvidia":
             raise ActivationBlocked("NVIDIA driver-volume attestation not implemented")
-        _journal(root, {
-            "phase": "starting", "generation": tx._state(root)["active"],
+
+        base = {
+            "generation": generation, "image": manifest["image"],
             "container_id": None, "stream_verified": False,
-        }, new=True)
+        }
+        _journal(root, {"phase": "starting", **base}, new=True)
+        recorded_id = None
         try:
             docker.start_once(compose_file)
-            identifiers = docker.project_ids()
+            identifiers = tuple(docker.project_ids())
             if len(identifiers) != 1:
                 raise ActivationBlocked("Expected exactly one new managed Wolf container")
-            container = docker.inspect_owned(identifiers[0])
+            candidate_id = host_docker.valid_id(identifiers[0])
+            container = docker.inspect_owned(candidate_id, manifest["image"])
+            if (container.get("id") != candidate_id
+                    or container.get("image") != manifest["image"]):
+                raise ActivationBlocked("Container identity or image mismatch")
+            # Record the exact created ID *before* any later failure can
+            # authorize targeted cleanup. Crash before this point is review-only.
+            _journal(root, {
+                "phase": "container_identified", **base,
+                "container_id": candidate_id,
+            })
+            recorded_id = candidate_id
             if not container.get("running") or container.get("health") == "unhealthy":
                 raise ActivationBlocked("New Wolf container did not enter running state")
-            # Running is not healthy and is never equivalent to real streaming.
             _journal(root, {
-                "phase": "started_unverified_stream",
-                "generation": tx._state(root)["active"],
-                "container_id": identifiers[0],
-                "stream_verified": False,
+                "phase": "started_unverified_stream", **base,
+                "container_id": recorded_id,
                 "container_health": container.get("health", "not_configured"),
             })
             return {
                 "result": "simulated_start_only",
-                "container_id": identifiers[0],
+                "container_id": recorded_id,
                 "stream_verified": False,
             }
         except Exception:
-            # Cleanup is permitted only when exactly one newly created ID is
-            # positively identified through immutable Compose/service labels.
-            # Ambiguity leaves everything untouched for manual recovery.
+            # A failed Compose command might have created a container.
+            # Without a durable, precisely recorded ID we must NEVER guess.
             cleaned = False
-            try:
-                ids = docker.project_ids()
-                if len(ids) == 1:
-                    docker.inspect_owned(ids[0])
-                    docker.remove_owned(ids[0])
-                    cleaned = True
-            except Exception:
-                pass
+            if recorded_id is not None:
+                try:
+                    if tuple(docker.project_ids()) == (recorded_id,):
+                        current = docker.inspect_owned(recorded_id, manifest["image"])
+                        if (current.get("id") == recorded_id
+                                and current.get("image") == manifest["image"]):
+                            docker.remove_owned(recorded_id, manifest["image"])
+                            cleaned = not docker.project_ids()
+                except Exception:
+                    pass
             _journal(root, {
                 "phase": "failed_cleaned" if cleaned else "manual_recovery_required",
-                "generation": tx._state(root)["active"],
-                "container_id": None,
-                "stream_verified": False,
+                **base,
+                "container_id": recorded_id,
             })
             raise
     finally:

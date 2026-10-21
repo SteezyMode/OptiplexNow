@@ -13,7 +13,7 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 
 ## Included in current `main`
 
-- Native GTK3 client, primary actions, tray controls, Settings and setup wizard.
+- Native GTK3 client, primary actions, tray controls, Settings and setup wizard. The source now sizes its dashboard using the usable monitor dimensions, rather than the former fixed 660×350 start window; a separate disposable-profile Xvfb layout test checks 1024×768 and 3440×1440 after installed-package build. The change is not included in v1.16.1.
 - Tailscale connectivity and server discovery, SSH/SFTP access and host hardware dashboard.
 - Moonlight streaming launch for configured Wolf apps, native Wolf pairing dialog, and generated four-digit pairing PIN transported through a dedicated helper.
 - Browser launch for configured video, music, and download services.

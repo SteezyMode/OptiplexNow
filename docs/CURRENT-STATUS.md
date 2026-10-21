@@ -49,6 +49,10 @@ The current development client replaces the former first-time `ssh-copy-id` term
 
 This removes a **normal first-run terminal requirement** but does not grant preapproved Tailscale users automatic host SSH access. Future host enrollment must use an owner-controlled, least-privilege broker.
 
+## Native-code diagnostics (development CI)
+
+An independent `native-sanitizers` job is being added to test the extracted C modules under AddressSanitizer (memory access) and UndefinedBehaviorSanitizer, with stricter warnings on the graphical SSH/Tailscale helper modules. It runs on disposable GitHub runners, does not need the streaming host, and **does not modify the packaged binary, users' systems, or release compiler flags**. GLib/GIO process-global leak detection is disabled for these runs; memory bounds and undefined-behavior checking remain enabled. The still-large legacy GTK `main.c` is not covered by this isolated instrumented test target, and real end-to-end device validation remains required.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

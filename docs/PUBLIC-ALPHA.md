@@ -27,7 +27,9 @@ The eventual ideal is a **single sign-in and approved-device experience**, inclu
 
 ### 2. Video: private library
 
-- Guided setup of Jellyfin for a compatible clean host, **or** a non-destructive connection to an already configured server.
+- Guided setup of Jellyfin for a compatible clean host, **or** a non-destructive connection to an already configured server. New owners are not expected to know what Jellyfin is or install it before starting NOW.
+- **No manual service URL required on the ordinary path.** Owner selects **Set Up My Video Library** or **Use Existing Jellyfin**. For a new installation, NOW safely provisions the managed service and lets the owner choose library folders. For an existing service, it obtains the correct instance by verified, owner-confirmed discovery without changing unrelated deployments. Manual HTTPS URL entry remains an **advanced fallback**, not onboarding's main input.
+- Once an owner approves the service, eligible NOW clients learn its permitted address via trusted server/client configuration. **Do not require public DNS, reverse proxy or port forwarding by default**; retain proper Jellyfin authentication, client approval and TLS/network boundaries. Do not send Jellyfin administrator credentials in shareable presets. Track this public-alpha requirement in [#148](https://github.com/SteezyMode/OptiplexNow/issues/148).
 - Owner selects approved library folders and can organize files using authenticated, bounded operations.
 - Authorized members can browse and play the media available to their account; server file administration is **not** implied by media playback permission.
 - Stream actual video remotely while the host computer remains usable and other NOW services are independently reachable.
@@ -62,6 +64,7 @@ The eventual ideal is a **single sign-in and approved-device experience**, inclu
 
 - [ ] New supported Linux host plus clean client complete a graphical owner-guided configuration for **all three selected modules**, without entering terminal commands during the supported path. Record total time and separate first-stream time.
 - [ ] A remote game actually runs while the physical host desktop remains usable; video, gamepad/audio and reconnection work.
+- [ ] An owner without preinstalled Jellyfin can set up Video graphically, and an owner with existing Jellyfin can select it without destruction. A clean approved client discovers the authorized Video endpoint without typing a web address or requiring public DNS.
 - [ ] Jellyfin streams from an owner-chosen library over the private remote connection, including while an admin starts another permitted download.
 - [ ] qBittorrent uses the VPN egress, stops traffic when the VPN fails and never changes the route/availability of Jellyfin, gaming or host administration.
 - [ ] Admin can search from reviewed providers, manage a download, choose a per-item approved directory, and subsequently inspect/move the file with a protected file-management path.

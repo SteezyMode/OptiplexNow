@@ -50,6 +50,12 @@ Report state and source independently: Tailscale is connected/disconnected, Wolf
 
 An eventual host installer must publish managed service IDs and health capabilities instead of requiring a name such as `gluetun`. Avoid accidental Docker permission expansion and application-specific host assumptions.
 
+## Host monitoring boundary
+
+Host metrics and physical-disk filtering are parsed by `src/host_metrics.c/.h`, outside GTK. The worker fetches read-only telemetry and hands a typed, bounded set of values to the main thread for rendering. Tailscale status uses the same structured status helper as the setup wizard, not a substring match on an arbitrary `100.*` address.
+
+**SSH trust:** background host probes and power actions require a known, preapproved SSH host key (`StrictHostKeyChecking=yes`). They must never create first-time trust as a side effect of an apparently read-only status check; a new host uses the explicit graphical authorization flow. Changed host keys require manual investigation, not automatic replacement. The client still uses the existing SSH account and does not grant additional host privileges.
+
 ## Maintainability and threading contract
 
 The six ordered engineering items and next-session stop condition live in [Product direction](PRODUCT.md#beta-1-engineering-execution-plan). This section defines implementation boundaries, not a second roadmap.

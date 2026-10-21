@@ -24,20 +24,20 @@ Native Python tests construct disposable filesystem fixtures, exercise parsing a
 
 ## First installation plan preview (source-only)
 
-The next step after preflight is \`server/host_plan.py\`. It consumes the
-versioned, redacted \`host_preflight.py\` results and generates a deterministic
+The next step after preflight is `server/host_plan.py`. It consumes the
+versioned, redacted `host_preflight.py` results and generates a deterministic
 **non-executable** installation plan. It does not configure the host or generate
 a runnable Compose file. Both tools remain **development source only**, not
 features included in the v1.17.0 client .deb.
 
 From the checked-out repository on a Linux host:
 
-\`\`\`sh
+```sh
 python3 server/host_plan.py
 python3 server/host_plan.py --json
 python3 server/host_preflight.py --json > scan.json
 python3 server/host_plan.py --preflight-json scan.json --json
-\`\`\`
+```
 
 A saved scan is a diagnostic record. Avoid sharing it without reviewing its
 contents. The planner reads a maximum 64 KiB report and accepts only the
@@ -48,8 +48,8 @@ The preview describes the **candidate** Ubuntu 24.04 x86-64/NVIDIA,
 single-owner Wolf streaming layout, proposed managed config and state roots,
 Docker project labels, required components, network ports, and lifecycle
 sequence. Jellyfin is optional. Every prospective mutating operation is
-marked *not implemented*. The plan always returns \`may_apply=false\` and
-\`decision=blocked\`, even if every scanner check passes.
+marked *not implemented*. The plan always returns `may_apply=false` and
+`decision=blocked`, even if every scanner check passes.
 
 Why it always blocks: no Wolf image digest has been pinned and verified, real
 encoder and streaming tests are incomplete, the least-privilege enrollment

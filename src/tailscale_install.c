@@ -30,10 +30,10 @@ static void install_worker(GTask *task, gpointer source_object, gpointer task_da
         return;
     }
 
+    const char *message = output ? g_strstrip(output) : "";
     gboolean installed = g_subprocess_get_successful(process) &&
-                         (g_strcmp0(g_strstrip(output ? output : ""),
-                                    "INSTALLED") == 0 ||
-                          g_strcmp0(output, "ALREADY_INSTALLED") == 0);
+                         (g_strcmp0(message, "INSTALLED") == 0 ||
+                          g_strcmp0(message, "ALREADY_INSTALLED") == 0);
     g_object_unref(process);
     g_free(output);
     if (!installed) {

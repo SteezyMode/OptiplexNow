@@ -29,7 +29,9 @@ jobs:
       - name: Stamp unreleased PR package version
         if: github.event_name == 'pull_request'
         run: |
-          echo "NOW_PACKAGE_VERSION=1.16.1+pr${{ github.event.pull_request.number }}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          base="$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\\1/p' package.py)"
+          test -n "$base"
+          echo "NOW_PACKAGE_VERSION=${base}+pr${{ github.event.pull_request.number }}.${{ github.run_number }}" >> "$GITHUB_ENV"
       - name: Build, test and inspect package
         shell: bash
         run: |

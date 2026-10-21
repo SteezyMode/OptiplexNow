@@ -27,6 +27,7 @@
 #include "wolf_transport.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
+#include "service_probe.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -78,11 +79,10 @@ static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tails
 static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_network,*metric_vpn,*metric_wolf,*metric_wolf_sessions,*metric_free,*drive_combo;
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
-static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
+static int specs_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
 static GtkWidget *active_setup_wizard=NULL;
 static char wolf_probe_host[512];
-static GtkWidget *service_labels[3]={NULL,NULL,NULL};
 #define MAX_DRIVES NOW_HOST_MAX_DRIVES
 /* Mount points reported by the server, not client-side disks. */
 typedef NowHostDrive Drive;
@@ -495,7 +495,7 @@ static void setup_tailscale(void)
     now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -587,9 +587,6 @@ static gboolean finish_on_main(void *arg) {
    update_drives(r);
    if(tailscale_label)gtk_label_set_text(GTK_LABEL(tailscale_label),r->tail?"TAILSCALE CONNECTED":"TAILSCALE NOT CONNECTED");
    status_inflight=0;
- }else if(r->type==7){
-    for(int i=0;i<3;i++)if(service_labels[i])gtk_label_set_text(GTK_LABEL(service_labels[i]),r->service_state[i]);
-    services_inflight=0;
  }else if(r->type==8){
     if(wizard_wolf_label)gtk_label_set_text(GTK_LABEL(wizard_wolf_label),r->success?"WOLF REACHABLE":"WOLF NOT DETECTED. YOU CAN STILL CONTINUE");
     wolf_inflight=0;
@@ -693,19 +690,6 @@ static void *worker(void*arg){
      else if(!tailscale_ok){r->success=3;strcpy(r->message,"CHECK TAILSCALE");}
      else{r->success=0;strcpy(r->message,"SERVER UNREACHABLE");}
    }
- }else if(r->type==7){
-   for(int i=0;i<3;i++){
-      const char*url=r->service_urls[i];
-      if(!*url){safe_copy(r->service_state[i],sizeof r->service_state[i],"NOT SET UP");continue;}
-      if((strncmp(url,"https://",8)&&strncmp(url,"http://",7))||!now_program_exists("curl")){
-        safe_copy(r->service_state[i],sizeof r->service_state[i],"NOT CHECKED");continue;
-      }
-      char http[128]={0};
-      char*argv[]={"curl","--silent","--show-error","--location","--max-time","3","--connect-timeout","2","--output","/dev/null","--write-out","%{http_code}",(char*)url,NULL};
-      int rc=now_run(argv,http,sizeof http,5);
-      int code=atoi(http);
-      safe_copy(r->service_state[i],sizeof r->service_state[i],rc==0 && code>=200&&code<500?"RESPONDING":"UNREACHABLE");
-   }
  }else if(r->type==8){
    r->success=tcp_reachable(r->message,"47989") || tcp_reachable(r->message,"47984");
  }else if(r->type==6){
@@ -770,16 +754,14 @@ static void *worker(void*arg){
 static void begin_job(int type) {
  if(type==0&&status_inflight)return;
  if(type==6&&specs_inflight)return;
- if(type==7&&services_inflight)return;
  if(type==8&&wolf_inflight)return;
- if(type!=0&&type!=6&&type!=7&&type!=8&&power_inflight)return;
- if(type==0)status_inflight=1;else if(type==6)specs_inflight=1;else if(type==7)services_inflight=1;else if(type==8)wolf_inflight=1;else power_inflight=1;
+ if(type!=0&&type!=6&&type!=8&&power_inflight)return;
+ if(type==0)status_inflight=1;else if(type==6)specs_inflight=1;else if(type==8)wolf_inflight=1;else power_inflight=1;
  Result*r=calloc(1,sizeof* r);r->type=type;
  if(type==8)safe_copy(r->message,sizeof r->message,*wolf_probe_host?wolf_probe_host:cfg[0]);
- if(type==7)for(int i=0;i<3;i++)safe_copy(r->service_urls[i],sizeof r->service_urls[i],cfg[5+i]);
  safe_copy(r->source_host,sizeof r->source_host,cfg[0]);
  safe_copy(r->source_user,sizeof r->source_user,cfg[1]);
- pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==7)services_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
+ pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
 }
 static gboolean periodic(void*unused){(void)unused;begin_job(0);return 1;}
 static void refresh(void){gtk_label_set_text(GTK_LABEL(indicator),"● CHECKING");begin_job(0);}
@@ -1871,11 +1853,14 @@ typedef struct {
     GtkWidget *assistant, *server_page, *games_page, *services_page;
     GtkWidget *host, *user, *relay, *relayuser, *wake;
     GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
-    GtkWidget *find_button, *tailscale_button, *service_inputs[3];
+    GtkWidget *find_button, *tailscale_button, *service_check_button;
+    GtkWidget *service_inputs[3], *service_labels[3];
+    char checked_urls[NOW_SERVICE_PROBE_COUNT][NOW_SERVICE_PROBE_URL_MAX];
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
     guint tailscale_poll_id;
     NowWizardNetwork *network;
+    NowServiceProbe *service_probe;
 } Wizard;
 
 static void wizard_unref(Wizard *wizard)
@@ -2080,7 +2065,7 @@ static void wizard_action(void*w,void*p){
     gtk_entry_set_text(GTK_ENTRY(c->relay),v[2]);gtk_entry_set_text(GTK_ENTRY(c->relayuser),v[3]);gtk_entry_set_text(GTK_ENTRY(c->wake),v[4]);
     for(int i=0;i<3;i++){
        gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),v[5+i]);
-       if(service_labels[i])gtk_label_set_text(GTK_LABEL(service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
+       if(c->service_labels[i])gtk_label_set_text(GTK_LABEL(c->service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
     }
     gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
     return;
@@ -2117,20 +2102,62 @@ static GtkWidget*wizard_button(Wizard*c,GtkWidget*page,const char*title,const ch
 static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
 static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();g_idle_add(destroy_wizard_idle,w);}
 static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;g_idle_add(destroy_wizard_idle,w);}
-static void wizard_service_check(void*w,void*p){
- (void)w;Wizard*c=p;
- if(services_inflight)return;
- Result*r=calloc(1,sizeof *r);if(!r)return;
- r->type=7;
- for(int i=0;i<3;i++){
-   const char*url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
-   if(!now_safe_preset_url(url)){gtk_label_set_text(GTK_LABEL(service_labels[i]),"INVALID URL");free(r);return;}
-   safe_copy(r->service_urls[i],sizeof r->service_urls[i],url);
-   gtk_label_set_text(GTK_LABEL(service_labels[i]),"CHECKING...");
- }
- services_inflight=1;pthread_t t;
- if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);
- else {services_inflight=0;free(r);}
+static void wizard_service_result(
+    gpointer context, const NowServiceProbeEntry entries[NOW_SERVICE_PROBE_COUNT],
+    const GError *error)
+{
+    Wizard *wizard = context;
+    wizard->references++;
+    if (!wizard->closing && wizard->assistant) {
+        for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
+            const char *current = gtk_entry_get_text(
+                GTK_ENTRY(wizard->service_inputs[index]));
+            const char *state = "UNREACHABLE";
+            if (strcmp(current, wizard->checked_urls[index]) != 0) {
+                state = "URL CHANGED — CHECK AGAIN";
+            } else if (error) {
+                state = g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)
+                    ? "TIMED OUT — RETRY" : "CHECK FAILED — RETRY";
+            } else if (entries) {
+                state = entries[index].state;
+            }
+            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]), state);
+        }
+        gtk_widget_set_sensitive(wizard->service_check_button, TRUE);
+    }
+    wizard_unref(wizard);
+}
+
+static void wizard_service_check(void *widget, void *data)
+{
+    (void)widget;
+    Wizard *wizard = data;
+    if (wizard->closing || !wizard->assistant ||
+        now_service_probe_busy(wizard->service_probe)) {
+        return;
+    }
+    const char *urls[NOW_SERVICE_PROBE_COUNT];
+    for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
+        urls[index] = gtk_entry_get_text(GTK_ENTRY(wizard->service_inputs[index]));
+        if (!now_safe_preset_url(urls[index])) {
+            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]),
+                               "INVALID URL — CORRECT TO CHECK");
+            return;
+        }
+    }
+    for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
+        safe_copy(wizard->checked_urls[index],
+                  sizeof wizard->checked_urls[index], urls[index]);
+        gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]), "CHECKING...");
+    }
+    gtk_widget_set_sensitive(wizard->service_check_button, FALSE);
+    if (!now_service_probe_start(wizard->service_probe, urls)) {
+        gtk_widget_set_sensitive(wizard->service_check_button, TRUE);
+        for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
+            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]),
+                               "COULD NOT START CHECK — RETRY");
+        }
+    }
 }
 static void wizard_destroy(void *widget, void *data)
 {
@@ -2146,10 +2173,9 @@ static void wizard_destroy(void *widget, void *data)
     }
     now_wizard_network_close(wizard->network);
     wizard->network = NULL;
+    now_service_probe_close(wizard->service_probe);
+    wizard->service_probe = NULL;
     wizard_wolf_label = NULL;
-    for (int i = 0; i < 3; i++) {
-        service_labels[i] = NULL;
-    }
     wizard_unref(wizard);
 }
 static void on_wizard(void*w,void*p){(void)w;(void)p;
@@ -2161,6 +2187,8 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->references=1;
  c->network=now_wizard_network_new(wizard_network_result,c,9000);
  if(!c->network){free(c);return;}
+ c->service_probe=now_service_probe_new(wizard_service_result,c,16000);
+ if(!c->service_probe){now_wizard_network_close(c->network);free(c);return;}
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
  active_setup_wizard=a;
@@ -2232,10 +2260,10 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
    c->service_inputs[i]=gtk_entry_new();gtk_widget_set_hexpand(c->service_inputs[i],1);
    gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),c->staged[i+5]);
    gtk_grid_attach(GTK_GRID(rows),c->service_inputs[i],1,i,1,1);
-   service_labels[i]=label(*c->staged[i+5]?"NOT CHECKED":"ADD URL","specvalue");
-   gtk_grid_attach(GTK_GRID(rows),service_labels[i],2,i,1,1);
+   c->service_labels[i]=label(*c->staged[i+5]?"NOT CHECKED":"ADD URL","specvalue");
+   gtk_grid_attach(GTK_GRID(rows),c->service_labels[i],2,i,1,1);
  }
- GtkWidget*check=button("CHECK SERVICES","setupaction");g_signal_connect_data(check,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,check,0);
+ c->service_check_button=button("CHECK SERVICES","setupaction");g_signal_connect_data(c->service_check_button,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,c->service_check_button,0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
  /* Page 6: nothing else needed for existing clients. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);gtk_container_set_border_width(GTK_CONTAINER(six),24);

@@ -83,6 +83,12 @@ The setup wizard's status and peer-discovery jobs, timeouts and cancellation now
 
 Native and ASan/UBSan tests exercise duplicate submissions, concurrent slow/fast operations, timeout, successful retry, closing during an active operation and closing from inside a callback. The actual GTK wizard's page-navigation, authorization and video streaming still require device-level Beta 1 acceptance. Current official v1.16.1 package does not contain this code.
 
+## Wizard service availability checks (development source)
+
+The setup wizard's Videos/Music/Downloads URL checks now use `src/service_probe.c/.h`, a GTK-free cancellable GTask component using fixed curl arguments. The GTK wizard owns its labels and the specific URLs being checked; there are no global service labels or shared service-check thread state. Closing the wizard disconnects callbacks and cancels pending subprocesses. A URL edited after a check begins is shown as changed, not incorrectly reported healthy from an old result. HTTP 2xx through 4xx counts as responding (server reachable, not necessarily healthy or authenticated); missing entries remain NOT SET UP. The ordinary HTTP probe no longer uses shell expansion.
+
+Native tests and sanitizers simulate responding/refused/HTTP-error endpoints, malformed URLs, duplicate requests, timeouts, successful retry and close-during-request. This is simulated evidence, not physical Beta 1 login or service verification.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

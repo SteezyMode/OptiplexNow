@@ -113,16 +113,22 @@ int now_run(char *const argv[], char *out, size_t cap, int timeout) {
             break;
         }
 
-        pid_t reaped;
-        do {
-            reaped = waitpid(pid, &status, WNOHANG);
-        } while (reaped < 0 && errno == EINTR);
-        if (reaped == pid) {
-            done = 1;
-        } else if (reaped < 0) {
-            failed = 1;
+        /* The child may exit before its buffered pipe output is readable.
+         * Do not return until both the exit status and pipe EOF are seen.
+         * Never call waitpid again after the child has been reaped.
+         */
+        if (!done) {
+            pid_t reaped;
+            do {
+                reaped = waitpid(pid, &status, WNOHANG);
+            } while (reaped < 0 && errno == EINTR);
+            if (reaped == pid) {
+                done = 1;
+            } else if (reaped < 0) {
+                failed = 1;
+            }
         }
-        if (done || failed) {
+        if (failed || (done && eof)) {
             break;
         }
 

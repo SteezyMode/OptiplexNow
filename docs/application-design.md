@@ -70,6 +70,10 @@ The six ordered engineering items and next-session stop condition live in [Produ
 
 **Verification contract:** mocked transport and parsing tests cover empty/stale/multiple pending requests, timeouts, cancellation and malformed data; compiled native tests cover extracted pure functions; GTK smoke tests cover lifetime and UI responsiveness where feasible. Real new-client pairing and streaming are independently required by [Beta acceptance](BETA-ACCEPTANCE.md). Do not substitute CI for device observations.
 
+## Graphical Tailscale setup boundary
+
+For the first graphical installer target, NOW on Debian/Ubuntu-family systems delegates only an explicitly confirmed Tailscale install to `pkexec /usr/bin/python3 /usr/lib/optiplex-now/tailscale-install.py`. The root helper has no variable command arguments, uses upstream HTTPS resources on a distro/codename allowlist, validates a single signed apt source entry, then installs the `tailscale` package through apt and enables its daemon. An existing `tailscale` executable is left unchanged. Tailscale sign-in opens the device-local `http://100.100.100.100/` web interface (supported by modern Tailscale) without starting a root shell. An unavailable PolicyKit agent must fail visibly and direct the user to official instructions, not silently fall back to terminal commands. Only package installation requires elevated privileges, not ordinary NOW startup.
+
 ## Engineering gates
 
 GitHub CI compiles, checks packaging, runs unit checks and GTK smoke tests. The release workflow publishes only new version tags. Neither substitutes for fresh-client pairing, real gameplay, live audio/input, or backup restore.

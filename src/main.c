@@ -26,6 +26,7 @@
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
 #include "tailscale_async.h"
+#include "tailscale_install.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -73,6 +74,7 @@ static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_networ
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
+static GtkWidget *active_setup_wizard=NULL;
 static char wolf_probe_host[512];
 static GtkWidget *service_labels[3]={NULL,NULL,NULL};
 #define MAX_DRIVES 16
@@ -322,9 +324,79 @@ static void pair(int relay) {
  char*args[]={"ssh-copy-id","-i",pub,dest,NULL};
  if(terminal_launch(args))say(relay?"Authorize the relay in the terminal":"Authorize the server in the terminal");
 }
-static void setup_tailscale(void) {
- if(now_program_exists("tailscale")){char*args[]={"sudo","tailscale","up",NULL};if(terminal_launch(args))say("Sign in to Tailscale in the opened terminal");}
- else browser_open("https://tailscale.com/download/linux");
+static gboolean tailscale_install_inflight = FALSE;
+
+static void tailscale_install_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    (void)data;
+    GError *error = NULL;
+    gboolean installed = now_tailscale_install_finish(result, &error);
+    tailscale_install_inflight = FALSE;
+    if (installed) {
+        say("TAILSCALE INSTALLED. SIGN IN THROUGH THE BROWSER.");
+        browser_open("http://100.100.100.100/");
+    } else {
+        say("TAILSCALE INSTALLATION WAS NOT COMPLETED.");
+        GtkWidget *notice = gtk_message_dialog_new(
+            GTK_WINDOW(active_setup_wizard ? active_setup_wizard : win),
+            GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
+            "Tailscale was not installed");
+        gtk_message_dialog_format_secondary_text(
+            GTK_MESSAGE_DIALOG(notice),
+            "The installation was cancelled or could not finish. "
+            "Check that an administrator account and internet access are available. "
+            "You can retry from NOW or open Tailscale's official setup guide.");
+        gtk_dialog_add_buttons(GTK_DIALOG(notice), "Close", GTK_RESPONSE_CLOSE,
+                               "Open setup guide", GTK_RESPONSE_HELP, NULL);
+        int action = gtk_dialog_run(GTK_DIALOG(notice));
+        gtk_widget_destroy(notice);
+        if (action == GTK_RESPONSE_HELP) {
+            browser_open("https://tailscale.com/docs/install/linux");
+        }
+        if (error) {
+            g_warning("Tailscale graphical installer failed: %s", error->message);
+        }
+    }
+    g_clear_error(&error);
+}
+
+static void setup_tailscale(void)
+{
+    if (now_program_exists("tailscale")) {
+        say("TAILSCALE SETUP OPENS IN YOUR BROWSER.");
+        browser_open("http://100.100.100.100/");
+        return;
+    }
+    if (tailscale_install_inflight) {
+        say("TAILSCALE INSTALLATION IS ALREADY RUNNING.");
+        return;
+    }
+    if (!now_program_exists("pkexec")) {
+        say("GRAPHICAL ADMIN AUTHORIZATION IS MISSING; OPENING TAILSCALE HELP.");
+        browser_open("https://tailscale.com/docs/install/linux");
+        return;
+    }
+
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(active_setup_wizard ? active_setup_wizard : win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+        "Install Tailscale on this computer?");
+    gtk_message_dialog_format_secondary_text(
+        GTK_MESSAGE_DIALOG(dialog),
+        "NOW will request your administrator password through the desktop "
+        "authorization dialog, add Tailscale's official signed package repository "
+        "on supported Debian/Ubuntu systems, and install its service. "
+        "Existing Tailscale installations are not changed.");
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL,
+                           "Install Tailscale", GTK_RESPONSE_OK, NULL);
+    int answer = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    if (answer != GTK_RESPONSE_OK) {
+        return;
+    }
+    tailscale_install_inflight = TRUE;
+    say("INSTALLING TAILSCALE — CONFIRM THE SYSTEM PASSWORD PROMPT.");
+    now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;
@@ -1706,7 +1778,15 @@ static gboolean wizard_tailscale_poll(gpointer data)
 {
     Wizard *wizard = data;
     if (!wizard->assistant || wizard->closing ||
-        !gtk_widget_get_visible(wizard->assistant) || wizard->tailscale_cancel) {
+        !gtk_widget_get_visible(wizard->assistant)) {
+        return G_SOURCE_CONTINUE;
+    }
+    if (tailscale_install_inflight) {
+        gtk_label_set_text(GTK_LABEL(wizard->ts_state),
+                           "INSTALLING TAILSCALE — APPROVE THE SYSTEM PASSWORD PROMPT");
+        return G_SOURCE_CONTINUE;
+    }
+    if (wizard->tailscale_cancel) {
         return G_SOURCE_CONTINUE;
     }
 
@@ -1888,7 +1968,9 @@ static void wizard_service_check(void*w,void*p){
 }
 static void wizard_destroy(void *widget, void *data)
 {
-    (void)widget;
+    if (active_setup_wizard == widget) {
+        active_setup_wizard = NULL;
+    }
     Wizard *wizard = data;
     wizard->closing = 1;
     wizard->assistant = NULL;
@@ -1921,6 +2003,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->references=1;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
+ active_setup_wizard=a;
  gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
  gtk_window_set_transient_for(GTK_WINDOW(a),GTK_WINDOW(win));gtk_window_set_modal(GTK_WINDOW(a),1);
  /* Page 1: keep existing device setup. No credentials or pairings are reset. */

@@ -6,6 +6,13 @@ Status: test plan. An unchecked item is **not** validated by GitHub CI.
 
 Private Linux client beta against an **existing, owner-approved host**. Four preapproved Tailscale testers are the initial model. The beta distributes an amd64 Debian package; it does not install Wolf, Docker, Jellyfin, Gluetun, Tailscale accounts, or an OptiPlex account service on a new host.
 
+## Graphical Tailscale setup acceptance
+
+- [ ] On a fresh supported Debian/Ubuntu-family Linux desktop without Tailscale: select Install Tailscale, approve the system authentication dialog, verify upstream signed repository/package installation, and sign in using the browser. No terminal appears.
+- [ ] On a client with Tailscale already installed and connected: use Connect without reinstalling, changing any network settings or requesting root access.
+- [ ] Decline authorization, disconnect the network, and test unsupported OS/repository conflicts. NOW must show a clear non-technical failure, preserve existing package sources, and leave the user a way to retry or open official help.
+- [ ] Do not infer that Tailscale membership grants server or Wolf permission. Existing trusted SSH/pairing and media login remain independent.
+
 ## Pre-release validation path
 
 For **unreleased changes on main**, a PR's passing `Validate OptiPlex NOW` workflow can provide a short-lived **unreleased PR test installer** under that run's Artifacts section. The packaged Debian version is `1.16.1+prNUMBER.RUN`, distinct from the immutable tagged v1.16.1 release. These packages expire after seven days and are **not official releases or general-user installers**.

@@ -11,7 +11,6 @@ This module supplies the protocol and security checks, not production consent.
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import secrets
 import socket
@@ -22,7 +21,6 @@ import host_transaction as tx
 
 PROTOCOL = 1
 MAX_REQUEST = 4096
-MAX_REPLY = 1024
 TICKET_TTL = 60.0
 ALLOWED_OPERATION = "start_wolf"
 
@@ -157,7 +155,7 @@ def handle_local_request(connection: socket.socket,
             raise AuthorizationError("Invalid JSON request") from exc
         if not isinstance(request, dict) or set(request) != {
             "version", "operation", "workspace", "generation"
-        } or request["version"] != PROTOCOL:
+        } or type(request["version"]) is not int or request["version"] != PROTOCOL:
             raise AuthorizationError("Unexpected protocol fields or version")
         if (not isinstance(request["workspace"], str)
                 or len(request["workspace"]) > 1024):
@@ -170,3 +168,24 @@ def handle_local_request(connection: socket.socket,
                 "ticket": token}
     except (socket.timeout, OSError) as exc:
         raise AuthorizationError("Local connection failed") from exc
+
+
+def serve_one(connection: socket.socket,
+              authority: OwnerAuthority, confirm) -> None:
+    """Reply to exactly one local request; expose no internal exception text.
+
+    The caller owns accept(), socket lifecycle and the trusted local owner UI.
+    This is NOT a listening service or a privileged installer endpoint.
+    """
+    try:
+        response = handle_local_request(connection, authority, confirm)
+    except AuthorizationError:
+        response = {"version": PROTOCOL, "status": "denied"}
+    encoded = (json.dumps(response, separators=(",", ":")) + "\n").encode()
+    if len(encoded) > 1024:
+        raise AuthorizationError("Internal response exceeds size limit")
+    try:
+        connection.settimeout(3)
+        connection.sendall(encoded)
+    except (OSError, socket.timeout) as exc:
+        raise AuthorizationError("Failed sending local reply") from exc

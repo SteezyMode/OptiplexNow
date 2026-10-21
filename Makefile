@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
+.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass
 
 build:
@@ -79,3 +79,34 @@ check-tailscale: | build
 build/now-ssh-askpass: src/ssh_askpass.c | build
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/ssh_askpass.c -o $@ $(GTK_LIBS)
 
+
+# Independent native-code diagnostics. Never used for the published .deb.
+# Leak detection is disabled for GIO/GTK process-global allocations; ASan
+# bounds/use-after-free and UBSan checks remain active.
+SAN_CFLAGS = -std=gnu11 -O1 -g -Wall -Wextra -Werror=implicit-function-declaration -Werror=incompatible-pointer-types -Werror=return-type -Werror=format-security -Wformat=2 -Werror=misleading-indentation -fno-omit-frame-pointer -fsanitize=address,undefined
+SAN_LIBS = -fsanitize=address,undefined
+SAN_ENV = ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1
+
+# Compiled behavioral tests run through AddressSanitizer + UBSan. No fonts,
+# server, network, live credentials, or graphical session are needed.
+check-sanitizers: | build
+	mkdir -p build/sanitized
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_process.c src/process.c -o build/sanitized/test-process $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-process
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_presets.c src/presets.c -o build/sanitized/test-presets $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-presets
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_config.c src/config.c -o build/sanitized/test-config $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-config
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_wolf_pairing.c src/wolf_pairing.c -o build/sanitized/test-wolf-pairing $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-wolf-pairing
+	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_wolf_transport.c src/wolf_transport.c -o build/sanitized/test-wolf-transport $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-wolf-transport
+	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_tailscale_async.c src/tailscale_async.c -o build/sanitized/test-tailscale $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-tailscale
+
+# Compile-only, stricter diagnostics on extracted production modules, including
+# GUI authorization helpers. The legacy main.c is deliberately excluded until
+# it is split into independently testable responsibilities.
+	$(CC) $(SAN_CFLAGS) $(GTK_CFLAGS) -Isrc -c src/ssh_authorize.c -o build/sanitized/ssh_authorize.o
+	$(CC) $(SAN_CFLAGS) $(GTK_CFLAGS) -Isrc -c src/tailscale_install.c -o build/sanitized/tailscale_install.o
+	$(CC) $(SAN_CFLAGS) $(GTK_CFLAGS) -Isrc -c src/ssh_askpass.c -o build/sanitized/ssh_askpass.o

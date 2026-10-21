@@ -56,7 +56,7 @@ The six engineering improvements are a permanent review checklist, not work that
 | **3. Readable C** | New extracted modules follow `.clang-format` | Format only touched legacy functions; `main.c` still needs incremental cleanup |
 | **4. Monitoring and tray separation** | Existing worker status pipeline | Extract status normalization/probes from GTK, then tray actions; no large rewrite |
 | **5. Behavioral tests** | Native config/Wolf tests, simulated failures [#109](https://github.com/SteezyMode/OptiplexNow/pull/109), disposable GUI smoke, Tailscale status/peer tests [#110](https://github.com/SteezyMode/OptiplexNow/pull/110) | Installer authorization and distro tests [#111](https://github.com/SteezyMode/OptiplexNow/pull/111), real Tailscale login and UI cancellation evidence |
-| **6. Stronger diagnostics** | Compiler warnings and native tests already run in CI | Separate opt-in AddressSanitizer/UndefinedBehaviorSanitizer tests, then tighter warnings |
+| **6. Stronger diagnostics** | Compiler warnings and native tests already run in CI; independent ASan/UBSan test job introduced in the current hardening PR | Verify sanitizer job, extend coverage when monitoring/tray are extracted; do not make a whole-app rewrite a prerequisite |
 
 **Current delivery sequence:** finish and verify graphical Tailscale installation and browser sign-in on supported Debian/Ubuntu client distributions; simplify SSH authorization without exposing server administration; validate one real unpaired Moonlight connection and new-client onboarding; then take the monitoring/tray and sanitizer work as small, measured PRs. The standardized host installer remains a later product milestone, not a prerequisite for the current client test.
 

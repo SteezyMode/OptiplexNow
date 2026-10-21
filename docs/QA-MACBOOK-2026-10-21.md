@@ -43,7 +43,7 @@ This was a **fresh NOW/Moonlight client setup**, not a clean OS installation, Ta
 | Jellyfin service connectivity | **Pass observed** | Services wizard returned **RESPONDING** for a manually entered HTTPS video URL |
 | Persist URL from wizard to settings | **Fail** | After wizard completion, Videos opened nothing; Videos URL in main Settings was empty. Manually entering and saving same URL fixed launch |
 | Videos main button/tray shortcut | **Pass after manual fix** | Both had appeared inert when URL absent; saved URL enabled Jellyfin browser launch |
-| Jellyfin video and audio playback | **Pass observed** | User opened and played content and reported both working well |
+| Jellyfin content playback | **Pass observed** | User opened content and reported it worked well; audio was not independently measured |
 | Final setup-complete screen | **Acceptable, limited review** | Tester clicked past it, reported appearance acceptable; no systematic copy/navigation review |
 | App window from tray | **Fail UX** | Tray activation displayed window as fullscreen/unresizable on the client's 1366x768 XFCE desktop |
 | Restart/upgrade/pairing persistence | **Not tested** | No reboot, reconnect, upgrade or previously-paired retry recorded |
@@ -78,7 +78,7 @@ No verified game FPS, playable input, game audio, thermal profile or simultaneou
 
 ### 4. Video and wizard persistence
 
-The tester entered the owner-provided Jellyfin HTTPS URL on the Services wizard page; **CHECK SERVICES** reported **RESPONDING**. After finishing/closing setup, **Videos** opened nothing from both launcher and tray. Main Settings showed an **empty Videos URL**. The tester added the same URL in Settings; Videos opened Jellyfin and actual video with audio played successfully. This is concrete evidence that the wizard's validated field was not persisted in the normal configuration in this test, not a Jellyfin or browser outage. [Issue #147](https://github.com/SteezyMode/OptiplexNow/issues/147).
+The tester entered the owner-provided Jellyfin HTTPS URL on the Services wizard page; **CHECK SERVICES** reported **RESPONDING**. After finishing/closing setup, **Videos** opened nothing from both launcher and tray. Main Settings showed an **empty Videos URL**. The tester added the same URL in Settings; Videos opened Jellyfin and actual Jellyfin content played successfully (audio not independently measured). This is concrete evidence that the wizard's validated field was not persisted in the normal configuration in this test, not a Jellyfin or browser outage. [Issue #147](https://github.com/SteezyMode/OptiplexNow/issues/147).
 
 **Broader product issue:** even after persistence is fixed, requiring the owner to know and type a Jellyfin URL is unsuitable for an ordinary consumer. Many target hosts will have **no Jellyfin installation at all**. For public alpha, NOW should offer graphical **Set Up My Video Library** for a clean compatible host, or **Use Existing Jellyfin** with safe owner-confirmed detection. Once enrolled, approved client devices should receive the authorized video endpoint through trusted server metadata or connection setup, with no required public domain, reverse proxy or URL typing. Keep manual URL input as an advanced option. Preserve existing stacks and real Jellyfin authentication; never invent or leak owner URLs/credentials. [Issue #148](https://github.com/SteezyMode/OptiplexNow/issues/148). **Neither managed installation nor automatic discovery ships in v1.18.0.**
 

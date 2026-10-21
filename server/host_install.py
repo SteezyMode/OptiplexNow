@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Real, deliberately narrow NOW Host Wolf installer for clean AMD/Intel hosts.
+"""Real, deliberately narrow NOW Host Wolf installer for clean GPU hosts.
 
 --check reads the host only. --install MAY pull a pinned upstream image and
 create a single, NOW-owned Wolf Compose project. It never installs Linux
 packages/drivers, rewrites another Docker project or replaces user data.
 
-First supported pilot candidates: Ubuntu or Pop!_OS 24.04 x86-64, AMD/Intel.
-NVIDIA is intentionally blocked until a driver-versioned volume lifecycle
-is implemented. Real stream/video/audio/controller validation is still required.
+Pilot candidates: Ubuntu or Pop!_OS 24.04 x86-64, AMD/Intel/NVIDIA.
+NVIDIA requires a verified SHA256 for the exact installed driver version.
+No installed Wolf streaming workload is certified until physical acceptance.
 """
 from __future__ import annotations
 
@@ -20,11 +20,11 @@ import re
 import stat
 import subprocess
 import sys
-import time
 
 import host_plan
 import host_preflight
 import host_stage
+import host_nvidia
 
 ROOT = Path("/var/lib/optiplex-now")
 WORKSPACE = ROOT / "host"
@@ -77,8 +77,8 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
         blockers.append("container_runtime")
     if snapshot.get("os_id") not in ("ubuntu", "pop") or snapshot.get("os_version") != "24.04":
         blockers.append("only Ubuntu/Pop!_OS 24.04 pilot candidates")
-    if gpu not in ("amd", "intel"):
-        blockers.append("NVIDIA volume preparation has not been implemented")
+    if gpu not in host_stage.GPU_CHOICES:
+        blockers.append("invalid GPU backend")
     try:
         host_stage.validate_render_node(render)
     except ValueError:
@@ -87,7 +87,7 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
         device = Path(render)
         vendor_file = Path("/sys/class/drm") / device.name / "device/vendor"
         vendor = host_preflight.read_small(vendor_file)
-        if gpu in ("amd", "intel") and (
+        if gpu in host_stage.GPU_CHOICES and (
                 vendor is None or vendor.strip().lower() != host_stage.GPU_VENDORS[gpu]):
             blockers.append("render node GPU vendor not independently verified")
         try:
@@ -95,9 +95,26 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
                 blockers.append("render node is not a character device")
         except OSError:
             blockers.append("render node not accessible")
-    if gpu in ("amd", "intel"):
-        # Do not mistake another card or generic render node for video-encoding
-        # support. The result below is only a pre-install compatibility check.
+    if gpu == "nvidia":
+        # The manual volume cannot compensate for wrong kernel modules,
+        # disabled DRM modesetting, or missing official character devices.
+        for check in ("nvidia_driver", "nvidia_drm_modeset"):
+            if statuses.get(check) != "pass":
+                blockers.append(check)
+        try:
+            host_nvidia.current_driver_version()
+        except host_nvidia.DriverError:
+            blockers.append("NVIDIA driver version cannot be verified")
+        for name in ("/dev/nvidia0", "/dev/nvidiactl", "/dev/nvidia-modeset",
+                     "/dev/nvidia-uvm", "/dev/nvidia-uvm-tools",
+                     "/dev/nvidia-caps/nvidia-cap1", "/dev/nvidia-caps/nvidia-cap2"):
+            try:
+                if not stat.S_ISCHR(Path(name).stat().st_mode):
+                    blockers.append(name + " is not a character device")
+            except OSError:
+                blockers.append(name + " is unavailable")
+    if gpu in host_stage.GPU_CHOICES:
+        # Device presence is necessary, not proof of hardware encoding.
         for name in ("/dev/uinput", "/dev/uhid"):
             try:
                 if not stat.S_ISCHR(Path(name).stat().st_mode):
@@ -132,6 +149,7 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
                 "candidate")
     return {"decision": decision,
             "gpu": gpu, "render_node": render,
+            "nvidia_driver_version": snapshot.get("nvidia_driver", "") if gpu == "nvidia" else None,
             "os": snapshot.get("os_id"), "version": snapshot.get("os_version"),
             "blockers": sorted(set(blockers)),
             "notes": [
@@ -164,7 +182,8 @@ def _status(workspace: Path, phase: str, image: str, *, cid: str | None = None) 
         os.close(folder)
 
 
-def _render_compose(gpu: str, render: str, digest: str, workspace: Path) -> str:
+def _render_compose(gpu: str, render: str, digest: str, workspace: Path,
+                    *, nvidia_volume: str | None = None) -> str:
     plan = {"tool": "now-host-plan", "schema_version": host_plan.PLAN_SCHEMA,
             "mode": "read_only_preview", "decision": "blocked",
             "may_apply": False, "changes_performed": False}
@@ -185,18 +204,37 @@ def _render_compose(gpu: str, render: str, digest: str, workspace: Path) -> str:
     service["profiles"] = []  # No default profile; explicit service only.
     service["labels"]["io.optiplex-now.managed"] = "host-install-pilot"
     service["restart"] = "unless-stopped"
+    if gpu == "nvidia":
+        if not nvidia_volume or not re.fullmatch(r"now-nvidia-[0-9-]+-[a-f0-9]{16}", nvidia_volume):
+            raise InstallationError("Verified version-matched NVIDIA volume is required")
+        old = host_stage.DRIVER_VOLUME
+        if compose.get("volumes") != {old: {"external": True}}:
+            raise InstallationError("Unexpected NVIDIA staging volume")
+        if service["volumes"].count(old + ":/usr/nvidia:rw") != 1:
+            raise InstallationError("NVIDIA userspace mount missing")
+        compose["volumes"] = {nvidia_volume: {"external": True}}
+        service["volumes"][service["volumes"].index(old + ":/usr/nvidia:rw")] = (
+            nvidia_volume + ":/usr/nvidia:rw")
+        service["environment"]["NVIDIA_DRIVER_VOLUME_NAME"] = nvidia_volume
+    elif nvidia_volume is not None:
+        raise InstallationError("NVIDIA volume must not be supplied for non-NVIDIA GPUs")
     return json.dumps(compose, sort_keys=True, indent=2) + "\n"
 
 
-def install(gpu: str, render: str, digest: str, confirmation: str) -> dict:
+def install(gpu: str, render: str, digest: str, confirmation: str,
+            nvidia_installer_sha256: str | None = None) -> dict:
     """Live, one-time clean host installation. No simulation or fallback path."""
     if os.geteuid() != 0:
         raise InstallationError("Root authority required (through a local authenticated prompt)")
     if confirmation != "INSTALL-WOLF":
         raise InstallationError("Explicit installation confirmation missing")
     host_stage.validate_digest(digest)
-    if gpu not in ("amd", "intel"):
-        raise InstallationError("NVIDIA installer is not enabled")
+    if gpu not in host_stage.GPU_CHOICES:
+        raise InstallationError("GPU backend is not supported")
+    if gpu == "nvidia":
+        host_nvidia.validate_installer_sha(nvidia_installer_sha256)
+    elif nvidia_installer_sha256:
+        raise InstallationError("Unexpected NVIDIA checksum on AMD/Intel host")
     fd = os.open(LOCK_PATH, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -212,15 +250,33 @@ def install(gpu: str, render: str, digest: str, confirmation: str) -> dict:
         WORKSPACE.mkdir(mode=0o700)
         (WORKSPACE / "wolf").mkdir(mode=0o700)
         image = IMAGE_PREFIX + digest
-        compose = _render_compose(gpu, render, digest, WORKSPACE)
+        driver = None
+        _status(WORKSPACE, "preparing", image)
+        if gpu == "nvidia":
+            version = host_nvidia.current_driver_version()
+            build_context = WORKSPACE / "nvidia-build"
+            build_context.mkdir(mode=0o700)
+            driver = host_nvidia.prepare_volume(
+                _docker, driver_version=version,
+                installer_sha=nvidia_installer_sha256,
+                build_context=build_context,
+                progress=lambda phase: _status(WORKSPACE, phase, image))
+            if host_nvidia.current_driver_version() != version:
+                raise InstallationError("NVIDIA host driver changed during installation")
+        compose = _render_compose(
+            gpu, render, digest, WORKSPACE,
+            nvidia_volume=driver["name"] if driver else None)
         _write_new(WORKSPACE / "compose.yaml", compose)
         _write_new(WORKSPACE / "owner.json", json.dumps(
             {"manager": "optiplex-now", "version": 1, "gpu": gpu,
-             "render_node": render, "image": image}, sort_keys=True) + "\n")
+             "render_node": render, "image": image,
+             "nvidia": driver}, sort_keys=True) + "\n")
         _status(WORKSPACE, "pulling", image)
         # Pull only the owner-confirmed immutable image reference.
         _docker(["pull", image], timeout=600)
         _status(WORKSPACE, "starting", image)
+        if gpu == "nvidia" and host_nvidia.current_driver_version() != driver["version"]:
+            raise InstallationError("NVIDIA host driver version no longer matches volume")
         _docker(["compose", "-p", PROJECT, "-f", str(WORKSPACE / "compose.yaml"),
                  "up", "--detach", "--no-deps", "--no-build",
                  "--no-recreate", "--pull", "never", "wolf"], timeout=90)
@@ -257,13 +313,16 @@ def main() -> int:
     p.add_argument("--gpu", choices=host_stage.GPU_CHOICES, required=True)
     p.add_argument("--render-node", required=True)
     p.add_argument("--image-digest", help="Verified Wolf OCI sha256 digest, required for --install")
+    p.add_argument("--nvidia-installer-sha256",
+                   help="SHA256 from a trusted source for official NVIDIA .run of this host's exact driver version")
     p.add_argument("--confirm", default="", help="Requires literal INSTALL-WOLF for --install")
     a = p.parse_args()
     try:
         if a.check:
             output = _host_checks(a.gpu, a.render_node)
         else:
-            output = install(a.gpu, a.render_node, a.image_digest, a.confirm)
+            output = install(a.gpu, a.render_node, a.image_digest, a.confirm,
+                             a.nvidia_installer_sha256)
     except (InstallationError, ValueError, OSError) as exc:
         print("NOW Host: " + str(exc), file=sys.stderr)
         return 1

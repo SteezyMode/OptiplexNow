@@ -30,5 +30,23 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertNotIn('snprintf(cfg[7],512,"http://%s:8085"', SOURCE)
 
 
+    def test_services_are_committed_before_final_wizard_page(self):
+        # A user may navigate away after Next without pressing Finish.
+        self.assertIn("if(page==c->finish_page)wizard_save(c);", SOURCE)
+        self.assertIn("c->finish_page=six;", SOURCE)
+        self.assertIn("if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);", SOURCE)
+
+    def test_wolf_pairing_search_is_bounded_and_owner_approved(self):
+        # Structural guards: full behavior still requires physical GTK tests.
+        self.assertIn("state->auto_refresh_id = g_timeout_add_seconds(3,", SOURCE)
+        self.assertIn("3 * 60 * G_USEC_PER_SEC", SOURCE)
+        self.assertIn('wolf_ui_start(state, "pending-text", NULL);', SOURCE)
+        self.assertIn("wolf_ui_start(state, \"pair\", payload);", SOURCE)
+        self.assertIn("g_source_remove(state->auto_refresh_id);", SOURCE)
+        self.assertIn("GTK_IS_WINDOW(toplevel)", SOURCE)
+        self.assertIn('"CONNECT TO GAME HOST","setupaction"', SOURCE)
+
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -51,7 +51,7 @@ The six engineering improvements are a permanent review checklist, not work that
 
 | Improvement | Evidence in `main` | Next incomplete work |
 | --- | --- | --- |
-| **1. Nonblocking I/O** | Wolf transport [#106](https://github.com/SteezyMode/OptiplexNow/pull/106), Tailscale status/discovery [#110](https://github.com/SteezyMode/OptiplexNow/pull/110) | Finish graphical installer verification [#111](https://github.com/SteezyMode/OptiplexNow/pull/111); then remaining synchronous SSH/setup actions |
+| **1. Nonblocking I/O** | Wolf transport [#106](https://github.com/SteezyMode/OptiplexNow/pull/106), Tailscale status/discovery [#110](https://github.com/SteezyMode/OptiplexNow/pull/110) | Graphical SSH authorization in PR #112; remaining synchronous advanced host actions |
 | **2. Modular responsibilities** | Config [#103](https://github.com/SteezyMode/OptiplexNow/pull/103), Wolf parsing [#105](https://github.com/SteezyMode/OptiplexNow/pull/105), Wolf transport [#106](https://github.com/SteezyMode/OptiplexNow/pull/106), Tailscale status/discovery [#110](https://github.com/SteezyMode/OptiplexNow/pull/110) | GUI installer helper [#111](https://github.com/SteezyMode/OptiplexNow/pull/111) requires physical acceptance; later monitoring and tray |
 | **3. Readable C** | New extracted modules follow `.clang-format` | Format only touched legacy functions; `main.c` still needs incremental cleanup |
 | **4. Monitoring and tray separation** | Existing worker status pipeline | Extract status normalization/probes from GTK, then tray actions; no large rewrite |

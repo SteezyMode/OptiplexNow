@@ -18,11 +18,15 @@ def stream_port_reachable(address):
 
 
 def candidates(status, probe=stream_port_reachable):
-    if status.get('BackendState') != 'Running':
+    if not isinstance(status, dict) or status.get('BackendState') != 'Running':
         raise ValueError('Connect Tailscale on this computer, then try Find server again.')
     rows = []
     seen = set()
     peers = status.get('Peer') or {}
+    if not isinstance(peers, dict):
+        raise ValueError('Invalid Tailscale peer listing.')
+    self_node = status.get('Self') or {}
+    own_addresses = set(self_node.get('TailscaleIPs') or []) if isinstance(self_node, dict) else set()
     nodes = list(peers.values())
     for node in nodes:
         if not isinstance(node, dict):
@@ -34,6 +38,7 @@ def candidates(status, probe=stream_port_reachable):
             except ValueError:
                 continue
         addresses.sort(key=lambda a: a.version)
+        addresses = [address for address in addresses if str(address) not in own_addresses]
         if not addresses:
             continue
         address = str(addresses[0])

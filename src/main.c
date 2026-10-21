@@ -2037,7 +2037,27 @@ int main(int argc,char**argv) {
  fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
- win=gtk_window_new(0);gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");gtk_window_set_default_size(GTK_WINDOW(win),660,350);
+ /* Give the dashboard enough height for server controls on normal displays.
+   Bound it to the monitor's usable area so older laptops and projectors can
+   still access everything through the existing scrolled container. */
+  int initial_width = 900;
+  int initial_height = 620;
+  GdkDisplay *display = gdk_display_get_default();
+  if (display) {
+    GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
+    if (!monitor && gdk_display_get_n_monitors(display) > 0) {
+      monitor = gdk_display_get_monitor(display, 0);
+    }
+    if (monitor) {
+      GdkRectangle workarea;
+      gdk_monitor_get_workarea(monitor, &workarea);
+      initial_width = MIN(1100, MAX(320, workarea.width - 96));
+      initial_height = MIN(720, MAX(300, workarea.height - 120));
+    }
+  }
+  win=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");
+  gtk_window_set_default_size(GTK_WINDOW(win),initial_width,initial_height);
  gtk_window_set_icon_name(GTK_WINDOW(win),"optiplex-now");gtk_window_set_position(GTK_WINDOW(win),1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
@@ -2102,7 +2122,7 @@ int main(int argc,char**argv) {
  const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);
- reflow(660);
+ reflow(initial_width);
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();
  if(!start_in_tray || first_run)gtk_widget_show_all(win);

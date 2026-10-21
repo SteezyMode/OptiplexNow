@@ -145,6 +145,10 @@ int now_host_parse_drives(const char *text, NowHostDrive *drives,
             cursor = fields[i];
         }
         if (valid && !strchr(fields[3], '|') &&
+            strlen(fields[0]) < sizeof drives[0].path &&
+            strlen(fields[1]) < sizeof drives[0].size &&
+            strlen(fields[2]) < sizeof drives[0].free_space &&
+            strlen(fields[3]) < sizeof drives[0].used_percent &&
             allowed_disk_path(fields[0]) && !system_mount(fields[0])) {
             NowHostDrive *drive = &drives[count];
             snprintf(drive->path, sizeof drive->path, "%s", fields[0]);

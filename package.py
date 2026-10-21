@@ -33,6 +33,7 @@ shutil.copy2(root/'build/now-host-setup',pkg/'usr/lib/optiplex-now/now-host-setu
 for host_module in ('host_preflight.py', 'host_plan.py', 'host_stage.py', 'host_install.py', 'host_nvidia.py'):
  shutil.copy2(root/'server'/host_module,pkg/'usr/lib/optiplex-now'/host_module)
 shutil.copy2(root/'server/nvidia-driver.Dockerfile', pkg/'usr/lib/optiplex-now/nvidia-driver.Dockerfile')
+shutil.copy2(root/'server/LICENSE-nvidia-driver-upstream.txt', pkg/'usr/share/doc/optiplex-now/LICENSE-nvidia-driver-upstream.txt')
 (pkg/'usr/lib/optiplex-now/host_install.py').chmod(0o755)
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)

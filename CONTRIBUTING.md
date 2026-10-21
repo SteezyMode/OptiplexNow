@@ -22,6 +22,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/ssh_authorize.c/.h` | Async, cancellable GUI SSH key authorization caller; GTK widgets belong to the caller, not the worker |
 | `src/ssh-authorize.py` | Restricted OpenSSH key-generation and ssh-copy-id orchestration; process group cleanup and bounded timeouts |
 | `src/ssh_askpass.c` | Separate, GTK-only host fingerprint confirmation and masked SSH password/passphrase prompt, invoked by OpenSSH |
+| `src/moonlight_install.c/.h` | Cancellable per-user Flatpak installation of Moonlight; fixed command arguments; no terminal or network dependency in tests |
 | `src/process.c/.h` | Subprocess execution and executable lookup |
 | `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
 | `src/backup.c` | Explicit encrypted client identity/settings backup |
@@ -52,7 +53,7 @@ Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Pytho
 
 ```sh
 make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
-make check-host-metrics check-tray-prefs check-tray-actions
+make check-host-metrics check-tray-prefs check-tray-actions check-moonlight-install
 make check-sanitizers  # ASan + UBSan, separate binaries; no release flag changes
 python3 -m unittest discover -s tests -v
 make package

@@ -50,6 +50,7 @@ class OnboardingFlowTests(unittest.TestCase):
             "PATH": str(self.bin) + os.pathsep + os.environ.get("PATH", ""),
             "NOW_TEST_FIXTURE_ROOT": str(self.root),
             "NOW_TEST_HOST_HELPER": str(SOURCE / "wolf-pair-local.py"),
+            "NOW_TEST_ASKPASS": str(askpass),
             "DISPLAY": ":99",  # Askpass is mocked, never launched.
         })
         self.env.pop("NOW_MOCK_AUTH_DENIED", None)
@@ -67,8 +68,12 @@ class OnboardingFlowTests(unittest.TestCase):
         env = self.env.copy()
         if overrides:
             env.update(overrides)
+        # Enrollment invokes the real module via a test-only wrapper so its
+        # fixed packaged askpass executable never becomes configurable in NOW.
+        entrypoint = (REPO / "tests" / "fixtures" / "run_ssh_authorize.py"
+                      if helper == "ssh-authorize.py" else SOURCE / helper)
         proc = subprocess.run(
-            [sys.executable, str(SOURCE / helper), *args],
+            [sys.executable, str(entrypoint), *args],
             input=json.dumps(payload) if payload is not None else None,
             text=True, capture_output=True, env=env, timeout=24,
             check=False

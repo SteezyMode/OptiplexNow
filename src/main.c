@@ -2597,8 +2597,15 @@ int main(int argc,char**argv) {
     if (monitor) {
       GdkRectangle workarea;
       gdk_monitor_get_workarea(monitor, &workarea);
-      initial_width = MIN(900, MAX(400, workarea.width - 96));
-      initial_height = MIN(620, MAX(340, workarea.height - 120));
+      /* Preserve the roomy ultrawide desktop layout tested by CI.
+       * Prefer a smaller normal window on 1366x768 notebook screens. */
+      if (workarea.width >= 1920 && workarea.height >= 900) {
+        initial_width = MIN(1100, MAX(400, workarea.width - 96));
+        initial_height = MIN(720, MAX(340, workarea.height - 120));
+      } else {
+        initial_width = MIN(900, MAX(400, workarea.width - 96));
+        initial_height = MIN(620, MAX(340, workarea.height - 120));
+      }
     }
   }
   win=gtk_window_new(GTK_WINDOW_TOPLEVEL);

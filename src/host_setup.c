@@ -21,6 +21,7 @@ typedef struct {
     GtkWidget *gpu_choice;
     GtkWidget *render_entry;
     GtkWidget *digest_entry;
+    GtkWidget *nvidia_sha_entry;
     GtkWidget *eligible_button;
     GtkWidget *install_button;
     gboolean eligible;
@@ -154,8 +155,8 @@ static void on_window_destroy(GtkWidget *window, gpointer data)
  * The privileged installer reruns every eligibility and conflict check. */
 static const char *selected_gpu(HostSetupUI *ui)
 {
-    return gtk_combo_box_get_active(GTK_COMBO_BOX(ui->gpu_choice)) == 0
-           ? "amd" : "intel";
+    int active = gtk_combo_box_get_active(GTK_COMBO_BOX(ui->gpu_choice));
+    return active == 0 ? "amd" : active == 1 ? "intel" : "nvidia";
 }
 
 static gboolean valid_pinned_digest(const char *digest)
@@ -290,13 +291,24 @@ static void on_install(GtkButton *button, gpointer data)
             "ENTER A VERIFIED SHA256 WOLF IMAGE DIGEST BEFORE INSTALLING.");
         return;
     }
+    const char *gpu = selected_gpu(ui);
+    const char *nvidia_sha = gtk_entry_get_text(GTK_ENTRY(ui->nvidia_sha_entry));
+    if (g_strcmp0(gpu, "nvidia") == 0 &&
+        (!nvidia_sha || strlen(nvidia_sha) != 64 ||
+         strspn(nvidia_sha, "0123456789abcdef") != 64)) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+            "NVIDIA REQUIRES A VERIFIED 64-CHARACTER DRIVER INSTALLER SHA256.");
+        return;
+    }
     GtkWidget *confirm = gtk_message_dialog_new(
         GTK_WINDOW(ui->window), GTK_DIALOG_MODAL,
         GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
         "Install a NEW Wolf streaming server on this computer?");
     gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(confirm),
-        "Only for an EMPTY, ELIGIBLE AMD/Intel host.\n"
+        "Only for an EMPTY, ELIGIBLE new Linux host.\n"
         "Image: ghcr.io/games-on-whales/wolf@%s\n"
+        "NVIDIA will build the verified driver userspace volume.\n"
+        "The supplied driver checksum MUST be independently verified.\n"
         "Managed data: /var/lib/optiplex-now/host\n"
         "Wolf requires administrative Docker socket access.\n"
         "The OS will ask for administrator authentication.\n"
@@ -309,12 +321,18 @@ static void on_install(GtkButton *button, gpointer data)
     gtk_widget_destroy(confirm);
     if (!approved)
         return;
-    const gchar *argv[] = {
+    const gchar *argv[17] = {
         "/usr/bin/pkexec", INSTALLER, "--install",
-        "--gpu", selected_gpu(ui),
+        "--gpu", gpu,
         "--render-node", gtk_entry_get_text(GTK_ENTRY(ui->render_entry)),
-        "--image-digest", digest, "--confirm", "INSTALL-WOLF", NULL
+        "--image-digest", digest, "--confirm", "INSTALL-WOLF",
+        NULL, NULL, NULL
     };
+    if (g_strcmp0(gpu, "nvidia") == 0) {
+        argv[11] = "--nvidia-installer-sha256";
+        argv[12] = nvidia_sha;
+        argv[13] = NULL;
+    }
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
         argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
@@ -392,7 +410,7 @@ int main(int argc, char **argv)
         -1);
 
     GtkWidget *advanced = gtk_expander_new(
-        "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL PILOT");
+        "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL / NVIDIA PILOT");
     GtkWidget *settings = gtk_grid_new();
     gtk_grid_set_column_spacing(GTK_GRID(settings), 8);
     gtk_grid_set_row_spacing(GTK_GRID(settings), 7);
@@ -401,8 +419,8 @@ int main(int argc, char **argv)
     gtk_box_pack_start(GTK_BOX(column), advanced, FALSE, FALSE, 0);
 
     GtkWidget *intro = gtk_label_new(
-        "Pop!_OS or Ubuntu 24.04. NVIDIA requires an unimplemented driver "
-        "volume and is not installable yet. Only use this on a new, empty host.");
+        "Pop!_OS or Ubuntu 24.04. NVIDIA additionally requires a trusted "
+        "SHA256 for the exact NVIDIA driver installer. Only for clean hosts.");
     gtk_label_set_line_wrap(GTK_LABEL(intro), TRUE);
     gtk_label_set_xalign(GTK_LABEL(intro), 0);
     gtk_grid_attach(GTK_GRID(settings), intro, 0, 0, 2, 1);
@@ -411,6 +429,7 @@ int main(int argc, char **argv)
     ui->gpu_choice = gtk_combo_box_text_new();
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "AMD");
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "Intel");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "NVIDIA");
     gtk_combo_box_set_active(GTK_COMBO_BOX(ui->gpu_choice), 0);
     gtk_grid_attach(GTK_GRID(settings), ui->gpu_choice, 1, 1, 1, 1);
 
@@ -425,16 +444,24 @@ int main(int argc, char **argv)
                                    "sha256: (verified upstream image digest)");
     gtk_grid_attach(GTK_GRID(settings), ui->digest_entry, 1, 3, 1, 1);
 
+    gtk_grid_attach(GTK_GRID(settings),
+                    gtk_label_new("NVIDIA installer SHA256"), 0, 4, 1, 1);
+    ui->nvidia_sha_entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(ui->nvidia_sha_entry),
+                                   "64 hex characters; independently verified");
+    gtk_grid_attach(GTK_GRID(settings), ui->nvidia_sha_entry, 1, 4, 1, 1);
     ui->eligible_button = gtk_button_new_with_label("CHECK INSTALL ELIGIBILITY");
-    gtk_grid_attach(GTK_GRID(settings), ui->eligible_button, 0, 4, 1, 1);
+    gtk_grid_attach(GTK_GRID(settings), ui->eligible_button, 0, 5, 1, 1);
     ui->install_button = gtk_button_new_with_label("INSTALL ON CLEAN HOST...");
     gtk_widget_set_sensitive(ui->install_button, FALSE);
-    gtk_grid_attach(GTK_GRID(settings), ui->install_button, 1, 4, 1, 1);
+    gtk_grid_attach(GTK_GRID(settings), ui->install_button, 1, 5, 1, 1);
     g_signal_connect(ui->gpu_choice, "changed",
                      G_CALLBACK(invalidate_install), ui);
     g_signal_connect(ui->render_entry, "changed",
                      G_CALLBACK(invalidate_install), ui);
     g_signal_connect(ui->digest_entry, "changed",
+                     G_CALLBACK(invalidate_install), ui);
+    g_signal_connect(ui->nvidia_sha_entry, "changed",
                      G_CALLBACK(invalidate_install), ui);
     g_signal_connect(ui->eligible_button, "clicked",
                      G_CALLBACK(on_eligibility), ui);

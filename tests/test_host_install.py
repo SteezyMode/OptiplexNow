@@ -8,6 +8,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "server"))
 import host_install as installer  # noqa: E402
+import host_nvidia  # noqa: E402
 
 PIN = "sha256:" + "a" * 64
 
@@ -23,10 +24,15 @@ class CleanHostInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(installer.InstallationError, "confirmation"):
                 installer.install("intel", "/dev/dri/renderD128", PIN, "")
 
-    def test_nvidia_is_not_accidentally_enabled(self):
+    def test_nvidia_requires_verified_sha_before_host_mutation(self):
         with mock.patch.object(installer.os, "geteuid", return_value=0):
-            with self.assertRaisesRegex(installer.InstallationError, "NVIDIA"):
-                installer.install("nvidia", "/dev/dri/renderD129", PIN, "INSTALL-WOLF")
+            for checksum in (None, "", "f" * 63, "g" * 64, "F" * 64):
+                with self.subTest(checksum=checksum), self.assertRaises(host_nvidia.DriverError):
+                    installer.install("nvidia", "/dev/dri/renderD129", PIN,
+                                      "INSTALL-WOLF", checksum)
+            with self.assertRaises(installer.InstallationError):
+                installer.install("amd", "/dev/dri/renderD128", PIN,
+                                  "INSTALL-WOLF", "f" * 64)
 
     def test_mutable_or_malformed_digest_refused(self):
         with mock.patch.object(installer.os, "geteuid", return_value=0):
@@ -53,14 +59,78 @@ class CleanHostInstallerTests(unittest.TestCase):
         self.assertEqual(wolf["labels"]["io.optiplex-now.managed"],
                          "host-install-pilot")
 
-    def test_real_check_on_ci_host_never_reports_installed(self):
-        # Uses the runner's actual hardware, process/net and /dev trees.
-        # A CI runner lacking a supported GPU must refuse candidacy.
+    def test_real_nvidia_eligibility_on_ci_runner_never_reports_stream_verified(self):
         result = installer._host_checks("nvidia", "/dev/dri/renderD128")
-        self.assertEqual(result["decision"], "blocked")
-        self.assertIn("NVIDIA volume preparation has not been implemented",
-                      result["blockers"])
+        self.assertIn(result["decision"], {"blocked", "candidate", "candidate_after_admin_check"})
         self.assertNotIn("stream_verified", result)
+        self.assertIn("nvidia_driver_version", result)
+
+
+    def test_nvidia_compose_requires_versioned_driver_volume(self):
+        volume = host_nvidia.volume_name("580.95.05", "f" * 64)
+        data = json.loads(installer._render_compose(
+            "nvidia", "/dev/dri/renderD129", PIN,
+            Path("/var/lib/optiplex-now/host"), nvidia_volume=volume))
+        wolf = data["services"]["wolf"]
+        self.assertEqual(data["volumes"], {volume: {"external": True}})
+        self.assertEqual(wolf["environment"]["NVIDIA_DRIVER_VOLUME_NAME"], volume)
+        self.assertIn(volume + ":/usr/nvidia:rw", wolf["volumes"])
+        self.assertNotIn("now-nvidia-driver-vol:/usr/nvidia:rw", wolf["volumes"])
+        with self.assertRaises(installer.InstallationError):
+            installer._render_compose(
+                "nvidia", "/dev/dri/renderD129", PIN,
+                Path("/var/lib/optiplex-now/host"))
+        with self.assertRaises(installer.InstallationError):
+            installer._render_compose(
+                "intel", "/dev/dri/renderD128", PIN,
+                Path("/var/lib/optiplex-now/host"), nvidia_volume=volume)
+
+    def test_driver_recipe_checks_download_and_rejects_bad_versions(self):
+        source = host_nvidia.RECIPE.read_text()
+        self.assertIn("sha256sum --check --status", source)
+        self.assertIn("https://download.nvidia.com/XFree86/Linux-x86_64/", source)
+        self.assertIn("NV_SHA256", source)
+        self.assertEqual(host_nvidia.volume_name("580.95.05", "f" * 64),
+                         "now-nvidia-580-95-05-" + "f" * 16)
+        for value in ("stable", "580.95;bad", "12.5.1", "532.4", "000.0.0"):
+            with self.subTest(value=value), self.assertRaises(host_nvidia.DriverError):
+                host_nvidia.validate_driver_version(value)
+
+    def test_versioned_volume_uses_verified_copy_and_never_deletes_volume(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory() as root:
+            records = []
+            version = "580.95.05"
+            sha = "f" * 64
+            name = host_nvidia.volume_name(version, sha)
+            def docker(args, timeout=30):
+                records.append(args)
+                if args[:2] == ["volume", "ls"]:
+                    return ""
+                if args[0] == "build":
+                    return "sha256:" + "b" * 64
+                if args[:2] == ["volume", "create"]:
+                    return name
+                if args[:2] == ["volume", "inspect"]:
+                    return json.dumps({
+                        "io.optiplex-now.managed": "host-install-pilot",
+                        "io.optiplex-now.nvidia.version": version,
+                        "io.optiplex-now.nvidia.installer-sha256": sha,
+                    })
+                if args[0] == "create":
+                    return "a" * 64
+                if args[0] == "rm":
+                    return ""
+                raise AssertionError("Unexpected Docker operation")
+            phases = []
+            result = host_nvidia.prepare_volume(
+                docker, driver_version=version, installer_sha=sha,
+                build_context=Path(root), progress=phases.append)
+            self.assertEqual(result["name"], name)
+            self.assertEqual(phases[-1], "driver_volume_ready")
+            self.assertIn("NV_SHA256=" + sha, records[1])
+            self.assertEqual([a[0] for a in records][-2:], ["create", "rm"])
+            self.assertFalse(any(a[:2] == ["volume", "rm"] for a in records))
 
     def test_docker_argv_uses_fixed_local_unix_socket_and_pinned_env(self):
         completed = mock.Mock(returncode=0, stdout=b"ok", stderr=b"")

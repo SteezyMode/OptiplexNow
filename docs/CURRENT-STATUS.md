@@ -116,8 +116,12 @@ are scoped to the pilot project and `/var/lib/optiplex-now/host`.
 
 The developer's currently running Wolf server must **not** be used to test
 installation: occupied ports or a prior managed project block it. NVIDIA
-remains disabled until its driver-volume lifecycle is implemented and
-validated. Both real streaming and recovery after failed start require
+can now prepare a version-specific volume from the exact driver version on
+the clean host, with the supplied official NVIDIA .run file SHA256 verified
+before the downloaded installer executes inside a Docker build. It does
+not overwrite driver volumes or change the host kernel drivers. Driver
+updates still require separately approved maintenance: automatic refresh and
+rollback are **not implemented**. Both real streaming and recovery after failed start require
 separate physical acceptance. The first implementation offers no automatic
 uninstall/repair/upgrade, and cannot be called a 15-minute turnkey installer.
 

@@ -26,16 +26,28 @@ assert r["may_apply"] is False
 assert r["changes_performed"] is False
 '
 
-# Exercise the actual installed clean-host gate against this runner.
-# NVIDIA MUST remain blocked, and no Docker operation may be attempted.
+# Run the installed NVIDIA preflight against actual CI host resources.
+# This runner does not certify GPU/video readiness or invoke Docker installation.
+test -r /usr/lib/optiplex-now/nvidia-driver.Dockerfile
+test -r /usr/lib/optiplex-now/host_nvidia.py
 python3 /usr/lib/optiplex-now/host_install.py \
   --check --gpu nvidia --render-node /dev/dri/renderD128 |
   python3 -c '
 import json, sys
 r=json.load(sys.stdin)
-assert r["decision"] == "blocked"
-assert "NVIDIA volume preparation has not been implemented" in r["blockers"]
+assert r["gpu"] == "nvidia"
+assert r["decision"] in ("blocked", "candidate_after_admin_check", "candidate")
+assert "nvidia_driver_version" in r
 '
+# The root entrypoint must reject missing Nvidia SHA before touching /run,
+# images, volumes or Docker (even when invoked as root on CI).
+if sudo /usr/lib/optiplex-now/host_install.py --install \
+  --gpu nvidia --render-node /dev/dri/renderD128 \
+  --image-digest "sha256:$(printf "%064d" 0)" \
+  --confirm INSTALL-WOLF > /dev/null 2>&1; then
+  echo "NVIDIA install accepted without required installer checksum" >&2
+  exit 1
+fi
 
 tmp="$(mktemp -d -t now-host-ui.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT

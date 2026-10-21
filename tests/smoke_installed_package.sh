@@ -20,6 +20,9 @@ test -r /usr/lib/optiplex-now/host_preflight.py
 test -r /usr/lib/optiplex-now/host_plan.py
 test -x /usr/lib/optiplex-now/host_install.py
 test -r /usr/lib/optiplex-now/host_stage.py
+test -r /usr/lib/optiplex-now/host_nvidia.py
+test -r /usr/lib/optiplex-now/nvidia-driver.Dockerfile
+test -r /usr/share/doc/optiplex-now/LICENSE-nvidia-driver-upstream.txt
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

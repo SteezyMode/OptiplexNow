@@ -33,7 +33,7 @@ The normal check runs the actual local read-only preflight and blocked Wolf
 plan. A machine already running Wolf is safe to **check** without changes.
 
 An advanced, explicitly confirmed installer can now provision one **new**
-Wolf service on a clean Pop!_OS or Ubuntu 24.04 AMD/Intel host with a
+Wolf service on a clean Pop!_OS or Ubuntu 24.04 AMD, Intel or NVIDIA host with a
 previously verified immutable Wolf image digest and OS administrator approval.
 It rechecks the machine and refuses occupied ports, unrelated installations
 or an existing NOW-managed host directory. It never installs graphics drivers,
@@ -41,11 +41,19 @@ Docker packages or other applications. Wolf video/audio/input readiness and
 recoverability after actual failure remain unverified, and there is no
 automatic repair, upgrade or uninstall yet.
 
-**NVIDIA hosts:** Pop!_OS 24.04 NVIDIA Edition is the recommended starting
-OS for newer cards, but Wolf's separate NVIDIA driver-volume management is
-still blocked. Do not test the advanced installer on an existing working
-server. This feature is **not included** in the published v1.17.0 prerelease
-and is not yet a turnkey host installation experience.
+**NVIDIA hosts:** Pop!_OS 24.04 NVIDIA Edition is the preferred first
+test platform. The advanced installer now builds a driver-version-matched
+Wolf userspace image after verifying a separately obtained SHA256 for NVIDIA's
+official driver .run file. It populates a *new*, version-specific NOW Docker
+volume and never deletes another one. Missing DRM modesetting or NVIDIA device
+nodes block installation; it does not change kernel drivers or boot settings.
+
+This is a **technical alpha candidate**, not one-click installation. Wolf's
+OCI digest and the official NVIDIA installer checksum must be verified and
+entered by the owner. Driver upgrades currently need an explicit maintenance
+workflow; they are **not** managed automatically. Real streaming and repair
+acceptance have not been performed. Do not test --install on a working host.
+This feature is **not included** in the published v1.17.0 prerelease.
 
 ## Connect to an existing host
 

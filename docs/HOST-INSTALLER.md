@@ -2,6 +2,26 @@
 
 **Status:** design contract only. No turnkey host setup is shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
 
+## First implemented host preflight (source-only)
+
+`server/host_preflight.py` provides a read-only, unprivileged host inventory.
+This is **not** a server installation action and is not included in the v1.17.0 client .deb. From a checked-out repository on the intended host:
+
+```sh
+python3 server/host_preflight.py
+python3 server/host_preflight.py --json
+```
+
+It reads local OS/architecture, PCI graphics vendors and render nodes, controller devices, the NVIDIA kernel version and DRM mode setting where relevant, memory, disk availability and local socket tables. It also invokes `docker info --format '{{.ServerVersion}}'` with a three-second timeout when the Docker CLI is present. This is a read-only daemon query; it does not launch containers, inspect private volume data, modify memberships or elevate privileges. No Docker access means an attention state, not permission expansion.
+
+The reported Wolf TCP/UDP ports are based on upstream's documented defaults: 47984/tcp, 47989/tcp, 48010/tcp, 47999/udp, 48100/udp and 48200/udp. A detected socket bind is a **potential conflict**, not evidence that the bound service is incompatible or unauthorized. An empty socket table does not establish remote reachability, firewall rules or future availability. The scanner never opens sockets or probes the network.
+
+The first host pilot is a **candidate Ubuntu 24.04 amd64 configuration**, not an already-validated support promise. Other distributions stay unknown until tested. Missing controller nodes, old NVIDIA driver and known port binds require attention. Encoder support, actual GPU container access, Wolf readiness and successful video/audio/controller streaming are **always unknown** until separate real host testing.
+
+The JSON contract is versioned (`schema_version=1`) and contains only bounded operational findings, no user file contents, SSH keys, host names, network addresses, auth tokens or full container lists. Each check uses `pass`, `attention`, `unsupported`, or `unknown`; `overall` is `unsupported`, `requires_attention`, or `unknown`. This stage deliberately never reports `compatible` or `verified_streaming=true`. A subsequent plan/apply component must not treat a clean preflight as authorization to install or alter services.
+
+Native Python tests construct disposable filesystem fixtures, exercise parsing and failures, assert no fixture modification, and run the JSON CLI. Tests run in normal CI; physical GPU and encoder acceptance is still outstanding. Wolf's installation requirements should be checked again when dependency versions are pinned.
+
 ## Initial supported scope
 
 Start with one explicitly supported Linux distribution and a verified hardware/driver matrix. Stream one Wolf application to one Moonlight device; optionally install Jellyfin with independent credentials. Add multi-desktop and multi-user features only after security and persistence gates pass.

@@ -222,6 +222,8 @@ class HostRuntimeTests(unittest.TestCase):
     def test_stopped_or_unhealthy_container_is_cleaned_when_verified_owned(self):
         for state in ({"running": False}, {"health": "unhealthy"}):
             with self.subTest(state=state):
+                if self.workspace.exists():
+                    shutil.rmtree(self.workspace)
                 self.prepare()
                 docker = FakeDocker()
                 for k, value in state.items():

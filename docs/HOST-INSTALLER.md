@@ -59,7 +59,7 @@ The GitHub workflow builds the real Debian package, installs it on disposable ru
 - [ ] Install the exact test `.deb` on a clean, independently controlled Ubuntu/Pop!_OS 24.04 amd64 host; preserve a separate working reference server.
 - [ ] Demonstrate GPU/render selection, driver prerequisites, explicit owner confirmation and legitimate OS elevation. Wrong, unsupported or occupied hosts must refuse safely.
 - [ ] Install Wolf to the dedicated project; verify server container identity, GPU access, encoder logs and persisted configuration without damaging unrelated services.
-- [ ] Connect a genuinely unpaired second client; verify *video, audio, controller input and session termination*.
+- [ ] Connect a genuinely unpaired second client; verify *video, audio, controller input and session termination*. While the remote game runs, confirm the host's **physical desktop remains independently usable**, with no unwanted input/audio takeover.
 - [ ] Restart host and client; verify recovery, preserved pairing, accurate status and reconnection.
 - [ ] Interrupt install, deny authorization and test network/image failures; inspect phase journal, preserve unrelated data, and establish safe documented recovery.
 - [ ] On NVIDIA, verify clean volume build, driver-version alignment and behavior after a host driver update. Do not accept automatic upgrade claims until the update/recovery path exists.

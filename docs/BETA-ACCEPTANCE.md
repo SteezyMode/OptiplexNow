@@ -6,6 +6,14 @@ Status: test plan. An unchecked item is **not** validated by GitHub CI.
 
 Private Linux client beta against an **existing, owner-approved host**. Four preapproved Tailscale testers are the initial model. The beta distributes an amd64 Debian package; it does not install Wolf, Docker, Jellyfin, Gluetun, Tailscale accounts, or an OptiPlex account service on a new host.
 
+## Pre-release validation path
+
+For **unreleased changes on main**, a PR's passing `Validate OptiPlex NOW` workflow can provide a short-lived **unreleased PR test installer** under that run's Artifacts section. The packaged Debian version is `1.16.1+prNUMBER.RUN`, distinct from the immutable tagged v1.16.1 release. These packages expire after seven days and are **not official releases or general-user installers**.
+
+Download the artifact ZIP from a successful PR run while signed into GitHub, extract the .deb and SHA256SUMS, and verify its checksum before installing on a spare test client. Installation and streaming observations apply only to that exact PR commit/build. Do not promote a PR artifact as a Beta 1 accepted release.
+
+After the tested code lands on main, use the documented version bump and tag-only release process to publish a new official artifact. Protect existing saved NOW and Moonlight identity; never delete either to manufacture a clean client.
+
 ## Required end-to-end test
 
 Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the existing known-good client for regression testing.

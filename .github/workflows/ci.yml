@@ -25,6 +25,13 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11 desktop-file-utils
+      # Closed-beta test builds must not impersonate the last published .deb.
+      - name: Stamp unreleased PR package version
+        if: github.event_name == 'pull_request'
+        run: |
+          base="$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\1/p' package.py)"
+          test -n "$base"
+          echo "NOW_PACKAGE_VERSION=${base}+pr${{ github.event.pull_request.number }}.${{ github.run_number }}" >> "$GITHUB_ENV"
       - name: Build, test and inspect package
         shell: bash
         run: |
@@ -49,3 +56,18 @@ jobs:
           test "$(dpkg-deb -f "$package" Version)" != ""
           dpkg-deb --contents "$package" | grep '/usr/bin/optiplex-now$'
           bash tests/smoke_installed_package.sh
+      - name: Record checksum for installable PR package
+        if: github.event_name == 'pull_request'
+        run: |
+          cd dist
+          sha256sum OptiPlex-Now_*_amd64.deb > SHA256SUMS
+      - name: Upload unreleased PR test installer
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: optiplex-now-pr-${{ github.event.pull_request.number }}-${{ github.run_number }}
+          path: |
+            dist/OptiPlex-Now_*_amd64.deb
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7

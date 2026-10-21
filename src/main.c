@@ -31,6 +31,7 @@
 #include "host_metrics.h"
 #include "tray_prefs.h"
 #include "tray_actions.h"
+#include "moonlight_install.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -817,18 +818,165 @@ static void launch_torrents(void){
  if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
  browser_open(cfg[7]);
 }
-static void install_moonlight(void){
- if(!now_program_exists("flatpak")){
-   say("FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"FLATPAK IS REQUIRED TO INSTALL MOONLIGHT");
-   return;
- }
- /* The action is explicitly user initiated. Flatpak asks to install the remote and package. */
- char*args[]={"sh","-c","flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo && flatpak install --user flathub com.moonlight_stream.Moonlight; printf '\\nPress Enter to close...'; read _",NULL};
- if(terminal_launch(args)){
-   say("COMPLETE INSTALLATION IN THE TERMINAL");
-   if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"COMPLETE INSTALLATION IN THE TERMINAL");
- }
+typedef struct {
+    GtkWidget *dialog;
+    GtkWidget *status;
+    GCancellable *cancel;
+    guint timeout_id;
+    gboolean finished;
+} MoonlightInstallUI;
+
+static MoonlightInstallUI *moonlight_install_ui = NULL;
+
+static gboolean moonlight_install_timeout(gpointer data)
+{
+    MoonlightInstallUI *state = data;
+    state->timeout_id = 0;
+    g_cancellable_cancel(state->cancel);
+    if (state->dialog) {
+        gtk_label_set_text(GTK_LABEL(state->status),
+                           "INSTALLATION TIMED OUT. STOPPING...");
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static void moonlight_install_destroy(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    MoonlightInstallUI *state = data;
+    state->dialog = NULL;
+    state->status = NULL;
+    if (!state->finished) {
+        g_cancellable_cancel(state->cancel);
+    }
+}
+
+static void moonlight_install_response(GtkDialog *dialog, gint response,
+                                        gpointer data)
+{
+    (void)response;
+    MoonlightInstallUI *state = data;
+    if (state->finished) {
+        gtk_widget_destroy(GTK_WIDGET(dialog));
+        return;
+    }
+    gtk_widget_destroy(GTK_WIDGET(dialog)); /* also cancels the active worker */
+}
+
+static void moonlight_install_done(GObject *source, GAsyncResult *result,
+                                    gpointer data)
+{
+    (void)source;
+    MoonlightInstallUI *state = data;
+    GError *error = NULL;
+    gboolean installed = now_moonlight_install_finish(result, &error);
+    state->finished = TRUE;
+    if (state->timeout_id) {
+        g_source_remove(state->timeout_id);
+        state->timeout_id = 0;
+    }
+
+    const char *message = "MOONLIGHT INSTALLED. OPEN IT TO PAIR WITH WOLF.";
+    if (!installed) {
+        message = g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
+            ? "MOONLIGHT INSTALLATION CANCELLED."
+            : "MOONLIGHT COULD NOT BE INSTALLED. CHECK YOUR CONNECTION AND FLATPAK.";
+    }
+    say(message);
+    if (games_notice) {
+        gtk_label_set_text(GTK_LABEL(games_notice), message);
+    }
+    if (games_install) {
+        gtk_widget_set_sensitive(games_install, TRUE);
+        gtk_button_set_label(GTK_BUTTON(games_install),
+                             installed ? "OPEN MOONLIGHT" : "INSTALL MOONLIGHT");
+    }
+    if (state->dialog) {
+        gtk_label_set_text(GTK_LABEL(state->status), message);
+        GtkWidget *button = gtk_dialog_get_widget_for_response(
+            GTK_DIALOG(state->dialog), GTK_RESPONSE_CANCEL);
+        if (button) {
+            gtk_button_set_label(GTK_BUTTON(button), "Close");
+        }
+    }
+    g_clear_error(&error);
+    g_clear_object(&state->cancel);
+    moonlight_install_ui = NULL;
+    if (!state->dialog) {
+        g_free(state);
+    }
+}
+
+static void moonlight_install_dialog_destroy(GtkWidget *widget, gpointer data)
+{
+    MoonlightInstallUI *state = data;
+    moonlight_install_destroy(widget, data);
+    if (state->finished) {
+        g_free(state);
+    }
+}
+
+static void install_moonlight(void)
+{
+    if (moonlight_install_ui) {
+        say("MOONLIGHT INSTALLATION IS ALREADY IN PROGRESS.");
+        return;
+    }
+    if (!now_program_exists("flatpak")) {
+        say("FLATPAK IS REQUIRED. INSTALL FLATPAK OR USE A MOONLIGHT APPIMAGE.");
+        if (games_notice) {
+            gtk_label_set_text(GTK_LABEL(games_notice),
+                               "INSTALL FLATPAK OR CHOOSE A MOONLIGHT APPIMAGE.");
+        }
+        return;
+    }
+    GtkWidget *parent = games_install ? gtk_widget_get_toplevel(games_install)
+                                     : active_setup_wizard;
+    if (!parent || !GTK_IS_WINDOW(parent)) {
+        parent = win;
+    }
+    GtkWidget *confirmation = gtk_message_dialog_new(
+        GTK_WINDOW(parent), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION,
+        GTK_BUTTONS_NONE, "Install Moonlight on this computer?");
+    gtk_message_dialog_format_secondary_text(
+        GTK_MESSAGE_DIALOG(confirmation),
+        "OptiPlex NOW will add the official Flathub remote if needed and "
+        "install Moonlight for your Linux account. It may download "
+        "Moonlight and runtime dependencies. No administrator password "
+        "or terminal is required.");
+    gtk_dialog_add_buttons(GTK_DIALOG(confirmation), "Cancel",
+                           GTK_RESPONSE_CANCEL, "Install Moonlight",
+                           GTK_RESPONSE_OK, NULL);
+    gtk_dialog_set_default_response(GTK_DIALOG(confirmation), GTK_RESPONSE_CANCEL);
+    int response = gtk_dialog_run(GTK_DIALOG(confirmation));
+    gtk_widget_destroy(confirmation);
+    if (response != GTK_RESPONSE_OK) {
+        return;
+    }
+
+    MoonlightInstallUI *state = g_new0(MoonlightInstallUI, 1);
+    state->cancel = g_cancellable_new();
+    moonlight_install_ui = state;
+    state->dialog = gtk_dialog_new_with_buttons(
+        "Installing Moonlight", GTK_WINDOW(parent), GTK_DIALOG_MODAL,
+        "Cancel installation", GTK_RESPONSE_CANCEL, NULL);
+    GtkWidget *area = gtk_dialog_get_content_area(GTK_DIALOG(state->dialog));
+    gtk_container_set_border_width(GTK_CONTAINER(area), 20);
+    state->status = gtk_label_new(
+        "INSTALLING MOONLIGHT FROM FLATHUB. THIS MAY TAKE SEVERAL MINUTES.");
+    gtk_label_set_line_wrap(GTK_LABEL(state->status), TRUE);
+    gtk_box_pack_start(GTK_BOX(area), state->status, FALSE, FALSE, 12);
+    g_signal_connect(state->dialog, "response",
+                     G_CALLBACK(moonlight_install_response), state);
+    g_signal_connect(state->dialog, "destroy",
+                     G_CALLBACK(moonlight_install_dialog_destroy), state);
+    gtk_widget_show_all(state->dialog);
+    if (games_install) {
+        gtk_widget_set_sensitive(games_install, FALSE);
+    }
+    say("INSTALLING MOONLIGHT...");
+    state->timeout_id = g_timeout_add_seconds(900, moonlight_install_timeout, state);
+    now_moonlight_install_async(state->cancel, moonlight_install_done, state);
 }
 /* The bridge is host-local behind trusted SSH. Never block GTK while querying it. */
 typedef struct {

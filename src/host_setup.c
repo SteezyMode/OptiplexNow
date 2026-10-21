@@ -45,7 +45,7 @@ static void report_complete(HostSetupUI *ui, const char *message)
         return;
     gtk_label_set_text(GTK_LABEL(ui->status), message);
     gtk_window_set_title(GTK_WINDOW(ui->window),
-        strstr(message, "COMPLETE.") ?
+        g_str_has_prefix(message, "REVIEW COMPLETE.") ?
         "OptiPlex NOW | Server Review Complete" :
         "OptiPlex NOW | Server Review Incomplete");
     gtk_widget_set_sensitive(ui->run_button, TRUE);

@@ -11,6 +11,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/main.c` | GTK3 UI, wizard, launcher, tray, state presentation and user-triggered actions |
 | `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
 | `src/host_metrics.c/.h` | Host telemetry key-value/disk parsing and mounted-drive filtering, independent of GTK/SSH |
+| `src/tray_prefs.c/.h` | GTK-free tray order, shortcut masks, legacy Desktop caption, action labels and private atomic persistence |
 | `src/wolf_pairing.c/.h` | GTK-independent pending-client validation and PIN request generation; no SSH privilege or remote approval |
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
@@ -44,6 +45,7 @@ Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Pytho
 
 ```sh
 make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
+make check-host-metrics check-tray-prefs
 make check-sanitizers  # ASan + UBSan, separate binaries; no release flag changes
 python3 -m unittest discover -s tests -v
 make package

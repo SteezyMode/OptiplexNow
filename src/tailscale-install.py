@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.request
 
 KEYRING = Path("/usr/share/keyrings/tailscale-archive-keyring.gpg")
@@ -71,15 +72,19 @@ def install_repository(base, codename):
     if active != [expected]:
         raise ValueError("Unexpected Tailscale repository configuration.")
 
+    if REPOSITORY.exists() and REPOSITORY.read_text(encoding='utf-8').strip() != expected:
+        raise ValueError('Existing Tailscale repository configuration requires manual review.')
     KEYRING.parent.mkdir(mode=0o755, parents=True, exist_ok=True)
-    tmpkey = KEYRING.with_suffix(".gpg.now-tmp")
-    tmpkey.write_bytes(key)
-    tmpkey.chmod(0o644)
-    tmpkey.replace(KEYRING)
-    tmplist = REPOSITORY.with_suffix(".list.now-tmp")
-    tmplist.write_text(expected + "\n", encoding="utf-8")
-    tmplist.chmod(0o644)
-    tmplist.replace(REPOSITORY)
+    if not KEYRING.exists():
+        tmpkey = KEYRING.with_suffix('.gpg.now-tmp')
+        tmpkey.write_bytes(key)
+        tmpkey.chmod(0o644)
+        tmpkey.replace(KEYRING)
+    if not REPOSITORY.exists():
+        tmplist = REPOSITORY.with_suffix('.list.now-tmp')
+        tmplist.write_text(expected + '\n', encoding='utf-8')
+        tmplist.chmod(0o644)
+        tmplist.replace(REPOSITORY)
 
 
 def run(*command, timeout=180):

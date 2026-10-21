@@ -14,6 +14,23 @@ permissions:
   contents: read
 
 jobs:
+  native-sanitizers:
+    name: Native memory and UB diagnostics
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install native test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-3-dev libfontconfig1-dev
+      - name: Run ASan, UBSan and stricter module compile
+        run: |
+          set -euo pipefail
+          make check-sanitizers
+
   build-and-test:
     runs-on: ubuntu-24.04
     timeout-minutes: 20

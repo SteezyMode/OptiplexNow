@@ -61,6 +61,10 @@ The host telemetry parser now has a GTK-independent C module with compiled tests
 
 Tray selection masks, saved action order, Desktop caption preferences and service labels are now parsed and persisted by `src/tray_prefs.c/.h` instead of `main.c`. The existing tray UI and AppIndicator/GTK fallback remain in the GTK controller. Compiled tests cover malformed order files, duplicate indices, mask fallbacks, the existing XDG order-file path and legacy Desktop caption path, atomic permissions-restricted saves, and generated service labels. This is an incremental architecture improvement, **not** a full tray rewrite, and the physical tray/minimize/restore experience is not yet acceptance-tested on a new desktop.
 
+## Tray action dispatch (development source)
+
+The GTK tray controller now delegates action-ID interpretation to a GTK-free `tray_actions.c/.h` dispatcher with explicit host-UI callback hooks. The ordered behaviors are preserved: opening NOW before Settings/System Info, displaying NOW before launching Games when Moonlight is unavailable, and direct restart/quit commands. Unknown or stale action IDs are ignored rather than passed to a service launcher. Native and sanitizer behavior tests exercise all eight service IDs, five utility IDs, missing callbacks and invalid IDs. GTK/AppIndicator creation and icon/minimize/restore logic remain in the controller; this is not full tray extraction. Real desktop regression is still pending.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

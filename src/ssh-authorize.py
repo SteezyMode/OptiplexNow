@@ -80,8 +80,6 @@ def authorize(host, user, pubkey):
     env = os.environ.copy()
     env["SSH_ASKPASS"] = ASKPASS
     env["SSH_ASKPASS_REQUIRE"] = "force"
-    env["SSH_ASKPASS_PROMPT"] = "confirm"
-    env["DISPLAY"] = env.get("DISPLAY") or ":0"  # Wayland askpass uses GDK backend.
     command = [
         "ssh-copy-id", "-i", str(pubkey),
         "-o", "ConnectTimeout=10",
@@ -94,21 +92,20 @@ def authorize(host, user, pubkey):
         command, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT, env=env, start_new_session=True
     )
+    child = _child
     try:
-        _output, _ = _child.communicate(timeout=SSH_TIMEOUT)
+        output, _ = child.communicate(timeout=SSH_TIMEOUT)
+        return_code = child.returncode
     except subprocess.TimeoutExpired:
-        os.killpg(_child.pid, signal.SIGKILL)
-        _child.communicate()
+        if child.poll() is None:
+            os.killpg(child.pid, signal.SIGKILL)
+        child.communicate()
         raise ValueError("SSH authorization timed out")
     finally:
         _child = None
-
-    if _child is None and _output is not None and len(_output) > 128 * 1024:
+    if len(output) > 128 * 1024:
         raise ValueError("Unexpected SSH output")
     # Do not emit ssh-copy-id output: it can contain host/user details.
-    if _child is None and _output is not None:
-        pass
-    return_code = 0  # assigned below by the process completion path
     return return_code
 
 

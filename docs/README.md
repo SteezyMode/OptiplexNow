@@ -7,6 +7,7 @@ Read in this order when joining development or starting a new review.
 | [Product direction](PRODUCT.md) | Vision, scope, phased requirements and exclusions |
 | [Current status](CURRENT-STATUS.md) | What code, CI and device observations support today |
 | [Beta acceptance](BETA-ACCEPTANCE.md) | Required end-to-end tester evidence |
+| [Host installation and alpha acceptance](HOST-INSTALLER.md) | Current guarded installer, NVIDIA limits, safety gates and clean-host test |
 | [Architecture](application-design.md) | Code ownership, protocols, data compatibility and safe boundaries |
 | [Contributing](../CONTRIBUTING.md) | Build, test, PR discipline and code map |
 | [Release process](RELEASE-PROCESS.md) | Immutable tags, artifact verification and rollback |

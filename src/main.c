@@ -2187,10 +2187,6 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf();
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
- else if(!strcmp(n,"w_profile")){
-   char *args[]={"sudo","python3","/usr/lib/optiplex-now/server-profile.py",NULL};
-   terminal_launch(args);
- }
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
@@ -2328,7 +2324,6 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
- wizard_button(c,two,"MUSIC SERVER PROFILES (THIS PC)","w_profile");
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
  /* Page 3: pair SSH keys once. Relay is optional. */

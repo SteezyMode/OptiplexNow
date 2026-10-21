@@ -37,6 +37,12 @@ On October 21, 2026, the **unreleased PR #108** package `1.16.1+pr108.250` passe
 
 This confirms startup, packaging, and synthetic layout behavior only. It does **not** prove a new physical Linux install, Tailscale sign-in, trusted SSH enrollment, Wolf pairing or actual video/audio/input. Those Beta 1 checklist items remain open.
 
+## Graphical Tailscale onboarding (development source, not v1.16.1)
+
+The current source now offers an opt-in **Install Tailscale** action for validated Debian/Ubuntu amd64 clients and Pop!_OS/Linux Mint systems that declare a matching Ubuntu base. Installation uses a desktop PolicyKit password prompt, a finite distro allowlist and Tailscale's official signed apt repository. It does not execute a remotely downloaded shell script. Existing Tailscale installations are never reinstalled or reconfigured. The client opens the Tailscale device-local browser UI for sign-in rather than launching a terminal. Unsupported Linux releases are directed to upstream instructions.
+
+This flow has mocked installer/packaging tests but has **not** yet been installed using PolicyKit and authenticated on a fresh physical computer. Installation may require a working desktop PolicyKit authentication agent and network access. System-wide Tailscale installation is a separate, explicitly approved operation and is not run by launching NOW.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

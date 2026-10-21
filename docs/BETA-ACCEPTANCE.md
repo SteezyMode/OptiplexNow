@@ -32,7 +32,7 @@ Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the
 - [ ] Restart the app and then upgrade the package. Verify settings, user URLs, device pairing, and shortcuts survive.
 - [ ] Show accurate disconnected/offline and recovered states without blocking the GTK interface. During Wolf pending-request refresh, authorization and Tailscale/server discovery, exercise a deliberately slow or unreachable endpoint; confirm the interface remains responsive and cancellation or closing a dialog cannot later update a destroyed widget.
 - [ ] Reject a changed, expired, or ambiguously selected pending Moonlight request. A late worker response must not authorize a different device or create duplicate pairing attempts.
-- [ ] Repeat on a low-resolution or older Linux client. Check tray behavior, scrolling, settings layout, and stream responsiveness.
+- [ ] Repeat on a low-resolution or older Linux client. Check tray behavior, scrolling, settings layout, and stream responsiveness. CI additionally boots disposable profiles at 1024×768 and 3440×1440 to check dashboard window bounds, but this does not establish user-device usability or first-time network enrollment.
 
 Record OS, package version, host version, results, and any manual intervention. A single owner-led test does not replace an independent tester session.
 

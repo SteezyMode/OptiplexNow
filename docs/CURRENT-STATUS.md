@@ -13,7 +13,7 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 
 ## Included in current `main`
 
-- Native GTK3 client, primary actions, tray controls, Settings and setup wizard.
+- Native GTK3 client, primary actions, tray controls, Settings and setup wizard. The source now sizes its dashboard using the usable monitor dimensions, rather than the former fixed 660×350 start window; a separate disposable-profile Xvfb layout test checks 1024×768 and 3440×1440 after installed-package build. The change is not included in v1.16.1.
 - Tailscale connectivity and server discovery, SSH/SFTP access and host hardware dashboard.
 - Moonlight streaming launch for configured Wolf apps, native Wolf pairing dialog, and generated four-digit pairing PIN transported through a dedicated helper.
 - Browser launch for configured video, music, and download services.
@@ -25,6 +25,17 @@ Release publishing changes GitHub artifacts only. It does not modify the running
 ## Portable defaults (development source, not v1.16.1)
 
 New source changes after the v1.16.1 tag remove the reference-host video and Web Gaming domain defaults, the reference SSH username, and automatically guessed optional service ports. Web Gaming and Downloads use user-configured URLs. Previously saved client URLs stay unchanged, but existing users must configure a Web Gaming URL after installing a future release because the old fixed domain was never saved to their config. **The published v1.16.1 installer is unchanged and still has the historical household defaults.** Verify the new code through CI and a clean-client test before making a new release.
+
+## Isolated fresh-profile GUI simulation (not device acceptance)
+
+On October 21, 2026, the **unreleased PR #108** package `1.16.1+pr108.250` passed GitHub CI, including installation and GUI smoke checks. Its downloaded .deb passed the packaged SHA256SUMS verification. The binary was also launched in independent Debian 13 Xvfb/DBus sessions with empty HOME and XDG configuration at **3440×1440** and **1024×768**.
+
+- First-run setup appeared without crashing and correctly showed Tailscale as not installed in the disposable environment.
+- Initial dashboard window geometry was **1100×720** at 3440×1440 and **928×648** at 1024×768, compared with the previous 660×350 at both resolutions.
+- With an isolated non-first-run config fixture, all four server power controls were visible without scrolling at 1024×768.
+- Empty-profile startup did **not** create a `config.ini` or replace the owner's existing settings.
+
+This confirms startup, packaging, and synthetic layout behavior only. It does **not** prove a new physical Linux install, Tailscale sign-in, trusted SSH enrollment, Wolf pairing or actual video/audio/input. Those Beta 1 checklist items remain open.
 
 ## Evidence boundaries
 

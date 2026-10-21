@@ -2,11 +2,26 @@
 
 [![Validate NOW](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
 
-**Linux client for games, media, and remote access to an existing personal server.** NOW combines Moonlight/Wolf launch controls, media links, remote files, and basic host management in a GTK3 desktop application.
+**Your games. Your movies. Your music. Your own server.**
+
+OptiPlex NOW aims to make a compatible computer your private alternative to cloud gaming and media subscriptions: **a personal GeForce NOW-style game host, Netflix-style media library, and Spotify-style music library**, using software and content you control. These are product comparisons, not affiliations, supplied media catalogs, or claims that NOW provides licensed content.
+
+### The product we're building
+
+| Experience | Intended result |
+| --- | --- |
+| **Independent gaming** | Play remotely in a separate Wolf-managed session while the host's physical desktop stays usable. Shared GPU/CPU resources still limit simultaneous workloads. |
+| **Movies and files** | Stream your own Jellyfin library, browse/manage server files remotely, and queue lawful downloads on the home server while watching from another device. |
+| **Music** | Discover, request, organize and play your own collection with optional tools such as [DroppedNeedle](https://github.com/DroppedNeedle/DroppedNeedle), slskd and compatible media players. |
+| **Private operation** | Keep ordinary gaming, media playback and file access on normal server networking, while routing configured download clients through their own VPN gateway. Verify isolation rather than assuming a green VPN indicator proves it. |
+
+**Goal:** On supported, OS-ready host and client machines, approximately **15 minutes from installing NOW on both to a working private remote stream**, without requiring Docker, VPN, certificate or pairing knowledge. No NOW-operated website or central cloud service should be necessary for basic self-hosted use. The owner's existing services may still expose private web UIs; native controls can replace repetitive browser steps over time.
+
+**Platform direction:** Linux host and client first; **Windows clients planned**, **Windows hosts a longer-term goal** with a separate technical and licensing feasibility gate for independent sessions. macOS is not promised. The initial implementation must not force every user to install gaming, Jellyfin, music and download stacks together.
 
 **Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 
-**Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
+**What ships today:** v1.17.0 is primarily a GTK3 client for an **already configured Linux host**, integrating Moonlight/Wolf, Tailscale/SSH, media links, SFTP and diagnostics. A guarded clean-host Wolf installer exists only in unreleased development builds. Independent-session behavior, complete fresh-host provisioning, native media/download/music administration and Windows builds are **not yet product-accepted or shipped**. See [Product direction](docs/PRODUCT.md) and [Current status](docs/CURRENT-STATUS.md).
 
 ## Download
 
@@ -15,7 +30,7 @@
 - [Previous v1.16.1 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1)
 - [Current code, release and test status](docs/CURRENT-STATUS.md)
 
-Supports compatible x86-64 Debian/Ubuntu-derived Linux distributions. Native Windows and macOS packages are not provided.
+**Available package:** compatible x86-64 Debian/Ubuntu-derived Linux systems. No Windows or macOS package yet; Windows client and host support are planned at different milestones.
 
 Download the **versioned** `OptiPlex-Now_1.17.0_amd64.deb` from the tagged closed-beta prerelease. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
 
@@ -24,6 +39,12 @@ sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 ```
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
+
+## Today's media and download integrations
+
+NOW already opens owner-configured Videos, Music and Downloads services and offers SFTP access to remote files. On an existing home server, a useful optional configuration is **Jellyfin for normal-network streaming**, **qBittorrent behind a dedicated Gluetun VPN gateway**, and **DroppedNeedle with slskd** for music discovery, requesting and organizing. The reference server has a Gluetun/slskd/qBittorrent arrangement; this is **not automatically installed or independently VPN-leak-tested** by NOW.
+
+**Future native integration:** use authenticated service APIs to manage download queues, music requests, library availability and file operations within NOW, without requiring a NOW website. This must be optional and must not expose Docker admin access, bypass service authentication, promise uninterrupted Jellyfin playback under heavy load, or silently route all home-server traffic through the download VPN.
 
 ## Unreleased development: NOW Host pilot
 

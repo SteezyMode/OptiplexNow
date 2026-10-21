@@ -39,8 +39,8 @@ for screen in 3440x1440 1024x768; do
       echo "No NOW dashboard window at $screen" >&2
       exit 1
     }
-    width="$(awk "/^[[:space:]]*Width:/{print \\$2}" <<<"$info")"
-    height="$(awk "/^[[:space:]]*Height:/{print \\$2}" <<<"$info")"
+    width="$(awk "/^[[:space:]]*Width:/{print \$2}" <<<"$info")"
+    height="$(awk "/^[[:space:]]*Height:/{print \$2}" <<<"$info")"
     IFS=x read -r maxw maxh <<<"$screen"
 
     # Full-height dashboard expected, while both dimensions stay on screen.

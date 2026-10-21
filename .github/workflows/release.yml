@@ -41,6 +41,7 @@ jobs:
           make check-host-metrics
           make check-tray-prefs
           make check-tray-actions
+          make check-moonlight-install
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

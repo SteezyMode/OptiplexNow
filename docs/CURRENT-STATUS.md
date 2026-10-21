@@ -71,6 +71,12 @@ The Beta 1 regression suite now drives actual Tailscale discovery, SSH enrollmen
 
 This test does not interact with GTK, verify true system authentication prompts, enroll a real Tailscale account or stream a game. Those still require a supported physical client. The host installation and device-approval backend remain future milestones.
 
+## Terminal-free Moonlight installation (development source)
+
+Moonlight installation previously launched a shell and terminal for `flatpak remote-add` followed by `flatpak install`. NOW now asks for explicit confirmation and runs the two fixed commands asynchronously as **per-user** Flatpak operations through `moonlight_install.c/.h`, reporting failure, completion, timeouts and cancellation in a GTK dialog. No sudo, administrator password, account system or host operation is introduced. Missing Flatpak directs the user to install it or choose a Moonlight AppImage; it does not silently invoke a terminal.
+
+The native test uses a disposable fake Flatpak binary to prove argument ordering, failure handling, cancellation and main-context responsiveness. This does **not** prove live Flathub download, desktop integration, hardware decoding or game streaming. Real-client Beta 1 acceptance remains pending.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

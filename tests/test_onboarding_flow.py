@@ -9,6 +9,7 @@ GTK automation. Physical-device acceptance remains a separate release gate.
 """
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import sys
@@ -33,8 +34,12 @@ class OnboardingFlowTests(unittest.TestCase):
         self.bin = self.root / "bin"
         self.home.mkdir()
         self.bin.mkdir()
+        # GitHub's contents API stores fixtures as non-executable text.
+        # The executable copies are confined to this disposable test directory.
         for executable in ("tailscale", "ssh-copy-id", "ssh", "docker"):
-            (self.bin / executable).symlink_to(FAKE_CLI)
+            shim = self.bin / executable
+            shutil.copyfile(FAKE_CLI, shim)
+            shim.chmod(0o700)
         askpass = self.root / "fake-askpass"
         askpass.write_text("#!/bin/sh\nexit 1\n")
         askpass.chmod(0o700)

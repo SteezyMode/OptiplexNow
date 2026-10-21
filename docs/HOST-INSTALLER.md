@@ -70,6 +70,58 @@ unknown encoder state, occupied-port behavior, preservation of unmanaged data,
 and no mutation of a disposable input file. These run in Python CI along
 with the earlier preflight suite.
 
+## Compose deployment prototype (source only, never auto-run)
+
+`server/host_stage.py` is the first concrete Docker Compose staging
+artifact. It builds on the read-only preflight and blocked installation
+plan, generating a **review-only** Wolf NVIDIA Container Toolkit configuration
+and an ownership manifest. It does **not** install or run Wolf. No `apply`,
+`start`, `repair` or `uninstall` command exists.
+
+This first pilot assumes NVIDIA, an explicitly chosen render device, a
+preverified immutable Wolf registry SHA256 image digest, Docker/Compose and
+one manually reviewable Wolf service. Upstream Wolf requires privileged
+access to the host Docker socket to spawn its application containers.
+The template records this requirement but **is not approved for deployment**.
+A restricted host broker and clean installation/rollback remain essential
+before customer distribution.
+
+Example with an actual verified digest and explicitly selected render node:
+
+```sh
+python3 server/host_stage.py \
+  --output /tmp/now-wolf-review \
+  --image-digest sha256:REPLACE_WITH_VERIFIED_64_LOWERCASE_HEX_DIGITS \
+  --render-node /dev/dri/renderD129
+```
+
+The example digest is a placeholder, not a valid image. Reviewers must verify
+the digest against the correct Wolf image/architecture and inspect their
+actual render device first. The script performs only bounded read-only
+host inspection and **writes files into a new, explicitly selected staging
+directory**. It refuses overwrites, symlink destinations and system folders.
+The new directory contains `compose.yaml`, `manifest.json`,
+`README.txt` and an initially empty `wolf/` configuration directory.
+
+The Compose definition is JSON-formatted YAML and follows Wolf's upstream
+NVIDIA Container Toolkit topology: host networking, device and udev mounts,
+explicit render node and a Docker socket mount. To reduce accidental
+deployment, its service is hidden behind an inactive Compose profile,
+`pull_policy=never`, `restart=no` and a unique Compose project; these
+settings are not a security boundary for a person who deliberately enables
+the profile. No separate container named `wolf` is created during staging,
+and no existing daemon resource is adopted or restarted.
+
+Run `docker compose -f compose.yaml config --quiet` **only for syntax
+validation**. It does not prove that the Wolf image is valid, the GPU encoder
+works, a stream starts, or that server authorization is secure. Automated
+tests inspect the generated model, protect existing files, enforce
+strict inputs and (where Docker Compose is present) validate the actual
+Compose grammar without talking to the daemon.
+
+Reference: [Wolf upstream quickstart](https://games-on-whales.github.io/wolf/stable/user/quickstart.html)
+and [Docker Compose GPU support](https://docs.docker.com/compose/how-tos/gpu-support/).
+
 ## Initial supported scope
 
 Start with one explicitly supported Linux distribution and a verified hardware/driver matrix. Stream one Wolf application to one Moonlight device; optionally install Jellyfin with independent credentials. Add multi-desktop and multi-user features only after security and persistence gates pass.

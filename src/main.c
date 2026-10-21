@@ -1778,7 +1778,15 @@ static gboolean wizard_tailscale_poll(gpointer data)
 {
     Wizard *wizard = data;
     if (!wizard->assistant || wizard->closing ||
-        !gtk_widget_get_visible(wizard->assistant) || wizard->tailscale_cancel) {
+        !gtk_widget_get_visible(wizard->assistant)) {
+        return G_SOURCE_CONTINUE;
+    }
+    if (tailscale_install_inflight) {
+        gtk_label_set_text(GTK_LABEL(wizard->ts_state),
+                           "INSTALLING TAILSCALE — APPROVE THE SYSTEM PASSWORD PROMPT");
+        return G_SOURCE_CONTINUE;
+    }
+    if (wizard->tailscale_cancel) {
         return G_SOURCE_CONTINUE;
     }
 

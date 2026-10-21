@@ -39,12 +39,17 @@ class HostStageTests(unittest.TestCase):
         self.assertEqual(wolf["restart"], "no")
         self.assertEqual(wolf["network_mode"], "host")
         self.assertEqual(wolf["environment"]["WOLF_RENDER_NODE"], RENDER)
+        self.assertEqual(wolf["environment"]["NVIDIA_DRIVER_VOLUME_NAME"],
+                         host_stage.DRIVER_VOLUME)
+        self.assertEqual(compose["volumes"][host_stage.DRIVER_VOLUME],
+                         {"external": True})
+        self.assertIn(host_stage.DRIVER_VOLUME + ":/usr/nvidia:rw", wolf["volumes"])
+        self.assertIn("/dev/nvidia0:/dev/nvidia0", wolf["devices"])
         self.assertIn("/var/run/docker.sock:/var/run/docker.sock:rw", wolf["volumes"])
         self.assertIn("./wolf:/etc/wolf:rw", wolf["volumes"])
         self.assertIn("/dev/uinput:/dev/uinput", wolf["devices"])
-        self.assertEqual(
-            wolf["deploy"]["resources"]["reservations"]["devices"][0]["capabilities"],
-            ["gpu"])
+        self.assertNotIn("deploy", wolf)
+        self.assertNotIn("NVIDIA_VISIBLE_DEVICES", wolf["environment"])
         self.assertNotIn("container_name", wolf)
         self.assertEqual(list(compose["services"]), ["wolf"])
 
@@ -55,6 +60,9 @@ class HostStageTests(unittest.TestCase):
         self.assertFalse(manifest["unmanaged_containers_may_be_adopted"])
         self.assertFalse(manifest["existing_data_may_be_deleted"])
         self.assertEqual(manifest["approval"], "not_granted")
+        self.assertEqual(manifest["nvidia_method"], "manual_external_driver_volume")
+        self.assertEqual(manifest["driver_volume"], host_stage.DRIVER_VOLUME)
+        self.assertIs(manifest["driver_volume_prepared"], False)
         self.assertNotIn("password", json.dumps(manifest))
 
     def test_image_digest_rejects_mutable_tags_and_injection(self):

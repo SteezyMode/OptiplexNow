@@ -10,6 +10,8 @@ SOURCE = (ROOT / "src" / "main.c").read_text()
 PRESET_SOURCE = (ROOT / "src" / "presets.c").read_text()
 CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
 CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
+TRAY_HEADER = (ROOT / "src" / "tray_prefs.h").read_text()
+TRAY_SOURCE = (ROOT / "src" / "tray_prefs.c").read_text()
 
 
 class OptionalServiceTests(unittest.TestCase):
@@ -21,24 +23,25 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("for(int i=0;i<8;i++){tiles[i]=button(names[i]", SOURCE)
 
     def test_primary_and_tray_are_independently_selected(self):
-        self.assertIn("#define TRAY_ALL_BUTTONS 255u", SOURCE)
-        self.assertIn("#define TRAY_DEFAULT_BUTTONS 255u", SOURCE)
+        # The actual order, mask, persistence and label behaviors are tested
+        # by compiled tests/test_tray_prefs.c, including malformed input.
+        self.assertIn("#define NOW_TRAY_DEFAULT_MASK 255u", TRAY_HEADER)
+        self.assertIn("now_tray_parse_mask(cfg[TRAY_MASK_SETTING])", SOURCE)
+        self.assertIn("now_tray_service_caption(action, desktop, caption", SOURCE)
+        self.assertIn("now_tray_order_load(order)", SOURCE)
+        self.assertIn("now_tray_order_save(ordered)", SOURCE)
+        self.assertIn("now_tray_desktop_caption_save(new_caption)", SOURCE)
         self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8]", SOURCE)
         self.assertIn('const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};', SOURCE)
-        self.assertIn("gtk_label_set_xalign(GTK_LABEL(heading),h==0?0.0f:0.5f);", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)
         self.assertIn("snprintf(cfg[FEATURED_MASK_SETTING],512", SOURCE)
         self.assertIn("snprintf(cfg[TRAY_MASK_SETTING],512", SOURCE)
-        self.assertIn("int order[8];tray_order_load(order);", SOURCE)
-        self.assertIn("if(!(mask & (1u<<i)))continue;", SOURCE)
-        self.assertIn("tray_order_save(ordered);", SOURCE)
         self.assertIn("G_CALLBACK(tray_order_move)", SOURCE)
         self.assertIn("gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n)", SOURCE)
-        self.assertIn("gtk_list_box_insert(GTK_LIST_BOX(order_list),row,-1)", SOURCE)
         self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
-        self.assertIn('snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);', SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
+        self.assertNotIn("static void tray_order_load(", SOURCE)
 
     def test_old_layout_and_config_migrate_safely(self):
         self.assertIn("#define CONFIG_COUNT 17", CONFIG_HEADER)

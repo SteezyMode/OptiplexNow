@@ -153,6 +153,16 @@ class HostPreflightTests(unittest.TestCase):
             self.assertNotIn("hostname", json.dumps(preflight.evaluate(result)))
             self.assertNotIn("ssh", json.dumps(preflight.evaluate(result)))
 
+    def test_pop_os_24_04_is_candidate_not_stream_verified(self):
+        report = preflight.evaluate(snapshot(
+            os_id="pop", os_version="24.04",
+            gpu_vendors=["Intel"], render_nodes=["renderD128"]))
+        checks = by_id(report)
+        self.assertEqual(checks["operating_system"]["status"], "pass")
+        self.assertIn("Pop!_OS", checks["operating_system"]["detail"])
+        self.assertEqual(checks["hardware_encoder"]["status"], "unknown")
+        self.assertFalse(report["verified_streaming"])
+
     def test_cli_json_contract_and_no_privileged_actions(self):
         process = subprocess.run(
             [sys.executable, str(REPO / "server/host_preflight.py"), "--json"],

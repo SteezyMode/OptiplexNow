@@ -16,6 +16,9 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/tailscale-status.py` | Read-only Tailscale JSON status normalization for wizard; never performs sign-in or enrollment |
 | `src/tailscale_install.c/.h` | Unprivileged GTK-independent GIO wrapper invoking PolicyKit to request a specific root installation operation |
 | `src/tailscale-install.py` | Opt-in signed upstream apt repository installer with a finite Debian/Ubuntu release allowlist; never invoked on an existing Tailscale installation |
+| `src/ssh_authorize.c/.h` | Async, cancellable GUI SSH key authorization caller; GTK widgets belong to the caller, not the worker |
+| `src/ssh-authorize.py` | Restricted OpenSSH key-generation and ssh-copy-id orchestration; process group cleanup and bounded timeouts |
+| `src/ssh_askpass.c` | Separate, GTK-only host fingerprint confirmation and masked SSH password/passphrase prompt, invoked by OpenSSH |
 | `src/process.c/.h` | Subprocess execution and executable lookup |
 | `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
 | `src/backup.c` | Explicit encrypted client identity/settings backup |

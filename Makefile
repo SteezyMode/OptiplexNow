@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto

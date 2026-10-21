@@ -54,7 +54,7 @@ An eventual host installer must publish managed service IDs and health capabilit
 
 The six ordered engineering items and next-session stop condition live in [Product direction](PRODUCT.md#beta-1-engineering-execution-plan). This section defines implementation boundaries, not a second roadmap.
 
-**Current state:** `src/config.c/.h` owns configuration persistence, and `src/process.c/.h` supplies bounded process execution. `main.c` still combines the GTK setup wizard, status/tray presentation and application launch logic. `wolf_pair_request()` invokes synchronous `GSubprocess` communication, and `find_server()` and some Tailscale wizard checks invoke blocking commands. Their timeouts limit the wait but do not make those GTK callbacks responsive.
+**Current source state:** `src/config.c/.h` owns configuration persistence; `src/process.c/.h` supplies bounded process execution; `src/wolf_pairing.c/.h` and `src/wolf_transport.c/.h` own Wolf request validation and asynchronous bridge execution. `src/tailscale_async.c/.h` now owns cancellable Tailscale helper execution and parsed discovery rows, while `src/tailscale-status.py` interprets read-only status JSON. The GTK wizard only starts jobs and displays their results. `main.c` still contains the substantial tray/status and action controller; not all other subprocess calls are asynchronous.
 
 **Wolf and network operations:**
 - Keep process execution, pending-client parsing and Wolf authorization decisions outside GTK callbacks behind a small API with explicit host identity, selected client and result/error fields.

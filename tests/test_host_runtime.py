@@ -372,7 +372,7 @@ class HostRuntimeTests(unittest.TestCase):
         another = FakeDocker()
         with self.assertRaisesRegex(rt.ActivationBlocked, "journal"):
             rt.simulate_first_start(self.workspace, report(), another,
-                                    approval=self.grant(),
+                                    approval=None,
                                     authority=self.auth,
                                     owner_connection=self.peer)
         self.assertEqual(another.events, [])

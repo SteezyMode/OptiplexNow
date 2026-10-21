@@ -18,6 +18,8 @@ test -r /usr/lib/optiplex-now/ssh-authorize.py
 test -x /usr/lib/optiplex-now/now-host-setup
 test -r /usr/lib/optiplex-now/host_preflight.py
 test -r /usr/lib/optiplex-now/host_plan.py
+test -x /usr/lib/optiplex-now/host_install.py
+test -r /usr/lib/optiplex-now/host_stage.py
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

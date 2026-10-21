@@ -29,15 +29,23 @@ Existing NOW preferences are intended to survive updates. Back up important clie
 
 The upcoming test package contains a separate GTK **Server Setup** window
 under **Settings > Connections & Server > Check This PC for Server Setup**.
-It runs the actual local read-only hardware preflight and blocked Wolf
-installation-plan review, without asking users to open a terminal.
-The check detects candidate GPU/OS support, existing Wolf port conflicts
-and unverified prerequisites. A machine already running Wolf is safe to
-review. **No installation, Docker changes or owner approvals are performed.**
+The normal check runs the actual local read-only preflight and blocked Wolf
+plan. A machine already running Wolf is safe to **check** without changes.
 
-This feature is **not included** in the published v1.17.0 prerelease and
-does not yet constitute the promised turnkey Server mode. A functioning
-host installer and clean physical hardware validation remain alpha gates.
+An advanced, explicitly confirmed installer can now provision one **new**
+Wolf service on a clean Pop!_OS or Ubuntu 24.04 AMD/Intel host with a
+previously verified immutable Wolf image digest and OS administrator approval.
+It rechecks the machine and refuses occupied ports, unrelated installations
+or an existing NOW-managed host directory. It never installs graphics drivers,
+Docker packages or other applications. Wolf video/audio/input readiness and
+recoverability after actual failure remain unverified, and there is no
+automatic repair, upgrade or uninstall yet.
+
+**NVIDIA hosts:** Pop!_OS 24.04 NVIDIA Edition is the recommended starting
+OS for newer cards, but Wolf's separate NVIDIA driver-volume management is
+still blocked. Do not test the advanced installer on an existing working
+server. This feature is **not included** in the published v1.17.0 prerelease
+and is not yet a turnkey host installation experience.
 
 ## Connect to an existing host
 

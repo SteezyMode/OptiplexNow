@@ -188,9 +188,10 @@ def evaluate(snapshot: dict) -> dict:
 
     distro = snapshot.get("os_id", "")
     version = snapshot.get("os_version", "")
-    if distro == "ubuntu" and version == "24.04":
+    if distro in ("ubuntu", "pop") and version == "24.04":
         os_status = "pass"
-        os_text = "Ubuntu 24.04 is the candidate for the first pilot; not hardware-certified."
+        os_text = (("Pop!_OS" if distro == "pop" else "Ubuntu")
+                   + " 24.04 is a pilot candidate; GPU encoding is not certified.")
     elif not distro:
         os_status = "unknown"
         os_text = "Unable to identify the Linux distribution."

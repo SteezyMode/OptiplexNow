@@ -26,6 +26,17 @@ assert r["may_apply"] is False
 assert r["changes_performed"] is False
 '
 
+# Exercise the actual installed clean-host gate against this runner.
+# NVIDIA MUST remain blocked, and no Docker operation may be attempted.
+python3 /usr/lib/optiplex-now/host_install.py \
+  --check --gpu nvidia --render-node /dev/dri/renderD128 |
+  python3 -c '
+import json, sys
+r=json.load(sys.stdin)
+assert r["decision"] == "blocked"
+assert "NVIDIA volume preparation has not been implemented" in r["blockers"]
+'
+
 tmp="$(mktemp -d -t now-host-ui.XXXXXX)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime"

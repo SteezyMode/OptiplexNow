@@ -199,10 +199,11 @@ static void eligibility_done(GObject *source, GAsyncResult *result, gpointer dat
             append_result(ui, "\nCLEAN-HOST INSTALL ELIGIBILITY\n");
             append_result(ui, out);
             append_result(ui, "\n");
-            ui->eligible = strstr(out, "\"decision\": \"candidate\"") != NULL;
+            ui->eligible = (strstr(out, "\"decision\": \"candidate\"") != NULL ||
+                            strstr(out, "\"decision\": \"candidate_after_admin_check\"") != NULL);
             gtk_widget_set_sensitive(ui->install_button, ui->eligible);
             gtk_label_set_text(GTK_LABEL(ui->status),
-                ui->eligible ? "CLEAN-HOST CANDIDATE. REVIEW BEFORE INSTALLING." :
+                ui->eligible ? "CANDIDATE. OS AUTHORIZATION WILL RECHECK DOCKER." :
                                "INSTALLATION BLOCKED. NO CHANGES MADE.");
         }
     }

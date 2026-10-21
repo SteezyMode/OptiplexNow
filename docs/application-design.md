@@ -56,6 +56,10 @@ Host metrics and physical-disk filtering are parsed by `src/host_metrics.c/.h`, 
 
 **SSH trust:** background host probes and power actions require a known, preapproved SSH host key (`StrictHostKeyChecking=yes`). They must never create first-time trust as a side effect of an apparently read-only status check; a new host uses the explicit graphical authorization flow. Changed host keys require manual investigation, not automatic replacement. The client still uses the existing SSH account and does not grant additional host privileges.
 
+## Background SSH operation identity
+
+The worker-entry boundary captures a `NowHostJobTarget` value on the GTK thread before dispatch. It contains the exact selected host and account; relay wake additionally captures the approved wake command. Background SSH probes, hardware inventory, Wolf administrative lookup and power operations consume only this snapshot rather than rereading mutable `cfg[]`. Before presenting the result, the GTK callback checks whether the selected endpoint still matches and drops stale output. Never interpret a saved host change as permission to retarget an action that was already initiated. The GTK-free contract is in `src/host_job_target.c/.h`; test it independently, including sanitizer builds.
+
 ## Tray routing boundary
 
 The GTK tray owns menu rendering, StatusNotifier/GTK status-icon integration and callbacks; `src/tray_prefs.c/.h` owns order, mask, saved labels and service metadata; `src/tray_actions.c/.h` interprets known action IDs through an explicit table of callbacks. The dispatcher has no GTK, network or SSH dependencies. Invalid IDs and missing handlers are rejected; launching Games still brings NOW forward first when Moonlight is missing. Do not turn this callback interface into a general app-wide event bus.

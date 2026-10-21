@@ -2,13 +2,14 @@
 
 Read [Product direction](docs/PRODUCT.md), [Current status](docs/CURRENT-STATUS.md) and [Beta acceptance](docs/BETA-ACCEPTANCE.md) before proposing new scope.
 
-NOW is currently an amd64 GTK3 Linux client for an already prepared server. It does not own Wolf's streaming protocol, Jellyfin's media service, Tailscale's network or Studio's creation features. The future host manager must remain separately installable.
+Published v1.17.0 is an amd64 GTK3 Linux client for an already prepared server. Unreleased development source additionally includes a **clean-host Wolf installation pilot** with separate GTK setup and a root-authorized helper, not yet physically accepted. NOW does not own Wolf's protocol, Jellyfin's service, Tailscale's network or Studio's tools. Keep privileged host operations outside the ordinary client; see [Host installer](docs/HOST-INSTALLER.md).
 
 ## Source map
 
 | Path | Responsibility |
 | --- | --- |
 | `src/main.c` | GTK3 UI, wizard, launcher, tray, state presentation and user-triggered actions |
+| `src/host_setup.c` | Separate Server Setup GUI; read-only host review and explicit opt-in clean-host install confirmation |
 | `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
 | `src/host_metrics.c/.h` | Host telemetry key-value/disk parsing and mounted-drive filtering, independent of GTK/SSH |
 | `src/tray_prefs.c/.h` | GTK-free tray order, shortcut masks, legacy Desktop caption, action labels and private atomic persistence |
@@ -33,7 +34,8 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/wolf-pair-local.py` | Privileged host-side Wolf socket mediation; not auto-installed on the host |
 | `src/server-profile.py` | Existing music stack export/staged import; not a host installer |
 | `src/open-remote-files.sh`, `src/open-web-gaming-admin.py` | SFTP and opt-in browser administration |
-| `src/restart-streaming.sh`, `server/` | Explicit host maintenance tools with narrow documented assumptions |
+| `server/host_install.py`, `server/host_nvidia.py`, `server/nvidia-driver.Dockerfile` | Guarded Wolf clean-host install and version-specific NVIDIA driver userspace volume; unverified on physical host |
+| `src/restart-streaming.sh`, other `server/` tools | Existing-host maintenance and review-only prototypes; do not treat their simulations as live deployment |
 | `Makefile`, `package.py`, `assets/` | Build, pinned embedded fonts, package manifest and icons |
 | `tests/`, `.github/workflows/` | Regression tests, CI and immutable release publishing |
 

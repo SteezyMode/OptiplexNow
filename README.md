@@ -25,35 +25,13 @@ sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
 
-## New in development source: Server Setup review
+## Unreleased development: NOW Host pilot
 
-The upcoming test package contains a separate GTK **Server Setup** window
-under **Settings > Connections & Server > Check This PC for Server Setup**.
-The normal check runs the actual local read-only preflight and blocked Wolf
-plan. A machine already running Wolf is safe to **check** without changes.
+The current source includes a separate **Server Setup** GUI with real read-only hardware checks and a deliberately restricted advanced installer for a **new** Ubuntu/Pop!_OS 24.04 AMD, Intel or NVIDIA host. The pilot needs Docker/Compose, owner confirmation, OS administrator authentication and verified immutable image inputs. NVIDIA requires an exact driver-installer SHA256 and builds a new versioned userspace volume without changing host drivers.
 
-An advanced, explicitly confirmed installer can now provision one **new**
-Wolf service on a clean Pop!_OS or Ubuntu 24.04 AMD, Intel or NVIDIA host with a
-previously verified immutable Wolf image digest and OS administrator approval.
-It rechecks the machine and refuses occupied ports, unrelated installations
-or an existing NOW-managed host directory. It never installs graphics drivers,
-Docker packages or other applications. Wolf video/audio/input readiness and
-recoverability after actual failure remain unverified, and there is no
-automatic repair, upgrade or uninstall yet.
+**It is not in published v1.17.0, not a one-click installer, and not yet accepted on physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
 
-**NVIDIA hosts:** Pop!_OS 24.04 NVIDIA Edition is the preferred first
-test platform. The advanced installer now builds a driver-version-matched
-Wolf userspace image after verifying a separately obtained SHA256 for NVIDIA's
-official driver .run file. It populates a *new*, version-specific NOW Docker
-volume and never deletes another one. Missing DRM modesetting or NVIDIA device
-nodes block installation; it does not change kernel drivers or boot settings.
-
-This is a **technical alpha candidate**, not one-click installation. Wolf's
-OCI digest and the official NVIDIA installer checksum must be verified and
-entered by the owner. Driver upgrades currently need an explicit maintenance
-workflow; they are **not** managed automatically. Real streaming and repair
-acceptance have not been performed. Do not test --install on a working host.
-This feature is **not included** in the published v1.17.0 prerelease.
+See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTALLER.md) and [Current verification](docs/CURRENT-STATUS.md).
 
 ## Connect to an existing host
 

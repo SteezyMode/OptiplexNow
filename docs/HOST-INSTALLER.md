@@ -193,6 +193,52 @@ is allowed to start, and no actual NVIDIA volume provisioning, Docker Compose
 activation, host authorization or live streaming verification is implemented.
 Tests run entirely in disposable fixtures, including failures and rollback.
 
+## First-start controller and Docker boundary (simulated, not shipped)
+
+`server/host_docker.py` provides a small local Docker adapter. All commands
+use argument arrays without shell interpolation, the system Unix socket
+(`/var/run/docker.sock`), a fixed Compose project and service, bounded
+timeouts, and errors that do not print daemon output. Docker context and
+host environment overrides are excluded. Only expected immutable Wolf image
+references and NOW driver volume names are accepted. The adapter inventories
+existing project containers, verifies Docker/Compose ownership labels and
+inspects running/health status. If cleanup is ever necessary, it targets
+an explicitly verified container ID, **never** `docker compose down` or
+a global volume removal.
+
+`server/host_runtime.py` implements the first-start state machine against an
+injected Docker interface. It requires explicit owner confirmation, a
+checksum-verified prepared configuration generation, fully passing
+preflight statuses, an empty Compose project, a locally cached pinned
+Wolf image and compatible GPU prerequisites. It writes an exclusive and
+durable `deployment.json` attempt journal before attempting startup.
+A successful mock start reports `started_unverified_stream`, **not**
+verified gaming, and does not modify the configuration-generation pointer.
+Any subsequent attempt is blocked until the previous journal is explicitly
+investigated.
+
+On a simulated failure, only exactly one newly observed and positively
+NOW-labeled container may be removed. Unknown ownership, multiple containers,
+a failed cleanup or an interrupted operation leaves a
+`manual_recovery_required` journal rather than issuing broad Docker
+cleanup. No media, game libraries, other containers or existing volumes
+are adopted, deleted, or changed.
+
+**Critical activation gate:** there is no public apply/start CLI or GTK
+integration for this controller, and `host_runtime.simulate_first_start`
+explicitly rejects the real `LocalDocker` adapter regardless of approval.
+All automated lifecycle tests inject a fake Docker backend. The real adapter
+has never been run against the reference host. In particular, NVIDIA
+driver-volume version attestation, live hardware-encoder verification,
+actual Wolf sessions and crash-safe end-to-end daemon recovery are not done.
+The source is a tested execution boundary and state machine for later
+review, **not a usable Wolf installer**. Production enabling requires a
+separate code review and an isolated supported physical host.
+
+This approach deliberately avoids adding a general-purpose container
+dashboard, CasaOS/Runtipi dependency, or shell scripts with uncontrolled
+system privileges.
+
 ## Initial supported scope
 
 Start with one explicitly supported Linux distribution and a verified hardware/driver matrix. Stream one Wolf application to one Moonlight device; optionally install Jellyfin with independent credentials. Add multi-desktop and multi-user features only after security and persistence gates pass.

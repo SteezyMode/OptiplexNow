@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
+import tempfile
 from pathlib import Path
 
 import host_docker
@@ -103,14 +105,11 @@ def _journal(root: Path, event: dict, *, new: bool = False) -> None:
         tx._write_exclusive(root / JOURNAL,
                             (json.dumps(payload, sort_keys=True) + "\n").encode())
     else:
-        tx._write_current(root, payload) if False else _replace_journal(root, payload)
+        _replace_journal(root, payload)
 
 
 def _replace_journal(root: Path, value: dict) -> None:
     """Atomic, durable journal update without changing active configuration."""
-    import os
-    import tempfile
-
     descriptor, temporary = tempfile.mkstemp(prefix=".deploy-", dir=root)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:

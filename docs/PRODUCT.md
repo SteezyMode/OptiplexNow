@@ -1,6 +1,6 @@
 # Product direction
 
-**Authority:** The vision, priorities and sequence live here. [Public-alpha contract](PUBLIC-ALPHA.md) defines the three required end-to-end workflows and role enforcement. [Current status](CURRENT-STATUS.md) records implemented, released and physically verified features. [Private client beta](BETA-ACCEPTANCE.md) and [Host installer](HOST-INSTALLER.md) cover narrower evidence. Do not treat them as proof of public-alpha completion.
+**Authority:** The vision, priorities and sequence live here. [Public-alpha contract](PUBLIC-ALPHA.md) defines the three required end-to-end workflows and role enforcement; [issue #137](https://github.com/SteezyMode/OptiplexNow/issues/137) tracks their implementation. [Current status](CURRENT-STATUS.md) records implemented, released and physically verified features. [Private client beta](BETA-ACCEPTANCE.md) and [Host installer](HOST-INSTALLER.md) cover narrower evidence. Do not treat them as proof of public-alpha completion.
 
 **Name:** OptiPlex NOW is an internal development codename. The commercial product will have a different name.
 

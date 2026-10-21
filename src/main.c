@@ -1964,17 +1964,19 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         if (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)) {
             message = "TAILSCALE CHECK TIMED OUT — RETRY CONNECTION";
         } else if (!error && reply) {
-            if (g_str_has_prefix(reply, "CONNECTED")) {
+            char *status = g_strstrip(g_strdup(reply));
+            if (g_strcmp0(status, "CONNECTED") == 0) {
                 message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
                 action = "TAILSCALE CONNECTED";
-            } else if (g_str_has_prefix(reply, "NOT_INSTALLED")) {
+            } else if (g_strcmp0(status, "NOT_INSTALLED") == 0) {
                 message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
                 action = "INSTALL TAILSCALE";
-            } else if (g_str_has_prefix(reply, "SIGN_IN")) {
+            } else if (g_strcmp0(status, "SIGN_IN") == 0) {
                 message = "TAILSCALE NEEDS SIGN-IN — CONNECT TAILSCALE";
-            } else if (g_str_has_prefix(reply, "NOT_CONNECTED")) {
+            } else if (g_strcmp0(status, "NOT_CONNECTED") == 0) {
                 message = "TAILSCALE DISCONNECTED — CONNECT TAILSCALE";
             }
+            g_free(status);
         }
         gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
         gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);

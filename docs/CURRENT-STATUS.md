@@ -53,6 +53,10 @@ This removes a **normal first-run terminal requirement** but does not grant prea
 
 An independent `native-sanitizers` job is being added to test the extracted C modules under AddressSanitizer (memory access) and UndefinedBehaviorSanitizer, with stricter warnings on the graphical SSH/Tailscale helper modules. It runs on disposable GitHub runners, does not need the streaming host, and **does not modify the packaged binary, users' systems, or release compiler flags**. GLib/GIO process-global leak detection is disabled for these runs; memory bounds and undefined-behavior checking remain enabled. The still-large legacy GTK `main.c` is not covered by this isolated instrumented test target, and real end-to-end device validation remains required.
 
+## Host monitoring refactor (development source)
+
+The host telemetry parser now has a GTK-independent C module with compiled tests for key-value extraction, disk-section boundaries, excluded recovery/boot mounts, missing sections and malformed fields. The dashboard also shares the wizard's structured Tailscale status helper. Background SSH monitoring and power actions no longer use `StrictHostKeyChecking=accept-new`; they require a trusted host key, which must be established through explicit authorization. These are source/CI checks only: real host power management and status must still be regression-tested, and the shipped v1.16.1 package is unchanged.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

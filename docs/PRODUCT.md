@@ -58,7 +58,7 @@ The six engineering improvements are a permanent review checklist, not work that
 | **5. Behavioral tests** | Native config/Wolf tests, simulated failures [#109](https://github.com/SteezyMode/OptiplexNow/pull/109), disposable GUI smoke | Tailscale signed-out/offline/timeout/peer checks (current PR), more UI cancellation and real-device evidence |
 | **6. Stronger diagnostics** | Compiler warnings and native tests already run in CI | Separate opt-in AddressSanitizer/UndefinedBehaviorSanitizer tests, then tighter warnings |
 
-**Current delivery sequence:** finish and verify Tailscale async/discovery; simplify SSH authorization without exposing server administration; validate one real unpaired Moonlight connection and new-client onboarding; then take the monitoring/tray and sanitizer work as small, measured PRs. The standardized host installer remains a later product milestone, not a prerequisite for the current client test.
+**Current delivery sequence:** finish and verify graphical Tailscale installation and browser sign-in on supported Debian/Ubuntu client distributions; simplify SSH authorization without exposing server administration; validate one real unpaired Moonlight connection and new-client onboarding; then take the monitoring/tray and sanitizer work as small, measured PRs. The standardized host installer remains a later product milestone, not a prerequisite for the current client test.
 
 **Stop condition:** do not call a system accepted merely because GitHub CI is green. Record source, simulated, installed-package and physical-device evidence separately. Do not start a speculative new subsystem while an active slice has failed tests.
 

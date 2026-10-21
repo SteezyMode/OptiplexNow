@@ -4,7 +4,8 @@ Read in this order when joining development or starting a new review.
 
 | File | Authority |
 | --- | --- |
-| [Product direction](PRODUCT.md) | Vision, scope, phased requirements and exclusions |
+| [Product direction](PRODUCT.md) | Vision, modular product roadmap, immediate development order and exclusions |
+| [Public alpha](PUBLIC-ALPHA.md) | Three required workflows: independent gaming, Jellyfin video and VPN-isolated downloads; role boundaries and physical acceptance |
 | [Current status](CURRENT-STATUS.md) | What code, CI and device observations support today |
 | [Beta acceptance](BETA-ACCEPTANCE.md) | Required end-to-end tester evidence |
 | [Host installation and alpha acceptance](HOST-INSTALLER.md) | Current guarded installer, NVIDIA limits, safety gates and clean-host test |

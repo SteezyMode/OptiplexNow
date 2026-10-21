@@ -163,6 +163,51 @@ class OwnerAuthorityTests(unittest.TestCase):
         self.assertEqual(result["status"], "approved_for_simulation")
         self.consume(result["ticket"])
 
+    def test_one_request_bounded_reply_over_real_unix_stream(self):
+        request = {
+            "version": 1, "operation": "start_wolf",
+            "workspace": str(self.workspace), "generation": self.generation,
+        }
+        self.client.sendall(json.dumps(request).encode() + b"\n")
+        host_owner.serve_one(self.server, self.owner, self.approve)
+        self.client.settimeout(2)
+        response = json.loads(self.client.recv(1024))
+        self.assertEqual(response["version"], 1)
+        self.assertEqual(response["status"], "approved_for_simulation")
+        self.consume(response["ticket"])
+
+    def test_denied_reply_never_contains_internal_exception_details(self):
+        self.client.sendall(b"invalid-json\n")
+        host_owner.serve_one(self.server, self.owner, self.approve)
+        self.client.settimeout(2)
+        response = json.loads(self.client.recv(1024))
+        self.assertEqual(response, {"version": 1, "status": "denied"})
+        self.assertNotIn("ticket", response)
+        self.assertFalse(self.owner._tickets)
+
+    def test_version_bool_does_not_alias_integer_protocol_version(self):
+        request = {
+            "version": True, "operation": "start_wolf",
+            "workspace": str(self.workspace), "generation": self.generation,
+        }
+        self.client.sendall(json.dumps(request).encode() + b"\n")
+        host_owner.serve_one(self.server, self.owner, self.approve)
+        response = json.loads(self.client.recv(1024))
+        self.assertEqual(response["status"], "denied")
+        self.assertEqual(self.calls, [])
+
+    def test_no_trusted_confirmation_mechanism_cannot_issue(self):
+        with self.assertRaises(host_owner.AuthorizationError):
+            self.owner.issue(
+                self.server, operation="start_wolf",
+                workspace=self.workspace, generation=self.generation,
+                confirm=None)
+
+    def test_tcp_socket_is_explicitly_refused(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as other:
+            with self.assertRaisesRegex(host_owner.AuthorizationError, "Unix"):
+                host_owner.peer_identity(other)
+
     def test_rejects_unknown_protocol_fields_and_multiple_requests(self):
         baseline = {
             "version": 1, "operation": "start_wolf",

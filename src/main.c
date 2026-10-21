@@ -1608,7 +1608,7 @@ typedef struct {
     GtkWidget *assistant, *server_page, *games_page, *services_page;
     GtkWidget *host, *user, *relay, *relayuser, *wake;
     GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
-    GtkWidget *find_button, *service_inputs[3];
+    GtkWidget *find_button, *tailscale_button, *service_inputs[3];
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
     guint tailscale_poll_id, status_timeout_id, discovery_timeout_id;
@@ -1679,12 +1679,15 @@ static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointe
 
     if (wizard->assistant && !wizard->closing) {
         const char *message = "TAILSCALE STATUS UNAVAILABLE — CHECK CONNECTION";
+        const char *action = "CONNECT TAILSCALE";
         if (status) {
             g_strstrip(status);
             if (strcmp(status, "CONNECTED") == 0) {
                 message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
+                action = "TAILSCALE CONNECTED";
             } else if (strcmp(status, "NOT_INSTALLED") == 0) {
-                message = "TAILSCALE NOT INSTALLED — USE CONNECT TAILSCALE";
+                message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
+                action = "INSTALL TAILSCALE";
             } else if (strcmp(status, "SIGN_IN") == 0) {
                 message = "TAILSCALE NEEDS SIGN-IN — CONNECT TAILSCALE";
             } else if (strcmp(status, "NOT_CONNECTED") == 0) {
@@ -1692,6 +1695,7 @@ static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointe
             }
         }
         gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
+        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
     }
     g_free(status);
     g_clear_error(&error);
@@ -1923,7 +1927,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
  add(one,label("CONNECT THIS DEVICE","modalheading"),0);
  c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- wizard_button(c,one,"SIGN IN WITH TAILSCALE","w_ts");
+ c->tailscale_button=wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
  wizard_button(c,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup");
  add(one,label("Connection status updates automatically after sign-in.","helper"),0);
  wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");

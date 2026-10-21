@@ -30,6 +30,7 @@
 #include "ssh_authorize.h"
 #include "host_metrics.h"
 #include "tray_prefs.h"
+#include "tray_actions.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -2162,18 +2163,61 @@ static void tray_toggle(void *icon,void *data){
  if(gtk_widget_get_visible(win))gtk_widget_hide(win);
  else tray_show_window();
 }
-static void tray_action(void *widget,void *data){
- (void)widget;
- int action=(int)(long)data;
- if(action==10)tray_show_window();
- else if(action==11){tray_show_window();on_settings(NULL,NULL);}
- else if(action==12){tray_show_window();on_system_info(NULL,NULL);}
- else if(action==13)tray_quit(NULL,NULL);
- else if(action==14)on_restart_streaming(NULL,NULL);
-  else {
-   if(action==0 && !has_moonlight())tray_show_window();
-   on_tile(NULL,(void*)(long)action);
- }
+static void tray_dispatch_show(void *context)
+{
+    (void)context;
+    tray_show_window();
+}
+
+static void tray_dispatch_settings(void *context)
+{
+    (void)context;
+    on_settings(NULL, NULL);
+}
+
+static void tray_dispatch_system_info(void *context)
+{
+    (void)context;
+    on_system_info(NULL, NULL);
+}
+
+static void tray_dispatch_quit(void *context)
+{
+    (void)context;
+    tray_quit(NULL, NULL);
+}
+
+static void tray_dispatch_restart(void *context)
+{
+    (void)context;
+    on_restart_streaming(NULL, NULL);
+}
+
+static void tray_dispatch_service(void *context, int index)
+{
+    (void)context;
+    on_tile(NULL, (void *)(long)index);
+}
+
+static int tray_dispatch_moonlight_available(void *context)
+{
+    (void)context;
+    return has_moonlight();
+}
+
+static void tray_action(void *widget, void *data)
+{
+    (void)widget;
+    static const NowTrayActions handlers = {
+        .show_window = tray_dispatch_show,
+        .open_settings = tray_dispatch_settings,
+        .open_system_info = tray_dispatch_system_info,
+        .quit = tray_dispatch_quit,
+        .restart_streaming = tray_dispatch_restart,
+        .launch_service = tray_dispatch_service,
+        .moonlight_available = tray_dispatch_moonlight_available
+    };
+    (void)now_tray_dispatch_action(GPOINTER_TO_INT(data), &handlers, NULL);
 }
 static void tray_menu_item(const char*caption,int action){
  GtkWidget *item=gtk_menu_item_new_with_label(caption);
@@ -2190,7 +2234,7 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
- tray_menu_item("Open OptiPlex Now",10);
+ tray_menu_item("Open OptiPlex Now",NOW_TRAY_OPEN_WINDOW);
  unsigned mask=tray_button_mask();
  if(mask){
   tray_separator();
@@ -2215,11 +2259,11 @@ static void tray_build_menu(void){
   }
  }
  tray_separator();
- tray_menu_item("Restart streaming service…",14);
+ tray_menu_item("Restart streaming service…",NOW_TRAY_RESTART_STREAMING);
  tray_separator();
- tray_menu_item("System Info",12);
- tray_menu_item("Settings",11);
- tray_separator();tray_menu_item("Quit",13);
+ tray_menu_item("System Info",NOW_TRAY_OPEN_SYSTEM_INFO);
+ tray_menu_item("Settings",NOW_TRAY_OPEN_SETTINGS);
+ tray_separator();tray_menu_item("Quit",NOW_TRAY_QUIT);
  gtk_widget_show_all(tray_menu);
  if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
  if(old)gtk_widget_destroy(old);

@@ -56,6 +56,10 @@ Host metrics and physical-disk filtering are parsed by `src/host_metrics.c/.h`, 
 
 **SSH trust:** background host probes and power actions require a known, preapproved SSH host key (`StrictHostKeyChecking=yes`). They must never create first-time trust as a side effect of an apparently read-only status check; a new host uses the explicit graphical authorization flow. Changed host keys require manual investigation, not automatic replacement. The client still uses the existing SSH account and does not grant additional host privileges.
 
+## Tray routing boundary
+
+The GTK tray owns menu rendering, StatusNotifier/GTK status-icon integration and callbacks; `src/tray_prefs.c/.h` owns order, mask, saved labels and service metadata; `src/tray_actions.c/.h` interprets known action IDs through an explicit table of callbacks. The dispatcher has no GTK, network or SSH dependencies. Invalid IDs and missing handlers are rejected; launching Games still brings NOW forward first when Moonlight is missing. Do not turn this callback interface into a general app-wide event bus.
+
 ## Maintainability and threading contract
 
 The six ordered engineering items and next-session stop condition live in [Product direction](PRODUCT.md#beta-1-engineering-execution-plan). This section defines implementation boundaries, not a second roadmap.

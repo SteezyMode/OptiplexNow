@@ -12,6 +12,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
 | `src/host_metrics.c/.h` | Host telemetry key-value/disk parsing and mounted-drive filtering, independent of GTK/SSH |
 | `src/tray_prefs.c/.h` | GTK-free tray order, shortcut masks, legacy Desktop caption, action labels and private atomic persistence |
+| `src/tray_actions.c/.h` | GTK-free explicit tray action routing and callback contract; validates IDs and launch order |
 | `src/wolf_pairing.c/.h` | GTK-independent pending-client validation and PIN request generation; no SSH privilege or remote approval |
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
@@ -33,11 +34,11 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `Makefile`, `package.py`, `assets/` | Build, pinned embedded fonts, package manifest and icons |
 | `tests/`, `.github/workflows/` | Regression tests, CI and immutable release publishing |
 
-`src/main.c` is still a large GTK controller, with shared indexed settings and synchronous onboarding operations. New modules should keep GTK widgets and remote I/O out of parsing/persistence code. Split one responsibility at a time with behavioral tests; do not replace the GUI or mix a large formatting-only diff with a functional change.
+`src/main.c` is still a large GTK controller, with shared indexed settings and some synchronous advanced host operations. Core Wolf, Tailscale and SSH onboarding calls have been moved to asynchronous helpers; other UI and status responsibilities remain coupled. New modules should keep GTK widgets and remote I/O out of parsing/persistence code. Split one responsibility at a time with behavioral tests; do not replace the GUI or mix a large formatting-only diff with a functional change.
 
 A shared `.clang-format` defines four-space C indentation and a 100-column target. Format newly extracted or edited functions, not the entire legacy `main.c` in unrelated PRs. Preserve the existing serialized config index order, file path and legacy preset inputs.
 
-The active [six-item Beta 1 engineering work order](docs/PRODUCT.md#beta-1-engineering-execution-plan) is applied within existing product milestones. For the first Wolf slice, separate transport/parsing from GTK before changing blocking calls. Any worker result must return to the GTK main context, respect cancellation and dialog lifetime, and be checked against the intended client identity. Keep formatting-only changes out of behavioral PRs. Sanitizers belong to a separately tested diagnostic target, not a surprise change to release build flags.
+The active [six-item Beta 1 engineering register](docs/PRODUCT.md#six-item-progress-register) is applied within existing product milestones. Continue extracting one narrow responsibility per PR and put behavior tests next to the owning module. Any worker result must return to the GTK main context, respect cancellation and dialog lifetime, and be checked against the intended client identity. Keep formatting-only changes out of behavioral PRs. Sanitizers belong to a separately tested diagnostic target, not a surprise change to release build flags.
 
 ## Local build
 
@@ -45,7 +46,7 @@ Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Pytho
 
 ```sh
 make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
-make check-host-metrics check-tray-prefs
+make check-host-metrics check-tray-prefs check-tray-actions
 make check-sanitizers  # ASan + UBSan, separate binaries; no release flag changes
 python3 -m unittest discover -s tests -v
 make package

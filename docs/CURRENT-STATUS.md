@@ -77,6 +77,12 @@ Moonlight installation previously launched a shell and terminal for `flatpak rem
 
 The native test uses a disposable fake Flatpak binary to prove argument ordering, failure handling, cancellation and main-context responsiveness. This does **not** prove live Flathub download, desktop integration, hardware decoding or game streaming. Real-client Beta 1 acceptance remains pending.
 
+## GTK wizard network lifecycle extraction (development source)
+
+The setup wizard's status and peer-discovery jobs, timeouts and cancellation now belong to `src/wizard_network.c/.h`. The GTK layer only launches requests and displays the results. Closing the wizard disables its callback before any outstanding work is cancelled; worker-held references keep the request manager alive until completion without retaining destroyed GTK widgets. A late discovery response no longer opens a chooser after the user navigates away from the Server page, and a second wizard cannot be opened over an active one.
+
+Native and ASan/UBSan tests exercise duplicate submissions, concurrent slow/fast operations, timeout, successful retry, closing during an active operation and closing from inside a callback. The actual GTK wizard's page-navigation, authorization and video streaming still require device-level Beta 1 acceptance. Current official v1.16.1 package does not contain this code.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

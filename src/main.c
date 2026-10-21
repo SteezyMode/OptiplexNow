@@ -29,6 +29,7 @@
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
+#include "tray_prefs.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -89,10 +90,6 @@ static char appimage_found[PATH_MAX];
 static void tray_build_menu(void);
 /* Defer menu replacement until the Settings activation has unwound. */
 static gboolean tray_rebuild_after_settings(gpointer unused){(void)unused;tray_build_menu();return G_SOURCE_REMOVE;}
-static void tray_desktop_caption(char *out,size_t cap);
-static void tray_desktop_caption_save(const char *value);
-static void tray_order_load(int out[8]);
-static void tray_order_save(const int order[8]);
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
@@ -102,8 +99,6 @@ static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflig
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
 #define TRAY_MASK_SETTING 13
-#define TRAY_ALL_BUTTONS 255u
-#define TRAY_DEFAULT_BUTTONS 255u;
 static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
@@ -165,11 +160,9 @@ static const char *CSS =
 static void safe_copy(char *dest, size_t cap, const char *src) { snprintf(dest,cap,"%s",src?src:""); }
 static void mkdir_safe(const char *p) { mkdir(p,0700); }
 /* Tray and featured selection are independent bitmasks. */
-static unsigned tray_button_mask(void) {
- char *end=NULL;errno=0;
- unsigned long value=strtoul(cfg[TRAY_MASK_SETTING],&end,10);
- if(errno || end==cfg[TRAY_MASK_SETTING] || *end || value>TRAY_ALL_BUTTONS)return TRAY_DEFAULT_BUTTONS;
- return (unsigned)value;
+static unsigned tray_button_mask(void)
+{
+    return now_tray_parse_mask(cfg[TRAY_MASK_SETTING]);
 }
 static unsigned featured_mask(void){
  char *end=NULL;errno=0;
@@ -1613,7 +1606,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  col=preferences;
  add(col,label("DESKTOP SHORTCUT NAME","modalheading"),0);
  add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
- char desktop_label[128];tray_desktop_caption(desktop_label,sizeof desktop_label);
+ char desktop_label[128];now_tray_desktop_caption(desktop_label,sizeof desktop_label);
  GtkWidget*desktop_caption_entry=gtk_entry_new();
  gtk_entry_set_max_length(GTK_ENTRY(desktop_caption_entry),48);
  gtk_entry_set_text(GTK_ENTRY(desktop_caption_entry),desktop_label);
@@ -1624,7 +1617,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*order_list=gtk_list_box_new();
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(order_list),GTK_SELECTION_NONE);
  gtk_widget_set_name(order_list,"trayorder");
- int current_order[8];tray_order_load(current_order);
+ int current_order[8];now_tray_order_load(current_order);
  GtkWidget*headers=gtk_grid_new();
  gtk_grid_set_column_spacing(GTK_GRID(headers),12);
  const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};
@@ -1636,7 +1629,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
   gtk_grid_attach(GTK_GRID(headers),heading,h,0,1,1);
  }
  add(col,headers,0);
- const char*service_names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
+
  unsigned fm=featured_mask(),tm=tray_button_mask();
  for(int n=0;n<8;n++){
    int i=current_order[n];
@@ -1645,7 +1638,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
    GtkWidget*line=gtk_grid_new();
    gtk_grid_set_column_spacing(GTK_GRID(line),12);
    gtk_container_add(GTK_CONTAINER(row),line);
-   GtkWidget*name=label(service_names[i],NULL);
+   GtkWidget*name=label(now_tray_service_name(i),NULL);
    gtk_widget_set_size_request(name,128,-1);
    gtk_label_set_xalign(GTK_LABEL(name),0);
    gtk_grid_attach(GTK_GRID(line),name,0,0,1,1);
@@ -1705,13 +1698,13 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
     snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
     const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
     if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
-      tray_desktop_caption_save(new_caption);
+      now_tray_desktop_caption_save(new_caption);
     int ordered[8];
     for(int n=0;n<8;n++){
       GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
       ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
     }
-    tray_order_save(ordered);
+    now_tray_order_save(ordered);
     const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
     if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
     else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
@@ -2194,48 +2187,6 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
-static void tray_desktop_caption(char *out,size_t cap){
- const char *home=getenv("HOME");char path[PATH_MAX];
- snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
- FILE *f=fopen(path,"r");if(!f){safe_copy(out,cap,"XFCE");return;}
- if(!fgets(out,(int)cap,f)){safe_copy(out,cap,"XFCE");fclose(f);return;}
- fclose(f);out[strcspn(out,"\r\n")]=0;
- if(!*out)safe_copy(out,cap,"XFCE");
-}
-static void tray_desktop_caption_save(const char *value){
- char path[PATH_MAX];const char *home=getenv("HOME");
- snprintf(path,sizeof path,"%s/.config/optiplex-desk/desktop-label",home?home:"/tmp");
- FILE*f=fopen(path,"w");if(!f)return;
- fprintf(f,"%s\n",value);fclose(f);chmod(path,0600);
-}
-/* Order is local to the client. Missing/invalid files use the original order. */
-static void tray_order_path(char *path,size_t cap){
- const char *xdg=getenv("XDG_CONFIG_HOME"),*home=getenv("HOME");
- if(xdg&&*xdg)snprintf(path,cap,"%s/optiplex-desk/tray-order",xdg);
- else snprintf(path,cap,"%s/.config/optiplex-desk/tray-order",home?home:"/tmp");
-}
-static void tray_order_load(int out[8]){
- for(int i=0;i<8;i++)out[i]=i;
- char path[PATH_MAX],buf[64];tray_order_path(path,sizeof path);
- FILE*f=fopen(path,"r");if(!f)return;
- if(!fgets(buf,sizeof buf,f)){fclose(f);return;}fclose(f);
- int seen=0,temp[8];
- for(int i=0;i<8;i++){
-  if(buf[i]<'0'||buf[i]>'7'){return;}
-  int v=buf[i]-'0';if(seen&(1<<v))return;
-  seen|=1<<v;temp[i]=v;
- }
- if(seen==255)for(int i=0;i<8;i++)out[i]=temp[i];
-}
-static void tray_order_save(const int order[8]){
- char path[PATH_MAX],tmp[PATH_MAX];tray_order_path(path,sizeof path);
- snprintf(tmp,sizeof tmp,"%s.tmp",path);
- FILE*f=fopen(tmp,"w");if(!f)return;
- for(int i=0;i<8;i++)fputc('0'+order[i],f);
- fputc('\n',f);
- if(fclose(f)==0){chmod(tmp,0600);if(rename(tmp,path)!=0)unlink(tmp);}
- else unlink(tmp);
-}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -2243,18 +2194,24 @@ static void tray_build_menu(void){
  unsigned mask=tray_button_mask();
  if(mask){
   tray_separator();
-  static const char *names[]={"Games","Videos","Music","Files","Downloads","Terminal","Desktop","Web Gaming"};
-  static const char *descriptions[]={"Steam","Jellyfin","Dropped Needle","SFTP","VueTorrent","SSH","","Wolf UI"};
-  char desktop[128];tray_desktop_caption(desktop,sizeof desktop);
-  int order[8];tray_order_load(order);
-  for(int j=0;j<8;j++){int i=order[j];if(!(mask & (1u<<i)))continue;
-   /* AppIndicator/DBusMenu serializes the menu item label, not arbitrary
-    * GtkBox children. Use a standard labeled item for both tray backends. */
-   char caption[256];
-   snprintf(caption,sizeof caption,"%s — %s",names[i],i==6?desktop:descriptions[i]);
-   GtkWidget*item=gtk_menu_item_new_with_label(caption);
-   g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)i,NULL,0);
-   gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
+  char desktop[128];
+  now_tray_desktop_caption(desktop, sizeof desktop);
+  int order[NOW_TRAY_ACTIONS];
+  now_tray_order_load(order);
+  for (int position = 0; position < NOW_TRAY_ACTIONS; ++position) {
+      int action = order[position];
+      if (!(mask & (1u << action))) {
+          continue;
+      }
+      /* Standard menu items work with GTK and AppIndicator/DBusMenu. */
+      char caption[256];
+      if (!now_tray_service_caption(action, desktop, caption, sizeof caption)) {
+          continue;
+      }
+      GtkWidget *item = gtk_menu_item_new_with_label(caption);
+      g_signal_connect_data(item, "activate", (GCallback)tray_action,
+                            (void *)(long)action, NULL, 0);
+      gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), item);
   }
  }
  tray_separator();

@@ -57,6 +57,10 @@ An independent `native-sanitizers` job is being added to test the extracted C mo
 
 The host telemetry parser now has a GTK-independent C module with compiled tests for key-value extraction, disk-section boundaries, excluded recovery/boot mounts, missing sections and malformed fields. The dashboard also shares the wizard's structured Tailscale status helper. Background SSH monitoring and power actions no longer use `StrictHostKeyChecking=accept-new`; they require a trusted host key, which must be established through explicit authorization. These are source/CI checks only: real host power management and status must still be regression-tested, and the shipped v1.16.1 package is unchanged.
 
+## Tray modularization (development source)
+
+Tray selection masks, saved action order, Desktop caption preferences and service labels are now parsed and persisted by `src/tray_prefs.c/.h` instead of `main.c`. The existing tray UI and AppIndicator/GTK fallback remain in the GTK controller. Compiled tests cover malformed order files, duplicate indices, mask fallbacks, the existing XDG order-file path and legacy Desktop caption path, atomic permissions-restricted saves, and generated service labels. This is an incremental architecture improvement, **not** a full tray rewrite, and the physical tray/minimize/restore experience is not yet acceptance-tested on a new desktop.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

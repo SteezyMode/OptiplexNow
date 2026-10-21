@@ -13,6 +13,8 @@ sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
 test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
+test -x /usr/lib/optiplex-now/now-ssh-askpass
+test -r /usr/lib/optiplex-now/ssh-authorize.py
 [[ "$(readlink /usr/bin/optiplex-desk)" = "optiplex-now" ]]
 desktop-file-validate /usr/share/applications/optiplex-now.desktop
 desktop-file-validate /usr/share/applications/optiplex-desk.desktop

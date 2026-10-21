@@ -20,6 +20,17 @@ int main(void) {
 
     if (now_run(ok, output, sizeof output, 3) != 0) return fail("successful exit code");
     if (strcmp(output, "hello") != 0) return fail("captured stdout");
+
+    /* A quick child can be reaped before the pipe reports its final bytes.
+     * Repeat to exercise that scheduling race, including ASan's slower fork.
+     */
+    for (int attempt = 0; attempt < 48; ++attempt) {
+        output[0] = '\0';
+        if (now_run(ok, output, sizeof output, 3) != 0 ||
+            strcmp(output, "hello") != 0) {
+            return fail("quick child output lost after process exit");
+        }
+    }
     if (now_run(nonzero, NULL, 0, 3) != 7) return fail("nonzero exit code");
     if (now_run(NULL, NULL, 0, 3) != -1) return fail("invalid command");
 

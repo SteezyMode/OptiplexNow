@@ -1099,8 +1099,8 @@ static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer dat
             gtk_label_set_text(GTK_LABEL(state->status),
                 "Invalid or ambiguous pending clients. Refresh to retry.");
         } else {
-            /* A refresh replaces the candidate set. Preserve selection only
-             * for the same verified request; never silently switch devices. */
+            /* A refreshed index can refer to a different client. Clear old
+             * selection and require approval of the current candidate list. */
             GtkComboBox *combo = GTK_COMBO_BOX(state->clients);
             gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
             for (int i = 0; i < state->count; i++) {
@@ -1164,7 +1164,7 @@ static gboolean wolf_ui_auto_refresh(gpointer data)
         state->auto_refresh_id = 0;
         if (!state->busy && state->count == 0) {
             gtk_label_set_text(GTK_LABEL(state->status),
-                "No client found. Use Refresh clients to search again.");
+                "No client found. Use Refresh Now to search again.");
         }
         return G_SOURCE_REMOVE;
     }
@@ -1272,7 +1272,7 @@ static void pair_wolf(GtkWidget *origin){
  /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
 }
-static void on_games_action(void*w,void*arg){(void)w;
+static void on_games_action(void*w,void*arg){
  int resp=(int)(long)arg;
  if(resp==101){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(resp==102)open_moonlight();

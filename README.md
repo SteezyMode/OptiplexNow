@@ -4,26 +4,40 @@
 
 **Linux client for games, media, and remote access to an existing personal server.** NOW combines Moonlight/Wolf launch controls, media links, remote files, and basic host management in a GTK3 desktop application.
 
-**Release channel:** v1.17.0 is the current **closed-beta candidate**. It becomes available only after its tag-triggered prerelease appears on [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases). Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
+**Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 
 **Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
 
 ## Download
 
 - [Versioned releases and closed-beta installers](https://github.com/SteezyMode/OptiplexNow/releases)
-- [v1.17.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) (available after tag publication)
+- [v1.17.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0)
 - [Previous v1.16.1 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1)
 - [Current code, release and test status](docs/CURRENT-STATUS.md)
 
 Supports compatible x86-64 Debian/Ubuntu-derived Linux distributions. Native Windows and macOS packages are not provided.
 
-Download the **versioned** `OptiPlex-Now_1.17.0_amd64.deb` from the tagged closed-beta release when published. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
+Download the **versioned** `OptiPlex-Now_1.17.0_amd64.deb` from the tagged closed-beta prerelease. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
 
 ```sh
 sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 ```
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
+
+## New in development source: Server Setup review
+
+The upcoming test package contains a separate GTK **Server Setup** window
+under **Settings > Connections & Server > Check This PC for Server Setup**.
+It runs the actual local read-only hardware preflight and blocked Wolf
+installation-plan review, without asking users to open a terminal.
+The check detects candidate GPU/OS support, existing Wolf port conflicts
+and unverified prerequisites. A machine already running Wolf is safe to
+review. **No installation, Docker changes or owner approvals are performed.**
+
+This feature is **not included** in the published v1.17.0 prerelease and
+does not yet constitute the promised turnkey Server mode. A functioning
+host installer and clean physical hardware validation remain alpha gates.
 
 ## Connect to an existing host
 

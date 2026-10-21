@@ -4,9 +4,9 @@ Updated: 2026-10-21 JST. GitHub Releases and CI are the authority for new public
 
 ## Release state
 
-- **Current release candidate:** v1.17.0 **Closed Beta**, pending an explicit tag and successful tagged release workflow. A merged PR alone is not a published installer. It is deliberately marked as a GitHub prerelease, not `Latest`, while real-device acceptance remains incomplete.
+- **Current published prerelease:** [v1.17.0 Closed Beta](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0), published October 21, 2026. It remains a prerelease because real-device acceptance is incomplete; merged source-only PRs are not installed client updates.
 - **Previously published release:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1), tag `e6df6d06206b359bd4c219bf6c7e4f06db7de2d6`, successful release workflow `39475111081`.
-- **Planned v1.17.0 release assets:** `OptiPlex-Now_1.17.0_amd64.deb`, `OptiPlex-Now_amd64.deb`, and `SHA256SUMS`. These are official only if [the versioned prerelease](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) exists and the tagged workflow succeeds.
+- **Published v1.17.0 release assets:** `OptiPlex-Now_1.17.0_amd64.deb`, `OptiPlex-Now_amd64.deb`, and `SHA256SUMS`. These are available on [the versioned prerelease](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0).
 - **Included in previous v1.16.1:** [#96](https://github.com/SteezyMode/OptiplexNow/pull/96) colors connected Tailscale and positive Wolf desktop states; [#97](https://github.com/SteezyMode/OptiplexNow/pull/97) detects the Gluetun image under a custom container name.
 - **New in v1.17.0 candidate:** GUI Tailscale setup, graphical SSH enrollment and Moonlight installation, wizard network lifecycle improvements, host-selection snapshots, responsive encrypted backup, modular C helpers and expanded CI. See [release notes](releases/v1.17.0.md).
 - **Acceptance:** Source/package CI passes, but a clean-client install, first-time pairing and actual streaming have not yet completed the [Beta 1 checklist](BETA-ACCEPTANCE.md). The new release exists for that testing.
@@ -101,6 +101,23 @@ The setup wizard's Videos/Music/Downloads URL checks now use `src/service_probe.
 
 Native tests and sanitizers simulate responding/refused/HTTP-error endpoints, malformed URLs, duplicate requests, timeouts, successful retry and close-during-request. This is simulated evidence, not physical Beta 1 login or service verification.
 
+## Server setup: actual read-only GTK review (development source)
+
+A new, separate native GTK executable \`src/host_setup.c\` now provides
+**Settings > Connections & Server > Check This PC for Server Setup**.
+The package includes the real Python host preflight and blocked planning tools
+with the standalone review window. Clicking CHECK THIS PC executes both
+read-only tools asynchronously and displays observed operating system/GPU,
+input device and port findings and installation blockers. No shell terminal,
+Docker mutation, sudo, container startup or management service is involved.
+
+The installed-package test runs those actual scripts, asserts the installer
+remains blocked, and opens the real GTK UI under a disposable graphical session
+until its review completes. This is **packaged-interface evidence**, not proof
+that a fresh GPU host has been provisioned. It is not in published v1.17.0.
+The host deployment prototypes and local-owner ticket module remain separate
+development source, not an executable installer.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |
@@ -110,7 +127,7 @@ Native tests and sanitizers simulate responding/refused/HTTP-error endpoints, ma
 | Pairing | Host read-only helper and SSH transport tested; pairing UI implemented | Actual new-device Wolf authorization and repeat access without re-pairing |
 | Streaming | Known existing owner streaming paths used in development | Recorded Games and Videos acceptance on a clean client |
 | VPN | Test host has `music-vpn` Gluetun running/healthy; download containers share its namespace | Observe updated NOW widget on actual client; no exit-IP verification |
-| Host installer | Design issues and local helper contract exist | Fresh-host installer not implemented |
+| Host installer | Read-only preflight/plan in development GUI; staged/config/lifecycle and owner-auth source tested independently | No actual privileged deployment, clean-host install or working stream |
 | NOW-owned identity | Device approval requirement documented | Authentication service and emailed approval not implemented |
 
 CI passing is not device acceptance. The six-item [engineering progress register](PRODUCT.md#six-item-progress-register) tracks implemented config, Wolf, Tailscale, SSH, monitoring, tray and sanitizer improvements separately from physical verification. The current source has substantial modularization, but GTK `main.c` still contains tightly coupled state and UI actions. The next release gate is the [Beta 1 end-to-end checklist](BETA-ACCEPTANCE.md): graphical Tailscale sign-in, trusted SSH enrollment, initial Wolf pairing, Games/Videos and repeat reconnect on an actual fresh client. None of those outcomes may be inferred solely from simulation or CI.

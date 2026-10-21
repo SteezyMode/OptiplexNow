@@ -1555,6 +1555,19 @@ static void on_games_setup_from_settings(void*w,void*p){
  config_save();on_games_setup(w,c->parent);
 }
 static void on_tail(void*w,void*p){(void)w;(void)p;setup_tailscale();}
+/* Host review runs in its own small GTK process; no changes to client state. */
+static void on_server_readiness(void *w,void *p)
+{
+ (void)w;(void)p;
+ gchar *argv[]={"/usr/lib/optiplex-now/now-host-setup",NULL};
+ GError *error=NULL;
+ if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+   if(error)g_error_free(error);
+   preset_alert(win,"Server setup unavailable",
+       "Read-only host setup is not installed. Install the latest NOW test package.");
+ }
+}
+
 static void on_system_info(void*w,void*p){
  (void)w;(void)p;
  GtkWidget*d=gtk_dialog_new_with_buttons("System Info",GTK_WINDOW(win),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
@@ -1784,6 +1797,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*col=connection;
  add(col,label("CONNECTION","modalheading"),0);
  GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
+ add(col,label("HOST SETUP (READ-ONLY)","modalheading"),0);
+ GtkWidget*host_review=button("CHECK THIS PC FOR SERVER SETUP","setupaction");
+ g_signal_connect(host_review,"clicked",G_CALLBACK(on_server_readiness),NULL);
+ add(col,host_review,0);
+ add(col,label("Checks hardware and installation blockers. Does not install or restart services.","helper"),0);
  tailscale_label=label("CHECKING TAILSCALE","helper");add(col,tailscale_label,0);
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);

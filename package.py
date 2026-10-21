@@ -27,6 +27,11 @@ shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.p
 shutil.copy2(root/'src/tailscale-status.py',pkg/'usr/lib/optiplex-now/tailscale-status.py')
 shutil.copy2(root/'src/tailscale-install.py',pkg/'usr/lib/optiplex-now/tailscale-install.py')
 shutil.copy2(root/'src/ssh-authorize.py',pkg/'usr/lib/optiplex-now/ssh-authorize.py')
+# Read-only host diagnostics and GTK review; no server installer or privileges.
+shutil.copy2(root/'build/now-host-setup',pkg/'usr/lib/optiplex-now/now-host-setup')
+(pkg/'usr/lib/optiplex-now/now-host-setup').chmod(0o755)
+for host_module in ('host_preflight.py', 'host_plan.py'):
+ shutil.copy2(root/'server'/host_module,pkg/'usr/lib/optiplex-now'/host_module)
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)
 shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-client.py')

@@ -1,89 +1,61 @@
 # Product direction
 
-**Authority:** This document defines intended scope and delivery order. [Current status](CURRENT-STATUS.md) records what is implemented and verified; [Beta acceptance](BETA-ACCEPTANCE.md) and [Host acceptance](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) determine release readiness.
+**Authority:** The vision, priorities and sequence live here. [Public-alpha contract](PUBLIC-ALPHA.md) defines the three required end-to-end workflows and role enforcement. [Current status](CURRENT-STATUS.md) records implemented, released and physically verified features. [Private client beta](BETA-ACCEPTANCE.md) and [Host installer](HOST-INSTALLER.md) cover narrower evidence. Do not treat them as proof of public-alpha completion.
 
-## Purpose
+**Name:** OptiPlex NOW is an internal development codename. The commercial product will have a different name.
 
-**Product:** a personal entertainment server that makes one compatible computer usable remotely for games, movies, files and controlled downloads. The main promise is *your own GeForce NOW-style remote gaming and Netflix-style media library*, using hardware and lawful content you control, not the catalogs or services of those companies.
+## The promise
 
-**Gaming requirement:** games stream through an independent session without commandeering the host PC's physical screen, inputs or desktop. The host may remain usable for another person, subject to shared CPU/GPU capacity. This is not yet a claim of securely isolated multi-user accounts.
+**Make your own entertainment server, without becoming a server administrator.**
 
-**Media requirement:** watch Jellyfin remotely while queuing an authorized download to the home server, browse and organize files remotely, and keep **only selected download applications** behind a VPN gateway. Neither Jellyfin nor the rest of the home server should depend on that downloader VPN. Confirm isolation and playback under load with measurements, not container labels.
+One compatible host computer, with one simple client/server installation experience, lets an approved person play games and access personal media remotely. The owner's computer remains usable as a normal PC. Technical work such as network enrollment, streaming, containers, VPN routing, service health and recovery belongs behind the application.
 
-**Experience target:** on two supported, OS-ready computers, roughly 15 minutes from NOW installation to an authenticated remote stream, without manual Docker, VPN or Moonlight/Wolf setup. Select gaming and media modules independently. Linux hosts and clients come first; **Windows clients are planned**, and **Windows hosts are a longer-term goal** with independent-session technical/licensing questions to resolve.
+**Three essential public-alpha workflows:** independent game streaming, Jellyfin video, and **Private Downloads** with qBittorrent behind an isolated VPN gateway. All three are **required for public-alpha acceptance**, while end users may select which services to install. This is a self-hosted system for personally controlled content and computing, not an entertainment catalog.
 
-**Optional music:** DroppedNeedle and related music servers are proven possible on the reference machine but not an established general product integration. Keep a configurable Music link and existing-host profile utility; native music discovery/recommendations and bundled provisioning require separate reliability, licensing and maintenance review. Do not market NOW as a Spotify replacement yet. Books/comics and other library categories may be optional future additions, not roadmap gates.
+In particular, the **download VPN does not take over the server's network**. Only expressly selected download apps route through it. Jellyfin, Wolf, ordinary desktop activity and authorized remote access remain outside that tunnel. Downloads fail closed when the tunnel fails. This is service-level network independence, **not** a guarantee that heavy workloads cannot share/compete for disk, CPU or internet bandwidth.
 
-## Product rules
+File organization, download search, queue operations and per-item download destinations are **owner/admin-only**. Invited members may browse and play content they are authorized to see; they do not receive management access. Real service-side authorization is mandatory, not just different tabs.
 
-1. **One clear setup path.** Normal users should not need a terminal, administrator instructions or manual image digests. Technical options belong in diagnostics.
-2. **Approved devices reconnect.** Do not request a new PIN for a previously authorized Moonlight device, but do not silently authorize an unknown client.
-3. **Respect low-end clients.** Validate actual video, input, audio and latency on modest hardware; do not promise specific performance without measurements.
-4. **Host independence.** No developer IP, username, container, domain, account or file path becomes a universal customer default.
-5. **Preserve systems.** Only change services NOW explicitly owns after an authorized operation. Do not adopt, overwrite or remove unrelated containers or user data.
-6. **Accurate state.** Reachable, running, healthy, paired and active-session are different claims; unknown is not healthy.
-7. **Upstream first.** Integrate Wolf/Moonlight, Jellyfin, Gluetun, qBittorrent and authenticated APIs rather than rebuilding their protocols.
-8. **Independent networking.** Do not force all server traffic through a download VPN; verify downloader routing, fail-closed behavior, service availability and bandwidth effects.
-9. **Modular entertainment.** Users can enable gaming, media and download features separately. Music and other library types are optional, not mandatory installation dependencies.
+**Target:** roughly 15 minutes from starting NOW installation on two supported, OS-ready PCs to a working authenticated game stream, with no required terminal steps. This excludes OS installation, game downloads, library import and purchase of VPN service. A genuinely easy unified login and approved-device experience is the goal; do not equate it to completed cross-service single sign-on.
 
-## Product phases
+Linux hosts/clients are first. Windows **client** builds are planned; Windows **host** support is a later technical and licensing project, particularly for sessions independent of the host display. Music (including DroppedNeedle), books, comics and extensive user-specific desktops are optional future research, not public-alpha prerequisites.
 
-| Phase | Delivery | Evidence / remaining gate |
+## Engineering and product principles
+
+1. **One path for ordinary people.** Guided installation, enrollment, clear status, safe repair/removal and readable recovery. No Docker, Tailscale, SSH, certificate or port-forwarding tutorials as the normal workflow.
+2. **Independent services.** Game, video and downloads are separately selectable and independently recoverable. Neither the commercial VPN nor a billing service may interrupt ordinary access to the user's computer, Jellyfin or Wolf.
+3. **Protect the owner.** Never adopt, overwrite, delete or restart unrelated host services without informed approval. Keep managed data/versioning and least-privilege administrative operations separate.
+4. **Server-enforced roles.** One owner/admin can manage downloads/files/services; restricted viewers can only use approved playback/game capabilities. Verify bypass attempts against direct upstream URLs, not merely NOW GUI buttons.
+5. **Measured truth.** A running Docker container, successful CI test or green VPN health badge does not prove actual streaming, VPN public egress, fail-closed behavior or an accepted fresh setup.
+6. **Upstream first.** Integrate supported Wolf/Moonlight, Jellyfin, qBittorrent, Gluetun and optional VPN-provider interfaces. Do not build custom streaming, identity or torrent engines without a demonstrated necessity.
+7. **Practical low-maintenance product.** Prefer a small supported hardware matrix and reproducible recovery over speculative features, forced subscriptions or general-purpose homelab management.
+
+## Phases and current evidence
+
+| Phase | Purpose | Status |
 | --- | --- | --- |
-| Existing-host Linux client | GTK3 Debian app with Moonlight/Wolf controls, service links, Tailscale/SSH onboarding and diagnostics | v1.17.0 closed-beta prerelease published; fresh-client acceptance pending |
-| **Private Beta 1 client** | Install on a truly fresh Linux client, authorize an existing host, stream and reconnect with minimal guidance | [Client checklist](BETA-ACCEPTANCE.md) not complete |
-| **NOW Host technical alpha** | One clean, supported Ubuntu/Pop!_OS 24.04 AMD/Intel/NVIDIA machine can install a managed Wolf service without disturbing other services | Real install code in development source; **clean-host stream, reboot and recovery not yet verified** |
-| Managed host product | Versioned dependencies, automatic prerequisites, upgrades, repair, removal, diagnostics and recoverable configuration | Later scope, [#98](https://github.com/SteezyMode/OptiplexNow/issues/98); not a 15-minute installer yet |
-| **Media/download workflow** | Existing Videos, Downloads and SFTP links; owner-supplied Jellyfin/qBittorrent, Gluetun gateway | Actual remote use on reference machine; no NOW-managed media stack, native queue, VPN egress/leak certification or portable installer yet |
-| Optional media stack | Guided Jellyfin setup, VPN-isolated downloader, safe library mapping, remote queue and bandwidth controls | After game-host alpha and existing-server media acceptance; no mandatory services |
-| Windows client | Native Windows installer and equivalent simple onboarding | Planned; no build or hardware acceptance yet |
-| Windows host | Independent game session leaving physical host desktop usable | Longer-term feasibility and Windows licensing gate |
-| Music/library extensions | Optional music integration, potentially DroppedNeedle; books/comics later if justified | Exploratory only, not part of current alpha or turnkey promise |
-| Account/device approval | Owner-approved enrollment and revocation for a new device without repeated first-time pairing | Future scope, [#94](https://github.com/SteezyMode/OptiplexNow/issues/94) |
-| Independent user desktops | Distinct durable user profiles, sessions, isolation and authorization | Feasibility only, [#85](https://github.com/SteezyMode/OptiplexNow/issues/85) |
+| **Existing-host closed client beta** | GUI launch, Moonlight/Tailscale/SSH onboarding, Videos/Downloads links, SFTP and diagnostics | Published v1.17.0, fresh-client physical acceptance pending |
+| **Clean-host gaming technical alpha** | Start a NOW-managed Wolf instance and prove independent video/audio/controller stream on real hardware | Development installer exists; physical end-to-end test and recovery pending |
+| **Public alpha: three pillars** | Guided gaming, Jellyfin and VPN-isolated qBittorrent, plus admin downloads/files and restricted viewers | **Product requirement**, not implemented as a single supported installation; [acceptance](PUBLIC-ALPHA.md) |
+| **Product hardening** | First-run usability, owned-service repair, upgrades, removal, diagnostics, real external testers | Not yet accepted |
+| **Windows client** | Access the same Linux host without requiring a Linux client | Planned, not implemented |
+| **Windows host** | Comparable independent game session on a Windows PC | Longer-term feasibility/licensing work |
+| **Optional modules/business** | Music, books, comics, referrals and potentially an optional branded VPN | Research only; none is a prerequisite for public alpha |
 
-**Scope distinction:** the *existing-host client beta* does not install Wolf, Docker, Jellyfin or the VPN download stack. The separate *new-host alpha* currently provisions Wolf only. Current client media/download functions link to an already running owner's stack. No native downloader management, automatic music discovery, NOW-managed accounts, email approval or secure multi-tenant isolation is shipped.
+**Scope boundary:** the current Wolf host pilot is **not** a Jellyfin or Gluetun/qBittorrent installer. The reference PC's media/download/VPN stack is user-built. NOW currently opens its URLs and offers SFTP/health diagnostics; there is no verified native qBittorrent admin interface, server-side member role enforcement, automatic VPN kill-switch certification or one-login experience.
 
-## Immediate development sequence
+## Immediate work order
 
-1. **Stop expanding architecture.** The current host installer and GUI are implemented enough to attempt a physical test. No new orchestration framework or simulated installer path without a test-discovered need.
-2. **Prove a clean-host independent game session.** Use [Host installer acceptance](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) on an independent GPU PC and separate client. Check real encoder output, host physical display independence, pairing, video/audio/controller, conflict refusal, restart and recovery.
-3. **Fix only observed blockers.** First-install NVIDIA volume code exists; driver-update migration and repair remain unimplemented. Package dependencies and image selection are still too manual for nontechnical users. Prioritize defects and missing steps found in the hardware trial.
-4. **Complete existing-host client Beta 1 acceptance.** Use an unpaired supported Linux client for Tailscale login, SSH trust, Wolf/Moonlight authorization, Games/Videos, reconnection and upgrade preservation.
-5. **Verify the already-working media pattern.** Remote Jellyfin playback while adding a legal download through the configured qBittorrent Web UI; inspect SFTP organization, downloader-only VPN routing, kill-switch refusal and streaming performance under load. Keep this independent of automatic server provisioning.
-6. **Then reduce setup friction.** Standardize host prerequisites and managed updates. Add optional Jellyfin/downloader install and native API controls only when they demonstrably help; do not build a music manager or broad media catalog now. Test Windows clients before Windows host engineering.
+1. **Test independent gaming on clean physical hardware**, including GPU encoder, remote input/audio, host desktop independence, reconnection, reboot and failed-install handling. Protect the working reference server.
+2. **Validate real media + isolated downloading against the known-working host**: remote Jellyfin playback while another authorized download is queued; actual VPN egress and fail-closed conditions; usable file paths; impact of bandwidth/disk contention.
+3. **Build the smallest safe, graphical host modules** for Jellyfin and a customer-supplied VPN with Gluetun/qBittorrent. Native download queue/search/per-item approved directory selection and owner-only file access must work, even if existing upstream players and media UIs remain in use.
+4. **Prove owner/member enforcement** for playback versus downloader/files/configuration, including direct-request bypass attempts. Keep custom cloud SSO and universal user desktops out of scope.
+5. **Run fresh-user installation tests on a narrow supported matrix**. Measure setup time, errors, recovery interventions and support hours, then decide whether it is viable to commercialize. Do not publish public-alpha claims prematurely.
 
-**Stop condition:** green CI, GUI launch and a running container do not prove a working game stream. Record build/CI, package install and physical-device evidence separately. A test failure takes priority over speculative refactoring.
+**Later VPN business research:** A possible **$7/month optional VPN** covering protected server downloads and other personal devices could be explored via legitimate affiliate or wholesale partners. No provider contract, device allowance, $7 pricing or profit is confirmed. Bring-your-own VPN remains fully supported; white-label billing and provisioning must not delay public alpha.
 
-## Beta 1 engineering execution plan
+## Compatibility and review boundaries
 
-The October 21 six-part quality plan remains engineering discipline, **not six new product features**. Large one-time extraction campaigns are no longer the delivery priority.
+Preserve existing client settings (`~/.config/optiplex-desk/config.ini`), `.onp` presets, `.onb` encrypted backups, saved URLs, tray preferences and Moonlight identity. Follow [Contributing](../CONTRIBUTING.md) and [Architecture](application-design.md) for modular code ownership, CI, privilege boundaries and narrow changes. Do not rewrite the application solely to match the roadmap.
 
-### Six-item progress register
-
-| Principle | Current implementation | Next action |
-| --- | --- | --- |
-| Nonblocking I/O | Asynchronous Wolf, Tailscale, SSH, Moonlight setup, backup and wizard helpers | Exercise real slow/offline devices and cancellation |
-| Modular responsibilities | Extracted configuration, Wolf, status, SSH, tray and wizard modules; Server Setup is a separate GTK executable | Split `main.c` only when active feature work reveals a concrete coupling problem |
-| Readable source | New modules use named interfaces and existing `.clang-format` conventions | Format touched functions, not unrelated legacy files |
-| Status/tray separation | Parsing, preferences and action dispatch extracted from GTK | Verify physical desktop behavior, offline/unknown state and tray fallback |
-| Behavioral tests | Python/native tests, isolated GTK installed-package checks and client/onboarding fixtures | Record genuine hardware and first-run outcomes; do not substitute mocks for them |
-| Diagnostics | Native ASan/UBSan CI and focused compiler warnings | Keep diagnostic builds separate from release flags; expand when touching affected code |
-
-Preserve on-disk client settings (`~/.config/optiplex-desk/config.ini`), `.onp` presets, `.onb` backups, installed desktop/CLI aliases, tray action choices, Moonlight identities and existing URL settings. Do not rewrite all of `main.c`, switch frameworks or rename serialized keys as part of unrelated work. Keep one responsibility per functional PR with tests and a compatibility statement.
-
-## Target user flows
-
-**Existing approved host:** install NOW, sign into Tailscale, discover or select the host, confirm SSH identity when needed, pair a new Moonlight client once, then launch an independent game session or owner-configured Videos, Downloads and Files. Jellyfin playback should continue on normal networking while the separately VPN-routed downloader adds media. Tailscale membership does not replace Wolf, qBittorrent or Jellyfin authorization.
-
-**New clean host:** check prerequisites, authorize installation, provision a managed Wolf service, prove gaming independent of the physical host desktop, then enroll a trusted client. The current advanced alpha still needs manual immutable-image inputs and Docker/Compose, and does not provision media or VPN stacks.
-
-**Future existing-account device:** sign into a NOW account, obtain owner approval for that device, use revocable rights to an already permitted host, and reconnect without unnecessary prompts. Not implemented.
-
-## Boundaries and measures
-
-NOW does not own Wolf, Moonlight, Tailscale, Jellyfin, Gluetun, qBittorrent, DroppedNeedle, game licenses, media rights or user content. OptiPlex Studio is independent. Streaming-service brand comparisons are illustrative, not affiliations or promises of a licensed catalog. No blanket promise of Windows games, every GPU, multi-tenant security, legal access to any particular download or commercial readiness.
-
-Measure time to a first independent stream, host-desktop usability, reconnection, low-end-client performance, media accessibility during concurrent downloading, actual VPN-only downloader routing, kill-switch behavior, and support burden. Expand scope only from real failures and user needs.
-
-References: [Architecture](application-design.md), [Host installer](HOST-INSTALLER.md), [Wolf pairing contract](WOLF-PAIRING-HOST-CONTRACT.md), [upstream/fork policy](UPSTREAM-FIRST-WOLF-INTEGRATION.md).
+No ownership of Wolf, Moonlight, Jellyfin, qBittorrent, Gluetun, customer games or media rights is implied. Streaming brand comparisons are shorthand for convenience, not provider affiliation or access to their catalogs. A VPN changes network routing; it does not make downloading any particular content lawful or guarantee anonymity.

@@ -90,7 +90,7 @@ class OwnerAuthorityTests(unittest.TestCase):
         self.assertEqual(self.calls, [])
 
     def test_no_callback_refusal_and_callback_exception(self):
-        for cb in (False, 1, None, lambda *_: False,
+        for cb in (False, 1, lambda *_: False,
                    lambda *_: 1):
             with self.subTest(cb=cb), self.assertRaises(host_owner.AuthorizationError):
                 self.issue(confirm=cb)

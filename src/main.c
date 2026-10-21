@@ -74,6 +74,7 @@ static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_networ
 static GtkWidget *spec_values[8]={0},*spec_status=NULL;
 static int specs_inflight=0, services_inflight=0, wolf_inflight=0;
 static GtkWidget *wizard_wolf_label=NULL;
+static GtkWidget *active_setup_wizard=NULL;
 static char wolf_probe_host[512];
 static GtkWidget *service_labels[3]={NULL,NULL,NULL};
 #define MAX_DRIVES 16
@@ -336,7 +337,23 @@ static void tailscale_install_done(GObject *source, GAsyncResult *result, gpoint
         say("TAILSCALE INSTALLED. SIGN IN THROUGH THE BROWSER.");
         browser_open("http://100.100.100.100/");
     } else {
-        say("INSTALLATION NOT COMPLETED. RETRY OR OPEN THE OFFICIAL DOWNLOAD PAGE.");
+        say("TAILSCALE INSTALLATION WAS NOT COMPLETED.");
+        GtkWidget *notice = gtk_message_dialog_new(
+            GTK_WINDOW(active_setup_wizard ? active_setup_wizard : win),
+            GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
+            "Tailscale was not installed");
+        gtk_message_dialog_format_secondary_text(
+            GTK_MESSAGE_DIALOG(notice),
+            "The installation was cancelled or could not finish. "
+            "Check that an administrator account and internet access are available. "
+            "You can retry from NOW or open Tailscale's official setup guide.");
+        gtk_dialog_add_buttons(GTK_DIALOG(notice), "Close", GTK_RESPONSE_CLOSE,
+                               "Open setup guide", GTK_RESPONSE_HELP, NULL);
+        int action = gtk_dialog_run(GTK_DIALOG(notice));
+        gtk_widget_destroy(notice);
+        if (action == GTK_RESPONSE_HELP) {
+            browser_open("https://tailscale.com/docs/install/linux");
+        }
         if (error) {
             g_warning("Tailscale graphical installer failed: %s", error->message);
         }
@@ -362,7 +379,7 @@ static void setup_tailscale(void)
     }
 
     GtkWidget *dialog = gtk_message_dialog_new(
-        GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+        GTK_WINDOW(active_setup_wizard ? active_setup_wizard : win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
         "Install Tailscale on this computer?");
     gtk_message_dialog_format_secondary_text(
         GTK_MESSAGE_DIALOG(dialog),
@@ -1943,7 +1960,9 @@ static void wizard_service_check(void*w,void*p){
 }
 static void wizard_destroy(void *widget, void *data)
 {
-    (void)widget;
+    if (active_setup_wizard == widget) {
+        active_setup_wizard = NULL;
+    }
     Wizard *wizard = data;
     wizard->closing = 1;
     wizard->assistant = NULL;
@@ -1976,6 +1995,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->references=1;
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
+ active_setup_wizard=a;
  gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
  gtk_window_set_transient_for(GTK_WINDOW(a),GTK_WINDOW(win));gtk_window_set_modal(GTK_WINDOW(a),1);
  /* Page 1: keep existing device setup. No credentials or pairings are reset. */

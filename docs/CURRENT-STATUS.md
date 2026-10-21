@@ -101,23 +101,30 @@ The setup wizard's Videos/Music/Downloads URL checks now use `src/service_probe.
 
 Native tests and sanitizers simulate responding/refused/HTTP-error endpoints, malformed URLs, duplicate requests, timeouts, successful retry and close-during-request. This is simulated evidence, not physical Beta 1 login or service verification.
 
-## Server setup: actual read-only GTK review (development source)
+## Server setup: functional guarded clean-host pilot (unreleased)
 
-A new, separate native GTK executable \`src/host_setup.c\` now provides
-**Settings > Connections & Server > Check This PC for Server Setup**.
-The package includes the real Python host preflight and blocked planning tools
-with the standalone review window. Clicking CHECK THIS PC executes both
-read-only tools asynchronously and displays observed operating system/GPU,
-input device and port findings and installation blockers. No shell terminal,
-Docker mutation, sudo, container startup or management service is involved.
+The native `src/host_setup.c` GUI provides **Settings > Connections &
+Server > Check This PC for Server Setup**. Its default operation performs
+real read-only hardware and conflict checks. The expandable advanced section
+now adds a real, explicitly confirmed Wolf install action for a **clean
+Ubuntu/Pop!_OS 24.04 AMD/Intel host only**. It requires Docker/Compose
+already present, correct GPU vendor/render node, free Wolf ports and a
+verified immutable image digest. The OS's `pkexec` prompts for
+administrator authorization; the privileged installer rechecks host
+eligibility before creating anything. All container and state operations
+are scoped to the pilot project and `/var/lib/optiplex-now/host`.
 
-The installed-package test runs those actual scripts, asserts the installer
-remains blocked, and opens the real GTK UI under a disposable graphical session
-until its review completes. This is **packaged-interface evidence**, not proof
-that a fresh GPU host has been provisioned. It is not in published v1.17.0.
-The host deployment prototypes and local-owner ticket module remain separate
-development source, not an executable installer.
+The developer's currently running Wolf server must **not** be used to test
+installation: occupied ports or a prior managed project block it. NVIDIA
+remains disabled until its driver-volume lifecycle is implemented and
+validated. Both real streaming and recovery after failed start require
+separate physical acceptance. The first implementation offers no automatic
+uninstall/repair/upgrade, and cannot be called a 15-minute turnkey installer.
 
+The installed-package CI runs the *actual read-only checker* and the
+installed GUI under a disposable display; live Docker install and physical
+video/audio/controller streaming are explicitly untested. Not present in
+published v1.17.0.
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

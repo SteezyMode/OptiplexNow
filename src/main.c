@@ -1501,13 +1501,22 @@ lock_error:
 }
 static gboolean tray_finish_restore(void *unused){
  (void)unused;
- if(win){gtk_window_deiconify(GTK_WINDOW(win));gtk_widget_show_all(win);gtk_window_present(GTK_WINDOW(win));}
+ if(win){
+   gtk_window_deiconify(GTK_WINDOW(win));
+   gtk_widget_show_all(win);
+   gtk_window_present(GTK_WINDOW(win));
+ }
  tray_restoring=0;
  return 0;
 }
 static void tray_show_window(void){
  if(!win)return;
  tray_restoring=1;
+ /* On XFCE, hidden maximized/fullscreen windows can reopen as an unresizable
+  * screen-filling surface. The tray is a normal-window restore action. */
+ gtk_window_unfullscreen(GTK_WINDOW(win));
+ gtk_window_unmaximize(GTK_WINDOW(win));
+ gtk_window_set_resizable(GTK_WINDOW(win),TRUE);
  gtk_window_deiconify(GTK_WINDOW(win));gtk_widget_show_all(win);gtk_window_present(GTK_WINDOW(win));
  /* Some XFCE window managers send the iconified-state event after restore.
   * Present a second time once that event has been processed. */
@@ -2588,19 +2597,32 @@ int main(int argc,char**argv) {
     if (monitor) {
       GdkRectangle workarea;
       gdk_monitor_get_workarea(monitor, &workarea);
-      initial_width = MIN(1100, MAX(320, workarea.width - 96));
-      initial_height = MIN(720, MAX(300, workarea.height - 120));
+      /* Preserve the roomy ultrawide desktop layout tested by CI.
+       * Prefer a smaller normal window on 1366x768 notebook screens. */
+      if (workarea.width >= 1920 && workarea.height >= 900) {
+        initial_width = MIN(1100, MAX(400, workarea.width - 96));
+        initial_height = MIN(720, MAX(340, workarea.height - 120));
+      } else {
+        initial_width = MIN(900, MAX(400, workarea.width - 96));
+        initial_height = MIN(620, MAX(340, workarea.height - 120));
+      }
     }
   }
   win=gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(win),"OptiPlex Now");
   gtk_window_set_default_size(GTK_WINDOW(win),initial_width,initial_height);
+  gtk_window_set_resizable(GTK_WINDOW(win),TRUE);
  gtk_window_set_icon_name(GTK_WINDOW(win),"optiplex-now");gtk_window_set_position(GTK_WINDOW(win),1);
  g_signal_connect_data(win,"destroy",(GCallback)on_window_destroy,NULL,NULL,0);
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"window-state-event",(GCallback)minimize_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
- GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),1,1);gtk_container_add(GTK_CONTAINER(win),sc);
+ GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+ /* The stack's wider pages must scroll, not set an enormous window minimum. */
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sc),320);
+ gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sc),280);
+ gtk_container_add(GTK_CONTAINER(win),sc);
  GtkWidget*main_pages=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_container_add(GTK_CONTAINER(sc),main_pages);

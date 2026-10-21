@@ -104,6 +104,11 @@ def _journal(root: Path, event: dict, *, new: bool = False) -> None:
     if new:
         tx._write_exclusive(root / JOURNAL,
                             (json.dumps(payload, sort_keys=True) + "\n").encode())
+        directory = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory)
+        finally:
+            os.close(directory)
     else:
         _replace_journal(root, payload)
 

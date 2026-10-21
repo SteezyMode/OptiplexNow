@@ -207,10 +207,12 @@ an explicitly verified container ID, **never** `docker compose down` or
 a global volume removal.
 
 `server/host_runtime.py` implements the first-start state machine against an
-injected Docker interface. Simulated approval is now bound to the exact
-workspace, operation and configuration generation, so stale approvals fail
-before Docker access. **This test record is not authentication**: only a
-future privileged host broker can attest the real owner's identity.
+injected Docker interface. Simulated approval must come from the
+local `host_owner.py` authority, which verifies Linux kernel peer
+credentials, requires a host-controlled confirmation callback, and issues
+a one-use ticket bound to the workspace, operation and active generation.
+This is authenticated *local process identity*, not yet production-proof
+owner consent or a running privileged host service.
 The controller also requires a checksum-verified prepared configuration
 generation and fully passing
 preflight statuses, an empty Compose project, a locally cached pinned
@@ -250,6 +252,47 @@ separate code review and an isolated supported physical host.
 This approach deliberately avoids adding a general-purpose container
 dashboard, CasaOS/Runtipi dependency, or shell scripts with uncontrolled
 system privileges.
+
+## Local owner authorization boundary (source-only, no live service)
+
+\`server/host_owner.py\` introduces a deliberately small Linux-local protocol
+for authorizing one **simulated** Wolf first-start. It uses \`AF_UNIX\` with
+kernel \`SO_PEERCRED\` to obtain peer UID/PID, rather than trusting a client
+JSON username or SSH identity. The configured owner UID must match; remote
+TCP connections are refused. A bounded, versioned single-request protocol
+accepts only \`start_wolf\`, the candidate workspace and the active generation.
+No generic Docker commands or arbitrary path operations are exposed.
+
+A **trusted local owner confirmation callback** is required and must return
+the literal Boolean \`True\` after verifying the operation, workspace and
+generation. Refusals, missing callbacks or exceptions cannot issue a grant.
+This callback belongs inside a future trusted host GUI/polkit broker and
+**must not** be selected or supplied by the requesting client.
+
+The authority issues a 60-second, 256-bit random, single-use ticket held in
+memory, bound to the peer's kernel UID/PID, operation, exact workspace and
+current generation. Consumption removes the ticket even on a mismatch;
+expired grants and stale configurations fail closed. No ticket is stored in
+a Docker label, user configuration, journal or long-term credential file.
+The bounded local handler responds once and redacts denial details.
+
+\`host_runtime.simulate_first_start\` now requires that ticket and invokes
+the authority to consume it before querying the simulated Docker adapter.
+The old forgeable \`owner_confirmed=True\`/caller-supplied approval dictionary
+is no longer accepted. Linux socket tests cover kernel peer credentials,
+mismatched UID, callback refusal, replay, expiration, incorrect generation,
+protocol injection, too-large requests and UNIX stream replies.
+
+**Security and usability limits:** the module has no installed Unix socket
+listener, systemd service, privilege elevation, GUI consent screen, owner
+registration, revocation workflow or Tailscale client-enrollment endpoint.
+It is an authorization *core*, not a deployed security boundary. A Linux UID
+identifies a local process but cannot distinguish legitimate consent from
+malware running as the same user. Future production authorization requires
+a correctly privileged service, an independently trusted interactive owner
+confirmation mechanism, and a documented threat model. No approval ticket
+enables actual Docker commands in this branch; the real Docker adapter remains
+blocked and the host installer is not shipped.
 
 ## Initial supported scope
 

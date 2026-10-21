@@ -11,7 +11,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import socket
 import stat
 import subprocess
 
@@ -154,4 +153,4 @@ class LocalDocker:
         """Cleanup of only a positively identified NOW-owned container ID."""
         cid = valid_id(container_id)
         self.inspect_owned(cid)
-        self._call(["rm", "--force", "--volumes=false", cid], timeout=20)
+        self._call(["rm", "--force", cid], timeout=20)

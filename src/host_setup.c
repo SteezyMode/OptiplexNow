@@ -310,7 +310,7 @@ static void on_install(GtkButton *button, gpointer data)
     if (!approved)
         return;
     const gchar *argv[] = {
-        "/usr/bin/pkexec", "/usr/bin/python3", INSTALLER, "--install",
+        "/usr/bin/pkexec", INSTALLER, "--install",
         "--gpu", selected_gpu(ui),
         "--render-node", gtk_entry_get_text(GTK_ENTRY(ui->render_entry)),
         "--image-digest", digest, "--confirm", "INSTALL-WOLF", NULL

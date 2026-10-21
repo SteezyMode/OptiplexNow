@@ -60,6 +60,12 @@ Host metrics and physical-disk filtering are parsed by `src/host_metrics.c/.h`, 
 
 The worker-entry boundary captures a `NowHostJobTarget` value on the GTK thread before dispatch. It contains the exact selected host and account; relay wake additionally captures the approved wake command. Background SSH probes, hardware inventory, Wolf administrative lookup and power operations consume only this snapshot rather than rereading mutable `cfg[]`. Before presenting the result, the GTK callback checks whether the selected endpoint still matches and drops stale output. Never interpret a saved host change as permission to retarget an action that was already initiated. The GTK-free contract is in `src/host_job_target.c/.h`; test it independently, including sanitizer builds.
 
+## Encrypted device backup execution boundary
+
+`src/backup_async.c/.h` owns the GIO subprocess bridge to the existing encrypted `optiplex-now-backup` helper. GTK collects file selection and the password, then shows modal progress while the helper runs without blocking the GTK main context. The password is written to the child's stdin, never argv or environment, and its worker-owned memory is erased after I/O completes. The full backup helper and its v1 .onb file format remain unchanged.
+
+Restoring SSH, Moonlight, and client configuration is not currently atomic as a group, so deliberately *do not* offer a forced cancellation action in the GUI. A forced kill during file replacement can leave a partially restored identity. Future transactional restore design can change this only after providing a reliable all-or-nothing or rollback contract and testing it. Mock command tests cannot substitute for a trusted-device restore rehearsal.
+
 ## Tray routing boundary
 
 The GTK tray owns menu rendering, StatusNotifier/GTK status-icon integration and callbacks; `src/tray_prefs.c/.h` owns order, mask, saved labels and service metadata; `src/tray_actions.c/.h` interprets known action IDs through an explicit table of callbacks. The dispatcher has no GTK, network or SSH dependencies. Invalid IDs and missing handlers are rejected; launching Games still brings NOW forward first when Moonlight is missing. Do not turn this callback interface into a general app-wide event bus.

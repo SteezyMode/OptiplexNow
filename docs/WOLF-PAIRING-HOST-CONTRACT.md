@@ -43,6 +43,10 @@ The pairing dialog still requires explicit refresh and authorization of the inte
 - Redact PINs, Wolf pairing secrets, Moonlight certificate keys, Tailscale enrollment keys and session crypto material from diagnostics and code.
 - Preserve already-paired device identity and user data during updates; do not reset working clients to test a new connection.
 
+## Offline negative-path coverage
+
+The Python client and host helper have simulated tests for: unavailable SSH, subprocess timeouts, malformed host responses, explicit Wolf refusal, changed client address, expired request index, missing host secret and invalid PINs. These mocks exercise fail-closed behavior **without contacting the real Wolf container**. They do not prove host identity when two pending requests can share an IP, nor replace a physical unpaired-client test.
+
 ## Required acceptance checks
 
 - [x] Observe the local socket and schema.

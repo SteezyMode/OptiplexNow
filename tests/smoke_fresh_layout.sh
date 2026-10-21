@@ -62,5 +62,15 @@ for screen in 3440x1440 1024x768; do
     }
     echo "Fresh GUI: $screen -> ${width}x${height}; empty profile preserved."
   ' bash "$tmp" "$screen"
-  rm -rf -- "$tmp"
+  # GVfs can briefly recreate runtime entries while DBus terminates.
+  # Retry only within our disposable test directory, never a user's HOME.
+  cleaned=0
+  for attempt in 1 2 3 4 5; do
+    if rm -rf -- "$tmp" 2>/dev/null && [[ ! -e "$tmp" ]]; then
+      cleaned=1
+      break
+    fi
+    sleep 0.2
+  done
+  [[ "$cleaned" -eq 1 ]] || { echo "Could not clean disposable GUI test directory" >&2; exit 1; }
 done

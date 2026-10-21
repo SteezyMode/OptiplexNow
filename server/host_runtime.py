@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 import host_docker
+import host_owner
 import host_plan
 import host_stage
 import host_transaction as tx
@@ -134,23 +135,6 @@ def _replace_journal(root: Path, value: dict) -> None:
             os.unlink(temporary)
 
 
-def _require_simulated_approval(approval: dict | None, root: Path,
-                                generation: str) -> None:
-    """Bind a test-only approval to exactly one prepared generation.
-
-    Caller-generated data is NOT authentication. A privileged host broker
-    must eventually prove the actual owner's identity and grant authority.
-    """
-    expected = {
-        "operation": "start_wolf",
-        "workspace": str(root),
-        "generation": generation,
-        "source": "simulated_owner",
-    }
-    if not isinstance(approval, dict) or approval != expected:
-        raise ActivationBlocked("Missing or stale generation-bound owner approval")
-
-
 def _read_journal(root: Path) -> dict:
     path = root / JOURNAL
     try:
@@ -227,11 +211,14 @@ def review_attempt(workspace: Path, docker: object) -> dict:
 
 
 def simulate_first_start(workspace: Path, report: dict, docker: object,
-                         *, approval: dict | None) -> dict:
+                         *, approval: str | None,
+                         authority: host_owner.OwnerAuthority | None,
+                         owner_connection) -> dict:
     """Test-only startup and narrowly identified cleanup via a fake Docker.
 
-    No real Docker adapter is accepted. The approval structure is test data,
-    not a production identity proof; live use needs a privileged broker.
+    No real Docker adapter is accepted. A one-use ticket must be generated
+    by the host-local authority from Unix kernel peer credentials and trusted
+    owner confirmation. This simulator still cannot run production Docker.
     """
     if isinstance(docker, host_docker.LocalDocker):
         raise ActivationBlocked("Live Docker deployment is not enabled")
@@ -244,7 +231,14 @@ def simulate_first_start(workspace: Path, report: dict, docker: object,
             raise ActivationBlocked("Prior start journal requires manual inspection")
         compose_file, manifest = _active_bundle(root)
         generation = tx._state(root)["active"]
-        _require_simulated_approval(approval, root, generation)
+        if authority is None or owner_connection is None:
+            raise ActivationBlocked("Owner authorization service is not connected")
+        try:
+            authority.consume(owner_connection, approval,
+                              operation="start_wolf",
+                              workspace=root, generation=generation)
+        except host_owner.AuthorizationError as exc:
+            raise ActivationBlocked("Owner authorization refused or stale") from exc
         _readiness(report, manifest["gpu_vendor"])
         if docker.project_ids():
             raise ActivationBlocked("Existing Compose project: refuse adoption or restart")

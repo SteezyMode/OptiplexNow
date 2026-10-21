@@ -100,7 +100,7 @@ class HostTransactionTests(unittest.TestCase):
                 self.addCleanup(lambda root=workspace: shutil.rmtree(root, ignore_errors=True))
                 result = tx.prepare(self.staged(gpu=gpu), workspace)
                 compose_file = workspace / tx.GEN_DIR / result["generation"] / "compose.yaml"
-                compose = json.loads(compose_file.read_text().split("\\n", 1)[1])
+                compose = json.loads(compose_file.read_text().split("\n", 1)[1])
                 wolf = compose["services"]["wolf"]
                 self.assertNotIn("volumes", compose)
                 self.assertNotIn("NVIDIA_DRIVER_VOLUME_NAME", wolf["environment"])

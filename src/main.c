@@ -1095,6 +1095,7 @@ static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer dat
                                                NOW_WOLF_MAX_PENDING);
         if (state->count < 0) {
             state->count = 0;
+            gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
             gtk_label_set_text(GTK_LABEL(state->status),
                 "Invalid or ambiguous pending clients. Refresh to retry.");
         } else {
@@ -1207,14 +1208,14 @@ static void wolf_ui_response(GtkDialog *dialog, gint response, gpointer data)
     memset(payload, 0, sizeof payload);
 }
 
-static void wolf_pair_dialog(const char *generated_pin)
+static void wolf_pair_dialog(const char *generated_pin, GtkWindow *parent)
 {
     WolfPairUI *state = g_new0(WolfPairUI, 1);
     g_strlcpy(state->host, cfg[0], sizeof state->host);
     g_strlcpy(state->user, cfg[1], sizeof state->user);
 
     GtkWidget *dialog = gtk_dialog_new_with_buttons(
-        "Connect to Game Host", GTK_WINDOW(win), GTK_DIALOG_MODAL,
+        "Connect to Game Host", parent ? parent : GTK_WINDOW(win), GTK_DIALOG_MODAL,
         "Cancel", GTK_RESPONSE_CANCEL, "Refresh Now", 1,
         "Authorize Device", GTK_RESPONSE_OK, NULL);
     state->dialog = dialog;
@@ -1249,7 +1250,7 @@ static void wolf_pair_dialog(const char *generated_pin)
     state->auto_refresh_id = g_timeout_add_seconds(3, wolf_ui_auto_refresh, state);
     wolf_ui_start(state, "pending-text", NULL);
 }
-static void pair_wolf(void){
+static void pair_wolf(GtkWidget *origin){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER IN SETTINGS");return;}
  unsigned int random_value=0;
@@ -1265,7 +1266,8 @@ static void pair_wolf(void){
  GSubprocess*process=g_subprocess_newv(args,G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
  if(!process){g_clear_error(&error);say("MOONLIGHT PAIRING COULD NOT START");memset(pin,0,sizeof pin);return;}
  say("MOONLIGHT PAIRING STARTED");
- wolf_pair_dialog(pin);
+ GtkWidget *toplevel = origin ? gtk_widget_get_toplevel(origin) : win;
+ wolf_pair_dialog(pin, GTK_IS_WINDOW(toplevel) ? GTK_WINDOW(toplevel) : GTK_WINDOW(win));
  memset(pin,0,sizeof pin);
  /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
@@ -1275,7 +1277,7 @@ static void on_games_action(void*w,void*arg){(void)w;
  if(resp==101){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
- else if(resp==103)pair_wolf();
+ else if(resp==103)pair_wolf(w);
  else if(resp==104){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
      if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),"CHECK SERVER SETTINGS");
@@ -2237,7 +2239,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_relay"))pair(1);
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
- else if(!strcmp(n,"w_wolf"))pair_wolf();
+ else if(!strcmp(n,"w_wolf"))pair_wolf(w);
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);

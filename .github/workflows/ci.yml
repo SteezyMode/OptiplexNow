@@ -60,6 +60,7 @@ jobs:
           make check-wolf-transport
           make check-tailscale
           make check-host-metrics
+          make check-tray-prefs
           make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh

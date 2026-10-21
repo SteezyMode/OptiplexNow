@@ -9,7 +9,7 @@ LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
 .PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network check-service-probe check-sanitizers
-all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass
+all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass build/now-host-setup
 
 build:
 	mkdir -p build
@@ -35,6 +35,10 @@ build/limelight.o: build/limelight.ttf
 
 build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/host_job_target.c src/host_job_target.h src/backup_async.c src/backup_async.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h src/wizard_network.c src/wizard_network.h src/service_probe.c src/service_probe.h build/inter.o build/limelight.o
 	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/host_job_target.c src/backup_async.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c src/wizard_network.c src/service_probe.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+
+# Separate native server readiness window. No privileged operations.
+build/now-host-setup: src/host_setup.c | build
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/host_setup.c -o $@ $(GTK_LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto

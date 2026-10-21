@@ -34,6 +34,9 @@ int main(void)
         "DRIVE=relative/path|2T|1T|50%\n"
         "DRIVE=/mnt/broken|1G\n"
         "DRIVES_END\nDRIVE=/outside_after|1G|1G|0%\n";
+    EXPECT(now_host_safe_disk_path("/mnt/media"));
+    EXPECT(!now_host_safe_disk_path("relative"));
+    EXPECT(!now_host_safe_disk_path("/mnt/invalid path"));
     EXPECT(now_host_parse_drives(report, drives, NOW_HOST_MAX_DRIVES) == 2);
     EXPECT(strcmp(drives[0].path, "/") == 0);
     EXPECT(strcmp(drives[1].path, "/mnt/media") == 0);

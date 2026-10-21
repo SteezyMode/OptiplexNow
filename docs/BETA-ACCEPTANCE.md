@@ -50,6 +50,14 @@ Use a Linux client with no prior NOW configuration or Wolf pairing. Preserve the
 
 Record OS, package version, host version, results, and any manual intervention. A single owner-led test does not replace an independent tester session.
 
+## First physical client evidence: October 21, 2026
+
+The first owner-assisted real-device NOW v1.18.0 client test is recorded in [MacBook beta QA report](QA-MACBOOK-2026-10-21.md). On Linux Mint XFCE at 1366x768, the installed client recognized preexisting Tailscale, discovered an existing server, showed graphical SSH trust/password dialogs, installed Moonlight Flatpak, and paired real Moonlight clients with Wolf. Moonlight 6.2.0 AppImage streamed Wolf XFCE Desktop. After a manual settings workaround, **Jellyfin video and audio playback passed**.
+
+**Do not mark the whole Beta 1 checklist complete:** Steam streaming failed even when invoked directly through AppImage; pairing windows were obscured; automatic pending-client refresh and verified completion feedback are missing; a tested Videos URL was absent from the persisted main settings; tray window sizing was unusable. The test did not cover clean OS/Tailscale enrollment, fresh host setup, actual game audio/input, SSH reconnect, upgrade preservation, external users or system recovery. The [formal report](QA-MACBOOK-2026-10-21.md) includes reproducible observations, uncertainty and issue links.
+
+**Public-alpha video design:** manually entering a Jellyfin URL is acceptable as a *temporary existing-host beta fallback*, **not** the intended ordinary customer path. The public alpha must support managed Jellyfin setup for hosts without it, or safe enrollment of existing Jellyfin, and automatic approved-client video endpoint configuration ([#148](https://github.com/SteezyMode/OptiplexNow/issues/148)). This is a separate scope milestone from the observed [wizard URL-save bug #147](https://github.com/SteezyMode/OptiplexNow/issues/147).
+
 ## Verification levels
 
 | Level | Meaning |

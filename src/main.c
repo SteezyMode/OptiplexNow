@@ -26,6 +26,7 @@
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
 #include "tailscale_async.h"
+#include "tailscale_install.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -322,9 +323,63 @@ static void pair(int relay) {
  char*args[]={"ssh-copy-id","-i",pub,dest,NULL};
  if(terminal_launch(args))say(relay?"Authorize the relay in the terminal":"Authorize the server in the terminal");
 }
-static void setup_tailscale(void) {
- if(now_program_exists("tailscale")){char*args[]={"sudo","tailscale","up",NULL};if(terminal_launch(args))say("Sign in to Tailscale in the opened terminal");}
- else browser_open("https://tailscale.com/download/linux");
+static gboolean tailscale_install_inflight = FALSE;
+
+static void tailscale_install_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    (void)source;
+    (void)data;
+    GError *error = NULL;
+    gboolean installed = now_tailscale_install_finish(result, &error);
+    tailscale_install_inflight = FALSE;
+    if (installed) {
+        say("TAILSCALE INSTALLED. SIGN IN THROUGH THE BROWSER.");
+        browser_open("http://100.100.100.100/");
+    } else {
+        say("INSTALLATION NOT COMPLETED. RETRY OR OPEN THE OFFICIAL DOWNLOAD PAGE.");
+        if (error) {
+            g_warning("Tailscale graphical installer failed: %s", error->message);
+        }
+    }
+    g_clear_error(&error);
+}
+
+static void setup_tailscale(void)
+{
+    if (now_program_exists("tailscale")) {
+        say("TAILSCALE SETUP OPENS IN YOUR BROWSER.");
+        browser_open("http://100.100.100.100/");
+        return;
+    }
+    if (tailscale_install_inflight) {
+        say("TAILSCALE INSTALLATION IS ALREADY RUNNING.");
+        return;
+    }
+    if (!now_program_exists("pkexec")) {
+        say("GRAPHICAL ADMIN AUTHORIZATION IS MISSING; OPENING TAILSCALE HELP.");
+        browser_open("https://tailscale.com/docs/install/linux");
+        return;
+    }
+
+    GtkWidget *dialog = gtk_message_dialog_new(
+        GTK_WINDOW(win), GTK_DIALOG_MODAL, GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+        "Install Tailscale on this computer?");
+    gtk_message_dialog_format_secondary_text(
+        GTK_MESSAGE_DIALOG(dialog),
+        "NOW will request your administrator password through the desktop "
+        "authorization dialog, add Tailscale's official signed package repository "
+        "on supported Debian/Ubuntu systems, and install its service. "
+        "Existing Tailscale installations are not changed.");
+    gtk_dialog_add_buttons(GTK_DIALOG(dialog), "Cancel", GTK_RESPONSE_CANCEL,
+                           "Install Tailscale", GTK_RESPONSE_OK, NULL);
+    int answer = gtk_dialog_run(GTK_DIALOG(dialog));
+    gtk_widget_destroy(dialog);
+    if (answer != GTK_RESPONSE_OK) {
+        return;
+    }
+    tailscale_install_inflight = TRUE;
+    say("INSTALLING TAILSCALE — CONFIRM THE SYSTEM PASSWORD PROMPT.");
+    now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
 typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160],source_host[512],source_user[512]; char specs[7][160]; char service_state[3][80]; char service_urls[3][512]; } Result;

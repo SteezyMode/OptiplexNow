@@ -32,6 +32,7 @@
 #include "ssh_authorize.h"
 #include "host_metrics.h"
 #include "host_job_target.h"
+#include "backup_async.h"
 #include "tray_prefs.h"
 #include "tray_actions.h"
 #include "moonlight_install.h"
@@ -1625,22 +1626,83 @@ static int backup_password(void*parent,int restore,char*out,size_t n){
  }
  gtk_widget_destroy(d);return ok;
 }
-static int backup_execute(int restore,const char*path,const char*password){
- if(access(BACKUP_BINARY,X_OK)!=0)return -2;
- int pipefd[2];if(pipe(pipefd)!=0)return -1;
- pid_t pid=fork();
- if(pid<0){close(pipefd[0]);close(pipefd[1]);return -1;}
- if(pid==0){
-  close(pipefd[1]);dup2(pipefd[0],STDIN_FILENO);close(pipefd[0]);
-  int fd=open("/dev/null",O_WRONLY);if(fd>=0){dup2(fd,STDOUT_FILENO);dup2(fd,STDERR_FILENO);close(fd);}
-  execl(BACKUP_BINARY,"optiplex-now-backup",restore?"restore":"export",path,(char*)NULL);
-  _exit(127);
- }
- close(pipefd[0]);size_t len=strlen(password);int ok=1;
- if(write(pipefd[1],password,len)!=(ssize_t)len||write(pipefd[1],"\n",1)!=1)ok=0;
- close(pipefd[1]);int status=0;if(waitpid(pid,&status,0)<0)return -1;
- return ok&&WIFEXITED(status)&&WEXITSTATUS(status)==0?0:-1;
+/* Restore must finish without interruption. The existing archive helper replaces
+ * identity files individually, so forced cancellation could leave partial state.
+ * Run it asynchronously under an uncloseable modal progress dialog instead. */
+typedef struct {
+    GtkWidget *dialog;
+    gboolean completed;
+    gboolean success;
+    GError *error;
+} BackupProgress;
+
+static gboolean backup_progress_ignore_close(GtkWidget *widget,
+                                               GdkEvent *event, gpointer data)
+{
+    (void)widget;
+    (void)event;
+    (void)data;
+    return TRUE;
 }
+
+static void backup_progress_finished(GObject *source, GAsyncResult *result,
+                                      gpointer data)
+{
+    (void)source;
+    BackupProgress *progress = data;
+    progress->success = now_backup_run_finish(result, &progress->error);
+    progress->completed = TRUE;
+    if (progress->dialog) {
+        gtk_dialog_response(GTK_DIALOG(progress->dialog), GTK_RESPONSE_ACCEPT);
+    } else {
+        g_clear_error(&progress->error);
+        g_free(progress);
+    }
+}
+
+static int backup_progress_run(void *parent, int restore, const char *path,
+                               const char *password)
+{
+    GtkWidget *dialog = gtk_dialog_new_with_buttons(
+        restore ? "Restoring encrypted backup" : "Saving encrypted backup",
+        GTK_WINDOW(parent), GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
+        NULL);
+    gtk_window_set_deletable(GTK_WINDOW(dialog), FALSE);
+    g_signal_connect(dialog, "delete-event",
+                     G_CALLBACK(backup_progress_ignore_close), NULL);
+    GtkWidget *area = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+    GtkWidget *col = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 12);
+    gtk_container_set_border_width(GTK_CONTAINER(col), 18);
+    GtkWidget *spinner = gtk_spinner_new();
+    GtkWidget *message = gtk_label_new(
+        restore ? "Restoring settings and device identity. Do not close NOW." :
+                  "Encrypting device settings and pairing identity. Do not close NOW.");
+    gtk_label_set_line_wrap(GTK_LABEL(message), TRUE);
+    gtk_container_add(GTK_CONTAINER(area), col);
+    add(col, spinner, 0);
+    add(col, message, 1);
+
+    BackupProgress *progress = g_new0(BackupProgress, 1);
+    progress->dialog = dialog;
+    gtk_widget_show_all(dialog);
+    gtk_spinner_start(GTK_SPINNER(spinner));
+    now_backup_run_async(BACKUP_BINARY, restore, path, password,
+                         backup_progress_finished, progress);
+    gtk_dialog_run(GTK_DIALOG(dialog));
+    /* Parent destruction can dismiss the dialog without completing the job.
+     * Keep the state alive for its completion callback in that unusual case. */
+    progress->dialog = NULL;
+    gtk_widget_destroy(dialog);
+    if (!progress->completed)
+        return -1;
+    int rc = progress->success ? 0 :
+        (g_error_matches(progress->error, G_IO_ERROR, G_IO_ERROR_NOT_FOUND) ?
+         -2 : -1);
+    g_clear_error(&progress->error);
+    g_free(progress);
+    return rc;
+}
+
 static int full_backup_ui(void*parent,int restore){
  if(restore){
   GtkWidget*d=gtk_dialog_new_with_buttons("Confirm Restore",GTK_WINDOW(parent),1,"CANCEL",GTK_RESPONSE_CANCEL,"CONTINUE",GTK_RESPONSE_OK,NULL);
@@ -1651,7 +1713,8 @@ static int full_backup_ui(void*parent,int restore){
  }
  char path[PATH_MAX];if(!backup_pick(path,sizeof path,parent,!restore))return 0;
  char pw[2048]={0};if(!backup_password(parent,restore,pw,sizeof pw))return 0;
- int rc=backup_execute(restore,path,pw);explicit_bzero(pw,sizeof pw);
+ /* Passphrase is duplicated only for the subprocess stdin and wiped here. */
+ int rc=backup_progress_run(parent,restore,path,pw);explicit_bzero(pw,sizeof pw);
  if(rc==0){
   if(restore){now_config_load();last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);reflow(dimensions.width>0?dimensions.width:660);tray_build_menu();refresh();preset_alert(parent,"Backup restored","Settings restored. Restart Moonlight to load its pairing data. Tailscale still requires sign-in on this device.");}
   else preset_alert(parent,"Backup saved","Encrypted backup saved. Keep your password safe and only restore on a trusted computer.");

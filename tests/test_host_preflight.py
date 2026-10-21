@@ -44,7 +44,7 @@ class HostPreflightTests(unittest.TestCase):
         self.assertEqual(checks["operating_system"]["status"], "pass")
 
     def test_other_distributions_unknown_not_automatically_rejected(self):
-        result = preflight.evaluate(snapshot(os_id="pop", os_version="24.04"))
+        result = preflight.evaluate(snapshot(os_id="fedora", os_version="42"))
         self.assertEqual(by_id(result)["operating_system"]["status"], "unknown")
         self.assertEqual(result["overall"], "unknown")
 

@@ -31,11 +31,11 @@ class HostTransactionTests(unittest.TestCase):
         self.workspace = Path("/tmp") / ("now-managed-fixture-" + uuid4().hex)
         self.addCleanup(lambda: shutil.rmtree(self.workspace, ignore_errors=True))
 
-    def staged(self, digest=DIGEST1):
-        target = self.source_root / ("stage-" + digest[-5:])
+    def staged(self, digest=DIGEST1, gpu="nvidia"):
+        target = self.source_root / ("stage-" + gpu + "-" + digest[-5:])
         if not target.exists():
             host_stage.stage(target, host_stage.make_bundle(
-                BLOCKED, digest=digest, render_node="/dev/dri/renderD129"))
+                BLOCKED, digest=digest, render_node="/dev/dri/renderD129", gpu_vendor=gpu))
         return target
 
     def read_state(self):
@@ -91,6 +91,45 @@ class HostTransactionTests(unittest.TestCase):
         self.assertEqual((self.workspace / "wolf" / "test-save").read_bytes(),
                          b"persistent")
         self.assertTrue((self.workspace / tx.GEN_DIR / second["generation"]).exists())
+
+
+    def test_amd_and_intel_generations_prepare_without_driver_volume(self):
+        for gpu in ("amd", "intel"):
+            with self.subTest(gpu=gpu):
+                workspace = Path("/tmp") / ("now-managed-" + gpu + "-" + uuid4().hex)
+                self.addCleanup(lambda root=workspace: shutil.rmtree(root, ignore_errors=True))
+                result = tx.prepare(self.staged(gpu=gpu), workspace)
+                compose_file = workspace / tx.GEN_DIR / result["generation"] / "compose.yaml"
+                compose = json.loads(compose_file.read_text().split("\\n", 1)[1])
+                wolf = compose["services"]["wolf"]
+                self.assertNotIn("volumes", compose)
+                self.assertNotIn("NVIDIA_DRIVER_VOLUME_NAME", wolf["environment"])
+                self.assertNotIn("nvidia", " ".join(wolf["devices"]).lower())
+                self.assertIn(str(workspace / "wolf") + ":/etc/wolf:rw", wolf["volumes"])
+                self.assertEqual(
+                    tx.prepare(self.staged(gpu=gpu), workspace)["generation"],
+                    result["generation"])
+
+    def test_switch_gpu_profile_is_versioned_and_configuration_rollback_works(self):
+        first = tx.prepare(self.staged(gpu="amd"), self.workspace)
+        (self.workspace / "wolf" / "settings.cfg").write_text("preserve")
+        second = tx.prepare(self.staged(gpu="nvidia"), self.workspace)
+        self.assertNotEqual(first["generation"], second["generation"])
+        result = tx.rollback(self.workspace)
+        self.assertEqual(result["generation"], first["generation"])
+        self.assertEqual((self.workspace / "wolf" / "settings.cfg").read_text(),
+                         "preserve")
+        self.assertEqual(self.read_state()["runtime"], "not_started")
+
+    def test_rejects_gpu_manifest_mismatch(self):
+        bundle = self.staged(gpu="intel")
+        path = bundle / "manifest.json"
+        data = json.loads(path.read_text())
+        data["gpu_vendor"] = "nvidia"
+        path.write_text(json.dumps(data))
+        with self.assertRaises(ValueError):
+            tx.prepare(bundle, self.workspace)
+        self.assertFalse(self.workspace.exists())
 
     def test_no_previous_generation_refuses_rollback(self):
         tx.prepare(self.staged(), self.workspace)

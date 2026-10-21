@@ -41,7 +41,7 @@ void now_host_get_metric(char *dest, size_t size, const char *text,
     }
 }
 
-static int allowed_disk_path(const char *path)
+int now_host_safe_disk_path(const char *path)
 {
     if (!path || path[0] != '/' || strlen(path) > 350) {
         return 0;
@@ -149,7 +149,7 @@ int now_host_parse_drives(const char *text, NowHostDrive *drives,
             strlen(fields[1]) < sizeof drives[0].size &&
             strlen(fields[2]) < sizeof drives[0].free_space &&
             strlen(fields[3]) < sizeof drives[0].used_percent &&
-            allowed_disk_path(fields[0]) && !system_mount(fields[0])) {
+            now_host_safe_disk_path(fields[0]) && !system_mount(fields[0])) {
             NowHostDrive *drive = &drives[count];
             snprintf(drive->path, sizeof drive->path, "%s", fields[0]);
             snprintf(drive->size, sizeof drive->size, "%s", fields[1]);

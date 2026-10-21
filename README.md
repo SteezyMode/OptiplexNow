@@ -4,22 +4,23 @@
 
 **Linux client for games, media, and remote access to an existing personal server.** NOW combines Moonlight/Wolf launch controls, media links, remote files, and basic host management in a GTK3 desktop application.
 
-**Release channel:** [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the published private closed beta build. Fresh-client acceptance remains pending.
+**Release channel:** v1.17.0 is the current **closed-beta candidate**. It becomes available only after its tag-triggered prerelease appears on [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases). Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 
 **Current limit:** NOW is a client for an already configured host. It does not provision a new server, operate NOW user accounts, or send device approval emails. [Product direction](docs/PRODUCT.md) separates these future features from the released software.
 
 ## Download
 
-- [Latest official release and checksums](https://github.com/SteezyMode/OptiplexNow/releases/latest)
-- [Direct amd64 Debian package](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)
+- [Versioned releases and closed-beta installers](https://github.com/SteezyMode/OptiplexNow/releases)
+- [v1.17.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) (available after tag publication)
+- [Previous v1.16.1 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1)
 - [Current code, release and test status](docs/CURRENT-STATUS.md)
 
 Supports compatible x86-64 Debian/Ubuntu-derived Linux distributions. Native Windows and macOS packages are not provided.
 
-Download the `OptiPlex-Now_amd64.deb` package, then install through the system's software installer or from its download directory:
+Download the **versioned** `OptiPlex-Now_1.17.0_amd64.deb` from the tagged closed-beta release when published. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
 
 ```sh
-sudo apt install ./OptiPlex-Now_amd64.deb
+sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 ```
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
@@ -31,9 +32,9 @@ Existing NOW preferences are intended to survive updates. Back up important clie
 3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
 4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
 
-**Release compatibility:** the published v1.16.1 household beta still contains reference-host defaults. New development code removes those defaults: a fresh client starts with empty Videos, Music, Downloads, and Web Gaming URLs. Configure services belonging to your own host, or import a trusted connection preset. Existing saved URLs remain intact; Tailscale does not sign into Jellyfin.
+**Release compatibility:** v1.17.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
 
-**Still manual:** first-time SSH authorization, a separately installed host pairing helper, and aspects of Wolf pairing. The development client accepts an optional **Web Gaming URL** in Settings > Gaming & Streaming; an existing installation must set it once after upgrading to a future release with this change. Streaming, Videos, Music, and Downloads are independent, configurable services. An already paired device should not be treated as proof that unpaired onboarding works. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
+**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. The client now offers GUI workflows, but none is confirmed end-to-end on a fresh physical client. On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
 
 ## Available functions
 

@@ -60,7 +60,7 @@ class HostStageTests(unittest.TestCase):
                 files = host_stage.make_bundle(
                     BLOCKED_PLAN, digest=DUMMY_DIGEST, render_node=RENDER,
                     gpu_vendor=gpu)
-                compose = json.loads("\\n".join(files["compose.yaml"].splitlines()[1:]))
+                compose = json.loads("\n".join(files["compose.yaml"].splitlines()[1:]))
                 wolf = compose["services"]["wolf"]
                 manifest = json.loads(files["manifest.json"])
                 self.assertEqual(manifest["gpu_vendor"], gpu)
@@ -85,17 +85,17 @@ class HostStageTests(unittest.TestCase):
             root = Path(temp)
             vendor_file = root / "class/drm/renderD129/device/vendor"
             vendor_file.parent.mkdir(parents=True)
-            vendor_file.write_text("0x10de\\n")
+            vendor_file.write_text("0x10de\n")
             host_stage.check_render_vendor("nvidia", RENDER, root)
             with self.assertRaises(ValueError):
                 host_stage.check_render_vendor("amd", RENDER, root)
             with self.assertRaises(ValueError):
                 host_stage.check_render_vendor("intel", RENDER, root)
-            vendor_file.write_text("0x1002\\n")
+            vendor_file.write_text("0x1002\n")
             host_stage.check_render_vendor("amd", RENDER, root)
             with self.assertRaises(ValueError):
                 host_stage.check_render_vendor("nvidia", RENDER, root)
-            vendor_file.write_text("0x8086\\n")
+            vendor_file.write_text("0x8086\n")
             host_stage.check_render_vendor("intel", RENDER, root)
 
     def test_manifest_forbids_installation_and_implicit_adoption(self):

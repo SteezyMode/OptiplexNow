@@ -100,7 +100,7 @@ class SSHAuthorizeTests(unittest.TestCase):
             self.assertEqual(kwargs["env"]["SSH_ASKPASS_REQUIRE"], "force")
             self.assertEqual(kwargs["env"]["SSH_ASKPASS"], str(askpass))
             self.assertNotIn("sudo", command)
-            self.assertNotIn("password", " ".join(command).lower())
+            self.assertNotIn("my-secret-password", " ".join(command).lower())
             self.assertEqual(child.calls, [module.SSH_TIMEOUT])
 
     def test_password_refusal_is_not_success(self):

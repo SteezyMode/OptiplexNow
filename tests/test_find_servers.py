@@ -44,6 +44,21 @@ class DiscoveryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0][0], "100.64.1.8")
 
+    def test_self_address_is_never_a_selectable_server(self):
+        data = {"BackendState": "Running",
+                "Self": {"TailscaleIPs": ["100.64.0.1"]},
+                "Peer": {"unexpected-self": {"Online": True,
+                           "TailscaleIPs": ["100.64.0.1"]},
+                         "host": {"Online": True,
+                                  "TailscaleIPs": ["100.64.0.9"]}}}
+        rows = module.candidates(data, probe=lambda host: False)
+        self.assertEqual([row[0] for row in rows], ["100.64.0.9"])
+
+    def test_malformed_peers_are_rejected(self):
+        with self.assertRaises(ValueError):
+            module.candidates({"BackendState": "Running", "Peer": ["wrong"]},
+                              probe=lambda host: False)
+
     def test_empty_peers_is_not_an_error(self):
         self.assertEqual(module.candidates({"BackendState": "Running", "Peer": {}},
                                             probe=lambda host: False), [])

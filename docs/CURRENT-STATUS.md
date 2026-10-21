@@ -4,19 +4,19 @@ Updated October 21, 2026 (JST). **Source code, published releases, CI and physic
 
 ## Release status
 
-- **Published closed-beta prerelease:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0), published October 21, 2026. Download the versioned `OptiPlex-Now_1.17.0_amd64.deb` and verify the release `SHA256SUMS`. [Release procedure](RELEASE-PROCESS.md).
-- **Latest merged host source:** [PR #134](https://github.com/SteezyMode/OptiplexNow/pull/134) added NVIDIA first-install volume preparation after the clean AMD/Intel pilot. **This code is not included in v1.17.0.** Passing PR checks does not update installed computers or publish a new release.
-- **Last verified PR #134 CI:** 200 Python tests passed, both workflow jobs passed; native diagnostics, a built and installed `.deb`, read-only host scripts and the real GTK review window ran on disposable CI infrastructure. **No live Wolf installation or streaming session was validated.**
+- **Published closed-beta prerelease:** [v1.18.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0), October 21, 2026. Download the versioned `OptiPlex-Now_1.18.0_amd64.deb` and verify the release `SHA256SUMS`. This package includes the existing-host client plus a **guarded experimental clean-host Wolf pilot**, not the full three-pillar installer. [Release process](RELEASE-PROCESS.md).
+- **First physical client acceptance:** [October 21 MacBook test report](QA-MACBOOK-2026-10-21.md) on Linux Mint XFCE v1.18.0. Existing Tailscale/server discovery, Moonlight installation and Wolf pairing were observed; Moonlight 6.2.0 AppImage streamed Wolf XFCE; Jellyfin video/audio playback passed **after manual URL Settings correction**. Steam streaming failed, pairing UX was obstructive, URL persistence and tray resizing failed. **Beta 1 not accepted.**
+- **Source and release distinction:** [PR #142](https://github.com/SteezyMode/OptiplexNow/pull/142) removed Music Server Profiles from the onboarding wizard on `main` after v1.18.0 was tagged. [PR #143](https://github.com/SteezyMode/OptiplexNow/pull/143) proposes collapsed optional wake controls. Neither should be represented as included in the tested v1.18.0 install. CI and existing host pilot checks do not prove a clean host deployment or an actual Steam game stream.
 
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |
 | --- | --- | --- |
-| GTK3 client, saved settings, Games/Videos entry points, tray, diagnostics | Implemented; current release provides client functions for preconfigured hosts | Existing-host functionality only; exact v1.17.0 fresh-client run still pending |
-| Tailscale graphical setup, discovery and SSH trust/enrollment | Implemented helpers and GUI, with automated negative-path checks | Fresh physical sign-in, PolicyKit and fingerprint/password paths pending |
-| Wolf/Moonlight connection and pairing | Client bridge and asynchronous work implemented; tests include refusal and stale requests | Genuine unpaired-client pairing and actual stream pending |
-| Moonlight and encrypted backup GUI | Install and backup/restore paths implemented with automated checks | Fresh-device install, failure handling and upgrade preservation pending |
-| Owner-configured media, downloads and files | Videos, Music and Downloads service URLs, SFTP remote files, Gluetun Docker health status | Works against existing reference stack; **not** a NOW-installed media platform, native torrent client or validated VPN traffic-leak test |
+| GTK3 client, saved settings, Games/Videos entry points, tray, diagnostics | Implemented for preconfigured hosts | v1.18.0 Mint client test passed Videos launch and playback after a manual URL fix; wizard URL persistence failed (#147); tray resize failed (#146) |
+| Tailscale graphical setup, discovery and SSH trust/enrollment | Implemented GUI and helpers | v1.18.0 real client recognized existing Tailscale, discovered Wolf host, presented native SSH fingerprint and password dialogs; new login, verification outcome, reconnect and negative paths not accepted |
+| Wolf/Moonlight connection and pairing | Pairing bridge implemented | Genuine Flatpak/AppImage pairs observed; Wolf XFCE AppImage stream passed; Steam stream failed; buried approval window, manual refresh and missing completion feedback (#144, #145) |
+| Moonlight and encrypted backup GUI | Flatpak guided install and AppImage selection implemented | Fresh client Flatpak install observed; legacy Intel Flatpak codec warnings; AppImage XFCE streamed; backup and upgrade preservation not tested |
+| Owner-configured media, downloads and files | Videos/Music/Downloads URLs, SFTP and Gluetun status; no managed media install | Jellyfin video/audio on existing host physically passed from Mint client with manually saved URL; downloads, files, VPN leak and managed Jellyfin **not** tested; no-URL service onboarding is #148 |
 | Optional music service | Music link and existing-host profile export for a DroppedNeedle/slskd/qBittorrent/Gluetun configuration | Experimental for general users, no bundled DroppedNeedle installation, recommendations or Spotify-like catalog |
 | Server Setup review | Separate GTK window; real read-only preflight and plan shipped in PR build | Real hardware observation useful, but **not** an installation certificate |
 | Clean NOW-managed Wolf installation | Developer/alpha implementation in `server/host_install.py` and GUI, AMD/Intel/NVIDIA; immutable image, root recheck, dedicated state | **No confirmed clean physical host install** |
@@ -39,9 +39,9 @@ A running Docker container is **not** an active session, verified hardware encod
 
 ## Immediate acceptance gates
 
-**Next action: install and stream on independent hardware.** Use the [Host installer acceptance checklist](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) for a **clean server plus a second client**. Record OS, GPU/driver, Docker/Compose, Wolf digest, package build, observed video/audio/input and recovery behavior.
+**Next action: resolve the observed v1.18.0 Steam-stream failure and beta UX/persistence regressions, while preparing an independent physical clean-host test.** Use the [Host installer acceptance checklist](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) for a **clean server plus a second client**. Record OS, GPU/driver, Docker/Compose, Wolf digest, package build, observed video/audio/input and recovery behavior.
 
-Separately complete [Beta 1 client acceptance](BETA-ACCEPTANCE.md) against an already owner-approved host: fresh desktop package install, browser Tailscale sign-in, verified SSH identity, genuinely unpaired Moonlight/Wolf client, Games and Videos, restart/upgrade and reconnection. The two acceptance tracks must not be conflated.
+Continue [Beta 1 client acceptance](BETA-ACCEPTANCE.md) against an owner-approved existing host. The [MacBook report](QA-MACBOOK-2026-10-21.md) is a partial device pass and a set of blocking defects; restart/upgrade/reconnection, new Tailscale sign-in and full gaming remain open. The two acceptance tracks must not be conflated.
 
 **Do not announce a validated alpha or commercial readiness based on source and CI alone.** Fix physical-test defects before adding more server frameworks, simulated lifecycle features or general-purpose dashboards.
 

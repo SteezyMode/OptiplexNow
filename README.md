@@ -20,7 +20,7 @@
 
 **Public-alpha definition:** all three experiences must be working and independently tested on supported hardware. Media and downloader components remain optional choices for individual customers; an alpha demonstration must qualify all three. Music, books and comics are later possibilities, not first-alpha requirements. VPN subscriptions, including a potential bundled ~$7/month plan, are exploratory and **not needed** for public alpha: customers may use a compatible existing VPN.
 
-[Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
+[Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
 **Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 

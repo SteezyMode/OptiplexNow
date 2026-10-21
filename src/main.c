@@ -1611,7 +1611,7 @@ typedef struct {
     GtkWidget *find_button, *service_inputs[3];
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
-    guint tailscale_poll_id;
+    guint tailscale_poll_id, status_timeout_id, discovery_timeout_id;
     GCancellable *tailscale_cancel, *discovery_cancel;
 } Wizard;
 
@@ -1645,6 +1645,26 @@ static void wizard_save(Wizard*c){
  /* Optional services use user-entered URLs, never reference-host ports. */
  config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
 }
+static gboolean wizard_status_timeout(gpointer data)
+{
+    Wizard *wizard = data;
+    wizard->status_timeout_id = 0;
+    if (wizard->tailscale_cancel) {
+        g_cancellable_cancel(wizard->tailscale_cancel);
+    }
+    return G_SOURCE_REMOVE;
+}
+
+static gboolean wizard_discovery_timeout(gpointer data)
+{
+    Wizard *wizard = data;
+    wizard->discovery_timeout_id = 0;
+    if (wizard->discovery_cancel) {
+        g_cancellable_cancel(wizard->discovery_cancel);
+    }
+    return G_SOURCE_REMOVE;
+}
+
 static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointer data)
 {
     (void)source;
@@ -1652,6 +1672,10 @@ static void wizard_tailscale_done(GObject *source, GAsyncResult *result, gpointe
     GError *error = NULL;
     char *status = now_tailscale_run_finish(result, &error);
     g_clear_object(&wizard->tailscale_cancel);
+    if (wizard->status_timeout_id) {
+        g_source_remove(wizard->status_timeout_id);
+        wizard->status_timeout_id = 0;
+    }
 
     if (wizard->assistant && !wizard->closing) {
         const char *message = "TAILSCALE STATUS UNAVAILABLE — CHECK CONNECTION";
@@ -1684,6 +1708,7 @@ static gboolean wizard_tailscale_poll(gpointer data)
 
     wizard->tailscale_cancel = g_cancellable_new();
     wizard->references++;
+    wizard->status_timeout_id = g_timeout_add_seconds(9, wizard_status_timeout, wizard);
     now_tailscale_run_async("/usr/lib/optiplex-now/tailscale-status.py",
                             wizard->tailscale_cancel, wizard_tailscale_done, wizard);
     return G_SOURCE_CONTINUE;
@@ -1712,6 +1737,10 @@ static void wizard_discovery_done(GObject *source, GAsyncResult *result, gpointe
     GError *error = NULL;
     char *output = now_tailscale_run_finish(result, &error);
     g_clear_object(&wizard->discovery_cancel);
+    if (wizard->discovery_timeout_id) {
+        g_source_remove(wizard->discovery_timeout_id);
+        wizard->discovery_timeout_id = 0;
+    }
 
     if (!wizard->assistant || wizard->closing) {
         g_free(output);
@@ -1777,6 +1806,7 @@ static void find_server(Wizard *wizard)
     }
     wizard->discovery_cancel = g_cancellable_new();
     wizard->references++;
+    wizard->discovery_timeout_id = g_timeout_add_seconds(9, wizard_discovery_timeout, wizard);
     gtk_widget_set_sensitive(wizard->find_button, FALSE);
     gtk_label_set_text(GTK_LABEL(wizard->notice), "FINDING TAILSCALE DEVICES...");
     now_tailscale_run_async("/usr/lib/optiplex-now/find-servers.py",
@@ -1861,6 +1891,14 @@ static void wizard_destroy(void *widget, void *data)
     if (wizard->tailscale_poll_id) {
         g_source_remove(wizard->tailscale_poll_id);
         wizard->tailscale_poll_id = 0;
+    }
+    if (wizard->status_timeout_id) {
+        g_source_remove(wizard->status_timeout_id);
+        wizard->status_timeout_id = 0;
+    }
+    if (wizard->discovery_timeout_id) {
+        g_source_remove(wizard->discovery_timeout_id);
+        wizard->discovery_timeout_id = 0;
     }
     if (wizard->tailscale_cancel) {
         g_cancellable_cancel(wizard->tailscale_cancel);

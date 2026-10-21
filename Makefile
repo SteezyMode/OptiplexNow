@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-host-metrics check-host-job-target check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network check-service-probe check-sanitizers
+.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network check-service-probe check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/host_job_target.c src/host_job_target.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h src/wizard_network.c src/wizard_network.h src/service_probe.c src/service_probe.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/host_job_target.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c src/wizard_network.c src/service_probe.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/host_job_target.c src/host_job_target.h src/backup_async.c src/backup_async.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h src/wizard_network.c src/wizard_network.h src/service_probe.c src/service_probe.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/host_job_target.c src/backup_async.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c src/wizard_network.c src/service_probe.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 build/optiplex-now-backup: src/backup.c | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Werror=parentheses src/backup.c -o $@ -lcrypto
@@ -84,6 +84,11 @@ check-host-metrics: | build
 check-host-job-target: | build
 	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc tests/test_host_job_target.c src/host_job_target.c -o build/test-host-job-target
 	./build/test-host-job-target
+
+# Real asynchronous backup bridge with a disposable, non-privileged helper.
+check-backup-async: | build
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_backup_async.c src/backup_async.c -o build/test-backup-async $(shell pkg-config --libs gio-2.0)
+	./build/test-backup-async
 
 # GTK-free tray preferences: legacy paths, action order, masks and safe saving.
 check-tray-prefs: | build
@@ -138,6 +143,8 @@ check-sanitizers: | build
 	$(SAN_ENV) ./build/sanitized/test-host-metrics
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_host_job_target.c src/host_job_target.c -o build/sanitized/test-host-job-target $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-host-job-target
+	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_backup_async.c src/backup_async.c -o build/sanitized/test-backup-async $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-backup-async
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_tray_prefs.c src/tray_prefs.c -o build/sanitized/test-tray-prefs $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-tray-prefs
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_tray_actions.c src/tray_actions.c -o build/sanitized/test-tray-actions $(SAN_LIBS)

@@ -11,12 +11,20 @@
 
 #define PREFLIGHT "/usr/lib/optiplex-now/host_preflight.py"
 #define PLAN "/usr/lib/optiplex-now/host_plan.py"
+#define INSTALLER "/usr/lib/optiplex-now/host_install.py"
 #define MAX_RESULT 24576
 
 typedef struct {
     GtkWidget *window;
     GtkWidget *status;
     GtkWidget *run_button;
+    GtkWidget *gpu_choice;
+    GtkWidget *render_entry;
+    GtkWidget *digest_entry;
+    GtkWidget *eligible_button;
+    GtkWidget *install_button;
+    gboolean eligible;
+    gboolean installing;
     GtkTextBuffer *output;
     GCancellable *cancel;
     gboolean closing;
@@ -140,6 +148,193 @@ static void on_window_destroy(GtkWidget *window, gpointer data)
     gtk_main_quit();
 }
 
+
+/* Real clean-host installation requires eligibility first, then owner consent
+ * via both this review dialog and the local OS polkit authentication agent.
+ * The privileged installer reruns every eligibility and conflict check. */
+static const char *selected_gpu(HostSetupUI *ui)
+{
+    return gtk_combo_box_get_active(GTK_COMBO_BOX(ui->gpu_choice)) == 0
+           ? "amd" : "intel";
+}
+
+static gboolean valid_pinned_digest(const char *digest)
+{
+    if (!digest || !g_str_has_prefix(digest, "sha256:") ||
+        strlen(digest) != 71)
+        return FALSE;
+    for (const char *c = digest + 7; *c; c++)
+        if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'f')))
+            return FALSE;
+    return TRUE;
+}
+
+static void invalidate_install(GtkWidget *widget, gpointer data)
+{
+    (void)widget;
+    HostSetupUI *ui = data;
+    ui->eligible = FALSE;
+    gtk_widget_set_sensitive(ui->install_button, FALSE);
+    if (!ui->installing)
+        gtk_label_set_text(GTK_LABEL(ui->status),
+            "INSTALL SETTINGS CHANGED. CHECK ELIGIBILITY AGAIN.");
+}
+
+static void eligibility_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GtkWidget *window = GTK_WIDGET(data);
+    HostSetupUI *ui = g_object_get_data(G_OBJECT(window), "now-host-ui");
+    gchar *out = NULL;
+    GError *error = NULL;
+    gboolean ok = g_subprocess_communicate_utf8_finish(
+        G_SUBPROCESS(source), result, &out, NULL, &error);
+    if (!ui->closing) {
+        ui->running = FALSE;
+        gtk_widget_set_sensitive(ui->eligible_button, TRUE);
+        if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source)) ||
+            !out || strlen(out) > MAX_RESULT) {
+            append_result(ui, "\nHost installation eligibility check failed.\n");
+            gtk_label_set_text(GTK_LABEL(ui->status), "INSTALLATION CHECK FAILED.");
+        } else {
+            append_result(ui, "\nCLEAN-HOST INSTALL ELIGIBILITY\n");
+            append_result(ui, out);
+            append_result(ui, "\n");
+            ui->eligible = strstr(out, "\"decision\": \"candidate\"") != NULL;
+            gtk_widget_set_sensitive(ui->install_button, ui->eligible);
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                ui->eligible ? "CLEAN-HOST CANDIDATE. REVIEW BEFORE INSTALLING." :
+                               "INSTALLATION BLOCKED. NO CHANGES MADE.");
+        }
+    }
+    g_clear_error(&error);
+    g_free(out);
+    g_object_unref(window);
+}
+
+static void on_eligibility(GtkButton *button, gpointer data)
+{
+    (void)button;
+    HostSetupUI *ui = data;
+    if (ui->running || ui->closing || ui->installing)
+        return;
+    ui->eligible = FALSE;
+    gtk_widget_set_sensitive(ui->install_button, FALSE);
+    ui->running = TRUE;
+    gtk_widget_set_sensitive(ui->eligible_button, FALSE);
+    const gchar *argv[] = {
+        "/usr/bin/python3", INSTALLER, "--check",
+        "--gpu", selected_gpu(ui),
+        "--render-node", gtk_entry_get_text(GTK_ENTRY(ui->render_entry)),
+        NULL
+    };
+    GError *error = NULL;
+    GSubprocess *process = g_subprocess_newv(
+        argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+              G_SUBPROCESS_FLAGS_STDERR_SILENCE, &error);
+    if (!process) {
+        ui->running = FALSE;
+        gtk_widget_set_sensitive(ui->eligible_button, TRUE);
+        gtk_label_set_text(GTK_LABEL(ui->status),
+                           "INSTALLER CHECK UNAVAILABLE. NO CHANGES MADE.");
+        g_clear_error(&error);
+        return;
+    }
+    gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING CLEAN-HOST ELIGIBILITY...");
+    g_subprocess_communicate_utf8_async(
+        process, NULL, NULL, eligibility_done, g_object_ref(ui->window));
+    g_object_unref(process);
+}
+
+static void installation_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GtkWidget *window = GTK_WIDGET(data);
+    HostSetupUI *ui = g_object_get_data(G_OBJECT(window), "now-host-ui");
+    gchar *out = NULL;
+    GError *error = NULL;
+    gboolean ok = g_subprocess_communicate_utf8_finish(
+        G_SUBPROCESS(source), result, &out, NULL, &error);
+    if (!ui->closing) {
+        ui->installing = FALSE;
+        if (ok && g_subprocess_get_successful(G_SUBPROCESS(source)) &&
+            out && strlen(out) <= MAX_RESULT &&
+            strstr(out, "\"result\": \"running_stream_unverified\"")) {
+            append_result(ui, "\nINSTALLATION RESULT\n");
+            append_result(ui, out);
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                "WOLF STARTED. REAL GAME/VIDEO/INPUT STREAM NOT YET VERIFIED.");
+        } else {
+            append_result(ui,
+                "\nINSTALLATION INCOMPLETE. DO NOT REPEAT INSTALL BLINDLY.\n"
+                "Inspect the owner state under /var/lib/optiplex-now/host.\n"
+                "Existing unrelated services were not targeted for removal.\n");
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                "INSTALL INCOMPLETE. OWNER REVIEW REQUIRED.");
+        }
+        gtk_widget_set_sensitive(ui->eligible_button, TRUE);
+    }
+    g_clear_error(&error);
+    g_free(out);
+    g_object_unref(window);
+}
+
+static void on_install(GtkButton *button, gpointer data)
+{
+    (void)button;
+    HostSetupUI *ui = data;
+    if (!ui->eligible || ui->running || ui->installing || ui->closing)
+        return;
+    const char *digest = gtk_entry_get_text(GTK_ENTRY(ui->digest_entry));
+    if (!valid_pinned_digest(digest)) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+            "ENTER A VERIFIED SHA256 WOLF IMAGE DIGEST BEFORE INSTALLING.");
+        return;
+    }
+    GtkWidget *confirm = gtk_message_dialog_new(
+        GTK_WINDOW(ui->window), GTK_DIALOG_MODAL,
+        GTK_MESSAGE_WARNING, GTK_BUTTONS_NONE,
+        "Install a NEW Wolf streaming server on this computer?");
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(confirm),
+        "Only for an EMPTY, ELIGIBLE AMD/Intel host.\n"
+        "Image: ghcr.io/games-on-whales/wolf@%s\n"
+        "Managed data: /var/lib/optiplex-now/host\n"
+        "Wolf requires administrative Docker socket access.\n"
+        "The OS will ask for administrator authentication.\n"
+        "No existing Wolf installations will be imported or replaced.\n"
+        "Running does not mean streaming has been verified.",
+        digest);
+    gtk_dialog_add_buttons(GTK_DIALOG(confirm), "CANCEL", GTK_RESPONSE_CANCEL,
+                           "INSTALL ON THIS HOST", GTK_RESPONSE_ACCEPT, NULL);
+    gboolean approved = gtk_dialog_run(GTK_DIALOG(confirm)) == GTK_RESPONSE_ACCEPT;
+    gtk_widget_destroy(confirm);
+    if (!approved)
+        return;
+    const gchar *argv[] = {
+        "/usr/bin/pkexec", "/usr/bin/python3", INSTALLER, "--install",
+        "--gpu", selected_gpu(ui),
+        "--render-node", gtk_entry_get_text(GTK_ENTRY(ui->render_entry)),
+        "--image-digest", digest, "--confirm", "INSTALL-WOLF", NULL
+    };
+    GError *error = NULL;
+    GSubprocess *process = g_subprocess_newv(
+        argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+              G_SUBPROCESS_FLAGS_STDERR_SILENCE, &error);
+    if (!process) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+            "COULD NOT START OS AUTHORIZATION. NOTHING INSTALLED BY NOW.");
+        g_clear_error(&error);
+        return;
+    }
+    ui->installing = TRUE;
+    ui->eligible = FALSE;
+    gtk_widget_set_sensitive(ui->install_button, FALSE);
+    gtk_widget_set_sensitive(ui->eligible_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(ui->status),
+        "INSTALLATION REQUESTED. DO NOT START ANOTHER INSTALLATION.");
+    g_subprocess_communicate_utf8_async(
+        process, NULL, NULL, installation_done, g_object_ref(ui->window));
+    g_object_unref(process);
+}
+
 int main(int argc, char **argv)
 {
     /* Useful for an actual end-to-end installed-package GUI check. */
@@ -151,7 +346,7 @@ int main(int argc, char **argv)
     HostSetupUI *ui = g_new0(HostSetupUI, 1);
     ui->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(ui->window), "OptiPlex NOW | Server Setup");
-    gtk_window_set_default_size(GTK_WINDOW(ui->window), 680, 480);
+    gtk_window_set_default_size(GTK_WINDOW(ui->window), 720, 590);
     gtk_window_set_position(GTK_WINDOW(ui->window), GTK_WIN_POS_CENTER);
     g_object_set_data_full(G_OBJECT(ui->window), "now-host-ui", ui, host_ui_free);
     g_signal_connect(ui->window, "destroy",
@@ -189,11 +384,61 @@ int main(int argc, char **argv)
     gtk_container_add(GTK_CONTAINER(scroll), view);
     gtk_text_buffer_set_text(
         ui->output,
-        "No installation is available in this build.\n"
+        "Install is only available after clean-host eligibility and OS approval.\n"
         "Select CHECK THIS PC to see the actual local hardware findings,\n"
         "service conflicts and outstanding installation requirements.\n"
         "You can safely run this on a PC already hosting Wolf.",
         -1);
+
+    GtkWidget *advanced = gtk_expander_new(
+        "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL PILOT");
+    GtkWidget *settings = gtk_grid_new();
+    gtk_grid_set_column_spacing(GTK_GRID(settings), 8);
+    gtk_grid_set_row_spacing(GTK_GRID(settings), 7);
+    gtk_container_set_border_width(GTK_CONTAINER(settings), 8);
+    gtk_container_add(GTK_CONTAINER(advanced), settings);
+    gtk_box_pack_start(GTK_BOX(column), advanced, FALSE, FALSE, 0);
+
+    GtkWidget *intro = gtk_label_new(
+        "Pop!_OS or Ubuntu 24.04. NVIDIA requires an unimplemented driver "
+        "volume and is not installable yet. Only use this on a new, empty host.");
+    gtk_label_set_line_wrap(GTK_LABEL(intro), TRUE);
+    gtk_label_set_xalign(GTK_LABEL(intro), 0);
+    gtk_grid_attach(GTK_GRID(settings), intro, 0, 0, 2, 1);
+
+    gtk_grid_attach(GTK_GRID(settings), gtk_label_new("GPU"), 0, 1, 1, 1);
+    ui->gpu_choice = gtk_combo_box_text_new();
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "AMD");
+    gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "Intel");
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ui->gpu_choice), 0);
+    gtk_grid_attach(GTK_GRID(settings), ui->gpu_choice, 1, 1, 1, 1);
+
+    gtk_grid_attach(GTK_GRID(settings), gtk_label_new("Render device"), 0, 2, 1, 1);
+    ui->render_entry = gtk_entry_new();
+    gtk_entry_set_text(GTK_ENTRY(ui->render_entry), "/dev/dri/renderD128");
+    gtk_grid_attach(GTK_GRID(settings), ui->render_entry, 1, 2, 1, 1);
+
+    gtk_grid_attach(GTK_GRID(settings), gtk_label_new("Wolf SHA256"), 0, 3, 1, 1);
+    ui->digest_entry = gtk_entry_new();
+    gtk_entry_set_placeholder_text(GTK_ENTRY(ui->digest_entry),
+                                   "sha256: (verified upstream image digest)");
+    gtk_grid_attach(GTK_GRID(settings), ui->digest_entry, 1, 3, 1, 1);
+
+    ui->eligible_button = gtk_button_new_with_label("CHECK INSTALL ELIGIBILITY");
+    gtk_grid_attach(GTK_GRID(settings), ui->eligible_button, 0, 4, 1, 1);
+    ui->install_button = gtk_button_new_with_label("INSTALL ON CLEAN HOST...");
+    gtk_widget_set_sensitive(ui->install_button, FALSE);
+    gtk_grid_attach(GTK_GRID(settings), ui->install_button, 1, 4, 1, 1);
+    g_signal_connect(ui->gpu_choice, "changed",
+                     G_CALLBACK(invalidate_install), ui);
+    g_signal_connect(ui->render_entry, "changed",
+                     G_CALLBACK(invalidate_install), ui);
+    g_signal_connect(ui->digest_entry, "changed",
+                     G_CALLBACK(invalidate_install), ui);
+    g_signal_connect(ui->eligible_button, "clicked",
+                     G_CALLBACK(on_eligibility), ui);
+    g_signal_connect(ui->install_button, "clicked",
+                     G_CALLBACK(on_install), ui);
 
     GtkWidget *actions = gtk_button_box_new(GTK_ORIENTATION_HORIZONTAL);
     gtk_button_box_set_layout(GTK_BUTTON_BOX(actions), GTK_BUTTONBOX_END);

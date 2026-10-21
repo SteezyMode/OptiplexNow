@@ -43,6 +43,12 @@ The current source now offers an opt-in **Install Tailscale** action for validat
 
 This flow has mocked installer/packaging tests but has **not** yet been installed using PolicyKit and authenticated on a fresh physical computer. Installation may require a working desktop PolicyKit authentication agent and network access. System-wide Tailscale installation is a separate, explicitly approved operation and is not run by launching NOW.
 
+## Graphical SSH authorization (development source)
+
+The current development client replaces the former first-time `ssh-copy-id` terminal with a native GTK authorizing dialog and a separate graphical SSH password/fingerprint prompt. The bridge is asynchronous, bounded and cancellable; the helper uses only a selected host, SSH username and OpenSSH's standard public-key enrollment procedure. The user must approve the correct host fingerprint and enter an authorized account password when needed. CI mocks do not prove successful enrollment on a real server. No host SSH daemon or `authorized_keys` file is changed merely by upgrading NOW.
+
+This removes a **normal first-run terminal requirement** but does not grant preapproved Tailscale users automatic host SSH access. Future host enrollment must use an owner-controlled, least-privilege broker.
+
 ## Evidence boundaries
 
 | Area | Evidence available | Still required |

@@ -22,23 +22,24 @@
 
 [Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
-**Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
+**Release channel:** [v1.18.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0) is the published **closed-beta prerelease**. One [owner-assisted MacBook fresh-client test](docs/QA-MACBOOK-2026-10-21.md) has produced partial real-device evidence and blocking defects; full Beta 1 acceptance remains open. [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the previous published build.
 
-**What ships today:** v1.17.0 is a GTK3 **existing-host Linux client**: Moonlight/Wolf controls, Tailscale/SSH onboarding, owner-configured media/download links, SFTP and diagnostics. A guarded clean-host Wolf pilot is in unreleased development source, **not v1.17.0**. NOW does not yet deliver the full public-alpha stack, enforce owner/member roles across it, or offer Windows builds. See [Current status](docs/CURRENT-STATUS.md).
+**What ships today:** v1.18.0 is a GTK3 **existing-host Linux client** with Moonlight/Wolf controls, Tailscale/SSH onboarding, owner-configured media/download links, SFTP and diagnostics, plus a separate **experimental, guarded Wolf-only clean-host installer pilot**. The pilot is not accepted on physical clean hosts. NOW does not yet deliver the full public-alpha stack, enforce owner/member roles across it, or offer Windows builds. See [Current status](docs/CURRENT-STATUS.md).
 
 ## Download
 
 - [Versioned releases and closed-beta installers](https://github.com/SteezyMode/OptiplexNow/releases)
-- [v1.17.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0)
-- [Previous v1.16.1 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1)
+- [v1.18.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0)
+- [Previous v1.17.0 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0)
+- [Real-device MacBook acceptance report](docs/QA-MACBOOK-2026-10-21.md)
 - [Current code, release and test status](docs/CURRENT-STATUS.md)
 
 **Available package:** compatible x86-64 Debian/Ubuntu-derived Linux systems. No Windows or macOS package yet; Windows client and host support are planned at different milestones.
 
-Download the **versioned** `OptiPlex-Now_1.17.0_amd64.deb` from the tagged closed-beta prerelease. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
+Download the **versioned** `OptiPlex-Now_1.18.0_amd64.deb` from the tagged closed-beta prerelease. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
+sudo apt install ./OptiPlex-Now_1.18.0_amd64.deb
 ```
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
@@ -47,11 +48,11 @@ Existing NOW preferences are intended to survive updates. Back up important clie
 
 On the existing reference server, NOW opens a configured Jellyfin library and qBittorrent/VueTorrent interface, provides SFTP access and reports a Gluetun container health result. The VPN-isolated download arrangement is **manually configured on that host**, not deployed by the NOW installer. A healthy Docker container does not prove VPN egress or leak prevention. Today's generic SFTP shortcut also does **not** enforce the intended future owner/member access rules. This is useful reference behavior, not accepted turnkey installation.
 
-## Unreleased development: NOW Host pilot
+## Experimental development: NOW Host pilot
 
 The current source includes a separate **Server Setup** GUI with real read-only hardware checks and a deliberately restricted advanced installer for a **new** Ubuntu/Pop!_OS 24.04 AMD, Intel or NVIDIA host. The pilot needs Docker/Compose, owner confirmation, OS administrator authentication and verified immutable image inputs. NVIDIA requires an exact driver-installer SHA256 and builds a new versioned userspace volume without changing host drivers.
 
-**It is not in published v1.17.0, not a one-click installer, and not yet accepted on physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
+**It is included as a guarded experimental tool in published v1.18.0, but is not a one-click consumer installer and has not been accepted on clean physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
 
 See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTALLER.md) and [Current verification](docs/CURRENT-STATUS.md).
 
@@ -62,9 +63,9 @@ See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTAL
 3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
 4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
 
-**Release compatibility:** v1.17.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
+**Release compatibility:** v1.18.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
 
-**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. The client now offers GUI workflows, but none is confirmed end-to-end on a fresh physical client. On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
+**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. A real v1.18.0 Mint client paired Moonlight and played Jellyfin video successfully, but Steam streaming, pairing focus, and wizard URL persistence failed. See the [physical test report](docs/QA-MACBOOK-2026-10-21.md). On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
 
 ## Available functions
 
@@ -95,7 +96,7 @@ A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRI
 | Scope, vision, principles, phases | [Product direction](docs/PRODUCT.md) |
 | Public-alpha three-pillar requirements and owner/member permission gates | [Public alpha](docs/PUBLIC-ALPHA.md) |
 | Implemented, published, unverified | [Current status](docs/CURRENT-STATUS.md) |
-| First external tester acceptance | [Beta acceptance](docs/BETA-ACCEPTANCE.md) |
+| First external tester acceptance | [Beta acceptance](docs/BETA-ACCEPTANCE.md) and [October 21 physical beta report](docs/QA-MACBOOK-2026-10-21.md) |
 | Code layout and compatibility contracts | [Architecture](docs/application-design.md) |
 | Build, release, rollback | [Contributing](CONTRIBUTING.md) and [Release process](docs/RELEASE-PROCESS.md) |
 | Host preparation, pairing, future installer and fork policy | [Documentation index](docs/README.md) |

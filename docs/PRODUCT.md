@@ -32,7 +32,7 @@ Beta 1 uses a small group of preapproved Tailscale accounts. It does **not** inc
 
 ## Beta 1 engineering execution plan
 
-**Next development session: October 22, 2026 (JST).** This is the engineering work order for the existing Beta 1 client, not a new product phase. The five product priorities remain: **(1) finish Wolf pairing, (2) improve Tailscale sign-in, (3) simplify device authorization, (4) complete fresh-client acceptance, (5) build a standardized host installer later**. See [Beta acceptance](BETA-ACCEPTANCE.md) for the actual release gate and [Architecture](application-design.md) for implementation boundaries.
+**Engineering checklist adopted October 21, 2026 (JST).** This is the continuing engineering standard for the existing Beta 1 client, not a new product phase. The five product priorities remain: **(1) finish Wolf pairing, (2) improve Tailscale sign-in, (3) simplify device authorization, (4) complete fresh-client acceptance, (5) build a standardized host installer later**. See [Beta acceptance](BETA-ACCEPTANCE.md) for the actual release gate and [Architecture](application-design.md) for implementation boundaries.
 
 The October 21 configuration extraction in [PR #103](https://github.com/SteezyMode/OptiplexNow/pull/103) establishes the starting pattern. It does not mean the rest of `main.c` is modular or that pairing is nonblocking.
 

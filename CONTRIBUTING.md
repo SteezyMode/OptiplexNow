@@ -16,6 +16,7 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/wolf_pairing.c/.h` | GTK-independent pending-client validation and PIN request generation; no SSH privilege or remote approval |
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
+| `src/wizard_network.c/.h` | GTK-free orchestration of two independent setup requests, duplicate suppression, timeouts, cancellation and shutdown |
 | `src/tailscale-status.py` | Read-only Tailscale JSON status normalization for wizard; never performs sign-in or enrollment |
 | `src/tailscale_install.c/.h` | Unprivileged GTK-independent GIO wrapper invoking PolicyKit to request a specific root installation operation |
 | `src/tailscale-install.py` | Opt-in signed upstream apt repository installer with a finite Debian/Ubuntu release allowlist; never invoked on an existing Tailscale installation |
@@ -53,7 +54,7 @@ Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Pytho
 
 ```sh
 make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
-make check-host-metrics check-tray-prefs check-tray-actions check-moonlight-install
+make check-host-metrics check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network
 make check-sanitizers  # ASan + UBSan, separate binaries; no release flag changes
 python3 -m unittest discover -s tests -v
 make package

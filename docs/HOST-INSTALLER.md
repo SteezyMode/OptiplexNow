@@ -1,6 +1,60 @@
 # Future NOW Host installer
 
-**Status:** design contract only. No turnkey host setup is shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
+**Status:** a guarded clean AMD/Intel host installation pilot is implemented in development source; the complete turnkey host setup is not shipped. The developer's OptiPlex is a reference machine, not an installation template. Track delivery in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
+
+## Clean-host pilot: real Docker installation (development package)
+
+\`server/host_install.py\` and the **Advanced Clean-Host Install** section in
+the installed native Server Setup window implement a first genuine, opt-in
+Wolf installation operation. It is a **narrow developer/alpha pilot**, not
+a turnkey host setup. The Python helper can actually pull an immutable Wolf
+image and start the dedicated \`optiplex-now-host-pilot\` Compose project.
+
+This pilot accepts **Ubuntu 24.04 or Pop!_OS 24.04 on x86-64**, with an
+explicitly verified **AMD or Intel** DRM render node. A graphics device's
+presence is not evidence of encoder readiness. The installer requires
+Docker and Compose already installed, \`/dev/uinput\`, \`/dev/uhid\`, udev,
+sufficient disk/memory, usable local Docker access, no Wolf port binds,
+no prior NOW-managed host directory, and no existing Compose project with
+the dedicated name. Missing prerequisites **block installation**, rather
+than modifying drivers, boot configuration or other services.
+
+The GUI checks eligibility first. Only a candidate host can enable
+the Install button. The owner must provide a previously verified upstream
+\`sha256:\` Wolf image digest, explicitly accept the change in a GTK
+confirmation dialog, and authenticate through the OS's \`pkexec\` policy
+agent. The privileged installer then repeats all host checks before doing
+anything. It is not accessible through a remote management endpoint.
+
+On a candidate, the installer creates a private
+\`/var/lib/optiplex-now/host\` directory containing an immutable-image
+Compose file, dedicated \`wolf/\` persistent state, ownership descriptor
+and a durably written phase journal. It pulls only the specified digest,
+starts one dedicated Wolf service and checks the exact full container ID,
+image, Compose labels and running state. The reported result is
+\`running_stream_unverified\`; video, audio, controller input, pairing,
+reboot/recovery and reliable GPU encoding are **not yet certified**.
+Interrupted or incomplete operations leave an auditable journal and block
+unattended repeats. The pilot has no uninstall, repair, upgrade or
+automatic cleanup; it never runs \`docker compose down\`, adopts unrelated
+services or deletes existing volumes.
+
+**NVIDIA:** System76 publishes a separate Pop!_OS 24.04 NVIDIA image,
+recommended for NVIDIA GTX 16-series and newer. Prefer this distribution
+for first NVIDIA alpha candidates, but understand that preinstalled drivers
+are only host-side preparation. Wolf's currently preferred *manual*
+NVIDIA method needs a driver-version-matched container volume rebuilt
+after host driver updates. This component remains **not implemented**.
+NOW shows an explicit NVIDIA block rather than attempting an untrusted
+volume/image build or silently substituting the less-stable toolkit path.
+NVIDIA can be enabled only after that exact lifecycle is implemented and
+verified on a separate clean machine.
+
+All applicable test-package checks run on temporary CI runner machines.
+CI runs the real installed --check and starts the GTK screen, but does
+**not** invoke --install or certify a successful stream. Never test
+--install on an existing working server. Even on Pop!_OS, kernel driver
+updates and Docker socket privileges require independent operational review.
 
 ## First implemented host preflight (source-only)
 

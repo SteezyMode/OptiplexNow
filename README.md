@@ -2,27 +2,29 @@
 
 [![Validate NOW](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
 
-**Your own private game-streaming and media server.**
+**Your own entertainment server. Games, video, and private downloads.**
 
-OptiPlex NOW aims to turn a compatible personal computer into **your own GeForce NOW-style game host and Netflix-style media library**. Keep the hardware and content under your control, while accessing them from another device. These comparisons describe the experience, not affiliations, bundled game licenses, or provided media catalogs.
+**OptiPlex NOW is an internal development codename, not the future commercial name.** The goal is a single, easy host-and-client application that makes one compatible personal computer a remotely accessible entertainment server. Think **your own GeForce NOW-style game streaming and Netflix-style personal library**, using your hardware and content, without needing to learn Docker, VPN networking, or streaming servers. These comparisons describe user experience, not affiliations or provided catalogs.
 
-### The product we're building
+### The three public-alpha pillars
 
-| Core capability | Intended experience |
+| Core experience | Product requirement |
 | --- | --- |
-| **Independent remote games** | Start a Wolf-managed game session on your own GPU while the host's physical screen and desktop remain usable. GPU and CPU resources are shared, so concurrent performance depends on hardware. |
-| **Your media, everywhere** | Stream your own Jellyfin library, browse and organize server files, and remotely queue lawful downloads on the home server, even while viewing another title. |
-| **VPN-isolated downloads** | Route the selected downloader's traffic through a dedicated VPN gateway, without routing Jellyfin, gaming or the host's whole network through that VPN. Keep service access private and verify the isolation. |
+| **Independent games** | Stream a real game from the home PC while its physical screen, desktop, keyboard and mouse stay independently usable. |
+| **Personal video** | Stream an owner-managed Jellyfin library remotely, even while the server performs other tasks. |
+| **Private Downloads** | Search reviewed sources, control qBittorrent and choose download folders remotely. Route **only designated downloader traffic** through an isolated commercial VPN, while the host, Jellyfin and gaming remain on normal networking. Downloads must stop safely if the VPN fails. |
 
-**Target:** About **15 minutes from installing on two OS-ready, supported computers to an authenticated remote stream**, without manually configuring Docker, VPNs or streaming/pairing servers. Optional gaming, video and download components should not be forced on every user.
+**Owner/admin:** manages downloads, file organization, VPN settings and the server. **Member/viewer:** can play authorized media and permitted games, without file-management or downloader-administration privileges. Enforcement belongs on the server, not just behind hidden buttons.
 
-**Platform direction:** Linux host/client first. **Windows clients are planned**; **Windows hosts remain a longer-term target**, with independent-session technical and licensing feasibility still to establish. No Windows implementation is claimed today.
+**Goal:** approximately **15 minutes to a first authenticated game stream** between two compatible, OS-ready computers, using a simple graphical setup and approved-device flow. A single easy sign-in experience is the longer-term design goal; current separate upstream authentications are not yet unified. Linux first, **Windows clients planned**, Windows host support a longer-term feasibility target.
 
-**Music, later if warranted:** A self-hosted music library and tools such as DroppedNeedle are optional exploratory integrations, not a third core pillar or a bundled Spotify replacement. Their usability, maintenance and license obligations must be checked before inclusion.
+**Public-alpha definition:** all three experiences must be working and independently tested on supported hardware. Media and downloader components remain optional choices for individual customers; an alpha demonstration must qualify all three. Music, books and comics are later possibilities, not first-alpha requirements. VPN subscriptions, including a potential bundled ~$7/month plan, are exploratory and **not needed** for public alpha: customers may use a compatible existing VPN.
+
+[Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
 **Release channel:** [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the published **closed-beta prerelease**. Real fresh-client acceptance remains pending; [v1.16.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.16.1) is the previous published build.
 
-**What ships today:** v1.17.0 is primarily a GTK3 client for an **already configured Linux host**, integrating Moonlight/Wolf, Tailscale/SSH, media links, SFTP and diagnostics. A guarded clean-host Wolf installer exists only in unreleased development builds. Independent-session behavior, complete fresh-host provisioning, native media/download/music administration and Windows builds are **not yet product-accepted or shipped**. See [Product direction](docs/PRODUCT.md) and [Current status](docs/CURRENT-STATUS.md).
+**What ships today:** v1.17.0 is a GTK3 **existing-host Linux client**: Moonlight/Wolf controls, Tailscale/SSH onboarding, owner-configured media/download links, SFTP and diagnostics. A guarded clean-host Wolf pilot is in unreleased development source, **not v1.17.0**. NOW does not yet deliver the full public-alpha stack, enforce owner/member roles across it, or offer Windows builds. See [Current status](docs/CURRENT-STATUS.md).
 
 ## Download
 
@@ -41,11 +43,9 @@ sudo apt install ./OptiPlex-Now_1.17.0_amd64.deb
 
 Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
 
-## Existing media and download workflow
+## Current media and download integration
 
-NOW already opens **owner-configured** video and download interfaces, provides remote SFTP file access, and shows a Gluetun container health status. On the reference host, Jellyfin streaming stays on ordinary home-server networking while qBittorrent runs through a separate Gluetun VPN gateway; remote queue management works through the configured browser interface. **NOW does not yet deploy that media stack, provide a native qBittorrent UI, or independently confirm VPN exit IP and leak protection.**
-
-Long-term, optional managed media modules can provide install/repair workflows and native API controls for download queues, library organization and bandwidth limits. These can use private authenticated connections without a NOW-operated public website. Files and playback must remain available independently of the downloader VPN.
+On the existing reference server, NOW opens a configured Jellyfin library and qBittorrent/VueTorrent interface, provides SFTP access and reports a Gluetun container health result. The VPN-isolated download arrangement is **manually configured on that host**, not deployed by the NOW installer. A healthy Docker container does not prove VPN egress or leak prevention. Today's generic SFTP shortcut also does **not** enforce the intended future owner/member access rules. This is useful reference behavior, not accepted turnkey installation.
 
 ## Unreleased development: NOW Host pilot
 
@@ -93,6 +93,7 @@ A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRI
 | Subject | Primary reference |
 | --- | --- |
 | Scope, vision, principles, phases | [Product direction](docs/PRODUCT.md) |
+| Public-alpha three-pillar requirements and owner/member permission gates | [Public alpha](docs/PUBLIC-ALPHA.md) |
 | Implemented, published, unverified | [Current status](docs/CURRENT-STATUS.md) |
 | First external tester acceptance | [Beta acceptance](docs/BETA-ACCEPTANCE.md) |
 | Code layout and compatibility contracts | [Architecture](docs/application-design.md) |

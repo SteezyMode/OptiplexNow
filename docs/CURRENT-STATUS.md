@@ -30,7 +30,7 @@ A running Docker container is **not** an active session, verified hardware encod
 
 ## Technical boundaries
 
-- The product vision is a modular personal entertainment server, initially gaming plus remote media/download management. The first-run product promise includes independent game sessions leaving the physical host desktop usable; this is still an acceptance requirement, not an observed fresh-install result.
+- The [public-alpha product contract](PUBLIC-ALPHA.md) requires **all three** physically validated workflows: independent games, Jellyfin video and VPN-isolated remote download administration. The experience must keep the physical host desktop usable and ordinary services outside the download VPN. The role model is **owner/admin** (downloads, file management and settings) versus **member/viewer** (authorized playback and optionally approved gaming), enforced server-side. **None of that full stack or access boundary is accepted today.**
 - NOW's released client does **not** provision Wolf, Docker or media services. The developer-only Server Setup install path requires a clean Ubuntu/Pop!_OS 24.04 amd64 host, an OS administrator prompt, Docker/Compose already present and manually verified immutable image inputs.
 - Install code refuses preexisting NOW-managed workspaces/projects and Wolf port conflicts. It does not adopt or delete user containers. The live reference host is **not** an installation test target.
 - NVIDIA's manual driver-volume first-install path exists, but automatic regeneration and safe migration after a driver update do not. The installer is not byte-for-byte reproducible because base image/apt dependencies are not fully pinned. [Host installer contract](HOST-INSTALLER.md).

@@ -2,7 +2,7 @@
 
 **State: development-only installation candidate.** The [published v1.17.0 client](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) does not contain this installer. On current source, an opt-in, privileged installation path exists for *clean* Ubuntu 24.04 and Pop!_OS 24.04 amd64 hosts with AMD, Intel or NVIDIA graphics. A complete installation and working game stream have **not** been validated on independent physical hardware. Track completion in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
 
-This document is the authoritative engineering contract for **new NOW-managed hosts**, not a general Wolf tutorial or a guide for importing an existing server. [Product scope](PRODUCT.md), [current verification](CURRENT-STATUS.md), and [client Beta 1 acceptance](BETA-ACCEPTANCE.md) cover separate questions.
+This document is the authoritative **Wolf-only host technical-alpha** contract for new NOW-managed hosts, not a general server installer. The **public entertainment-server alpha** additionally requires guided Jellyfin and VPN-isolated qBittorrent with strict owner/member roles; see [Public-alpha contract](PUBLIC-ALPHA.md). [Product direction](PRODUCT.md), [current verification](CURRENT-STATUS.md) and [private client beta](BETA-ACCEPTANCE.md) cover separate stages.
 
 ## Implemented path
 

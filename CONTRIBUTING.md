@@ -12,6 +12,8 @@ NOW is currently an amd64 GTK3 Linux client for an already prepared server. It d
 | `src/config.c/.h` | Persisted client configuration, defaults, legacy key migration and atomic saves |
 | `src/wolf_pairing.c/.h` | GTK-independent pending-client validation and PIN request generation; no SSH privilege or remote approval |
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
+| `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
+| `src/tailscale-status.py` | Read-only Tailscale JSON status normalization for wizard; never performs sign-in or enrollment |
 | `src/process.c/.h` | Subprocess execution and executable lookup |
 | `src/presets.c/.h` | Non-secret connection preset parsing and legacy compatibility |
 | `src/backup.c` | Explicit encrypted client identity/settings backup |
@@ -35,7 +37,7 @@ The active [six-item Beta 1 engineering work order](docs/PRODUCT.md#beta-1-engin
 Target tested CI environment: Ubuntu 24.04 amd64 with GCC, make, binutils, Python 3, GTK3/fontconfig headers, OpenSSL headers, curl, Pillow and Xvfb/test GUI dependencies. A clean build downloads two fonts from pinned upstream revisions with integrity and size verification.
 
 ```sh
-make check-process check-presets check-config check-wolf-pairing check-wolf-transport
+make check-process check-presets check-config check-wolf-pairing check-wolf-transport check-tailscale
 python3 -m unittest discover -s tests -v
 make package
 ```

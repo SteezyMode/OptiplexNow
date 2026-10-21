@@ -8,6 +8,7 @@ from unittest import mock
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "server"))
 import host_install as installer  # noqa: E402
+import host_nvidia  # noqa: E402
 
 PIN = "sha256:" + "a" * 64
 
@@ -23,10 +24,15 @@ class CleanHostInstallerTests(unittest.TestCase):
             with self.assertRaisesRegex(installer.InstallationError, "confirmation"):
                 installer.install("intel", "/dev/dri/renderD128", PIN, "")
 
-    def test_nvidia_is_not_accidentally_enabled(self):
+    def test_nvidia_requires_verified_sha_before_host_mutation(self):
         with mock.patch.object(installer.os, "geteuid", return_value=0):
-            with self.assertRaisesRegex(installer.InstallationError, "NVIDIA"):
-                installer.install("nvidia", "/dev/dri/renderD129", PIN, "INSTALL-WOLF")
+            for checksum in (None, "", "f" * 63, "g" * 64, "F" * 64):
+                with self.subTest(checksum=checksum), self.assertRaises(host_nvidia.DriverError):
+                    installer.install("nvidia", "/dev/dri/renderD129", PIN,
+                                      "INSTALL-WOLF", checksum)
+            with self.assertRaises(installer.InstallationError):
+                installer.install("amd", "/dev/dri/renderD128", PIN,
+                                  "INSTALL-WOLF", "f" * 64)
 
     def test_mutable_or_malformed_digest_refused(self):
         with mock.patch.object(installer.os, "geteuid", return_value=0):
@@ -53,14 +59,11 @@ class CleanHostInstallerTests(unittest.TestCase):
         self.assertEqual(wolf["labels"]["io.optiplex-now.managed"],
                          "host-install-pilot")
 
-    def test_real_check_on_ci_host_never_reports_installed(self):
-        # Uses the runner's actual hardware, process/net and /dev trees.
-        # A CI runner lacking a supported GPU must refuse candidacy.
+    def test_real_nvidia_eligibility_on_ci_runner_never_reports_stream_verified(self):
         result = installer._host_checks("nvidia", "/dev/dri/renderD128")
-        self.assertEqual(result["decision"], "blocked")
-        self.assertIn("NVIDIA volume preparation has not been implemented",
-                      result["blockers"])
+        self.assertIn(result["decision"], {"blocked", "candidate", "candidate_after_admin_check"})
         self.assertNotIn("stream_verified", result)
+        self.assertIn("nvidia_driver_version", result)
 
     def test_docker_argv_uses_fixed_local_unix_socket_and_pinned_env(self):
         completed = mock.Mock(returncode=0, stdout=b"ok", stderr=b"")

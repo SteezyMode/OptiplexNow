@@ -28,6 +28,7 @@
 #include "tailscale_async.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
+#include "host_metrics.h"
 #include <gtk/gtk.h>
 #include <gio/gio.h>
 #include <fontconfig/fontconfig.h>
@@ -78,9 +79,9 @@ static GtkWidget *wizard_wolf_label=NULL;
 static GtkWidget *active_setup_wizard=NULL;
 static char wolf_probe_host[512];
 static GtkWidget *service_labels[3]={NULL,NULL,NULL};
-#define MAX_DRIVES 16
+#define MAX_DRIVES NOW_HOST_MAX_DRIVES
 /* Mount points reported by the server, not client-side disks. */
-typedef struct {char path[256], size[32], free_space[32], used_percent[16];} Drive;
+typedef NowHostDrive Drive;
 static Drive visible_drives[MAX_DRIVES];
 static int visible_drive_count=0,drive_combo_updating=0;
 static void on_drive_changed(void*,void*);
@@ -614,43 +615,6 @@ static gboolean finish_on_main(void *arg) {
  }else {say(r->message);power_inflight=0;}
  free(r);return 0;
 }
-static int safe_disk_path(const char *s){
- if(!s||*s!='/'||strlen(s)>350)return 0;
- for(;*s;s++)if(!(isalnum((unsigned char)*s)||strchr("/_.-",*s)))return 0;
- return 1;
-}
-/* Keep mounted data drives in the selector, not recovery or OS support volumes.
-   Apply locally too, so changing the remote df filter cannot expose these rows. */
-static int system_mount(const char *path) {
- if(!path || path[0]!='/')return 1;
- if(!strcmp(path,"/"))return 0;
- const char *p=path;
- while(*p){
-   while(*p=='/')p++;
-   if(!*p)break;
-   const char *end=strchr(p,'/');size_t n=end?(size_t)(end-p):strlen(p);
-   if((n>=8 && strcasestr(p,"recovery") && (size_t)(strcasestr(p,"recovery")-p)<n) ||
-      (n==4 && !strncasecmp(p,"boot",4)) ||
-      (n==3 && !strncasecmp(p,"efi",3)) ||
-      (n==4 && !strncasecmp(p,"snap",4)))return 1;
-   if(!end)break;
-   p=end+1;
- }
- if(!strncmp(path,"/run/",5)||!strncmp(path,"/dev/",5)||
-    !strncmp(path,"/proc/",6)||!strncmp(path,"/sys/",5))return 1;
- return 0;
-}
-static void get_metric(char *dst,size_t n,const char *output,const char *key){
- const char *at=output;
- while((at=strstr(at,key)) && at!=output && at[-1]!='\n')at+=strlen(key);
- if(!at)return;
- at+=strlen(key);size_t j=0;
- while(*at && *at!='\n' && *at!='\r' && j+1<n){
-  if(isprint((unsigned char)*at)) dst[j++]=*at;
-  at++;
- }
- dst[j]=0;
-}
 static int tcp_reachable(const char *host,const char *port){
  if(!now_valid_host(host))return 0;
  struct addrinfo hints={.ai_family=AF_UNSPEC,.ai_socktype=SOCK_STREAM};
@@ -677,7 +641,12 @@ static void *worker(void*arg){
  Result*r=arg;char out[512]={0};
  if(r->type==0){
    int tailscale_ok=0;
-   if(now_program_exists("tailscale")) {char *argv[]={"tailscale","ip","-4",NULL};tailscale_ok=now_run(argv,out,sizeof out,5)==0 && strstr(out,"100.")!=NULL;}
+   if (now_program_exists("tailscale")) {
+       char *argv[] = {"/usr/bin/python3",
+                       "/usr/lib/optiplex-now/tailscale-status.py", NULL};
+       tailscale_ok = now_run(argv, out, sizeof out, 6) == 0 &&
+                      g_str_has_prefix(out, "CONNECTED");
+   }
    r->tail=tailscale_ok;
    if(!now_valid_host(r->source_host)||!now_valid_user(r->source_user)){r->success=0;strcpy(r->message,"CHECK SETTINGS");}
    else {
@@ -707,42 +676,22 @@ static void *worker(void*arg){
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
       "printf 'DRIVES_END\n'";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->source_user,r->source_host,cmd,NULL};
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->source_user,r->source_host,cmd,NULL};
      int code=now_run(argv,stats,sizeof stats,9);
      if(code==0&&strstr(stats,"READY")){
        r->success=1;strcpy(r->message,"SERVER REACHABLE");
-       get_metric(r->model,sizeof r->model,stats,"MODEL=");
-       get_metric(r->cpu,sizeof r->cpu,stats,"CPU=");
-       get_metric(r->gpu,sizeof r->gpu,stats,"GPU=");
-       get_metric(r->cpu_load,sizeof r->cpu_load,stats,"CPU_LOAD=");
-       get_metric(r->gpu_load,sizeof r->gpu_load,stats,"GPU_LOAD=");
-       get_metric(r->ram_used,sizeof r->ram_used,stats,"RAM_USED=");
-       get_metric(r->vram_used,sizeof r->vram_used,stats,"VRAM_USED=");
-       get_metric(r->vpn_state,sizeof r->vpn_state,stats,"VPN_STATUS=");
-       get_metric(r->wolf_state,sizeof r->wolf_state,stats,"WOLF_STATUS=");
-       get_metric(r->wolf_sessions,sizeof r->wolf_sessions,stats,"WOLF_DESKTOPS=");
+       now_host_get_metric(r->model,sizeof r->model,stats,"MODEL=");
+       now_host_get_metric(r->cpu,sizeof r->cpu,stats,"CPU=");
+       now_host_get_metric(r->gpu,sizeof r->gpu,stats,"GPU=");
+       now_host_get_metric(r->cpu_load,sizeof r->cpu_load,stats,"CPU_LOAD=");
+       now_host_get_metric(r->gpu_load,sizeof r->gpu_load,stats,"GPU_LOAD=");
+       now_host_get_metric(r->ram_used,sizeof r->ram_used,stats,"RAM_USED=");
+       now_host_get_metric(r->vram_used,sizeof r->vram_used,stats,"VRAM_USED=");
+       now_host_get_metric(r->vpn_state,sizeof r->vpn_state,stats,"VPN_STATUS=");
+       now_host_get_metric(r->wolf_state,sizeof r->wolf_state,stats,"WOLF_STATUS=");
+       now_host_get_metric(r->wolf_sessions,sizeof r->wolf_sessions,stats,"WOLF_DESKTOPS=");
        if(*r->gpu){strncat(r->gpu,"°C",sizeof r->gpu-strlen(r->gpu)-1);}
-       const char*line=stats;
-       while((line=strstr(line,"DRIVE=")) && r->drive_count<MAX_DRIVES){
-         line+=6;
-         const char*e=strchr(line,'\n');if(!e)break;
-         char row[512];size_t len=(size_t)(e-line);
-         if(len>=sizeof row){line=e;continue;}
-         memcpy(row,line,len);row[len]=0;
-         char *parts[4]={0},*cursor=row;
-         for(int j=0;j<4;j++){
-           parts[j]=cursor;
-           if(j<3){char *bar=strchr(cursor,'|');if(!bar){parts[0]=NULL;break;}*bar=0;cursor=bar+1;}
-         }
-         if(parts[0] && safe_disk_path(parts[0]) && !system_mount(parts[0])){
-           Drive*d=&r->drives[r->drive_count++];
-           safe_copy(d->path,sizeof d->path,parts[0]);
-           safe_copy(d->size,sizeof d->size,parts[1]);
-           safe_copy(d->free_space,sizeof d->free_space,parts[2]);
-           safe_copy(d->used_percent,sizeof d->used_percent,parts[3]);
-         }
-         line=e;
-       }
+       r->drive_count = now_host_parse_drives(stats, r->drives, MAX_DRIVES);
      }
      else if(strstr(stats,"Permission denied")||strstr(stats,"Host key verification")) {r->success=2;strcpy(r->message,"AUTHORIZE SSH IN SETTINGS");}
      else if(!tailscale_ok){r->success=3;strcpy(r->message,"CHECK TAILSCALE");}
@@ -776,17 +725,17 @@ static void *worker(void*arg){
       "printf 'OS='; . /etc/os-release; printf '%s\\n' \"$PRETTY_NAME\"; "
       "printf 'DRIVER='; nvidia-smi --query-gpu=driver_version --format=csv,noheader 2>/dev/null | head -1";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[1],cfg[0],(char*)cmd,NULL};
      if(now_run(argv,stats,sizeof stats,10)==0 && strstr(stats,"MODEL=")){
        const char *keys[]={"MODEL=","CPU_MODEL=","GPU_MODEL=","VRAM=","RAM=","OS=","DRIVER="};
-       for(int i=0;i<7;i++)get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
+       for(int i=0;i<7;i++)now_host_get_metric(r->specs[i],sizeof r->specs[i],stats,keys[i]);
        r->success=1;
      }
    }
  }else if(r->type==5){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])) {strcpy(r->message,"CHECK SERVER SETTINGS");}
    else {
-     char *args[]={"ssh","-o","BatchMode=yes","-o","ConnectTimeout=5","-o","StrictHostKeyChecking=accept-new",
+     char *args[]={"ssh","-o","BatchMode=yes","-o","ConnectTimeout=5","-o","StrictHostKeyChecking=yes",
          "-l",cfg[1],cfg[0],
          "docker logs --since 10m wolf 2>&1 | grep -oE 'http[^[:space:]]+/pin/#[0-9A-Fa-f]+' | tail -1",NULL};
      char logline[4096]={0};int c=now_run(args,logline,sizeof(logline),9);
@@ -803,7 +752,7 @@ static void *worker(void*arg){
    int kind=r->type-1; int relay=kind==0;int h=relay?2:0,u=relay?3:1;
    if(!now_valid_host(cfg[h])||!now_valid_user(cfg[u])){strcpy(r->message,"Invalid host or user. Check Settings.");}
    else {
-     char*arg[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=accept-new","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[u],cfg[h],NULL,NULL};
+     char*arg[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",cfg[u],cfg[h],NULL,NULL};
      char command[1024];
      if(relay) {
        if(!*cfg[4]||!now_safe_wake_path(cfg[4])){strcpy(r->message,"Set a valid relay wake script in Settings");goto done;}

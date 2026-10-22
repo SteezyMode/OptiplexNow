@@ -171,8 +171,11 @@ Do not import or expose it to remote clients directly.
 
 `status` returns only safe `needs_wolf_ui`, `wolf_ui_connected`, `busy`
 or `in_use` information. `start` requires a host-controlled enable flag,
-the exact bound client's active Wolf UI session, an authorized owner workspace
-and the existing single-writer lease checks. It uses the **same physically
+the exact bound client's active Wolf UI session, an authorized owner workspace,
+and a **host-only writer preflight callback re-evaluated for each launch**
+(including legacy writable aliases and running Steam processes), plus the
+existing single-writer lease checks. There is deliberately **no default
+production writer preflight implementation** in this source-only gate. It uses the **same physically
 tested** `launch_owner_steam` transaction. `stop` may only terminate a
 lease held by the exact bound owner device and delegates to the existing
 PIN-checked one-shot stop.

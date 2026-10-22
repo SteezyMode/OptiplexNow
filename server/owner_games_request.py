@@ -105,4 +105,6 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
 
     if lease is None or lease["client_id"] != verified_client_id:
         raise PolicyError("Cannot stop another owner's Steam session")
-    return stop_owner_steam(wolf_api, store=store, confirmed_stop=True)
+    return stop_owner_steam(wolf_api, store=store, confirmed_stop=True,
+                            expected_client_id=verified_client_id,
+                            expected_lease_id=lease["id"])

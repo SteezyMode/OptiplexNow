@@ -37,6 +37,30 @@ static void run_test(const char *script, const char *action, gboolean expected_o
     g_main_loop_unref(result.loop);
 }
 
+static void test_helper_location(void)
+{
+    gchar *path = now_games_helper_for_executable("/usr/bin/optiplex-now");
+    g_assert_cmpstr(path, ==,
+                    "/usr/lib/optiplex-now/owner-games-client.py");
+    g_free(path);
+
+    path = now_games_helper_for_executable(
+        "/home/test/Downloads/now-pr180/usr/bin/optiplex-now");
+    g_assert_cmpstr(path, ==,
+        "/home/test/Downloads/now-pr180/usr/lib/optiplex-now/owner-games-client.py");
+    g_free(path);
+
+    path = now_games_helper_for_executable("/tmp/now-client/optiplex-now");
+    g_assert_cmpstr(path, ==,
+                    "/usr/lib/optiplex-now/owner-games-client.py");
+    g_free(path);
+
+    path = now_games_helper_for_executable(NULL);
+    g_assert_cmpstr(path, ==,
+                    "/usr/lib/optiplex-now/owner-games-client.py");
+    g_free(path);
+}
+
 static void test_parser(void)
 {
     NowGamesReply result;
@@ -107,6 +131,7 @@ static void test_async_helper(void)
 int main(int argc, char **argv)
 {
     g_test_init(&argc, &argv, NULL);
+    g_test_add_func("/games/helper-location", test_helper_location);
     g_test_add_func("/games/reply-parser", test_parser);
     g_test_add_func("/games/async-helper", test_async_helper);
     return g_test_run();

@@ -953,7 +953,11 @@ static void managed_games_observed(GObject *source,GAsyncResult *result,gpointer
  managed_games.playing=FALSE;
  managed_games.finished_observed=TRUE;
  if(!managed_games.stream_process && !managed_games.stream_exited){
-  managed_games_message("STEAM FINISHED. CLOSE EXISTING MOONLIGHT SESSION");
+  /* The user opened this Wolf UI outside NOW, so we cannot close it.
+   * Do not strand the state machine: next Games click may invoke the
+   * existing authenticated idle-only reconcile after the user closes it. */
+  managed_games.finished_observed=FALSE;
+  managed_games_message("STEAM FINISHED. CLOSE EXISTING MOONLIGHT, THEN GAMES");
   return;
  }
  managed_games_message("STEAM EXIT VERIFIED. CLOSING MOONLIGHT...");

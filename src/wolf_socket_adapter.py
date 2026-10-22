@@ -16,6 +16,10 @@ WOLF_SOCKET = "/run/user/wolf/wolf.sock"
 MAX_REQUEST = 65536
 MAX_RESPONSE = 262144
 MAX_HEADERS = 16384
+# Upstream Wolf CreateLobby waits up to 20 seconds for its runner setup.
+# The Unix-socket client must outlive that deadline. No POST retries.
+DEFAULT_SOCKET_TIMEOUT = 5
+CREATE_SOCKET_TIMEOUT = 26
 ALLOWED = frozenset({
     ("GET", "/api/v1/clients"),
     ("GET", "/api/v1/profiles"),
@@ -47,8 +51,13 @@ def check_request(method, path, body=None):
     return serialized
 
 
+def socket_timeout(method, path):
+    return (CREATE_SOCKET_TIMEOUT if (method, path) ==
+            ("POST", "/api/v1/lobbies/create") else DEFAULT_SOCKET_TIMEOUT)
+
+
 class WolfUnixAPI:
-    def __init__(self, socket_path=WOLF_SOCKET, timeout=5):
+    def __init__(self, socket_path=WOLF_SOCKET, timeout=None):
         self.socket_path = socket_path
         self.timeout = timeout
 
@@ -60,7 +69,8 @@ class WolfUnixAPI:
                   f"Content-Type: application/json\r\n\r\n").encode("ascii")
         try:
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as peer:
-                peer.settimeout(self.timeout)
+                peer.settimeout(self.timeout if self.timeout is not None
+                                else socket_timeout(method, path))
                 peer.connect(self.socket_path)
                 peer.sendall(header + payload)
                 chunks = bytearray()

@@ -88,14 +88,14 @@ class RestrictedGamesClientTests(unittest.TestCase):
             with contextlib.redirect_stdout(out):
                 self.assertEqual(game.main(
                     ["--ui", "start", "127.0.0.1", "owner"]), 0)
-            self.assertEqual(out.getvalue(), "joined\\n".replace("\\\\n", "\\n"))
+            self.assertEqual(out.getvalue(), "joined" + chr(10))
         with patch.object(game, "invoke",
                           side_effect=RuntimeError("PRIVATE HOST DETAIL")):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 self.assertEqual(game.main(
                     ["--ui", "status", "127.0.0.1", "owner"]), 1)
-            self.assertEqual(out.getvalue(), "unavailable\\n".replace("\\\\n", "\\n"))
+            self.assertEqual(out.getvalue(), "unavailable" + chr(10))
             self.assertNotIn("PRIVATE", out.getvalue())
 
     def test_rejects_invalid_destination_and_response(self):

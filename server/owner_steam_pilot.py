@@ -17,6 +17,7 @@ from owner_access import OwnerStore, PolicyError
 from owner_host_pilot import (inspect_candidate, enroll_current_owner,
                               launch_enrolled_owner)
 from wolf_docker_adapter import WolfDockerAPI
+from owner_launch import stop_owner_steam, reconcile_stopped_owner_steam
 
 
 def run(args, *, api=None):
@@ -36,6 +37,14 @@ def run(args, *, api=None):
             confirmed_owner=args.confirm_existing_owner,
             confirmed_device=args.confirm_owner_device,
             video_caps=getattr(args, "video_caps", None))
+    if args.action == "stop":
+        return stop_owner_steam(
+            api, store=store, confirmed_stop=args.confirm_stop)
+    if args.action == "reconcile":
+        return reconcile_stopped_owner_steam(
+            api, store=store,
+            confirmed_runtime_stopped=args.confirm_runtime_stopped,
+            confirmed_no_other_steam_writer=args.confirm_no_other_steam_writer)
     if args.action == "launch":
         return launch_enrolled_owner(
             api, store, profile_id=args.profile,
@@ -49,7 +58,7 @@ def run(args, *, api=None):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
-    for action in ("inspect", "enroll", "launch"):
+    for action in ("inspect", "enroll", "launch", "stop", "reconcile"):
         cmd = sub.add_parser(action)
         cmd.add_argument("--profile", default="user",
                          help="Existing named Steam profile (default: user)")
@@ -61,6 +70,14 @@ def main(argv=None):
         if action == "enroll":
             cmd.add_argument("--confirm-existing-owner", action="store_true")
             cmd.add_argument("--confirm-owner-device", action="store_true")
+        if action == "stop":
+            cmd.add_argument("--confirm-stop", action="store_true",
+                             help="Stop the currently authorized owner Steam lobby")
+        if action == "reconcile":
+            cmd.add_argument("--confirm-runtime-stopped", action="store_true",
+                             help="Host operator verified Wolf was shut down out-of-band")
+            cmd.add_argument("--confirm-no-other-steam-writer", action="store_true",
+                             help="Host operator checked all Steam writers")
         if action == "launch":
             cmd.add_argument("--confirm-live-steam", action="store_true")
             cmd.add_argument("--confirm-no-other-steam-writer", action="store_true")

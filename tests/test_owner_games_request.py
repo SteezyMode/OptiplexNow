@@ -104,6 +104,11 @@ class TrustedGamesGateTests(unittest.TestCase):
             self.call("start", approved=True)
         self.assertFalse(any(method == "POST" for method, _, _ in self.api.calls))
 
+    def test_status_never_mistakes_direct_steam_session_for_wolf_ui(self):
+        self.api.data[4]["sessions"][0]["app_id"] = "steam-direct-id"
+        self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
+        self.assertFalse(any(method == "POST" for method, _, _ in self.api.calls))
+
     def test_stale_existing_lease_blocks_second_start(self):
         self.call("start", approved=True)
         n = len([p for m, p, _ in self.api.calls if m == "POST"])

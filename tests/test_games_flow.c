@@ -104,6 +104,8 @@ static void test_async_helper(void)
         " print('joined')\n"
         "elif sys.argv[1:] == ['--ui','stop','127.0.0.1','owner']:\n"
         " print('idle')\n"
+        "elif sys.argv[1:] == ['--ui','reconcile','127.0.0.1','owner']:\n"
+        " print('idle')\n"
         "else:\n"
         " print('unavailable')\n"
         " sys.exit(1)\n";
@@ -111,6 +113,7 @@ static void test_async_helper(void)
     run_test(file, "status", TRUE, NOW_GAMES_WOLF_UI_CONNECTED);
     run_test(file, "start", TRUE, NOW_GAMES_JOINED);
     run_test(file, "stop", TRUE, NOW_GAMES_IDLE);
+    run_test(file, "reconcile", TRUE, NOW_GAMES_IDLE);
     run_test(file, "exec", FALSE, NOW_GAMES_BUSY);
 
     const char *refuse = "import sys\nprint('denied')\nsys.exit(1)\n";

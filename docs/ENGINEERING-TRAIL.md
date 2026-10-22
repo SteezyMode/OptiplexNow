@@ -452,3 +452,12 @@ against the working reference server by interpreting this code's existence as ap
    MacBook Wolf UI session, backed-up named state and a single operator-approved
    host-local `launch` (no retries), collect sanitized result, inspect real
    lobby/session outcome and verify the desktop's independence. Update #154.
+
+
+## 2026-10-23: Wolf video producer caps for named Steam lobby (#154, PR #174)
+
+- **Evidence:** physical owner Steam CreateLobby generated GStreamer syntax errors and a 20-second setup timeout. NOW's planner put an empty `video_producer_buffer_caps` in the request. Upstream Wolf's lobby video producer consumes this field; Wolf's app/profile API reflector omits its active value.
+- **Hypothesis, not confirmed fix:** empty producer caps may account for the parse error. Upstream Wolf uses `video/x-raw` in its legacy pipeline and `video/x-raw(memory:CUDAMemory)` in NVIDIA zero-copy mode, selected at startup. Do not guess or repeat POST to verify.
+- **Code:** source-only planner/host-pilot rejects absent or unsupported caps before lease/POST. Operator must establish host-selected format from read-only Wolf startup logs and pass explicit `--video-caps`. No remote broker, automatic discovery or host runtime mutation was added.
+- **Tests:** mock planning, durable lease and socket-protocol regressions distinguish intended input and rejected missing caps; GitHub CI applies to source only. It does not prove actual Steam gameplay, video encoding, or secure broker.
+- **Next:** inspect current stalled lobby and uncertain lease read-only; verify Wolf's startup producer mode. Develop safe manual recovery for the existing failed attempt separately and only test a new Create+Join with explicit owner approval and an idle writer-safe host.

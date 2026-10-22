@@ -11,6 +11,12 @@ import secrets
 from owner_access import PolicyError, resolve_games, named_steam_profiles
 
 RUNNER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\Z")
+SUPPORTED_VIDEO_CAPS = frozenset((
+    "video/x-raw", "video/x-raw(memory:CUDAMemory)",
+))
+# These correspond to Wolf's software and NVIDIA zero-copy producer formats.
+# Require explicit host confirmation; silently choosing either is unsafe.
+
 LOBBY_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
 
 
@@ -66,7 +72,7 @@ def _single_steam_app(profiles_reply, profile_id):
 
 def plan_owner_steam_lobby(
     owner_policy, client_id, clients_reply, profiles_reply,
-    apps_reply, sessions_reply, lobbies_reply, *, video_caps="",
+    apps_reply, sessions_reply, lobbies_reply, *, video_caps=None,
     pin_digits=None,
 ):
     """Prepare private lobby requests, or refuse if existing state is not idle.
@@ -110,9 +116,13 @@ def plan_owner_steam_lobby(
     if lobbies:
         raise PolicyError("Existing Wolf lobby; reconnect or stop it safely before launching")
 
-    if (not isinstance(video_caps, str) or len(video_caps) > 512 or
-            "\x00" in video_caps or "\n" in video_caps):
-        raise PolicyError("Invalid host video caps")
+    # Wolf passes this field directly to its GStreamer video producer.
+    # An empty string can yield a pipeline parse error and setup timeout.
+    # The current REST app/profile reflectors do not expose Wolf's active caps.
+    # Until a host-side probe exists, reject an unverified/unsupported value
+    # BEFORE any state-changing Wolf request or durable lease is created.
+    if not isinstance(video_caps, str) or video_caps not in SUPPORTED_VIDEO_CAPS:
+        raise PolicyError("Host video caps not verified or unsupported; no lobby created")
     if pin_digits is None:
         pin_digits = [secrets.randbelow(10) for _ in range(8)]
     if (not isinstance(pin_digits, list) or len(pin_digits) != 8 or

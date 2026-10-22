@@ -44,11 +44,12 @@ def fixtures():
 
 
 class OwnerLobbyTests(unittest.TestCase):
-    def plan(self, data=None, client_id="1001", pin=None):
+    def plan(self, data=None, client_id="1001", pin=None, video_caps="video/x-raw"):
         if data is None:
             data = fixtures()
         return plan_owner_steam_lobby(*data[:1], client_id, *data[1:],
-                                     pin_digits=pin or [1, 2, 3, 4, 5, 6, 7, 8])
+                                     pin_digits=pin or [1, 2, 3, 4, 5, 6, 7, 8],
+                                     video_caps=video_caps)
 
     def test_builds_wolf_ui_compatible_private_lobby(self):
         plan = self.plan()
@@ -61,6 +62,8 @@ class OwnerLobbyTests(unittest.TestCase):
         self.assertFalse(create["multi_user"])
         self.assertFalse(create["stop_when_everyone_leaves"])
         self.assertEqual(create["pin"], [1, 2, 3, 4, 5, 6, 7, 8])
+        self.assertEqual(create["video_settings"]["video_producer_buffer_caps"],
+                         "video/x-raw")
         self.assertEqual(create["video_settings"]["width"], 1280)
         self.assertEqual(create["video_settings"]["height"], 720)
         self.assertEqual(create["video_settings"]["refresh_rate"], 30)
@@ -175,14 +178,26 @@ class OwnerLobbyTests(unittest.TestCase):
         with self.assertRaisesRegex(PolicyError, "Incomplete Wolf Docker"):
             self.plan(tuple(data))
 
+    def test_missing_or_invalid_caps_refused_before_create(self):
+        for invalid in (None, "", "\n", "video/x-raw ! fakesink",
+                        "video/x-raw(memory:DMABuf)", [], 123):
+            with self.subTest(caps=invalid):
+                with self.assertRaisesRegex(PolicyError, "caps"):
+                    self.plan(video_caps=invalid)
+        valid = self.plan(video_caps="video/x-raw(memory:CUDAMemory)")
+        self.assertEqual(valid["create_body"]["video_settings"]
+                         ["video_producer_buffer_caps"],
+                         "video/x-raw(memory:CUDAMemory)")
+
     def test_pin_is_validated_and_not_guessed_by_client(self):
         data = fixtures()
         for pin in ([1], [1,2,3,4,5,6,7,99], "12345678", [True]*8):
             with self.subTest(pin=pin):
                 with self.assertRaises(PolicyError):
                     plan_owner_steam_lobby(
-                        data[0], "1001", *data[1:], pin_digits=pin)
-        p = plan_owner_steam_lobby(data[0], "1001", *data[1:])
+                        data[0], "1001", *data[1:], pin_digits=pin, video_caps="video/x-raw")
+        p = plan_owner_steam_lobby(data[0], "1001", *data[1:],
+                                   video_caps="video/x-raw")
         self.assertEqual(len(p["create_body"]["pin"]), 8)
         self.assertEqual(p["create_body"]["pin"], p["join_template"]["pin"])
         self.assertTrue(all(0 <= d <= 9 for d in p["create_body"]["pin"]))

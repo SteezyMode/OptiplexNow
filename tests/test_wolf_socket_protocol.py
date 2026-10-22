@@ -238,7 +238,7 @@ class WolfProtocolTests(unittest.TestCase):
         store = OwnerStore(str(Path(self.temp.name) / "private"))
         with store.locked() as fd:
             store.write(fd, fixtures()[0])
-        result = launch_owner_steam("1001", api, store=store, execution_approved=True)
+        result = launch_owner_steam("1001", api, store=store, execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(result["status"], "joined")
         self.assertEqual(owner_launch_status(store)["status"], "joined")
         methods = [(m, p) for m, p, _ in self.server.requests]
@@ -255,7 +255,7 @@ class WolfProtocolTests(unittest.TestCase):
                          "fixture_lobby_1")
         # The second request is rejected before any new socket operation.
         with self.assertRaises(PolicyError):
-            launch_owner_steam("1001", api, store=store, execution_approved=True)
+            launch_owner_steam("1001", api, store=store, execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(len(self.server.requests), 7)
 
     def test_ambiguous_create_response_keeps_blocking_lease(self):
@@ -265,13 +265,13 @@ class WolfProtocolTests(unittest.TestCase):
             store.write(fd, fixtures()[0])
         with self.assertRaisesRegex(PolicyError, "uncertain"):
             launch_owner_steam("1001", self.api, store=store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(owner_launch_status(store)["status"], "uncertain")
         self.assertEqual(self.server.requests[-1][:2],
                          ("POST", "/api/v1/lobbies/create"))
         with self.assertRaisesRegex(PolicyError, "manual review"):
             launch_owner_steam("1001", self.api, store=store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(len(self.server.requests), 6)
 
 

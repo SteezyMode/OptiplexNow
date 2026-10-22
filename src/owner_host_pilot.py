@@ -10,7 +10,7 @@ from owner_lobby import plan_owner_steam_lobby, _inventory
 from owner_launch import launch_owner_steam
 
 
-def inspect_candidate(wolf_api, *, profile_id="user"):
+def inspect_candidate(wolf_api, *, profile_id="user", video_caps=None):
     """Verify a single live Wolf UI owner stream against actual host inventories.
 
     Return a redacted report plus private, in-memory binding for local operators.
@@ -51,7 +51,7 @@ def inspect_candidate(wolf_api, *, profile_id="user"):
     temporary_policy = new_owner(profile_id, profiles)
     approve_device(temporary_policy, client_id, clients)
     plan_owner_steam_lobby(temporary_policy, client_id, clients, profiles,
-                           apps, sessions, lobbies)
+                           apps, sessions, lobbies, video_caps=video_caps)
     report = {
         "success": True,
         "ready_for_operator_enrollment": True,
@@ -67,12 +67,13 @@ def inspect_candidate(wolf_api, *, profile_id="user"):
 
 
 def enroll_current_owner(wolf_api, store, *, profile_id="user",
-                         confirmed_owner=False, confirmed_device=False):
+                         confirmed_owner=False, confirmed_device=False,
+                         video_caps=None):
     """Explicit local operator adoption of one active Moonlight Wolf UI device."""
     if not confirmed_owner or not confirmed_device:
         raise PolicyError("Explicit existing-owner and paired-device consent required")
     report, client_id, clients, profiles = inspect_candidate(
-        wolf_api, profile_id=profile_id)
+        wolf_api, profile_id=profile_id, video_caps=video_caps)
     policy = new_owner(profile_id, profiles)
     approve_device(policy, client_id, clients)
     with store.locked() as fd:
@@ -85,12 +86,14 @@ def enroll_current_owner(wolf_api, store, *, profile_id="user",
 def launch_enrolled_owner(wolf_api, store, *, profile_id="user",
                           confirmed_live_steam=False,
                           confirmed_no_other_steam_writer=False,
-                          confirmed_legacy_links_reviewed=False):
+                          confirmed_legacy_links_reviewed=False,
+                          video_caps=None):
     """Host operator only. Creates/joins a real lobby, never a remote handler."""
     if not all((confirmed_live_steam, confirmed_no_other_steam_writer,
                 confirmed_legacy_links_reviewed)):
         raise PolicyError("Live Steam, writer isolation and legacy-link review consent required")
-    _, client_id, clients, _ = inspect_candidate(wolf_api, profile_id=profile_id)
+    _, client_id, clients, _ = inspect_candidate(
+        wolf_api, profile_id=profile_id, video_caps=video_caps)
     with store.locked() as fd:
         data = store.read(fd)
         if data is None:
@@ -101,4 +104,4 @@ def launch_enrolled_owner(wolf_api, store, *, profile_id="user",
     # Re-check authorization and inventories inside durable lease transaction.
     # No remote request can select client_id, named profile, runner or Steam data.
     return launch_owner_steam(client_id, wolf_api, store=store,
-                              execution_approved=True)
+                              execution_approved=True, video_caps=video_caps)

@@ -12,8 +12,27 @@ sys.path.insert(0, str(ROOT / "server"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from owner_access import OwnerStore, PolicyError
-from owner_host_pilot import (inspect_candidate, enroll_current_owner,
-                              launch_enrolled_owner)
+from owner_host_pilot import (
+    inspect_candidate as _inspect_candidate,
+    enroll_current_owner as _enroll_current_owner,
+    launch_enrolled_owner as _launch_enrolled_owner,
+)
+
+# Offline fixtures explicitly model a host with software/non-zero-copy caps.
+# Runtime code deliberately has no default: a real operator must verify this.
+TEST_VIDEO_CAPS = "video/x-raw"
+
+def inspect_candidate(*args, **kwargs):
+    return _inspect_candidate(*args, video_caps=kwargs.pop("video_caps", TEST_VIDEO_CAPS),
+                              **kwargs)
+
+def enroll_current_owner(*args, **kwargs):
+    return _enroll_current_owner(*args, video_caps=kwargs.pop("video_caps", TEST_VIDEO_CAPS),
+                                 **kwargs)
+
+def launch_enrolled_owner(*args, **kwargs):
+    return _launch_enrolled_owner(*args, video_caps=kwargs.pop("video_caps", TEST_VIDEO_CAPS),
+                                  **kwargs)
 from owner_launch import owner_launch_status
 from owner_steam_pilot import run as cli_run
 from test_owner_launch import FakeWolf
@@ -43,7 +62,7 @@ class HostPilotTests(unittest.TestCase):
     def test_inspect_cli_requires_no_state_directory(self):
         api = FakeWolf()
         result = cli_run(SimpleNamespace(action="inspect", profile="user",
-                                         state_dir=None), api=api)
+                                         state_dir=None, video_caps=TEST_VIDEO_CAPS), api=api)
         self.assertTrue(result["success"])
         self.assertFalse((self.root / "private").exists())
 
@@ -75,6 +94,14 @@ class HostPilotTests(unittest.TestCase):
                     inspect_candidate(api)
                 self.assertTrue(all(c[0] == "GET" for c in api.calls))
                 self.assertFalse((self.root / "private").exists())
+
+    def test_unverified_caps_fail_before_any_write_or_post(self):
+        api = FakeWolf()
+        with self.assertRaisesRegex(PolicyError, "caps"):
+            _inspect_candidate(api)
+        self.assertEqual(len(api.calls), 5)
+        self.assertFalse(any(c[0] == "POST" for c in api.calls))
+        self.assertFalse((self.root / "private").exists())
 
     def test_enrollment_requires_both_operator_confirmations(self):
         for owner, device in ((False, False), (True, False), (False, True)):

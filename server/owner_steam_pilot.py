@@ -22,7 +22,8 @@ from wolf_docker_adapter import WolfDockerAPI
 def run(args, *, api=None):
     api = api or WolfDockerAPI()
     if args.action == "inspect":
-        result, _, _, _ = inspect_candidate(api, profile_id=args.profile)
+        result, _, _, _ = inspect_candidate(
+            api, profile_id=args.profile, video_caps=getattr(args, "video_caps", None))
         return result
     if not args.state_dir:
         raise PolicyError("State directory is mandatory for operator changes")
@@ -33,13 +34,15 @@ def run(args, *, api=None):
         return enroll_current_owner(
             api, store, profile_id=args.profile,
             confirmed_owner=args.confirm_existing_owner,
-            confirmed_device=args.confirm_owner_device)
+            confirmed_device=args.confirm_owner_device,
+            video_caps=getattr(args, "video_caps", None))
     if args.action == "launch":
         return launch_enrolled_owner(
             api, store, profile_id=args.profile,
             confirmed_live_steam=args.confirm_live_steam,
             confirmed_no_other_steam_writer=args.confirm_no_other_steam_writer,
-            confirmed_legacy_links_reviewed=args.confirm_legacy_links_reviewed)
+            confirmed_legacy_links_reviewed=args.confirm_legacy_links_reviewed,
+            video_caps=getattr(args, "video_caps", None))
     raise PolicyError("Unsupported operator action")
 
 
@@ -50,6 +53,9 @@ def main(argv=None):
         cmd = sub.add_parser(action)
         cmd.add_argument("--profile", default="user",
                          help="Existing named Steam profile (default: user)")
+        cmd.add_argument("--video-caps",
+                         choices=["video/x-raw", "video/x-raw(memory:CUDAMemory)"],
+                         help="Verified Wolf video producer caps, from host evidence; do not guess")
         cmd.add_argument("--state-dir",
                          help="Explicit absolute private state directory for enroll/launch")
         if action == "enroll":

@@ -101,7 +101,7 @@ def owner_launch_status(store):
 
 
 def launch_owner_steam(trusted_client_id, wolf_api, *,
-                       store=None, execution_approved=False, video_caps=""):
+                       store=None, execution_approved=False, video_caps=None):
     """Create + join a named owner Steam lobby under a persisted launch lease.
 
     *** NOT A NETWORK HANDLER. ***

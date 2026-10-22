@@ -33,13 +33,15 @@ physical OptiPlex desktop remains usable. Steam audio was not separately
 verified.
 
 **Not a completed NOW Games workflow:** The shipped NOW Games button still
-runs direct `moonlight stream HOST Steam`, not this host-local named-profile
-pilot. The operator needs Docker-capable host access and a pre-established
-Wolf UI stream; no authenticated client-to-host Games broker, unmodified
-fresh-client enrollment, multi-device handoff or clean-host install is
-accepted. The latest test leaves a **v2 joined** lobby active; do not issue
-another Create until that session is stopped and its lease archived.
-**Private Alpha 1 remains unaccepted.**
+runs direct `moonlight stream HOST Steam`. A separate restricted Games SSH
+transport has since passed real device-bound status and rejection checks on
+the MacBook, but the GTK button does not invoke it. As of the subsequent
+read-only October 23 physical check, the reference host had **no active
+owner lease**, no detected Steam processes or Steam containers, one Wolf UI
+session and zero lobbies. These are point-in-time observations, not a
+license to create another Steam session. Automated first-run enrollment,
+multi-device handoff, client-side Games orchestration and a clean-host
+installation remain unaccepted. **Private Alpha 1 remains unaccepted.**
 
 ## October 22 owner Steam source-only development (unreleased)
 
@@ -116,30 +118,48 @@ in supervised recovery. GitHub tests were fixture/protocol evidence on merge;
 the corrected caps subsequently passed real Steam + RE2R and relaunch tests.
 See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
-## Games button integration boundary (source-only code)
+## Games button integration boundary
 
-`server/owner_games_request.py` introduces a source-only narrow request
-handler for `status/start/stop` that refuses client-selected identities and
-reuses the tested named owner Steam lifecycle. Its `verified_client_id`
-must come from an independently authenticated host transport; no such
-remote-device broker or trusted production caller exists yet. The handler
-is **not installed or invoked** by the current NOW Games button and does not
-replace the working direct Steam shortcut. Source-level tests are simulated,
-not a second physical client acceptance test.
+`server/owner_games_request.py` is the narrow `status/start/stop` host
+policy handler; `server/owner_games_ssh.py` accepts those operations over
+an owner-approved, forced-command SSH key bound to an existing Wolf device.
+That restricted path has now passed a real MacBook `status` request and
+negative shell and remote-forwarding tests. The application is **not**
+connected to the installed NOW Games button, and a generic client has no
+zero-terminal Games-key enrollment. Source/CI tests do not replace full
+live Start/Stop through the new transport or a physical GUI acceptance.
 
-## Restricted Games SSH authentication bridge (source-only)
+## October 23 physical restricted SSH and Steam alias audit
 
-A new owner-only SSH bridge, separate from the existing administrator key,
-can restrict a device to `status/start/stop` with a **forced command and
-per-device Ed25519 public key binding** approved by the host owner. The
-separate client key, host read-only enrollment check and private disabled-by-
-default host configuration are source changes only, not deployed to the
-reference OptiPlex. A trusted operator must independently compare the
-SSH public key to the device's already enrolled Wolf client identity.
-The active NOW Games button still launches direct `Steam` and is not wired
-to this transport. This is not a consumer onboarding flow or isolation
-against other privileged Wolf direct-app clients. Details: [restricted Games
-SSH](OWNER-GAMES-SSH.md).
+**Physically tested on the existing reference OptiPlex, not released:** The
+MacBook generated its own independent Ed25519 Games key. The owner verified
+the existing Wolf device grant and installed an OpenSSH
+`restrict,command=...` entry binding the key to that device. With the
+host-only Games policy still **disabled for Start/Stop**, the MacBook's
+restricted-key `status` request returned `wolf_ui_connected`. A request
+to run ordinary remote `id` failed with a denied JSON response and SSH
+exit 1; reverse SSH port forwarding was refused with exit 255. These
+checks verify this credential's narrow behavior, **not** all key-revocation,
+multi-tenant isolation or production onboarding cases.
+
+The host preflight reported `enabled:false`,
+`legacy_links_reviewed:false`, caps `video/x-raw`, no active Steam
+lease, and no matching Steam processes or containers. A top-level,
+nonrecursive inventory completed across **8** Wolf per-device folders:
+**5** `Steam` paths are symlinks to the same existing
+`profile-data/user/WolfSteam` workspace; **3** use separate directories.
+The earlier recursive scan was incomplete at 500 directories, but the
+top-level per-device inventory completed. No files or links were edited.
+
+The real Wolf apps inventory still exposes **Wolf UI, OptiPlex Studio
+Desktop and direct Steam** to Moonlight. The named `user` profile also
+includes Steam. Consequently, direct Steam can bypass NOW's single-owner
+Games lease and potentially write the shared Steam workspace. Keep the
+five symlinks and owner profile untouched; **do not enable remote
+Start/Stop or delete direct Steam until the GTK managed Games flow and
+controlled bypass-removal/rollback plan are ready**. The currently installed
+NOW Games button still targets direct Steam. Full details in
+[owner Games SSH](OWNER-GAMES-SSH.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
 ## Capability status
 
@@ -155,6 +175,7 @@ SSH](OWNER-GAMES-SSH.md).
 | Clean NOW-managed Wolf installation | Developer/alpha implementation in `server/host_install.py` and GUI, AMD/Intel/NVIDIA; immutable image, root recheck, dedicated state | **No confirmed clean physical host install** |
 | NVIDIA userspace driver volume | `host_nvidia.py`: version-specific build with official installer SHA256 check; no host-driver replacement | Physical encode and driver-update migration/rollback **unverified** |
 | Separate game sessions preserving host display | Wolf named-profile Steam Create/Join/Stop source pilot; installed NOW Games button not wired | **Physically verified on reference OptiPlex:** MacBook played RE2R while host desktop stayed free, followed by managed v2 Stop/relaunch. **Not accepted on fresh client or clean host through NOW GUI.** |
+| Restricted owner Games credential | Forced-command per-device SSH status/start/stop code on `main`, manually installed on reference host | Physical MacBook `status` succeeded; shell and reverse forwarding denied. Start/Stop **disabled**, wrong-key/revocation and GTK Games handoff **not** physically accepted; 5 shared legacy Steam aliases and direct Steam bypass remain. |
 | Windows clients and hosts | Explicit roadmap: Windows client first, independent-session Windows host later | Neither is implemented; Windows host adds licensing/technical feasibility gates |
 | Owner-mediated automatic device access by email | Future design only | Not implemented |
 | Turnkey install, dependency setup, repair, upgrades, uninstall | No complete end-to-end implementation | Not alpha-accepted |
@@ -172,7 +193,7 @@ A running Docker container is **not** an active session, verified hardware encod
 
 ## Immediate acceptance gates
 
-**Next action: automate verified owner Steam-profile continuity for each authorized client (#154), fix pairing and settings persistence defects, and validate Games plus existing Jellyfin Videos for two trusted household users on the working host. The MacBook Steam launch succeeded October 22 after manual repair, but automated first-run setup has not passed. Prepare an independent clean-host physical test separately.** Use the [Host installer acceptance checklist](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) for a **clean server plus a second client**. Record OS, GPU/driver, Docker/Compose, Wolf digest, package build, observed video/audio/input and recovery behavior.
+**Next implementation:** integrate the restricted Games client with GTK without blocking the UI: verify the dedicated credential, start `Wolf UI` through Moonlight, wait for a matching authenticated `wolf_ui_connected` status, issue at most one managed Start, and provide meaningful busy, failure, reconnect and guarded Stop behavior. No implicit fallback to direct Steam on a denied/uncertain managed launch. Validate through NOW, then plan a reversible, backed-up removal of only **direct** Steam from Moonlight's app list while preserving the named owner profile and existing symlinks. Keep host Games write controls disabled until bypass/isolation and race issues are reviewed. After this, address first-run pairing and settings persistence, test a second household device, and separately validate a clean host (#154).** Use the [Host installer acceptance checklist](HOST-INSTALLER.md#physical-host-acceptance-before-alpha-sign-off) for a **clean server plus a second client**. Record OS, GPU/driver, Docker/Compose, Wolf digest, package build, observed video/audio/input and recovery behavior.
 
 Continue [Beta 1 client acceptance](BETA-ACCEPTANCE.md) against an owner-approved existing host. The [MacBook report](QA-MACBOOK-2026-10-21.md) is a partial device pass and a set of blocking defects; restart/upgrade/reconnection, new Tailscale sign-in and full gaming remain open. The two acceptance tracks must not be conflated.
 

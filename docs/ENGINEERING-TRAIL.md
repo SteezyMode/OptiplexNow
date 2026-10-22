@@ -317,6 +317,19 @@ or playback. The workflow was subsequently **pinned to the verified image
 digest** to avoid test drift from the moving `:stable` tag. No owner hardware
 or Steam state was involved.
 
+**Release-safety CI failure and resolution:** The new third GitHub workflow
+passed its *own* pinned-real-Wolf GET test in run `39757974832`, but the
+standard build/test workflow `39757974840` correctly rejected its filename:
+`test_repo_contract.WorkflowSafetyTests.test_only_documented_now_workflows_exist`
+allowlisted only `ci.yml` and `release.yml`. This was an intentional
+repository release-safety contract, not a test that should be bypassed or
+deleted. After reviewing `wolf-real-compat.yml`, explicitly added that
+single third workflow to the allowlist and added negative tests for release
+publication, push triggers, privileged containers, host networking and Docker
+socket mounting. The compatibility workflow uses `contents: read` and only
+a disposable GitHub-hosted runner. All changes need full CI revalidation.
+No reference-host deployment or Steam test is implied.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

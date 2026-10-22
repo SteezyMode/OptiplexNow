@@ -558,3 +558,57 @@ against the working reference server by interpreting this code's existence as ap
   disposable or status-only host, then graphical Moonlight Wolf UI startup,
   authenticated one-shot Start and actual RE2R playback without a terminal.
   See [owner Games SSH](OWNER-GAMES-SSH.md) and issue #154.
+
+## 2026-10-23: Physical restricted Games SSH and Wolf storage audit
+
+- Following merged PR #178 (main squash commit
+  `3662034d49d9c91e10952d222c25487e03acc7aa`), the MacBook
+  generated a separate Games-specific Ed25519 key. The owner manually
+  installed the corresponding `restrict,command=...` forced-key entry
+  for the already approved Wolf Moonlight client, leaving the existing
+  administrator SSH access intact. Host Games config was created in 0600
+  owner space with `enabled:false`, `legacy_links_reviewed:false`
+  and observed legacy NVIDIA caps `video/x-raw`.
+- **Physical read-only status accepted:** the MacBook invoked the
+  restricted SSH client helper and received
+  `{"status":"wolf_ui_connected","success":true}`. This establishes
+  working bound credential -> host policy -> paired client status, not
+  successful remote Steam Start/Stop or fresh automatic enrollment.
+- **Physical denials accepted for tested cases:** an SSH `id` command
+  using only the dedicated restricted key returned the host's denied
+  response with exit 1; an attempted reverse forwarding returned
+  `remote port forwarding failed` with exit 255. This does not
+  establish wrong-key, revocation, arbitrary forwarding, or shared-user
+  isolation.
+- The host read-only preflight found no active owner Steam lease, no
+  matching Steam processes or containers, one live Wolf UI session,
+  zero lobbies and a still-disabled Games writer path. The owner Steam
+  workspace exists as a non-symlink directory.
+- The initial recursive Steam scan stopped after 500 directories.
+  A subsequent **complete top-level** inventory of 8 numeric per-device
+  Wolf folders found **5** Steam symlinks pointing to
+  `/etc/wolf/profile-data/user/WolfSteam` and **3** separate
+  Steam directories. This is not a full nested filesystem scan. No
+  Steam files, aliases, runtime sessions or containers were modified.
+- The actual Wolf direct Moonlight apps still include `Wolf UI`,
+  `OptiPlex Studio Desktop` and `Steam`, while the existing
+  named `user` profile also includes Steam. Direct Steam remains a
+  bypass of NOW's lease and can access the shared writable owner
+  directory through legacy aliases. We must not interpret five aliases
+  as five currently running writers.
+- **Chosen sequence:** first implement the restricted-device GTK Games
+  flow, including Wolf UI launch/wait, one-shot Start, busy/reconnect,
+  explicit guarded Stop and no fallback to direct Steam on failure.
+  Then review back up/rollback and verify the installed Wolf API's
+  direct-app removal support. Restrict **only direct** Steam with
+  a controlled host change that leaves named-profile Steam, other
+  direct apps, existing symlinks and personal game data untouched.
+  Only enable real restricted-key Games writes in a supervised, tested
+  owner window once other writer entry points are addressed. Keep
+  current `enabled:false` and `legacy_links_reviewed:false`
+  until then.
+- **Not shipped:** the current released and source GTK Games button
+  still calls `moonlight stream HOST Steam`; source-only broker
+  helper and physical SSH status success do not imply zero-terminal
+  consumer Games functionality. This is the next software milestone
+  under issue #154.

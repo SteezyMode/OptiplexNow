@@ -23,8 +23,10 @@ from owner_access import OwnerStore, PolicyError
 from owner_launch import launch_owner_steam, owner_launch_status
 from wolf_socket_adapter import (
     MAX_REQUEST, MAX_RESPONSE, WolfUnixAPI, WolfSocketError, parse_response,
-    check_request)
-from wolf_docker_adapter import WolfDockerAPI
+    check_request, socket_timeout, DEFAULT_SOCKET_TIMEOUT,
+    CREATE_SOCKET_TIMEOUT)
+from wolf_docker_adapter import (WolfDockerAPI, CREATE_DOCKER_TIMEOUT,
+                                 DEFAULT_DOCKER_TIMEOUT)
 from test_owner_lobby import fixtures
 
 
@@ -112,6 +114,30 @@ class WolfProtocolTests(unittest.TestCase):
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=2)
+
+    def test_create_lobby_timeout_outlives_upstream_daemon_wait(self):
+        # Wolf upstream waits up to 20s for CreateLobby runner setup.
+        self.assertGreater(CREATE_SOCKET_TIMEOUT, 20)
+        self.assertGreater(CREATE_DOCKER_TIMEOUT, CREATE_SOCKET_TIMEOUT)
+        self.assertEqual(socket_timeout("POST", "/api/v1/lobbies/create"),
+                         CREATE_SOCKET_TIMEOUT)
+        self.assertEqual(socket_timeout("POST", "/api/v1/lobbies/join"),
+                         DEFAULT_SOCKET_TIMEOUT)
+        self.assertEqual(socket_timeout("GET", "/api/v1/sessions"),
+                         DEFAULT_SOCKET_TIMEOUT)
+        calls = []
+        def fake_runner(argv, **kwargs):
+            calls.append((argv[-2:], kwargs["timeout"]))
+            return subprocess.CompletedProcess(argv, 0, b'{"success":true}', b"")
+        api = WolfDockerAPI(runner=fake_runner)
+        api("GET", "/api/v1/sessions")
+        api("POST", "/api/v1/lobbies/create", {"runner": {"type": "process"}})
+        api("POST", "/api/v1/lobbies/join", {"lobby_id": "example"})
+        self.assertEqual(calls, [
+            (["GET", "/api/v1/sessions"], DEFAULT_DOCKER_TIMEOUT),
+            (["POST", "/api/v1/lobbies/create"], CREATE_DOCKER_TIMEOUT),
+            (["POST", "/api/v1/lobbies/join"], DEFAULT_DOCKER_TIMEOUT),
+        ])
 
     def test_socket_uses_real_http_and_only_expected_paths(self):
         result = self.api("GET", "/api/v1/clients")

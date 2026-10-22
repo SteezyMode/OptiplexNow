@@ -11,6 +11,10 @@ import subprocess
 from wolf_socket_adapter import MAX_RESPONSE, WolfSocketError, check_request
 
 CONTAINER = "wolf"
+# The inner socket adapter allows 26 seconds for a CreateLobby POST because
+# the upstream daemon itself may wait 20 seconds for runner setup.
+CREATE_DOCKER_TIMEOUT = 35
+DEFAULT_DOCKER_TIMEOUT = 10
 ADAPTER_FILE = Path(__file__).with_name("wolf_socket_adapter.py")
 
 
@@ -30,7 +34,11 @@ class WolfDockerAPI:
         try:
             proc = self.runner(
                 argv, input=payload, stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL, timeout=10, check=False)
+                stderr=subprocess.DEVNULL,
+                timeout=(CREATE_DOCKER_TIMEOUT if (method, path) ==
+                         ("POST", "/api/v1/lobbies/create")
+                         else DEFAULT_DOCKER_TIMEOUT),
+                check=False)
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise WolfSocketError("Wolf host-local container command failed") from None
         if proc.returncode != 0:

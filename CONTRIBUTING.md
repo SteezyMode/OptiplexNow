@@ -37,6 +37,8 @@ Published v1.17.0 is an amd64 GTK3 Linux client for an already prepared server. 
 | `src/wolf-pair-local.py` | Privileged host-side Wolf socket mediation; not auto-installed on the host |
 | `src/owner_access.py` | Host-local owner/device/workspace policy: strict grant resolution, private atomic state; no Wolf session launcher |
 | `src/owner_lobby.py` | Pure, offline Wolf named-profile Steam lobby request planner; does not call Wolf or bypass upstream access checks |
+| `src/wolf_socket_adapter.py` | Bounded, allowlisted Wolf HTTP-over-Unix-socket protocol (container-local; no TCP) |
+| `src/wolf_docker_adapter.py` | Fixed Docker exec bridge to reviewed socket script; host-local only, not authenticated user-facing API |
 | `src/owner_launch.py` | Host-local, explicit-gate Wolf Create/Join transaction with durable fail-closed Steam lease; **not installed/invoked or an upstream authorization boundary** |
 | `src/owner-access-local.py` | Developer-only root/admin enrollment CLI; no NOW client integration or host deployment yet |
 | `src/server-profile.py` | Existing music stack export/staged import; not a host installer |

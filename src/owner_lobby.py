@@ -121,7 +121,7 @@ def plan_owner_steam_lobby(
     # The current REST app/profile reflectors do not expose Wolf's active caps.
     # Until a host-side probe exists, reject an unverified/unsupported value
     # BEFORE any state-changing Wolf request or durable lease is created.
-    if video_caps not in SUPPORTED_VIDEO_CAPS:
+    if not isinstance(video_caps, str) or video_caps not in SUPPORTED_VIDEO_CAPS:
         raise PolicyError("Host video caps not verified or unsupported; no lobby created")
     if pin_digits is None:
         pin_digits = [secrets.randbelow(10) for _ in range(8)]

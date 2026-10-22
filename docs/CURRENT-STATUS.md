@@ -47,14 +47,15 @@ running services were involved. See [real Wolf validation](REAL-WOLF-VALIDATION.
 
 ## Wolf lobby protocol verification (PR #168, disposable state only)
 
-A new pinned-image CI check compares Wolf's **actual live OpenAPI schema**
-to NOW's Create/Join expectations and, only with entirely disposable
-empty Wolf state, attempts a single harmless process-lobby Create.
-The source Steam runner planner was tightened to require complete tagged
-Docker runner fields; earlier fixture-only tests did not enforce them.
-This is not real Steam or Moonlight streaming. See [validation levels](REAL-WOLF-VALIDATION.md)
-and [engineering trail](ENGINEERING-TRAIL.md). Report verified GitHub
-CI outcomes before calling the Create POST accepted.
+[Actual Wolf run 39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+confirmed the pinned daemon's Create/Join schema and **accepted one real
+disposable process-lobby Create POST** via NOW's HTTP adapter. No Join was
+attempted and no Steam account, Moonlight session or GPU was used. The source
+Steam planner was tightened to reject incomplete tagged Docker runners; older
+mock fixtures omitted required fields. **The owner's Games shortcut and host
+remain unchanged. Fresh-client P0 still fails acceptance.** See
+[validation levels](REAL-WOLF-VALIDATION.md) and
+[engineering trail](ENGINEERING-TRAIL.md).
 
 ## Capability status
 

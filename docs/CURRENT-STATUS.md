@@ -116,7 +116,7 @@ in supervised recovery. GitHub tests were fixture/protocol evidence on merge;
 the corrected caps subsequently passed real Steam + RE2R and relaunch tests.
 See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
-## Games button integration boundary (source-only, unmerged PR)
+## Games button integration boundary (source-only code)
 
 `server/owner_games_request.py` introduces a source-only narrow request
 handler for `status/start/stop` that refuses client-selected identities and

@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "server"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from owner_access import OwnerStore, PolicyError
-from owner_launch import read_lease, write_lease
+from owner_launch import read_lease, write_lease, stop_owner_steam
 from owner_games_request import handle_owner_games_request
 from test_owner_launch import StatefulWolf
 from test_owner_lobby import fixtures
@@ -180,6 +180,25 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.assertFalse(any(m == "POST" for m, _, _ in self.api.calls))
         with self.store.locked() as fd:
             self.assertIsNone(read_lease(fd))
+
+    def test_stop_checks_bound_identity_and_lease_under_lock(self):
+        self.call("start", approved=True)
+        with self.store.locked() as fd:
+            original = read_lease(fd)
+        count = len([p for m, p, _ in self.api.calls if m == "POST"])
+        with self.assertRaisesRegex(PolicyError, "different owner device"):
+            stop_owner_steam(
+                self.api, store=self.store, confirmed_stop=True,
+                expected_client_id="2002", expected_lease_id=original["id"])
+        with self.assertRaisesRegex(PolicyError, "lease changed"):
+            stop_owner_steam(
+                self.api, store=self.store, confirmed_stop=True,
+                expected_client_id="1001",
+                expected_lease_id="6d9c81fb-9b60-4c64-b980-33d223f3a4c8")
+        self.assertEqual(count, len([
+            p for m, p, _ in self.api.calls if m == "POST"]))
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
 
     def test_no_request_can_stop_unrelated_lease(self):
         self.call("start", approved=True)

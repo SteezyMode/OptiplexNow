@@ -18,7 +18,7 @@ import sys
 
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}\Z")
 USER_RE = re.compile(r"[a-z_][a-z0-9_-]{0,31}\Z", re.I)
-ACTIONS = frozenset(("status", "start", "stop"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile"))
 KEY_DIR = Path.home() / ".local/share/optiplex-now/games-client"
 MAX_RESPONSE = 2048
 

@@ -137,6 +137,10 @@ def plan_owner_steam_lobby(
         # A private PIN helps prevent arbitrary joins; it does NOT restrict
         # Wolf direct app access. A host-side entitlement gateway is still needed.
         "pin": list(pin_digits),
+        # Wolf also stops a lobby when its Steam runner exits naturally.
+        # Keep this false: disconnect alone must not forcibly kill a game.
+        # The restricted broker reconciles a finished lease only after a
+        # verified zero-session, zero-lobby and no-writer census.
         "stop_when_everyone_leaves": False,
         "runner_state_folder": state_folder,
         "runner": runner,

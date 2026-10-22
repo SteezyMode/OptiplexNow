@@ -3,10 +3,10 @@
 
 #include "config.h"
 
-/* Save the three service URLs as a unit. An invalid URL must never overwrite
- * a previously configured service or cause a partial three-field update.
- * Empty URLs are intentional: a user can clear an optional service. */
-int now_wizard_store_services(
+/* Return a bitmask of invalid Videos/Music/Downloads URLs (bit 0/1/2).
+ * Valid fields are stored independently. Invalid fields retain their prior
+ * values; an empty string intentionally clears one optional service. */
+unsigned now_wizard_store_services(
     char config[CONFIG_COUNT][CONFIG_VALUE_SIZE],
     const char *const urls[3]);
 

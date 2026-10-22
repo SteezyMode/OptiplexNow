@@ -1,4 +1,7 @@
 """Restricted Games SSH client tests; do not connect to live hosts."""
+import contextlib
+import io
+from unittest.mock import patch
 import importlib.util
 from pathlib import Path
 import os
@@ -77,6 +80,23 @@ class RestrictedGamesClientTests(unittest.TestCase):
         self.assertIn("BatchMode=yes",argv)
         self.assertEqual(kw["input"],b'{"version":1,"action":"status"}\n')
         self.assertEqual(kw["timeout"],25)
+
+    def test_ui_mode_emits_one_safe_token_and_denies_failure(self):
+        with patch.object(game, "invoke",
+                          return_value={"success": True, "status": "joined"}):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(game.main(
+                    ["--ui", "start", "127.0.0.1", "owner"]), 0)
+            self.assertEqual(out.getvalue(), "joined\\n".replace("\\\\n", "\\n"))
+        with patch.object(game, "invoke",
+                          side_effect=RuntimeError("PRIVATE HOST DETAIL")):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(game.main(
+                    ["--ui", "status", "127.0.0.1", "owner"]), 1)
+            self.assertEqual(out.getvalue(), "unavailable\\n".replace("\\\\n", "\\n"))
+            self.assertNotIn("PRIVATE", out.getvalue())
 
     def test_rejects_invalid_destination_and_response(self):
         for host in ("--ProxyCommand=x","a..b","bad host"):

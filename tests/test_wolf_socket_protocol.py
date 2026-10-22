@@ -22,7 +22,8 @@ sys.path.insert(0, str(ROOT / "tests"))
 from owner_access import OwnerStore, PolicyError
 from owner_launch import launch_owner_steam, owner_launch_status
 from wolf_socket_adapter import (
-    MAX_REQUEST, MAX_RESPONSE, WolfUnixAPI, WolfSocketError, parse_response)
+    MAX_REQUEST, MAX_RESPONSE, WolfUnixAPI, WolfSocketError, parse_response,
+    check_request)
 from wolf_docker_adapter import WolfDockerAPI
 from test_owner_lobby import fixtures
 
@@ -129,7 +130,6 @@ class WolfProtocolTests(unittest.TestCase):
             ("POST", "/api/v1/sessions/stop", {}),
             ("POST", "/api/v1/clients/settings", {}),
             ("POST", "/api/v1/pair/client", {}),
-            ("GET", "/api/v1/openapi-schema", None),
             ("DELETE", "/api/v1/lobbies", None),
             ("POST", "/api/v1/lobbies/join", None),
             ("GET", "/api/v1/clients", {"should_not": "exist"}),
@@ -138,6 +138,10 @@ class WolfProtocolTests(unittest.TestCase):
                 with self.assertRaises(WolfSocketError):
                     self.api(method, path, payload)
         self.assertEqual(self.server.requests, [])
+        # The verified public schema GET is now intentionally read-only
+        # allowlisted, not an arbitrary Wolf administration request.
+        self.assertEqual(
+            check_request("GET", "/api/v1/openapi-schema"), b"")
 
     def test_invalid_http_framing_never_reports_success(self):
         raws = [

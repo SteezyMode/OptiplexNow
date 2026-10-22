@@ -8,7 +8,7 @@ This is the next part of [#154](https://github.com/SteezyMode/OptiplexNow/issues
 
 1. **Offline simulation (passed):** tests in `tests/test_wolf_socket_protocol.py`
    use a fake AF_UNIX HTTP server, not Wolf.
-2. **Real daemon read-only GET (attempted in PR #167):**
+2. **Real daemon read-only GET (passed in PR #167):**
    `.github/workflows/wolf-real-compat.yml` pulls upstream Wolf into an isolated
    ephemeral GitHub Actions container. It deliberately gives Wolf no GPU,
    input devices, host networking, host filesystem mounts (except a new empty
@@ -26,10 +26,12 @@ This is the next part of [#154](https://github.com/SteezyMode/OptiplexNow/issues
 
 ## Verified upstream daemon result (October 22, 2026)
 
-In PR #167, GitHub Actions [run 39757247197](https://github.com/SteezyMode/OptiplexNow/actions/runs/39757247197)
+In PR #167, GitHub Actions [run 39757678257](https://github.com/SteezyMode/OptiplexNow/actions/runs/39757678257)
 booted an isolated **actual** Wolf daemon and our adapter received valid
 read-only GET responses: **2 apps, 1 profile, 0 paired clients, 0 sessions,
-0 lobbies**. The image's own Docker volume at `/run/user/wolf/` had to be
+0 lobbies**. The exact upstream image digest was
+`sha256:b0ef253739f9bd49b71eba7e150c955fd05990c0d409e666d89236995351551a`,
+now pinned in the compatibility workflow. The image's own Docker volume at `/run/user/wolf/` had to be
 handled explicitly, without allowing arbitrary external data volumes.
 Prior CI failures were fixture assertion, cleanup and mount-path normalization
 errors, **not** evidence of defects in Wolf. The complete fixes are in
@@ -45,6 +47,7 @@ narrowest meaningful real-Wolf compatibility milestone so far.
 `server/probe_real_wolf.py --container now-wolf-compat-EXAMPLE` only uses the
 five Wolf `GET` inventory endpoints. It refuses the production `wolf` name,
 requires a special test label and a single scratch `/etc/wolf` bind mount,
+plus only image-declared fresh anonymous Docker volumes,
 rejects host networking and privileged containers, and never issues a POST.
 It reports counts only; actual sessions may contain AES keys and must not be
 logged, printed or uploaded.
@@ -52,9 +55,10 @@ logged, printed or uploaded.
 The automated runner creates a unique container named
 `now-wolf-compat-<GitHub run ID>`, tags it
 `io.optiplex-now.compat-disposable=true`, and binds a new scratch directory
-under the runner temporary path. It pulls the upstream `:stable` test image
-and records the resulting **content digest** in its summary. The tag is
-mutable, so the recorded digest is the evidence anchor, not the tag name.
+under the runner temporary path. It pulls the upstream digest-pinned test image
+and records the resolved **content digest** in the run log and summary. The
+workflow now uses the previously verified immutable digest instead of a mutable
+tag. Changing that digest requires a new recorded real-daemon compatibility run.
 
 **Do not execute this workflow against the production OptiPlex.** It is a
 GitHub-hosted disposable attempt and does not use the user's host. If the

@@ -28,6 +28,7 @@
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "service_probe.h"
+#include "wizard_services.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -176,12 +177,14 @@ static unsigned featured_mask(void){
    return EXISTING_INSTALL_FEATURED_MASK;
  return (unsigned)value;
 }
-static void config_save(void)
+static int config_save(void)
 {
     update_model_heading();
     if (!now_config_save()) {
         fprintf(stderr, "Unable to save OptiPlex NOW configuration\n");
+        return 0;
     }
+    return 1;
 }
 static void preset_alert(void*parent,const char*title,const char*msg){
  GtkWidget*d=gtk_dialog_new_with_buttons(title,GTK_WINDOW(parent),1,"OK",GTK_RESPONSE_OK,NULL);
@@ -2045,20 +2048,38 @@ static void wizard_validate(void*w,void*p){
 static void wizard_save(Wizard*c){
  const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
                       gtk_entry_get_text(GTK_ENTRY(c->relay)),gtk_entry_get_text(GTK_ENTRY(c->relayuser)),gtk_entry_get_text(GTK_ENTRY(c->wake))};
- if(!now_valid_host(values[0])||!now_valid_user(values[1])){
-   return;
- }
+ int server_valid=now_valid_host(values[0])&&now_valid_user(values[1]);
  for(int i=0;i<5;i++){
-   if(strchr(values[i],'\n')||strchr(values[i],'\r'))return;
-   safe_copy(cfg[i],512,values[i]);
+   if(strchr(values[i],'\n')||strchr(values[i],'\r'))server_valid=0;
  }
- if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);safe_copy(cfg[16],512,c->staged[16]);}
- for(int i=0;i<3;i++)if(c->service_inputs[i]){
-   const char *url=gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i]));
-   if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);
+ if(server_valid){
+   for(int i=0;i<5;i++)safe_copy(cfg[i],512,values[i]);
+   if(c->preset_loaded){
+     safe_copy(cfg[10],512,c->staged[10]);
+     safe_copy(cfg[14],512,c->staged[14]);
+     safe_copy(cfg[16],512,c->staged[16]);
+   }
  }
- /* Optional services use user-entered URLs, never reference-host ports. */
- config_save();gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+
+ /* Media URLs must survive leaving Services even if server/SSH identity is
+  * incomplete. Validate the entire group before replacing any saved URLs. */
+ const char *urls[3];
+ for(int i=0;i<3;i++){
+   urls[i]=c->service_inputs[i]?
+      gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i])):NULL;
+ }
+ int urls_valid=now_wizard_store_services(cfg,urls);
+ if(!config_save()){
+   gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
+   say("SETTINGS COULD NOT BE SAVED");
+ }else if(!urls_valid){
+   gtk_label_set_text(GTK_LABEL(c->notice),"INVALID SERVICE URL. PREVIOUS URLS RETAINED");
+   say("INVALID SERVICE URL. PREVIOUS URLS RETAINED");
+ }else if(!server_valid){
+   gtk_label_set_text(GTK_LABEL(c->notice),"SERVICE URLS SAVED. SERVER DETAILS INCOMPLETE");
+ }else{
+   gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+ }
 }
 static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
                                   const char *reply, const GError *error);

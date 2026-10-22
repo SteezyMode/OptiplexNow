@@ -837,6 +837,7 @@ typedef struct {
  gboolean running;
  gboolean opening_ui;
  gboolean stopping;
+ gboolean status_only;
  guint poll_id;
  gint64 deadline;
  GCancellable *cancel;
@@ -885,6 +886,19 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
     "STEAM STOP NOT CONFIRMED. CHECK HOST STATUS");
   return;
  }
+ if(managed_games.status_only){
+  if(answer==NOW_GAMES_WOLF_UI_CONNECTED)
+   managed_games_finish("AUTHORIZED OWNER DEVICE. WOLF UI CONNECTED");
+  else if(answer==NOW_GAMES_NEEDS_WOLF_UI)
+   managed_games_finish("OWNER DEVICE APPROVED. CONNECT WOLF UI TO PLAY");
+  else if(answer==NOW_GAMES_IN_USE)
+   managed_games_finish("OWNER STEAM SESSION ALREADY ACTIVE");
+  else if(answer==NOW_GAMES_BUSY)
+   managed_games_finish("WOLF CURRENTLY BUSY");
+  else
+   managed_games_finish("GAMES STATUS UNEXPECTED. NOTHING LAUNCHED");
+  return;
+ }
  if(strcmp(action,"start")==0){
   managed_games_finish(answer==NOW_GAMES_JOINED?
     "OWNER STEAM JOINED. CONTINUE IN MOONLIGHT":
@@ -924,7 +938,7 @@ static void managed_games_send(const char *action){
                          managed_games.user,managed_games.cancel,
                          managed_games_reply,(gpointer)action);
 }
-static void managed_games_begin(gboolean stop){
+static void managed_games_begin(gboolean stop,gboolean status_only){
  if(managed_games.running){
   managed_games_message("GAMES REQUEST ALREADY IN PROGRESS");
   return;
@@ -949,11 +963,13 @@ static void managed_games_begin(gboolean stop){
  memset(&managed_games,0,sizeof managed_games);
  managed_games.running=TRUE;
  managed_games.stopping=stop;
+ managed_games.status_only=status_only;
  managed_games.cancel=g_cancellable_new();
  managed_games.deadline=g_get_monotonic_time()+90*G_USEC_PER_SEC;
  g_strlcpy(managed_games.host,cfg[0],sizeof managed_games.host);
  g_strlcpy(managed_games.user,cfg[1],sizeof managed_games.user);
  managed_games_message(stop?"REQUESTING GUARDED OWNER STEAM STOP":
+  status_only?"CHECKING OWNER GAMES AUTHORIZATION":
   "CHECKING APPROVED GAMES CONNECTION...");
  managed_games_send(stop?"stop":"status");
 }
@@ -972,9 +988,13 @@ static void on_managed_games_stop(void *widget,void *data){
                         "Stop Steam",GTK_RESPONSE_OK,NULL);
  int response=gtk_dialog_run(GTK_DIALOG(dialog));
  gtk_widget_destroy(dialog);
- if(response==GTK_RESPONSE_OK)managed_games_begin(TRUE);
+ if(response==GTK_RESPONSE_OK)managed_games_begin(TRUE,FALSE);
 }
-static void launch_steam(void){managed_games_begin(FALSE);}
+static void on_managed_games_check(void *widget,void *data){
+ (void)widget;(void)data;
+ managed_games_begin(FALSE,TRUE);
+}
+static void launch_steam(void){managed_games_begin(FALSE,FALSE);}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
  if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
@@ -1483,6 +1503,8 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
+ GtkWidget*check=button("CHECK OWNER GAMES ACCESS","setupaction");
+ g_signal_connect_data(check,"clicked",(GCallback)on_managed_games_check,NULL,NULL,0);add(col,check,0);
  GtkWidget*stop=button("STOP OWNER STEAM (CONFIRM)","setupaction");
  g_signal_connect_data(stop,"clicked",(GCallback)on_managed_games_stop,NULL,NULL,0);add(col,stop,0);
  games_notice=label("","gameshint");add(col,games_notice,0);

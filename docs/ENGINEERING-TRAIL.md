@@ -415,3 +415,40 @@ against the working reference server by interpreting this code's existence as ap
 6. **Next actual check:** CI first; then run host `inspect` against the one physically active MacBook Wolf UI stream without production mutation. Subsequent host operator enrollment and live Create+Join require a deliberately approved idle-window test and separate Steam-writer safety assessment. The product broker must authenticate remote clients before wiring NOW Games; P0 issue #154 stays open.
 
 **Separate post-alpha concept:** F7 in-stream quality controls for bitrate, resolution and FPS. Standard Moonlight Qt has a statistics overlay, not necessarily mutable live encoding settings. Because NOW invokes external Moonlight, an in-stream interactive panel requires client integration/fork or a controlled reconnect; do not imply one can be added simply by changing NOW's GTK launcher or a Wolf API GET. Keep this scoped after automatic Games acceptance.
+
+
+## 2026-10-22: Real Wolf CreateLobby timeout bug before first owner Steam POST
+
+1. **Problem/evidence:** The physical MacBook owner profile enrollment and real Wolf API
+   preflight succeeded on the OptiPlex. A `5.3G` tar archive of
+   `/etc/wolf/profile-data/user/WolfSteam` was created and `tar -tf` passed;
+   the archive skipped ephemeral IBus sockets, and restore consistency remains
+   untested. The host COSMIC desktop had a separate running Steam process.
+   Upstream `src/moonlight-server/api/endpoints.cpp::endpoint_LobbyCreate`
+   waits up to **20 seconds** for runner setup; NOW's socket bridge was capped
+   at **5 seconds** and `docker exec` subprocess at **10 seconds**.
+   An otherwise successful CreateLobby could outlive the NOW client,
+   leaving a false `uncertain` lease and potentially live Steam data.
+2. **Change/boundary:** `src/wolf_socket_adapter.py` now allows **26s**
+   for the specific allowlisted `POST /api/v1/lobbies/create`.
+   `src/wolf_docker_adapter.py` allows **35s** for the corresponding
+   `docker exec` wrapper, giving the socket bridge headroom.
+   GET requests and other POSTs retain 5s socket / 10s wrapper limits.
+   No retries, new endpoints, live host commands or caller authentication
+   were added. No owner machine, installed beta or Steam state was changed.
+3. **Decision/rejected approach:** A global long timeout weakens other APIs.
+   Retrying when Create times out risks two Steam writers; existing lease
+   correctly blocks after ambiguous Create. Enforce per-method/path deadlines
+   and retain fail-closed uncertainty instead.
+4. **Tests/results:** `tests/test_wolf_socket_protocol.py` checks each
+   timeout path and asserts outer Create timeout exceeds the inner Create
+   timeout, which exceeds upstream's 20s. GitHub CI is required; this is
+   fixture-level timeout verification, not a real live Steam Create+Join.
+5. **Migration/rollback:** Source-only change; no configuration or on-disk
+   migration. Revert the two modules if needed, without touching the
+   private pilot enrollment. **Do not run real POST during active host Steam
+   use without verifying separate storage and an agreed maintenance plan.**
+6. **Next executable check:** Merge only on green CI; then use the enrolled
+   MacBook Wolf UI session, backed-up named state and a single operator-approved
+   host-local `launch` (no retries), collect sanitized result, inspect real
+   lobby/session outcome and verify the desktop's independence. Update #154.

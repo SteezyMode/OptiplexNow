@@ -26,15 +26,17 @@ def _validated_request(request):
 
 
 def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
-                               host_video_caps=None, host_approved=False):
+                               host_video_caps=None, host_approved=False,
+                               host_writer_check=None):
     """Handle one narrow request from a *separately authenticated* host caller.
 
     verified_client_id MUST be bound to the requesting credential by trusted
     host configuration. The request cannot select or impersonate it.
 
     host_approved and host_video_caps are host configuration, NOT fields the
-    remote client can send. Legacy writable profile aliases and other Steam
-    writers MUST be reviewed before enabling a production start operation.
+    remote client can send. host_writer_check is a privileged, host-side
+    preflight callback that MUST re-evaluate Steam processes and legacy
+    writable profile aliases on every start; client booleans are never trusted.
     """
     action = _validated_request(request)
     if not _valid_client_id(verified_client_id):
@@ -87,6 +89,14 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
             wolf_api, profile_id=profile_id, video_caps=host_video_caps)
         if live_client != verified_client_id:
             raise PolicyError("Wolf UI session belongs to another device")
+        if not callable(host_writer_check):
+            raise PolicyError("Host Steam writer preflight is unavailable")
+        try:
+            writer_clear = host_writer_check()
+        except Exception:
+            raise PolicyError("Host Steam writer preflight failed") from None
+        if writer_clear is not True:
+            raise PolicyError("Host Steam writer isolation is not verified")
         # The underlying owner transaction re-checks grant and Wolf state
         # under the persisted lease lock immediately before its single POST.
         return launch_owner_steam(

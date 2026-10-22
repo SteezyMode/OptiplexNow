@@ -21,6 +21,16 @@ direct-app permissions are not restricted by NOW's policy, and fresh-owner
 client P0 remains **unaccepted**. The transaction has not been executed on
 the user's Wolf server. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
+## October 22 Wolf protocol fixture (PR #166, source-only)
+
+The repository now has a bounded allowlisted Wolf socket adapter,
+a fixed host-side Docker bridge, and a disposable AF_UNIX HTTP daemon
+fixture covering create/join transport and persisted lease behavior.
+This is **not an actual Wolf image integration test**, has not been deployed
+on the reference host, and does not change the Games shortcut, authenticate
+a remote client, or prevent direct Wolf bypass. The fresh-client owner Steam
+acceptance gate remains open (#154). See [engineering trail](ENGINEERING-TRAIL.md).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

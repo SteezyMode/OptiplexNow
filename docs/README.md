@@ -11,6 +11,7 @@ Read in this order when joining development or starting a new review.
 | [MacBook physical beta report](QA-MACBOOK-2026-10-21.md) | October 21 v1.18.0 Linux Mint client observations, failures and regression requirements |
 | [Host installation and alpha acceptance](HOST-INSTALLER.md) | Current guarded installer, NVIDIA limits, safety gates and clean-host test |
 | [Architecture](application-design.md) | Code ownership, protocols, data compatibility and safe boundaries |
+| [Engineering trail](ENGINEERING-TRAIL.md) | Dated PR-by-PR evidence, rejected approaches, failures, next-team handoffs; **not** a release-status document |
 | [Contributing](../CONTRIBUTING.md) | Build, test, PR discipline and code map |
 | [Release process](RELEASE-PROCESS.md) | Immutable tags, artifact verification and rollback |
 | [Wolf pairing contract](WOLF-PAIRING-HOST-CONTRACT.md) | Actual host API, client bridge, privilege model and unverified checks |

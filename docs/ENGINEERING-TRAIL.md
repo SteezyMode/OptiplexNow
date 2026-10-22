@@ -255,6 +255,18 @@ Reproduction: `python3 -m unittest discover -s tests -p
 'test_real_wolf_lobby_contract.py' -v`; the pinned GitHub CI workflow
 exercises the *real* Wolf implementation, not only that local fixture.
 
+**Regression found in first standard CI:** Although [real Wolf run
+39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+passed, the `build-and-test` job failed
+`test_wolf_socket_protocol.test_rejects_unapproved_operations_before_socket_connect`.
+Its old denylist still contained the intentionally newly allowed
+read-only `GET /api/v1/openapi-schema`. The test drove that request to
+the fake Unix socket, so the assertion that **no** socket call occurred failed.
+Corrected the denylist and added an explicit allowlist assertion while
+preserving POST STOP/pair/settings denials. This is stale-test expectation,
+not a failure of the real Wolf contract or a live security bypass. Full CI
+must be rerun after the fix; final result belongs in PR #168 and #154.
+
 **What NOT to repeat:** Avoid using incomplete Docker runner mocks as proof
 of protocol compatibility. Do not add a live production Wolf helper or
 attempt an owner Steam POST from normal client setup. The next production

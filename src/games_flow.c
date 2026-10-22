@@ -67,7 +67,9 @@ gboolean now_games_parse_reply(const char *line, NowGamesReply *reply)
         {"busy", NOW_GAMES_BUSY},
         {"in_use", NOW_GAMES_IN_USE},
         {"joined", NOW_GAMES_JOINED},
-        {"idle", NOW_GAMES_IDLE}
+        {"idle", NOW_GAMES_IDLE},
+        {"running", NOW_GAMES_RUNNING},
+        {"finished", NOW_GAMES_FINISHED}
     };
     /* Input is a single result token plus the optional trailing LF from the
      * fixed helper. No JSON, newlines beyond LF, error strings or secrets. */
@@ -149,7 +151,8 @@ void now_games_request_async(const char *script, const char *action,
         !action || (strcmp(action, "status") != 0 &&
                     strcmp(action, "start") != 0 &&
                     strcmp(action, "stop") != 0 &&
-                    strcmp(action, "reconcile") != 0)) {
+                    strcmp(action, "reconcile") != 0 &&
+                    strcmp(action, "observe") != 0)) {
         g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                                 "Invalid restricted Games request");
         g_object_unref(task);

@@ -61,7 +61,8 @@ class RealWolfSafetyTests(unittest.TestCase):
             "Type": "volume", "Name": "a" * 64, "Source": "/var/lib/docker/volumes/" + "a"*64 + "/_data",
             "Destination": "/var/lib/wolf", "RW": True,
         }
-        info["Config"]["Volumes"] = {"/var/lib/wolf": {}}
+        # Docker normalizes trailing slashes in actual image volume paths.
+        info["Config"]["Volumes"] = {"/var/lib/wolf/": {}}
         info["Mounts"].append(extra)
         self.assertEqual(probe.validate_container("now-wolf-compat-test01", info),
                          "/tmp/now-wolf-compat-test01")

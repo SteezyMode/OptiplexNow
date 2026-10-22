@@ -206,6 +206,52 @@ to test the writing path against their live Steam state. Then implement
 authenticated host broker, Wolf direct-app admission denial, lease recovery
 and physical fresh-client P0 acceptance.
 
+## 2026-10-22: PR #168 pinned real Wolf lobby schema and disposable Create
+
+**Gap discovered:** PR #164/165 fixtures provided a Docker runner with
+`type`, `name`, `image`, `env` but OMITTED required Wolf fields
+`mounts`, `devices`, and `ports`. All earlier FakeWolf Create requests
+were accepted without schema validation; that was **not proof a real Wolf
+daemon would accept an owner's Steam runner**. Read current upstream
+Wolf `CreateLobbyRequest`, `AppDocker__tagged` and `JoinLobbyEvent`
+schema in `games-on-whales/wolf/docs/modules/dev/partials/spec.json` and
+upstream `tests/testWolfAPI.cpp`. A session `moonlight_session_id` is
+represented as a STRING in the API schema despite its C++ integer type;
+do **not** convert it to an integer based on the native implementation.
+
+**Code correction:** `src/owner_lobby.py` now fails closed unless the named
+Steam runner is a tagged `docker` runner with all seven required fields
+(`type/name/image/mounts/env/devices/ports`) and correct basic types;
+the shared lobby fixture and missing-field denial cases were updated.
+This does not alter the working host or Steam data.
+
+**Real contract attempt:** The pinned-image disposable-only GitHub workflow
+calls `GET /api/v1/openapi-schema` through the actual Wolf Unix socket.
+`server/verify_wolf_lobby_contract.py` compares the live required fields,
+Docker runner type and JoinLobby string-ID representation to NOW's fixed
+request contract. Only after confirming the exact pinned image, per-run
+scratch bind, no network privileges, no paired clients, no sessions and no
+lobbies, it attempts at most ONE real `POST /api/v1/lobbies/create`, using
+a harmless `process` runner (`sleep 10`), isolated profile data and
+no Steam credentials. It never issues Join, Stop or cleanup POST; the
+entire disposable container is removed afterward. A successful create
+still does **not** validate Steam, named profile permissions, input/audio,
+reconnection or a real Moonlight session.
+
+**Evidence to record:** exact PR #168 GHA run, `schema_compatible`,
+`actual_disposable_create` = `created_disposable_lobby` or
+`rejected_or_blocked`, any failed unit test and its correction.
+Reproduction: `python3 -m unittest discover -s tests -p
+'test_real_wolf_lobby_contract.py' -v`; the pinned GitHub CI workflow
+exercises the *real* Wolf implementation, not only that local fixture.
+
+**What NOT to repeat:** Avoid using incomplete Docker runner mocks as proof
+of protocol compatibility. Do not add a live production Wolf helper or
+attempt an owner Steam POST from normal client setup. The next production
+step needs a disposable GPU-equipped host and genuine Moonlight session for
+a verified Create+Join pair, authentication and an upstream bypass security
+test. Previous source-only owner grants still do not enforce Wolf access.
+
 ## 2026-10-22: PR #167 attempted real Wolf daemon on isolated CI runner
 
 **Problem:** PR #166 tests real Unix-socket bytes but its daemon is a Python

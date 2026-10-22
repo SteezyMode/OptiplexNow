@@ -206,5 +206,42 @@ to test the writing path against their live Steam state. Then implement
 authenticated host broker, Wolf direct-app admission denial, lease recovery
 and physical fresh-client P0 acceptance.
 
-**Owner-host operations in PR #165:** none. A developer must not run a real Wolf POST
+## 2026-10-22: PR #167 attempted real Wolf daemon on isolated CI runner
+
+**Problem:** PR #166 tests real Unix-socket bytes but its daemon is a Python
+simulation. Real Wolf could reject our socket/framing or fail to start. This
+iteration probes the *real upstream image* without using the user's running
+OptiPlex or pretending a mock is Wolf.
+
+**Change:** `server/probe_real_wolf.py` refuses any container except one
+with a unique `now-wolf-compat-*` name, explicit disposable label, exactly
+one scratch `/etc/wolf` storage mount, nonprivileged execution and
+`--network none`. It reads only the five GET inventory endpoints and reports
+counts, not raw Wolf profile/client/session fields. The special
+`.github/workflows/wolf-real-compat.yml` job on GitHub's hosted runner
+attempts to boot upstream `:stable` with no GPU, no uinput/uhid, no Docker
+socket and no port exposure, and records its **resolved image digest**. No
+POST and no credentials; one-use container and scratch volume are cleaned up.
+`tests/test_real_wolf_probe.py` checks production-container rejection and
+allowlisted read-only operations with a mocked Docker command.
+
+**Verification category:** an actual upstream image **boot attempt** on a
+hosted non-GPU runner. If Wolf refuses to start, the step reports BLOCKED
+(no daemon test performed), even when the workflow status is success.
+If the five APIs respond, that proves only the *real daemon read-only GET*
+subset with this exact image and environment. **No active Moonlight session,
+GPU stream, actual lobby Create/Join, or fresh owner setup is verified.**
+
+**Rejected approaches:** do not run a second Wolf on the personal server,
+mount `/etc/wolf` or the real host's Docker socket, reuse Steam data,
+enable host ports or mark real session behavior accepted from this job.
+Wolf's official quickstart requires render/input devices, which hosted
+runners lack. A dedicated **disposable GPU-equipped machine** is needed
+for Create/Join/session/reconnect physical acceptance. See
+[REAL-WOLF-VALIDATION.md](REAL-WOLF-VALIDATION.md).
+
+**Outcome:** see PR #167 GitHub Actions and comments; append exact observed
+result and any CI fix here. Do not speculate from a missing API.
+
+ A developer must not run a real Wolf POST
 against the working reference server by interpreting this code's existence as approval.

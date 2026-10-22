@@ -70,6 +70,18 @@ runner were observed physically, but native owner Steam Create+Join and
 fresh-owner one-click access remain **unaccepted**. See
 [the guarded host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
+## October 23 Wolf Steam video producer caps guard (PR #174, source only)
+
+Physical CreateLobby returned a GStreamer pipeline syntax error followed by a
+20-second setup timeout. Code inspection found NOW passed an empty
+`video_producer_buffer_caps`; upstream Wolf uses that string in the video
+producer. This is a strong candidate, **not a verified root-cause fix**.
+Source PR #174 requires explicit host-verified software or NVIDIA-zero-copy
+caps and refuses a create attempt otherwise, without writing a lease.
+The previous physical failed lobby/uncertain lease is unchanged. GitHub tests
+are fixture/protocol evidence only; no new physical Steam launch occurred.
+See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

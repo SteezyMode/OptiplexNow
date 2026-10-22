@@ -37,10 +37,14 @@ Prior CI failures were fixture assertion, cleanup and mount-path normalization
 errors, **not** evidence of defects in Wolf. The complete fixes are in
 [ENGINEERING-TRAIL.md](ENGINEERING-TRAIL.md).
 
-The first actual POST to create/join a persistent Steam lobby **has not
-been made**. All code paths that would manipulate a Steam workspace remain
-unconnected to the owner reference host. The validated GET contract is the
-narrowest meaningful real-Wolf compatibility milestone so far.
+[PR #168 actual Wolf run 39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+subsequently confirmed live Create/Join **schema** compatibility with the pinned
+Wolf image and returned `success: true` for **one real disposable Create
+POST** with a harmless `process` runner (`sleep 10`). There were no
+clients, Moonlight sessions, GPU video, Steam data, or Join POSTs.
+A real **Steam** Create+Join and physical client stream **have not been
+performed**. All code paths manipulating the owner's real Steam workspace
+remain unconnected to the reference host.
 
 ## Read-only disposable-container probe
 

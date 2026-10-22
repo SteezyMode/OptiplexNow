@@ -45,6 +45,17 @@ validation; all fixes are recorded in [engineering trail](ENGINEERING-TRAIL.md).
 The exact image digest is recorded by the workflow, and no owner-host data or
 running services were involved. See [real Wolf validation](REAL-WOLF-VALIDATION.md).
 
+## Wolf lobby protocol verification (PR #168, disposable state only)
+
+A new pinned-image CI check compares Wolf's **actual live OpenAPI schema**
+to NOW's Create/Join expectations and, only with entirely disposable
+empty Wolf state, attempts a single harmless process-lobby Create.
+The source Steam runner planner was tightened to require complete tagged
+Docker runner fields; earlier fixture-only tests did not enforce them.
+This is not real Steam or Moonlight streaming. See [validation levels](REAL-WOLF-VALIDATION.md)
+and [engineering trail](ENGINEERING-TRAIL.md). Report verified GitHub
+CI outcomes before calling the Create POST accepted.
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

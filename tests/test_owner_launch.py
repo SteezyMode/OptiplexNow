@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "tests"))
 from owner_access import OwnerStore, PolicyError
 from owner_launch import (launch_owner_steam, owner_launch_status, read_lease,
-                          write_lease)
+                          write_lease, stop_owner_steam, reconcile_stopped_owner_steam)
 from test_owner_lobby import fixtures
 
 
@@ -44,6 +44,44 @@ class FakeWolf:
                 raise self.join
             return self.join if self.join is not None else {"success": True}
         raise AssertionError("Unexpected Wolf operation " + method + path)
+
+
+class StatefulWolf(FakeWolf):
+    """Native-lobby test double with a mutable live lobby and STOP endpoint."""
+    def __init__(self):
+        super().__init__()
+        self.lobby = None
+        self.pin = None
+        self.fail_stop = False
+
+    def __call__(self, method, path, body=None):
+        if (method, path) == ("GET", "/api/v1/lobbies"):
+            self.calls.append((method, path, None))
+            return {"success": True, "lobbies": [copy.deepcopy(self.lobby)]
+                    if self.lobby is not None else []}
+        if (method, path) == ("POST", "/api/v1/lobbies/create"):
+            response = super().__call__(method, path, body)
+            self.pin = list(body["pin"])
+            self.lobby = {
+                "id": response["lobby_id"], "name": "Steam",
+                "started_by_profile_id": body["profile_id"],
+                "pin_required": True, "multi_user": False,
+                "connected_sessions": [],
+            }
+            return response
+        if (method, path) == ("POST", "/api/v1/lobbies/join"):
+            response = super().__call__(method, path, body)
+            self.lobby["connected_sessions"] = [body["moonlight_session_id"]]
+            return response
+        if (method, path) == ("POST", "/api/v1/lobbies/stop"):
+            self.calls.append((method, path, copy.deepcopy(body)))
+            if self.fail_stop:
+                raise TimeoutError("PRIVATE remote daemon state")
+            if body["lobby_id"] != self.lobby["id"] or body["pin"] != self.pin:
+                return {"success": False}
+            self.lobby = None
+            return {"success": True}
+        return super().__call__(method, path, body)
 
 
 class OwnerLaunchTests(unittest.TestCase):
@@ -99,7 +137,12 @@ class OwnerLaunchTests(unittest.TestCase):
                 .stat().st_mode), 0o600)
         raw = (Path(self.root.name) / "private" /
                "owner-steam-lease.json").read_text()
-        self.assertNotIn('"pin"', raw)
+        # Private PIN must survive process restart for StopLobby. Never return
+        # it in API status or a client-facing response.
+        self.assertIn('"pin"', raw)
+        self.assertEqual(len(__import__("json").loads(raw)["pin"]), 8)
+        self.assertNotIn("pin", str(result))
+        self.assertNotIn("pin", str(owner_launch_status(self.store)))
         self.assertNotIn("WolfSteam", raw)
         self.assertNotIn("aes_key", raw)
         self.assertNotIn("SECRET", raw)
@@ -216,6 +259,112 @@ class OwnerLaunchTests(unittest.TestCase):
             invalid = {"version": True, "id": "false", "client_id": "1001",
                        "workspace_id": "bad", "state": [], "lobby_id": None}
             with self.assertRaises(PolicyError):
+                write_lease(fd, invalid)
+            self.assertIsNone(read_lease(fd))
+
+
+    def test_persists_v2_pin_and_explicit_stop_archives_blocker(self):
+        api = StatefulWolf()
+        result = launch_owner_steam(
+            "1001", api, store=self.store,
+            execution_approved=True, video_caps="video/x-raw")
+        self.assertEqual(result["status"], "joined")
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            self.assertEqual(lease["version"], 2)
+            self.assertEqual(lease["pin"], api.pin)
+        stopped = stop_owner_steam(api, store=self.store, confirmed_stop=True)
+        self.assertEqual(stopped, {"success": True, "status": "idle",
+                                   "lease_archived": True})
+        posts = [p for m, p, _ in api.calls if m == "POST"]
+        self.assertEqual(posts, ["/api/v1/lobbies/create",
+                                 "/api/v1/lobbies/join",
+                                 "/api/v1/lobbies/stop"])
+        self.assertEqual(owner_launch_status(self.store), {"status": "idle"})
+        names = list((Path(self.root.name) / "private").glob(
+            "owner-steam-lease.closed-*.json"))
+        self.assertEqual(len(names), 1)
+        self.assertEqual(stat.S_IMODE(names[0].stat().st_mode), 0o600)
+        self.assertNotIn("pin", str(stopped))
+        # Relaunch may now proceed only through the normal owner preflight.
+        relaunched = launch_owner_steam(
+            "1001", api, store=self.store,
+            execution_approved=True, video_caps="video/x-raw")
+        self.assertEqual(relaunched["status"], "joined")
+
+    def test_stop_requires_approval_and_refuses_mismatched_lobby(self):
+        api = StatefulWolf()
+        launch_owner_steam("1001", api, store=self.store,
+                           execution_approved=True, video_caps="video/x-raw")
+        with self.assertRaisesRegex(PolicyError, "approval"):
+            stop_owner_steam(api, store=self.store)
+        api.lobby["started_by_profile_id"] = "other"
+        with self.assertRaisesRegex(PolicyError, "differs"):
+            stop_owner_steam(api, store=self.store, confirmed_stop=True)
+        self.assertEqual(len([1 for m, p, _ in api.calls
+                              if p == "/api/v1/lobbies/stop"]), 0)
+        self.assertEqual(owner_launch_status(self.store)["status"], "joined")
+
+    def test_stop_failure_blocks_repeat_and_leaves_pin_private(self):
+        api = StatefulWolf()
+        launch_owner_steam("1001", api, store=self.store,
+                           execution_approved=True, video_caps="video/x-raw")
+        api.fail_stop = True
+        with self.assertRaisesRegex(PolicyError, "unverified") as err:
+            stop_owner_steam(api, store=self.store, confirmed_stop=True)
+        self.assertNotIn("PRIVATE", str(err.exception))
+        self.assertEqual(owner_launch_status(self.store)["status"], "uncertain")
+        with self.assertRaisesRegex(PolicyError, "uncertain"):
+            stop_owner_steam(api, store=self.store, confirmed_stop=True)
+        self.assertEqual(len([1 for m, p, _ in api.calls
+                              if p == "/api/v1/lobbies/stop"]), 1)
+
+    def test_legacy_v1_lease_is_safe_to_read_but_never_stopped_without_pin(self):
+        api = StatefulWolf()
+        launch_owner_steam("1001", api, store=self.store,
+                           execution_approved=True, video_caps="video/x-raw")
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["version"] = 1
+            del lease["pin"]
+            write_lease(fd, lease)
+        with self.assertRaisesRegex(PolicyError, "no recoverable PIN"):
+            stop_owner_steam(api, store=self.store, confirmed_stop=True)
+        self.assertEqual(api.lobby["name"], "Steam")
+        self.assertEqual(owner_launch_status(self.store)["status"], "joined")
+
+    def test_legacy_idle_reconciliation_rejects_lingering_sessions_and_lobbies(self):
+        api = StatefulWolf()
+        launch_owner_steam("1001", api, store=self.store,
+                           execution_approved=True, video_caps="video/x-raw")
+        with self.assertRaisesRegex(PolicyError, "Explicit"):
+            reconcile_stopped_owner_steam(api, store=self.store)
+        with self.assertRaisesRegex(PolicyError, "active"):
+            reconcile_stopped_owner_steam(
+                api, store=self.store, confirmed_runtime_stopped=True,
+                confirmed_no_other_steam_writer=True)
+        api.lobby = None
+        with self.assertRaisesRegex(PolicyError, "active"):
+            reconcile_stopped_owner_steam(
+                api, store=self.store, confirmed_runtime_stopped=True,
+                confirmed_no_other_steam_writer=True)
+        api.data[4]["sessions"] = []
+        result = reconcile_stopped_owner_steam(
+            api, store=self.store, confirmed_runtime_stopped=True,
+            confirmed_no_other_steam_writer=True)
+        self.assertEqual(result["status"], "idle")
+        self.assertTrue(result["lease_archived"])
+        self.assertEqual(owner_launch_status(self.store), {"status": "idle"})
+
+    def test_invalid_persisted_pin_denied(self):
+        with self.store.locked() as fd:
+            from uuid import uuid4
+            invalid = {
+                "version": 2, "id": str(uuid4()), "client_id": "1001",
+                "workspace_id": self.store.read(fd)["workspaces"][0]["id"],
+                "state": "creating", "lobby_id": None, "pin": [True] * 8,
+            }
+            with self.assertRaisesRegex(PolicyError, "PIN"):
                 write_lease(fd, invalid)
             self.assertIsNone(read_lease(fd))
 

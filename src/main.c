@@ -847,14 +847,58 @@ typedef struct {
  gboolean stopping;
  gboolean status_only;
  gboolean reconciled_once;
+ gboolean playing;
+ gboolean observing;
+ gboolean stream_exited;
+ gboolean finished_observed;
  guint poll_id;
+ guint observe_id;
+ guint reconcile_id;
  gint64 deadline;
  GCancellable *cancel;
+ GSubprocess *stream_process;
  char host[512];
  char user[512];
 } ManagedGamesFlow;
 static ManagedGamesFlow managed_games={0};
 static void managed_games_send(const char *action);
+static void managed_games_observe(void);
+static gboolean managed_games_reconcile_after_exit(gpointer data);
+
+static void managed_games_stream_exited(GObject *source,GAsyncResult *result,gpointer unused){
+ (void)unused;
+ GError *error=NULL;
+ (void)g_subprocess_wait_finish(G_SUBPROCESS(source),result,&error);
+ g_clear_error(&error);
+ managed_games.stream_exited=TRUE;
+ g_clear_object(&managed_games.stream_process);
+ if(managed_games.finished_observed){
+  /* Let Wolf register the session disconnect before reconciling. */
+  managed_games.reconcile_id=g_timeout_add_seconds(3,
+   managed_games_reconcile_after_exit,NULL);
+ }
+}
+/* Own only the Moonlight process created by THIS NOW Games click. */
+static gboolean managed_games_open_wolf_ui(void){
+ int mode=moonlight_mode();
+ const gchar*exe=find_appimage();
+ const gchar*portable[]={exe,"stream",managed_games.host,"Wolf UI",NULL};
+ const gchar*native[]={"moonlight","stream",managed_games.host,"Wolf UI",NULL};
+ const gchar*flat[]={"flatpak","run","com.moonlight_stream.Moonlight",
+                     "stream",managed_games.host,"Wolf UI",NULL};
+ const gchar*const*argv=mode==1?portable:mode==2?native:flat;
+ GError *error=NULL;
+ managed_games.stream_process=g_subprocess_newv(argv,
+  G_SUBPROCESS_FLAGS_STDOUT_SILENCE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ if(!managed_games.stream_process){
+  g_clear_error(&error);
+  return FALSE;
+ }
+ managed_games.stream_exited=FALSE;
+ g_subprocess_wait_async(managed_games.stream_process,NULL,
+  managed_games_stream_exited,NULL);
+ return TRUE;
+}
 
 static void managed_games_message(const char *message){
  say(message);
@@ -873,6 +917,74 @@ static gboolean managed_games_poll(gpointer data){
  (void)data;
  managed_games.poll_id=0;
  if(managed_games.running)managed_games_send("status");
+ return G_SOURCE_REMOVE;
+}
+static gboolean managed_games_observe_timer(gpointer unused){
+ (void)unused;
+ managed_games.observe_id=0;
+ managed_games_observe();
+ return G_SOURCE_REMOVE;
+}
+static void managed_games_observed(GObject *source,GAsyncResult *result,gpointer unused){
+ (void)source;(void)unused;
+ NowGamesReply answer=NOW_GAMES_BUSY;
+ GError *error=NULL;
+ gboolean ok=now_games_request_finish(result,&answer,&error);
+ g_clear_error(&error);
+ managed_games.observing=FALSE;
+ if(!managed_games.playing)return;
+ if(!ok || (answer!=NOW_GAMES_RUNNING && answer!=NOW_GAMES_FINISHED)){
+  managed_games.playing=FALSE;
+  managed_games_message("STEAM EXIT UNKNOWN. MOONLIGHT WAS NOT CLOSED");
+  return;
+ }
+ if(answer==NOW_GAMES_RUNNING){
+  managed_games.observe_id=g_timeout_add_seconds(5,
+   managed_games_observe_timer,NULL);
+  return;
+ }
+ managed_games.playing=FALSE;
+ managed_games.finished_observed=TRUE;
+ if(!managed_games.stream_process && !managed_games.stream_exited){
+  managed_games_message("STEAM FINISHED. CLOSE EXISTING MOONLIGHT SESSION");
+  return;
+ }
+ managed_games_message("STEAM EXIT VERIFIED. CLOSING MOONLIGHT...");
+ if(managed_games.stream_process)
+  g_subprocess_send_signal(managed_games.stream_process,SIGTERM);
+ else if(managed_games.stream_exited)
+  managed_games.reconcile_id=g_timeout_add_seconds(3,
+   managed_games_reconcile_after_exit,NULL);
+}
+static void managed_games_observe(void){
+ if(!managed_games.playing||managed_games.observing)return;
+ managed_games.observing=TRUE;
+ char *helper=managed_games_helper();
+ now_games_request_async(helper,"observe",managed_games.host,
+  managed_games.user,NULL,managed_games_observed,NULL);
+ g_free(helper);
+}
+static void managed_games_reconciled(GObject *source,GAsyncResult *result,gpointer unused){
+ (void)source;(void)unused;
+ NowGamesReply answer=NOW_GAMES_BUSY;
+ GError *error=NULL;
+ gboolean ok=now_games_request_finish(result,&answer,&error);
+ g_clear_error(&error);
+ if(ok && answer==NOW_GAMES_IDLE)
+  managed_games_message("STEAM CLOSED. READY FOR NEXT GAME");
+ else
+  managed_games_message("STEAM CLOSED; LEASE REVIEW NEEDED BEFORE NEXT GAME");
+ managed_games.finished_observed=FALSE;
+}
+static gboolean managed_games_reconcile_after_exit(gpointer unused){
+ (void)unused;
+ managed_games.reconcile_id=0;
+ if(!managed_games.finished_observed||managed_games.stream_process)
+  return G_SOURCE_REMOVE;
+ char *helper=managed_games_helper();
+ now_games_request_async(helper,"reconcile",managed_games.host,
+  managed_games.user,NULL,managed_games_reconciled,NULL);
+ g_free(helper);
  return G_SOURCE_REMOVE;
 }
 static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer data){
@@ -909,9 +1021,14 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
   return;
  }
  if(strcmp(action,"start")==0){
-  managed_games_finish(answer==NOW_GAMES_JOINED?
-    "OWNER STEAM JOINED. CONTINUE IN MOONLIGHT":
-    "STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
+  if(answer==NOW_GAMES_JOINED){
+   managed_games.playing=TRUE;
+   managed_games_finish("STEAM JOINED. MONITORING NATURAL EXIT...");
+   managed_games.observe_id=g_timeout_add_seconds(5,
+    managed_games_observe_timer,NULL);
+  }else{
+   managed_games_finish("STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
+  }
   return;
  }
  if(strcmp(action,"reconcile")==0){
@@ -944,7 +1061,10 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
   if(!managed_games.opening_ui){
    managed_games.opening_ui=TRUE;
    managed_games_message("OPENING MOONLIGHT WOLF UI");
-   launch_wolf_app("Wolf UI");
+   if(!managed_games_open_wolf_ui()){
+    managed_games_finish("MOONLIGHT COULD NOT OPEN WOLF UI");
+    return;
+   }
   }
   managed_games_message("WAITING FOR AUTHENTICATED WOLF UI STREAM");
   managed_games.poll_id=g_timeout_add_seconds(3,managed_games_poll,NULL);
@@ -975,8 +1095,10 @@ static void managed_games_send(const char *action){
  g_free(helper);
 }
 static void managed_games_begin(gboolean stop,gboolean status_only){
- if(managed_games.running){
-  managed_games_message("GAMES REQUEST ALREADY IN PROGRESS");
+ if(managed_games.running||managed_games.playing||
+    managed_games.observing||managed_games.finished_observed||
+    managed_games.stream_process||managed_games.reconcile_id){
+  managed_games_message("GAMES SESSION OR EXIT CHECK ALREADY IN PROGRESS");
   return;
  }
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){

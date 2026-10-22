@@ -148,7 +148,8 @@ void now_games_request_async(const char *script, const char *action,
     if (!script || !*script || !host || !*host || !user || !*user ||
         !action || (strcmp(action, "status") != 0 &&
                     strcmp(action, "start") != 0 &&
-                    strcmp(action, "stop") != 0)) {
+                    strcmp(action, "stop") != 0 &&
+                    strcmp(action, "reconcile") != 0)) {
         g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                                 "Invalid restricted Games request");
         g_object_unref(task);

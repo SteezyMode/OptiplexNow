@@ -240,7 +240,16 @@ runners lack. A dedicated **disposable GPU-equipped machine** is needed
 for Create/Join/session/reconnect physical acceptance. See
 [REAL-WOLF-VALIDATION.md](REAL-WOLF-VALIDATION.md).
 
-**Outcome:** see PR #167 GitHub Actions and comments; append exact observed
+**First workflow result:** Run `39755626372` stopped in the *preflight
+unit test* before running Docker. Test `test_probe_only_uses_five_gets_and_redacts_session_keys`
+incorrectly scanned the whole Docker argv for the string `POST`, even though
+the embedded **reviewed source code** in argv legitimately contains that
+word. No POST request was executed. The corrected test checks the exact
+selected HTTP method (`argv[-2] == "GET"`) for each of the five requests.
+This is a false-positive assertion; it is not a real Wolf startup failure.
+Rerun PR CI before updating the real-daemon evidence.
+
+**Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 
  A developer must not run a real Wolf POST

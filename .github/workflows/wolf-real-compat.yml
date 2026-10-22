@@ -41,7 +41,9 @@ jobs:
 
           # Hosted GitHub runners have no /dev/dri, /dev/uinput or /dev/uhid.
           # A blocked boot is diagnostic, never a streaming compatibility pass.
-          image="ghcr.io/games-on-whales/wolf:stable"
+          # Real upstream digest captured by successful isolated run 39757678257.
+          # Pin protocol acceptance to these exact bytes, not moving :stable.
+          image="ghcr.io/games-on-whales/wolf@sha256:b0ef253739f9bd49b71eba7e150c955fd05990c0d409e666d89236995351551a"
           if ! timeout 360 docker pull "${image}" > /dev/null; then
             echo "Real Wolf image could not be pulled on disposable runner" >> "${GITHUB_STEP_SUMMARY}"
             exit 0

@@ -18,7 +18,7 @@ import sys
 
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}\Z")
 USER_RE = re.compile(r"[a-z_][a-z0-9_-]{0,31}\Z", re.I)
-ACTIONS = frozenset(("status", "start", "stop", "reconcile"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe"))
 KEY_DIR = Path.home() / ".local/share/optiplex-now/games-client"
 MAX_RESPONSE = 2048
 
@@ -101,7 +101,8 @@ def invoke(host, user, action, *, key_dir=KEY_DIR, runner=subprocess.run):
             reply.get("success") is not True or
             reply.get("status") not in ("needs_wolf_ui",
                                         "wolf_ui_connected", "busy",
-                                        "in_use", "joined", "idle")):
+                                        "in_use", "joined", "idle",
+                                        "running", "finished")):
         raise RuntimeError("Games request denied by host")
     # No key, Steam account data or raw Wolf API object is forwarded.
     return reply

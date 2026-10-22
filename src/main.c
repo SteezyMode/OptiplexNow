@@ -2062,19 +2062,22 @@ static void wizard_save(Wizard*c){
  }
 
  /* Media URLs must survive leaving Services even if server/SSH identity is
-  * incomplete. Validate the entire group before replacing any saved URLs. */
+  * incomplete. An invalid optional service must not block valid ones. */
  const char *urls[3];
  for(int i=0;i<3;i++){
    urls[i]=c->service_inputs[i]?
       gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i])):NULL;
  }
- int urls_valid=now_wizard_store_services(cfg,urls);
+ unsigned invalid_urls=now_wizard_store_services(cfg,urls);
  if(!config_save()){
    gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
    say("SETTINGS COULD NOT BE SAVED");
- }else if(!urls_valid){
-   gtk_label_set_text(GTK_LABEL(c->notice),"INVALID SERVICE URL. PREVIOUS URLS RETAINED");
-   say("INVALID SERVICE URL. PREVIOUS URLS RETAINED");
+ }else if(invalid_urls){
+   for(int i=0;i<3;i++)if((invalid_urls&(1u<<i))&&c->service_labels[i]){
+     gtk_label_set_text(GTK_LABEL(c->service_labels[i]),"INVALID URL. PREVIOUS VALUE RETAINED");
+   }
+   gtk_label_set_text(GTK_LABEL(c->notice),"VALID SERVICE URLS SAVED. INVALID URLS RETAINED");
+   say("INVALID SERVICE URL. OTHER URLS SAVED");
  }else if(!server_valid){
    gtk_label_set_text(GTK_LABEL(c->notice),"SERVICE URLS SAVED. SERVER DETAILS INCOMPLETE");
  }else{

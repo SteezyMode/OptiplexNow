@@ -18,7 +18,7 @@ Published v1.17.0 is an amd64 GTK3 Linux client for an already prepared server. 
 | `src/wolf_transport.c/.h` | Asynchronous worker-backed GIO request transport for the existing Python SSH bridge; no GTK widgets or Docker access |
 | `src/tailscale_async.c/.h` | Cancellable background Tailscale helper invocation and strict discovery parsing; no GTK widgets or network configuration |
 | `src/wizard_network.c/.h` | GTK-free orchestration of two independent setup requests, duplicate suppression, timeouts, cancellation and shutdown |
-| `src/wizard_services.c/.h` | GTK-free atomic validation and application of entered Videos/Music/Downloads URLs |
+| `src/wizard_services.c/.h` | GTK-free independent validation and application of entered Videos/Music/Downloads URLs |
 | `src/service_probe.c/.h` | GTK-free asynchronous HTTP availability checks with cancellation, timeout, bounded results and verified URLs |
 | `src/tailscale-status.py` | Read-only Tailscale JSON status normalization for wizard; never performs sign-in or enrollment |
 | `src/tailscale_install.c/.h` | Unprivileged GTK-independent GIO wrapper invoking PolicyKit to request a specific root installation operation |

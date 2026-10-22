@@ -509,3 +509,25 @@ against the working reference server by interpreting this code's existence as ap
   without a verified stop and archived lease. Next implementation: connect
   the named owner lifecycle to Games through a narrow authenticated host
   request, without giving ordinary clients unrestricted SSH/Docker access.
+
+## 2026-10-23: Bind future NOW Games actions to authenticated devices
+
+- The reference host physically demonstrated owner Steam Create/Join, RE2R,
+  independent desktop, Stop/recovery and relaunch. The current client Games
+  button, however, still calls direct Moonlight `Steam` and can select
+  per-device state rather than the durable named owner Steam workspace.
+- The next minimal module is a strict `status/start/stop` host request gate,
+  using the existing owner grant, actual paired-client inventory, live Wolf
+  UI identity and lease/Stop implementation. The request cannot provide
+  another client ID, profile, PIN, runner or caps. Invalid or revoked
+  identities are denied and active leases block new writes.
+- Deliberately NOT included: a TCP listener, unattended service, generic
+  SSH command, install-time auth, NOW Games UI retarget, Moonlight orchestration,
+  new session state machine or physical host deployment. A host-controlled
+  authenticated binding for each incoming remote credential is still required
+  before this code can be called from the actual NOW client.
+- Why: direct SSH with existing Docker-admin permissions or trusting a
+  client-submitted Wolf ID would widen rather than resolve the privilege
+  boundary. Next acceptance step after CI: independently authenticate a
+  remote owner device at host boundary and prove denial of forged, revoked
+  and concurrent requests; only then wire the GTK Games button.

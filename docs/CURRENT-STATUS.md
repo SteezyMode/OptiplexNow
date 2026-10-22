@@ -116,6 +116,17 @@ in supervised recovery. GitHub tests were fixture/protocol evidence on merge;
 the corrected caps subsequently passed real Steam + RE2R and relaunch tests.
 See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
+## Games button integration boundary (source-only code)
+
+`server/owner_games_request.py` introduces a source-only narrow request
+handler for `status/start/stop` that refuses client-selected identities and
+reuses the tested named owner Steam lifecycle. Its `verified_client_id`
+must come from an independently authenticated host transport; no such
+remote-device broker or trusted production caller exists yet. The handler
+is **not installed or invoked** by the current NOW Games button and does not
+replace the working direct Steam shortcut. Source-level tests are simulated,
+not a second physical client acceptance test.
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

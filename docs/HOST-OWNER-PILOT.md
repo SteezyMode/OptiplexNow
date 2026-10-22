@@ -157,6 +157,38 @@ restart a container. It refuses all nonempty Wolf runtimes, preserves
 private archived evidence, and never clears a lease on a guessed state.
 **It is not safe to use merely because a client window closed.**
 
+## Authenticated Games request gate (source only)
+
+`server/owner_games_request.py` is the minimal host-side application gate for
+the future NOW Games button. It accepts only `{"version":1,"action":"status"}`,
+`"start"` and `"stop"` action payloads, with no client-supplied user,
+device identity, Steam profile, runner configuration, filesystem path, PIN or
+video caps. A **separate trusted host transport** must bind the *actual*
+requesting credential to an already owner-approved Wolf Moonlight client ID,
+then supply that bound identity directly to the gate. This is **not** a TCP
+listener, SSH command, Unix socket server, authenticator, or deployed helper.
+Do not import or expose it to remote clients directly.
+
+`status` returns only safe `needs_wolf_ui`, `wolf_ui_connected`, `busy`
+or `in_use` information. `start` requires a host-controlled enable flag,
+the exact bound client's active Wolf UI session, an authorized owner workspace,
+and a **host-only writer preflight callback re-evaluated for each launch**
+(including legacy writable aliases and running Steam processes), plus the
+existing single-writer lease checks. There is deliberately **no default
+production writer preflight implementation** in this source-only gate. It uses the **same physically
+tested** `launch_owner_steam` transaction. `stop` may only terminate a
+lease held by the exact bound owner device and delegates to the existing
+PIN-checked one-shot stop.
+
+**Not yet safe to turn on from the shipped UI:** the production transport
+must independently authenticate a remote device and bind that credential to
+its Moonlight identity; provide a nonadministrative narrow access path;
+ensure the expected server-installed files/caps and legacy Steam writer
+isolation; and handle Moonlight Wolf UI startup/connection without races.
+Existing broad SSH + Docker rights are not a consumer permission model.
+An already active joined lease requires a deliberate stop, not an automatic
+second Create or forced takeover.
+
 ## Rollback and verification boundaries
 
 Before live testing, preserve Wolf `/etc/wolf`, Steam workspace data,

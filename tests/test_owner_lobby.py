@@ -154,9 +154,12 @@ class OwnerLobbyTests(unittest.TestCase):
         with self.assertRaises(PolicyError):
             self.plan(tuple(data))
         data = list(fixtures())
-        data[2]["profiles"][1]["apps"][0]["runner"]["name"] = "../../Steam"
-        with self.assertRaises(PolicyError):
-            self.plan(tuple(data))
+        for bad in ("../../Steam", "..", ".hidden", "Steam..Other", ""):
+            with self.subTest(runner_name=bad):
+                data = list(fixtures())
+                data[2]["profiles"][1]["apps"][0]["runner"]["name"] = bad
+                with self.assertRaises(PolicyError):
+                    self.plan(tuple(data))
 
     def test_pin_is_validated_and_not_guessed_by_client(self):
         data = fixtures()

@@ -59,6 +59,33 @@ Upstream source reference: [Wolf UI Apps/App.cs](https://github.com/games-on-wha
 
 **Live-host safety:** This is an offline plan builder and tests only. It does not alter the working owner's Steam folders or existing Wolf profile state and is not wired to the Games shortcut.
 
+## Disposable Wolf HTTP socket integration fixture (PR #166, no host deployment)
+
+`src/wolf_socket_adapter.py` implements a strict HTTP-over-Unix-socket
+transport for the native Wolf endpoint **inside** the `wolf` container.
+`src/wolf_docker_adapter.py` invokes this reviewed code via a fixed
+`docker exec` argument list. Only five GET inventories and two POST lobby
+operations are allowed; raw STOP, Docker admin, arbitrary shell/paths and
+network listeners are explicitly out of scope. JSON POST bodies are passed
+through stdin, never argv. A Wolf refused status, oversized/truncated/encoded
+response, invalid JSON or timeout raises a sanitized exception; no automatic
+retry occurs after a potentially successful POST.
+
+`tests/test_wolf_socket_protocol.py` exercises the actual socket wire format
+with a temporary Unix server and a local subprocess stand-in for Docker. It
+also verifies that `src/owner_launch.py` can call through this protocol
+under a fail-closed persisted lease. It is **simulated Wolf**: the test does
+not prove the reference host's Wolf image accepts the request shape or that
+Steam launches. No host helper, GUI, Steam state or running Wolf configuration
+was installed or changed by this PR.
+
+For actual Wolf, the host operator must verify the pinned image's response
+framing, app/session IDs, buffer caps, create/join schema and direct-access
+security on a **disposable test host** before authorizing execution. The
+existing `wolf-pair-local.py` pairing tool remains unchanged; its historical
+4 KiB POST body buffer must not be repurposed for Steam lobby configs.
+See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+
 ## Packaged code and deployment
 
 | Component | Location / action |

@@ -139,5 +139,72 @@ Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
    works in a physical end-to-end test. Keep eventual member accounts and new media
    provisioning deferred per PRODUCT.
 
+## 2026-10-22: PR #166 disposable Wolf socket-protocol verification
+
+### Problem and evidence
+
+- Previous #165 `FakeWolf` Python tests return Python dictionaries directly. They **never**
+  exercised HTTP request framing, JSON/Content-Length, Unix sockets, Docker's
+  child process boundary, response truncation or Wolf API refusal. Do not call
+  those tests a protocol integration test.
+- Wolf's upstream UI code provides the Create/Join JSON shape, but **does not**
+  prove the reference host's pinned Wolf image accepts our request. Real Wolf
+  Create/Join remains an outstanding physical/disposable test.
+
+### Changes and owned modules
+
+- `src/wolf_socket_adapter.py`: explicit GET allowlist for
+  `clients/profiles/apps/sessions/lobbies`; POST allowlist for
+  `lobbies/create` and `lobbies/join` **only**. Bounded request/response
+  sizes, 5-second socket timeout, complete HTTP status and length checks,
+  and sanitized errors. Rejects chunked/encoded replies until explicitly
+  verified and supported, rather than misparsing transport.
+- `src/wolf_docker_adapter.py`: a host-local bridge with fixed
+  `docker exec -i wolf python3 -c <reviewed-local-script> METHOD PATH`.
+  JSON request data crosses **stdin**, not argv; stderr is discarded and raw
+  session data must never be logged. No arbitrary Docker command, shell,
+  network listener, or Wolf admin API is accepted.
+- `tests/test_wolf_socket_protocol.py`: a **real temporary AF_UNIX HTTP
+  server** and a Docker-command stand-in that executes the *same adapter
+  source* in a local child Python process. Tests validate entire seven-step
+  owner launch request ordering, successful state lease, no repeat launch,
+  unsafe endpoint rejection, HTTP length/framing/JSON refusal, ambiguous
+  first POST and persisted blocking lease.
+- New adapter remains a **developer module only**: not included in the
+  published host installer, not exposed to clients, and not called by the
+  existing Games shortcut. No active Wolf container or Steam files changed.
+
+### Rejected shortcuts / failure modes
+
+- Do not expose generic Wolf `POST` support for convenience. A caller with
+  the socket has administrative-level Wolf access.
+- The old `wolf-pair-local.py` raw Docker bridge reads only 4096 bytes from
+  stdin for POST; a lobby runner config can be larger. Do **not** reuse that
+  bridge for lobby creation. The new adapter has a separate bounded request
+  protocol and deliberately does not rewrite existing pairing behavior.
+- Do not suppress ambiguous response framing, retry on timeout or automatically
+  clear `owner-steam-lease.json`: a partial POST may already have created a lobby.
+- An allowlisted host bridge is **not authentication**. Wolf's upstream direct
+  apps and Wolf UI are still outside NOW's device-grant enforcement.
+- This fixture answers protocol *compatibility in a simulated daemon*, not
+  Wolf version/driver compatibility or actual Steam video/input.
+
+### Reproduce and hand off
+
+Run `python3 -m unittest discover -s tests -p 'test_wolf_socket_protocol.py' -v`
+or the entire `python3 -m unittest discover -s tests -v` suite. PR #166 CI
+result must be entered in its PR and #154; native package tests cannot replace
+a disposable real Wolf host.
+
+**Next required proof:** on a disposable host with an actual compatible Wolf
+image digest, confirm response framing and the exact `GET /api/v1/apps`,
+`GET /api/v1/sessions`, `POST /api/v1/lobbies/create` and
+`POST /api/v1/lobbies/join` schemas while hiding keys/PINs. If this adapter
+rejects chunked transfer or a different session ID, update the explicitly
+tested protocol contract **before** production enablement. Do not ask an owner
+to test the writing path against their live Steam state. Then implement
+authenticated host broker, Wolf direct-app admission denial, lease recovery
+and physical fresh-client P0 acceptance.
+
 **Owner-host operations in PR #165:** none. A developer must not run a real Wolf POST
 against the working reference server by interpreting this code's existence as approval.

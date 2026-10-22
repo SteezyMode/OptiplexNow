@@ -216,8 +216,8 @@ class TrustedGamesGateTests(unittest.TestCase):
         with self.store.locked() as fd:
             self.assertIsNone(read_lease(fd))
         self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
-        self.api.data[4]["sessions"] = [
-            {"client_id": "1001", "app_id": "wolf-ui-id"}]
+        # Reconnected Wolf UI must present full real session settings.
+        self.api.data[4]["sessions"] = copy.deepcopy(fixtures()[4]["sessions"])
         self.assertEqual(self.call("start", approved=True)["status"], "joined")
 
     def test_reconcile_refuses_active_lobby_even_when_stream_disconnected(self):

@@ -20,14 +20,26 @@ OptiPlex physical desktop remained independently usable. The named Steam
 workspace was backed up and verified before launch. See [issue
 #154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
-The successful session still has a **version 1 joined lease without a
-persisted lobby PIN**. This session must NOT be stopped using the new
-version 2 PIN-gated StopLobby path. The unreleased lifecycle branch adds
-owner-only PIN persistence for future launches, a guarded stop, and manual
-idle reconciliation for legacy leases. These new lifecycle paths are not
-yet physically tested, and the NOW Games GUI still uses the legacy direct
-Steam shortcut. No authenticated client-to-host broker or one-click Games
-acceptance has occurred. **Private Alpha 1 remains unaccepted.**
+**Physically verified managed lifecycle on reference host:** After the user
+exited RE2R and disconnected Moonlight, Wolf reported zero lobbies/sessions.
+With no Steam writer active, merged PR #175's `reconcile` archived the old
+v1 lease without Wolf restart. A new v2 Create+Join opened Steam and stored
+a private PIN; the operator's guarded StopLobby returned
+`{lease_archived:true,status:"idle",success:true}` and returned the MacBook
+to Wolf UI. Another preflight passed and a further v2 Create+Join reopened
+Steam **without restarting Wolf or manually touching leases**. This proves
+the host-local **Create → Join → Play RE2R → Stop → Relaunch** path while the
+physical OptiPlex desktop remains usable. Steam audio was not separately
+verified.
+
+**Not a completed NOW Games workflow:** The shipped NOW Games button still
+runs direct `moonlight stream HOST Steam`, not this host-local named-profile
+pilot. The operator needs Docker-capable host access and a pre-established
+Wolf UI stream; no authenticated client-to-host Games broker, unmodified
+fresh-client enrollment, multi-device handoff or clean-host install is
+accepted. The latest test leaves a **v2 joined** lobby active; do not issue
+another Create until that session is stopped and its lease archived.
+**Private Alpha 1 remains unaccepted.**
 
 ## October 22 owner Steam source-only development (unreleased)
 
@@ -39,8 +51,8 @@ fail-closed launch lease and simulated failure-path tests. These files are
 source-level preparation, not installed operational host services. Normal
 client Games still launches the legacy direct Moonlight Steam app, Wolf's
 direct-app permissions are not restricted by NOW's policy, and fresh-owner
-client P0 remains **unaccepted**. That source-only work subsequently passed a physical Create+Join on
-October 23, as recorded above. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+client P0 remains **unaccepted**. The host-local source work subsequently
+passed real Create+Join and a full lifecycle check on October 23, above. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
 ## October 22 Wolf protocol fixture (PR #166, source-only)
 
@@ -99,9 +111,9 @@ Physical CreateLobby returned a GStreamer pipeline syntax error followed by a
 producer. This is a strong candidate, **not a verified root-cause fix**.
 Source PR #174 requires explicit host-verified software or NVIDIA-zero-copy
 caps and refuses a create attempt otherwise, without writing a lease.
-The previous physical failed lobby/uncertain lease is unchanged. GitHub tests
-were fixture/protocol evidence on merge; the corrected caps subsequently
-passed a physical Steam + RE2R test on October 23.
+The previous failed lobby and uncertain lease were subsequently reconciled
+in supervised recovery. GitHub tests were fixture/protocol evidence on merge;
+the corrected caps subsequently passed real Steam + RE2R and relaunch tests.
 See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
 ## Capability status
@@ -117,7 +129,7 @@ See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/O
 | Server Setup review | Separate GTK window; real read-only preflight and plan shipped in PR build | Real hardware observation useful, but **not** an installation certificate |
 | Clean NOW-managed Wolf installation | Developer/alpha implementation in `server/host_install.py` and GUI, AMD/Intel/NVIDIA; immutable image, root recheck, dedicated state | **No confirmed clean physical host install** |
 | NVIDIA userspace driver volume | `host_nvidia.py`: version-specific build with official installer SHA256 check; no host-driver replacement | Physical encode and driver-update migration/rollback **unverified** |
-| Separate game sessions preserving host display | Core Wolf-based product requirement; Wolf supports virtual app/session concepts | **Not yet physically verified end-to-end by NOW on a clean host** |
+| Separate game sessions preserving host display | Wolf named-profile Steam Create/Join/Stop source pilot; installed NOW Games button not wired | **Physically verified on reference OptiPlex:** MacBook played RE2R while host desktop stayed free, followed by managed v2 Stop/relaunch. **Not accepted on fresh client or clean host through NOW GUI.** |
 | Windows clients and hosts | Explicit roadmap: Windows client first, independent-session Windows host later | Neither is implemented; Windows host adds licensing/technical feasibility gates |
 | Owner-mediated automatic device access by email | Future design only | Not implemented |
 | Turnkey install, dependency setup, repair, upgrades, uninstall | No complete end-to-end implementation | Not alpha-accepted |

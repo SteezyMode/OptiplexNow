@@ -28,7 +28,7 @@ Acceptance:
 - [ ] Host/network restart preserves game/account state. Existing working Wolf/Steam installations are not silently migrated or overwritten.
 - [ ] Release acceptance demonstrates a real game, not just a created lobby, Steam splash screen or successful Moonlight spawn.
 
-Critical issue: [#154](https://github.com/SteezyMode/OptiplexNow/issues/154). The October 22 Wolf CreateLobby GStreamer pipeline parse failure remains a **diagnosis**, not a proven fixed root cause. Merged transport timeout adjustments do not alone certify real Steam launch.
+Critical issue: [#154](https://github.com/SteezyMode/OptiplexNow/issues/154). On October 23 the corrected legacy NVIDIA producer caps passed real owner Steam Create/Join, RE2R gameplay, and managed Stop/relaunch on the reference host while preserving the local desktop. The earlier missing-caps diagnosis is supported but not isolated as the only cause. **The GUI, authenticated broker, fresh-client, multi-device and clean-host gates remain open.**
 
 ## Pillar 2: personal video
 

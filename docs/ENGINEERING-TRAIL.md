@@ -271,6 +271,18 @@ named/persistent volume, privileged container or host network. Added positive
 and negative volume tests. This is a strict probe-gate compatibility change,
 not a real Wolf API result. Rerun and record the actual gate result.
 
+**Fourth workflow result:** Run `39756922735` printed sanitized mounts
+from the running upstream Wolf image:
+`/etc/wolf` (single scratch bind), plus an anonymous 64-hex Docker volume at
+`/run/user/wolf`. The image declares `/run/user/wolf/` **with a trailing
+slash**, which Docker normalizes off `Mounts[].Destination`. The gate rejected
+that safe mount before its first GET. Corrected the comparator by normalizing
+only declared destination trailing slashes; still requires a Docker-generated
+64-character hex name, a declaration in the image, no extra binds and no host
+network/privilege. A regression fixture now reproduces the exact spelling
+difference. The fail-closed diagnostic proves the real image mount layout,
+**not** the API semantics yet.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

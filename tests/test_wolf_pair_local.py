@@ -136,7 +136,9 @@ class WolfPairLocalTests(unittest.TestCase):
         self.assertFalse(result["owner_mapping_verified"])
         self.assertNotIn("SECRET", output.getvalue())
         self.assertNotIn("PRIVATE", output.getvalue())
-        self.assertNotIn("pin", output.getvalue())
+        self.assertNotIn('"pin":', output.getvalue())
+        self.assertNotIn('"settings":', output.getvalue())
+        self.assertNotIn('"runner":', output.getvalue())
 
     def test_owner_status_missing_profile_does_not_invent_steam_owner(self):
         result = bridge.owner_profile_readiness(

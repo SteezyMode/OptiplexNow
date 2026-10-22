@@ -14,6 +14,33 @@ Use source checkout on the Wolf host, as the operating-system administrator
 who already has Docker access. `WolfDockerAPI` talks only through the fixed
 `docker exec -i wolf` private Unix socket adapter. No ports are exposed.
 
+## Mandatory host video-format verification
+
+The prior operator pilot passed an empty `video_producer_buffer_caps` string in the
+Wolf CreateLobby request. On the reference NVIDIA host this coincided with a
+GStreamer pipeline syntax failure and Wolf's 20-second lobby setup timeout.
+**The missing caps are a strong root-cause candidate, not yet physically proven.**
+
+Upstream Wolf selects the producer format at startup. Its GET app/profile API
+does not report that selected caps, and automatic guessing is unsafe. Before
+using this source-only pilot, obtain the host's startup selection with a
+**read-only** command (do not restart Wolf):
+
+```sh
+docker logs wolf 2>&1 |
+  grep -E 'Using (zero copy|legacy) pipeline on' |
+  tail -10
+```
+
+For **NVIDIA**, `Using zero copy pipeline on NVIDIA` corresponds to
+`video/x-raw(memory:CUDAMemory)`; `Using legacy pipeline on NVIDIA`
+corresponds to `video/x-raw`. Pass the confirmed string using `--video-caps`.
+If the selection cannot be verified, **stop** rather than guessing. The
+current pilot supports exactly these two values; other GPU formats require a
+separately validated capability integration and are not silently approximated.
+Never submit another lobby Create POST while a previous uncertain lease or
+lobby remains.
+
 ## Safest first step while the host desktop is occupied
 
 From the MacBook, connect with trusted SSH to the OptiPlex; then, with its Wolf
@@ -21,7 +48,7 @@ UI stream **already active on the MacBook**, from the project checkout on
 the OptiPlex run:
 
 ```bash
-python3 server/owner_steam_pilot.py inspect
+python3 server/owner_steam_pilot.py inspect --video-caps 'HOST_VERIFIED_CAPS'
 ```
 
 This makes five bounded GET calls and emits only a redacted readiness report.
@@ -50,6 +77,7 @@ a new private state directory. It cannot replace an existing owner policy:
 ```bash
 mkdir -p -m 700 "$HOME/.local/state"
 python3 server/owner_steam_pilot.py enroll \
+  --video-caps 'HOST_VERIFIED_CAPS' \
   --state-dir "$HOME/.local/state/optiplex-now-owner-pilot" \
   --confirm-existing-owner --confirm-owner-device
 ```
@@ -60,6 +88,7 @@ be attempted:
 
 ```bash
 python3 server/owner_steam_pilot.py launch \
+  --video-caps 'HOST_VERIFIED_CAPS' \
   --state-dir "$HOME/.local/state/optiplex-now-owner-pilot" \
   --confirm-live-steam \
   --confirm-no-other-steam-writer \

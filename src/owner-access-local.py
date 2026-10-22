@@ -7,6 +7,7 @@ still requires upstream Wolf authorization to connect; this file cannot yet
 prevent a directly paired client from selecting Wolf apps itself.
 """
 import argparse
+import importlib.machinery
 import importlib.util
 import json
 import os
@@ -22,11 +23,20 @@ STATE_DIRECTORY = "/var/lib/optiplex-now"
 
 
 def _wolf_bridge():
-    path = Path(__file__).resolve().with_name("wolf-pair-local.py")
-    spec = importlib.util.spec_from_file_location("now_local_wolf_bridge", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    # Source tree uses .py; existing owner-host installs the same local
+    # helper without a suffix. Never attempt to download or execute a
+    # remote helper as part of enrollment.
+    directory = Path(__file__).resolve().parent
+    for name in ("wolf-pair-local.py", "wolf-pair-local"):
+        path = directory / name
+        if not path.is_file():
+            continue
+        loader = importlib.machinery.SourceFileLoader("now_local_wolf_bridge", str(path))
+        spec = importlib.util.spec_from_loader(loader.name, loader)
+        module = importlib.util.module_from_spec(spec)
+        loader.exec_module(module)
+        return module
+    raise PolicyError("Local Wolf helper is not installed alongside owner policy")
 
 
 def run(args, *, store=None, wolf_api=None):

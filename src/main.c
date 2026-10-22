@@ -905,6 +905,12 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
     "STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
   return;
  }
+ /* A delayed status must not trigger a new Start after the deadline.
+  * A Start already sent above is never automatically repeated. */
+ if(g_get_monotonic_time()>=managed_games.deadline){
+  managed_games_finish("GAMES CONNECT TIMEOUT. NO STEAM LAUNCH ATTEMPTED");
+  return;
+ }
  if(answer==NOW_GAMES_WOLF_UI_CONNECTED){
   managed_games_message("OWNER DEVICE AUTHORIZED. REQUESTING STEAM...");
   managed_games_send("start");
@@ -959,7 +965,9 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
   managed_games_message("THIS DEVICE NEEDS OWNER GAMES APPROVAL");
   return;
  }
- if(!stop && !has_moonlight()){on_games_setup(NULL,NULL);return;}
+ if(!stop && !status_only && !has_moonlight()){
+  on_games_setup(NULL,NULL);return;
+ }
  memset(&managed_games,0,sizeof managed_games);
  managed_games.running=TRUE;
  managed_games.stopping=stop;

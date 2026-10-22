@@ -55,6 +55,28 @@ class RealWolfSafetyTests(unittest.TestCase):
             probe.inspect_container("now-wolf-compat-../wolf",
                                     Mock(side_effect=AssertionError("called")))
 
+    def test_only_image_declared_fresh_anonymous_volumes_allowed(self):
+        info = safe_info()
+        extra = {
+            "Type": "volume", "Name": "a" * 64, "Source": "/var/lib/docker/volumes/" + "a"*64 + "/_data",
+            "Destination": "/var/lib/wolf", "RW": True,
+        }
+        info["Config"]["Volumes"] = {"/var/lib/wolf": {}}
+        info["Mounts"].append(extra)
+        self.assertEqual(probe.validate_container("now-wolf-compat-test01", info),
+                         "/tmp/now-wolf-compat-test01")
+        for mutate in (
+            lambda x: x["Mounts"][1].update({"Name": "existing-owner-data"}),
+            lambda x: x["Mounts"][1].update({"Type": "bind"}),
+            lambda x: x["Mounts"][1].update({"Destination": "/etc/wolf"}),
+            lambda x: x["Config"].update({"Volumes": {}}),
+        ):
+            bad = copy.deepcopy(info)
+            mutate(bad)
+            with self.subTest(bad=bad):
+                with self.assertRaises(probe.ProbeError):
+                    probe.validate_container("now-wolf-compat-test01", bad)
+
     def test_probe_only_uses_five_gets_and_redacts_session_keys(self):
         called = []
         responses = {

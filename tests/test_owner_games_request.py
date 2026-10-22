@@ -253,6 +253,20 @@ class TrustedGamesGateTests(unittest.TestCase):
         with self.store.locked() as fd:
             self.assertIsNotNone(read_lease(fd))
 
+    def test_reconcile_rechecks_wolf_runtime_after_writer_preflight(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        def race():
+            # An unrelated Wolf lobby appeared after the first idle snapshot.
+            self.api.lobby = {"id": "unexpected", "name": "Other",
+                              "started_by_profile_id": "other"}
+            return True
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True, writer_check=race)
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
     def test_reconcile_cannot_clear_foreign_revoked_uncertain_or_unapproved_lease(self):
         self.call("start", approved=True)
         self.api.lobby = None

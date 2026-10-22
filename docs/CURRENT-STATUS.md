@@ -57,6 +57,19 @@ remain unchanged. Fresh-client P0 still fails acceptance.** See
 [validation levels](REAL-WOLF-VALIDATION.md) and
 [engineering trail](ENGINEERING-TRAIL.md).
 
+## October 22 host-local owner launch pilot (source only)
+
+The repository now includes a read-only host operator entry point at
+`server/owner_steam_pilot.py inspect`, using actual Wolf inventory and the
+existing named-profile lobby planner. Enrollment requires explicit host owner
+and device consent; a later live Create+Join is guarded by additional host
+operator flags and the existing durable lease. This **is not remote device
+authentication, a deployed host service or a NOW Games-button change**. The
+MacBook's active Wolf UI session, paired identity and complete `user` Steam
+runner were observed physically, but native owner Steam Create+Join and
+fresh-owner one-click access remain **unaccepted**. See
+[the guarded host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

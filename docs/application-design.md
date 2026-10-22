@@ -77,6 +77,14 @@ The host administrator remains technically capable of inspecting server-local da
 - Preserve `~/.config/optiplex-desk/config.ini`, `.onp` presets and `.onb` backups. These are connection and device settings, **not authoritative server permissions**. Old client installs may continue working while adoption is opt-in; never infer that old client access is equivalent to a newly verified member grant.
 - Do not start the Shared Server permissions UI, second Steam account support, pooled games or private Jellyfin instances until the Personal Server acceptance test below passes.
 
+### Implemented local policy foundation (not yet launch enforcement)
+
+The development source includes `src/owner_access.py` and the developer-only `src/owner-access-local.py`. They provide a versioned, root-owned local JSON store and allow an administrator to **explicitly** adopt one existing named Wolf Steam profile and bind specific already-paired Moonlight certificate-derived client IDs to the one owner. The policy stores separate host, principal, workspace and device identifiers; a lookup refuses unknown, revoked, malformed or no-longer-paired devices. All changes are atomic and limited to the separate NOW-owned local policy file. A second approved owner device resolves the same persistent workspace, without moving or reading Steam files.
+
+**Not a security boundary yet:** Wolf itself still accepts any paired client according to upstream permissions. Nothing in this policy intercepts direct Moonlight requests, disables Wolf UI, controls Steam sessions, unpairs devices or limits host SSH permissions. The existing NOW Games button remains unchanged. Installing, bootstrapping or running this developer-only CLI on the reference host is **not** part of the current beta instructions. Approval here represents a host administrator's explicit assertion, not proof that an unattended NOW account login is the owner.
+
+Before connecting the local policy resolver to real launches, the narrow host agent must authenticate a device/session credential at its own boundary, validate its Wolf identity and grant, and **also enforce** those permissions against direct upstream Wolf entrypoints. A disconnected mapping file that only controls the NOW button is insufficient for invited users. Implement safe session leases and proper revoke/unpair behavior before calling owner access secure.
+
 ### Required tests before shipping the owner-profile integration
 
 - [ ] Fresh unpaired laptop with owner-authorized device enrollment, one-click Games, original Steam login/library, real game video/audio/input; **no terminal, symlink or Wolf UI profile selection**.

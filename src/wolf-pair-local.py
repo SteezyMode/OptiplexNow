@@ -49,9 +49,87 @@ def call_api(method, path, body=None):
         raise RuntimeError("Cannot access local Wolf API; verify Docker permissions and Wolf state")
     return json.loads(p.stdout)
 
+def owner_profile_readiness(profiles_reply, clients_reply):
+    """Return non-secret, read-only Wolf metadata; never grant access.
+
+    A single named Steam profile is only a candidate. It is NOT evidence that
+    an SSH caller, a Moonlight certificate or an invited member owns it.
+    """
+    if (not isinstance(profiles_reply, dict) or
+            profiles_reply.get("success") is not True or
+            not isinstance(profiles_reply.get("profiles"), list) or
+            not isinstance(clients_reply, dict) or
+            clients_reply.get("success") is not True or
+            not isinstance(clients_reply.get("clients"), list)):
+        raise ValueError("Malformed Wolf profile or client inventory")
+    profiles = profiles_reply["profiles"]
+    clients = clients_reply["clients"]
+    if len(profiles) > 256 or len(clients) > 2048:
+        raise ValueError("Wolf inventory exceeds inspection limits")
+
+    profile_ids = set()
+    candidates = []
+    direct = False
+    for profile in profiles:
+        if not isinstance(profile, dict):
+            raise ValueError("Invalid Wolf profile entry")
+        ident = profile.get("id")
+        apps = profile.get("apps")
+        if not isinstance(ident, str) or not ident or len(ident) > 128 or not isinstance(apps, list):
+            raise ValueError("Invalid Wolf profile identity or app list")
+        if ident in profile_ids:
+            raise ValueError("Duplicate Wolf profile identity")
+        profile_ids.add(ident)
+        steam_count = sum(
+            isinstance(app, dict) and app.get("title") == "Steam"
+            for app in apps
+        )
+        if any(not isinstance(app, dict) for app in apps) or steam_count > 1:
+            raise ValueError("Invalid or ambiguous Wolf Steam application")
+        if steam_count:
+            if ident == "moonlight-profile-id":
+                direct = True
+            else:
+                # Never forward Wolf profile PINs or app runner configuration.
+                candidates.append({"profile_id": ident})
+
+    seen = {}
+    repeated = 0
+    for client in clients:
+        if not isinstance(client, dict):
+            raise ValueError("Invalid paired client")
+        ident = client.get("client_id")
+        folder = client.get("app_state_folder")
+        if not isinstance(ident, str) or not ident or len(ident) > 128:
+            raise ValueError("Invalid paired client identity")
+        if not isinstance(folder, str) or not folder or len(folder) > 256:
+            raise ValueError("Invalid paired client state")
+        if ident in seen:
+            if seen[ident] != folder:
+                raise ValueError("Conflicting Wolf records for one client")
+            repeated += 1
+        else:
+            seen[ident] = folder
+
+    status = ("none" if not candidates else
+              "single_named_candidate" if len(candidates) == 1 else
+              "multiple_named_candidates")
+    return {
+        "success": True,
+        "status": status,
+        "direct_steam_available": direct,
+        "named_steam_candidates": candidates,
+        "unique_paired_clients": len(seen),
+        "identical_duplicate_records": repeated,
+        # A read-only profile match must NEVER grant a device or member access.
+        "owner_mapping_verified": False,
+        "can_auto_assign": False,
+    }
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("pending", "pair"))
+    parser.add_argument("action", choices=("pending", "pair", "owner-status"))
     args = parser.parse_args()
     if args.action == "pending":
         response = call_api("GET", "/api/v1/pair/pending")
@@ -62,6 +140,10 @@ def main():
         print(json.dumps({"success": True, "count": len(requests),
                           "clients": [{"index": i + 1, "client_ip": r.get("client_ip", "")}
                                       for i, r in enumerate(requests)]}))
+    elif args.action == "owner-status":
+        profiles = call_api("GET", "/api/v1/profiles")
+        clients = call_api("GET", "/api/v1/clients")
+        print(json.dumps(owner_profile_readiness(profiles, clients)))
     else:
         # Local authenticated caller sends index and PIN through stdin (not process argv).
         request = json.load(sys.stdin)

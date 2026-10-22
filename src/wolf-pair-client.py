@@ -28,7 +28,7 @@ def validated(host, user):
 
 def invoke(host, user, action, payload=None):
     validated(host, user)
-    if action not in ("pending", "pending-text", "pair"):
+    if action not in ("pending", "pending-text", "pair", "owner-status"):
         raise ValueError("Unsupported action")
     argv = ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=6",
             "-o", "StrictHostKeyChecking=yes", "-l", user, "--", host,

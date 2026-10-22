@@ -66,5 +66,21 @@ class WolfPairTransportTests(unittest.TestCase):
             self.assertEqual(run.call_args.kwargs["timeout"], 15)
 
 
+    def test_owner_status_calls_only_trusted_read_only_host_action(self):
+        with mock.patch.object(mod.subprocess, "run") as run:
+            run.return_value.returncode = 0
+            run.return_value.stdout = (
+                b'{"success":true,"status":"single_named_candidate",'
+                b'"can_auto_assign":false}'
+            )
+            result = mod.invoke("host.example", "tester", "owner-status")
+            self.assertEqual(result["status"], "single_named_candidate")
+            self.assertFalse(result["can_auto_assign"])
+            argv = run.call_args.args[0]
+            self.assertEqual(argv[-2:], [mod.HOST_HELPER, "owner-status"])
+            self.assertIn("StrictHostKeyChecking=yes", argv)
+            self.assertEqual(run.call_args.kwargs["input"], b"")
+
+
 if __name__ == "__main__":
     unittest.main()

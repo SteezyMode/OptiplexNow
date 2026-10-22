@@ -16,6 +16,25 @@
 
 The Wolf sessions API can include encryption keys. Never log raw session responses or secrets.
 
+## Read-only owner Steam inventory (in development)
+
+The reference host's real Wolf API was queried on October 22:
+
+- `GET /api/v1/clients` returned per-device `app_state_folder` values, with one client repeated identically. Identical duplicate records must be coalesced; conflicting duplicates must fail closed.
+- `GET /api/v1/openapi-schema` confirmed `POST /api/v1/clients/settings`, but that client-wide folder setting is **not** proof of choosing the named owner Steam profile.
+- The host has direct Steam under `moonlight-profile-id` and a persistent Steam app under named profile `user`. Wolf UI -> `user` -> Steam worked from Mac mini and MacBook; direct shortcuts were not yet verified on an unmodified fresh client. The preexisting symlinks are temporary host-side repairs, not permission models.
+
+The optional, read-only `owner-status` action in `src/wolf-pair-local.py` reads `GET /api/v1/profiles` and `GET /api/v1/clients`, validates their shapes, reports direct Steam availability and named Steam profile **candidates**, counts unique paired clients and identical duplicates, and rejects conflicting client folder records. It deliberately does **not**:
+
+- Call a write API, modify configuration, create links, adopt Steam state, or start a session.
+- Treat one Steam candidate or a paired Moonlight certificate as proof of account ownership.
+- Return profile PINs, Wolf runner environment, session encryption keys or per-client sensitive settings.
+- Grant privileged Docker/SSH access to a member. The existing host helper still requires an administrative SSH operator; this is **not yet** a secure general-user broker.
+
+The action is passed through the explicit trusted SSH allowlist and GTK-independent cancellable transport. It is **not wired to the normal Games button** until a server-enforced identity binding and supported named-profile launch mechanism are implemented and tested. The live reference host is unchanged; the helper on the reference machine may still be an older deployed version, so an untested status request is not evidence of a successful physical API call.
+
+Owner profile continuity and revocation remain blocked on [#154](https://github.com/SteezyMode/OptiplexNow/issues/154), with the [one-owner identity contract](application-design.md#personal-server-identity-and-access-contract) governing the implementation. A future change may add a narrowly authorized mapping operation **only after** a disposable-client test confirms Wolf's native launch/ownership semantics and refusal paths.
+
 ## Packaged code and deployment
 
 | Component | Location / action |

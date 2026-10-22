@@ -38,13 +38,14 @@ static gboolean cancel_request(gpointer user_data)
     return G_SOURCE_REMOVE;
 }
 
-static int run_case(const char *script, gboolean cancel)
+static int run_case(const char *script, const char *action,
+                    const char *expected, gboolean cancel)
 {
     TransportTest test = {0};
     test.loop = g_main_loop_new(NULL, FALSE);
     GCancellable *cancellable = g_cancellable_new();
 
-    now_wolf_request_async(script, "pending-text", "host.example", "tester", NULL,
+    now_wolf_request_async(script, action, "host.example", "tester", NULL,
                            cancellable, result_ready, &test);
     g_idle_add(mark_idle, &test);
     if (cancel) {
@@ -85,7 +86,11 @@ int main(void)
     fclose(file);
     chmod(script, 0600);
 
-    int ok = run_case(script, FALSE);
+    int ok = run_case(script, "pending-text", "1\\t100.100.1.2", FALSE);
+    if (ok) {
+        /* A new read-only action must be accepted by the async boundary. */
+        ok = run_case(script, "owner-status", "1\\t100.100.1.2", FALSE);
+    }
     if (ok) {
         /* The script checks argv[2], which is host in the bridge call. */
         file = fopen(script, "w");
@@ -94,7 +99,7 @@ int main(void)
                   "time.sleep(10)\n"
                   "print('1\\t100.100.1.2')\n", file);
             fclose(file);
-            ok = run_case(script, TRUE);
+            ok = run_case(script, "pending-text", NULL, TRUE);
         } else {
             ok = 0;
         }

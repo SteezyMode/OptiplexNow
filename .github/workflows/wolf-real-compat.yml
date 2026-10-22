@@ -1,0 +1,72 @@
+name: Real Wolf disposable API compatibility attempt
+
+on:
+  pull_request:
+    paths:
+      - 'server/probe_real_wolf.py'
+      - 'tests/test_real_wolf_probe.py'
+      - '.github/workflows/wolf-real-compat.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  disposable-wolf:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Re-check the production-container refusal tests
+        run: python3 -m unittest discover -s tests -p 'test_real_wolf_probe.py' -v
+      - name: Attempt actual isolated Wolf API without GPU or Docker socket
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="now-wolf-compat-${GITHUB_RUN_ID}"
+          data="${RUNNER_TEMP}/${name}"
+          mkdir -p "${data}"
+          chmod 700 "${data}"
+          cleanup() {
+            docker rm -f "${name}" >/dev/null 2>&1 || true
+            rm -rf -- "${data}"
+          }
+          trap cleanup EXIT
+
+          # Hosted GitHub runners have no /dev/dri, /dev/uinput or /dev/uhid.
+          # A blocked boot is diagnostic, never a streaming compatibility pass.
+          image="ghcr.io/games-on-whales/wolf:stable"
+          if ! timeout 360 docker pull "${image}" > /dev/null; then
+            echo "Real Wolf image could not be pulled on disposable runner" >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "${image}")"
+          echo "Attempted upstream image: \`${digest}\`" >> "${GITHUB_STEP_SUMMARY}"
+          if ! docker run -d \
+            --name "${name}" \
+            --network none \
+            --label io.optiplex-now.compat-disposable=true \
+            --mount "type=bind,src=${data},dst=/etc/wolf" \
+            "${image}" >/dev/null; then
+            echo "Real Wolf could not start without hardware; compatibility BLOCKED" >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+
+          ok=false
+          for attempt in $(seq 1 12); do
+            if python3 server/probe_real_wolf.py --container "${name}" > "${RUNNER_TEMP}/now-real-wolf-report.json"; then
+              ok=true
+              break
+            fi
+            sleep 3
+          done
+          if [ "${ok}" = true ]; then
+            echo "Read-only real Wolf API: PASS on isolated hosted runner" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            echo "Real Wolf API BLOCKED or incompatible in non-GPU runner; no Create/Join attempted" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          cat "${RUNNER_TEMP}/now-real-wolf-report.json" >> "${GITHUB_STEP_SUMMARY}"
+          # Do not mark 'Wolf works' based on the workflow's job status.
+          # Physical GPU/Moonlight/lobby Create+Join acceptance remains separate.

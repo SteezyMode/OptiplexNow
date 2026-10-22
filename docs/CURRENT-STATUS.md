@@ -127,6 +127,20 @@ is **not installed or invoked** by the current NOW Games button and does not
 replace the working direct Steam shortcut. Source-level tests are simulated,
 not a second physical client acceptance test.
 
+## Restricted Games SSH authentication bridge (source-only)
+
+A new owner-only SSH bridge, separate from the existing administrator key,
+can restrict a device to `status/start/stop` with a **forced command and
+per-device Ed25519 public key binding** approved by the host owner. The
+separate client key, host read-only enrollment check and private disabled-by-
+default host configuration are source changes only, not deployed to the
+reference OptiPlex. A trusted operator must independently compare the
+SSH public key to the device's already enrolled Wolf client identity.
+The active NOW Games button still launches direct `Steam` and is not wired
+to this transport. This is not a consumer onboarding flow or isolation
+against other privileged Wolf direct-app clients. Details: [restricted Games
+SSH](OWNER-GAMES-SSH.md).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

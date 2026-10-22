@@ -200,6 +200,85 @@ class TrustedGamesGateTests(unittest.TestCase):
         with self.store.locked() as fd:
             self.assertEqual(read_lease(fd)["state"], "joined")
 
+    def test_natural_full_exit_archives_own_joined_lease_and_allows_next_start(self):
+        self.call("start", approved=True)
+        self.assertEqual(self.call("status")["status"], "in_use")
+        # Simulate the previously desired experience: Steam Exit has ended
+        # the full stream, with zero Wolf lobbies and zero Wolf sessions.
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        before_posts = [p for method, p, _ in self.api.calls if method == "POST"]
+        result = self.call("reconcile", approved=True, writer_check=lambda: True)
+        self.assertEqual(result, {
+            "success": True, "status": "idle", "lease_archived": True})
+        self.assertEqual(
+            before_posts, [p for method, p, _ in self.api.calls if method == "POST"])
+        with self.store.locked() as fd:
+            self.assertIsNone(read_lease(fd))
+        self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
+        self.api.data[4]["sessions"] = [
+            {"client_id": "1001", "app_id": "wolf-ui-id"}]
+        self.assertEqual(self.call("start", approved=True)["status"], "joined")
+
+    def test_reconcile_refuses_active_lobby_even_when_stream_disconnected(self):
+        self.call("start", approved=True)
+        self.api.data[4]["sessions"] = []
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+        self.assertIsNotNone(self.api.lobby)
+
+    def test_reconcile_refuses_lingering_wolf_ui_stream(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
+    def test_reconcile_refuses_steam_process_and_preflight_failure(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        for preflight in (lambda: False, lambda: "yes", None):
+            with self.subTest(preflight=preflight):
+                with self.assertRaises(PolicyError):
+                    self.call("reconcile", approved=True, writer_check=preflight)
+        def private_error():
+            raise RuntimeError("SECRET HOST DETAIL")
+        with self.assertRaises(PolicyError) as err:
+            self.call("reconcile", approved=True, writer_check=private_error)
+        self.assertNotIn("SECRET", str(err.exception))
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
+    def test_reconcile_cannot_clear_foreign_revoked_uncertain_or_unapproved_lease(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", client="2002", approved=True)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=False)
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["state"] = "uncertain"
+            write_lease(fd, lease)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["state"] = "joined"
+            write_lease(fd, lease)
+            policy = self.store.read(fd)
+            policy["devices"][0]["revoked"] = True
+            self.store.write(fd, policy)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
     def test_no_request_can_stop_unrelated_lease(self):
         self.call("start", approved=True)
         # A forged transport identity still fails the enrolled grant.

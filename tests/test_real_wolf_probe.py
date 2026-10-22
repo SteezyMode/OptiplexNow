@@ -79,7 +79,9 @@ class RealWolfSafetyTests(unittest.TestCase):
         self.assertEqual(result["endpoint_counts"]["sessions"], 1)
         self.assertNotIn("SECRET-NO-OUTPUT", json.dumps(result))
         self.assertEqual(len(called), 6)
-        self.assertFalse(any("POST" in arg for args in called for arg in args))
+        # The reviewed Python source embedded in argv contains the *word*
+        # POST to define the allowlist. Check the actual selected method.
+        self.assertTrue(all(args[-2] == "GET" for args in called[1:]))
 
     def test_malformed_wolf_response_blocks_not_passes(self):
         def mock_docker(args, input_data=b""):

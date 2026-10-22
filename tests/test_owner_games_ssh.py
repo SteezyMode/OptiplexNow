@@ -73,7 +73,7 @@ class ForcedGamesBridgeTests(unittest.TestCase):
         self.assertFalse(any(m=="POST" for m,_,_ in self.api.calls))
 
     def test_wrong_ssh_bound_client_denied(self):
-        with self.assertRaisesRegex(PolicyError,"authorization"):
+        with self.assertRaisesRegex(PolicyError,"not paired"):
             execute(verified_client_id="1002", environ=self.env,
                     read_request=lambda:{"version":1,"action":"start"},
                     read_config=lambda:self.config,
@@ -119,7 +119,7 @@ class ForcedGamesBridgeTests(unittest.TestCase):
     def test_request_input_rejects_double_command_and_large_payload(self):
         for data,expected in (
             (b'{"version":1,"action":"status"}\n',{"version":1,"action":"status"}),
-            (b'{"version":1,"action":"status"}\n{"action":"stop"}\n',"multiple"),
+            (b'{"version":1,"action":"status"}\n{"action":"stop"}\n',"Multiple"),
             (b"f"*280+b"\n","exceeds"),
             (b'{"version":1,"action":"bad"\n',"Invalid"),
         ):

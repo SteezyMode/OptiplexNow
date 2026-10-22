@@ -14,8 +14,9 @@ import os
 import stat
 import uuid
 
-from owner_access import OwnerStore, PolicyError, STORE_LIMIT, _valid_client_id, _uuid
-from owner_lobby import plan_owner_steam_lobby, fill_join_lobby
+from owner_access import (OwnerStore, PolicyError, STORE_LIMIT, _valid_client_id, _uuid,
+                          resolve_games)
+from owner_lobby import plan_owner_steam_lobby, fill_join_lobby, LOBBY_ID
 
 LEASE_FILE = "owner-steam-lease.json"
 LEASE_VERSION = 1
@@ -26,16 +27,16 @@ def _validate_lease(lease):
     if not isinstance(lease, dict) or set(lease) != {
             "version", "id", "client_id", "workspace_id", "state", "lobby_id"}:
         raise PolicyError("Invalid owner Steam lease")
-    if (lease["version"] != LEASE_VERSION or not _uuid(lease["id"])
+    if (type(lease["version"]) is not int or
+            lease["version"] != LEASE_VERSION or not _uuid(lease["id"])
             or not _uuid(lease["workspace_id"]) or
             not _valid_client_id(lease["client_id"]) or
+            not isinstance(lease["state"], str) or
             lease["state"] not in LEASE_STATES):
         raise PolicyError("Invalid owner Steam lease values")
     lobby_id = lease["lobby_id"]
     if lobby_id is not None and (not isinstance(lobby_id, str) or
-                                len(lobby_id) > 128 or
-                                not lobby_id or
-                                not all(c.isalnum() or c in "-_" for c in lobby_id)):
+                                not LOBBY_ID.fullmatch(lobby_id)):
         raise PolicyError("Invalid owner Steam lease lobby")
     if lease["state"] in ("created", "joined") and lobby_id is None:
         raise PolicyError("Missing created Steam lobby ID")
@@ -126,6 +127,9 @@ def launch_owner_steam(trusted_client_id, wolf_api, *,
 
         # Never use a client-supplied profile name, app ID or session settings.
         clients = wolf_api("GET", "/api/v1/clients")
+        # Fail closed on the owner's grant before reading additional sensitive
+        # Wolf state or considering any launch.
+        resolve_games(policy, trusted_client_id, clients)
         profiles = wolf_api("GET", "/api/v1/profiles")
         apps = wolf_api("GET", "/api/v1/apps")
         sessions = wolf_api("GET", "/api/v1/sessions")

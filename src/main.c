@@ -1015,6 +1015,11 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
   return;
  }
  if(managed_games.stopping){
+  if(answer==NOW_GAMES_IDLE){
+   /* The owner explicitly confirmed Stop; close only our stream,
+    * leaving any separately opened Moonlight clients untouched. */
+   managed_games_abort_owned_stream();
+  }
   managed_games_finish(answer==NOW_GAMES_IDLE?
     "STEAM LOBBY STOP CONFIRMED":
     "STEAM STOP NOT CONFIRMED. CHECK HOST STATUS");
@@ -1114,11 +1119,22 @@ static void managed_games_send(const char *action){
  g_free(helper);
 }
 static void managed_games_begin(gboolean stop,gboolean status_only){
- if(managed_games.running||managed_games.playing||
-    managed_games.observing||managed_games.finished_observed||
-    managed_games.stream_process||managed_games.reconcile_id){
+ if(managed_games.running||managed_games.observing||
+    managed_games.reconcile_id||
+    (!stop && (managed_games.playing||
+               managed_games.finished_observed||
+               managed_games.stream_process))){
   managed_games_message("GAMES SESSION OR EXIT CHECK ALREADY IN PROGRESS");
   return;
+ }
+ if(stop && managed_games.playing){
+  /* An explicit owner-confirmed Stop is the recovery path. Suspend only
+   * our observer; never synthesize Steam exit or archive the lease. */
+  if(managed_games.observe_id){
+   g_source_remove(managed_games.observe_id);
+   managed_games.observe_id=0;
+  }
+  managed_games.playing=FALSE;
  }
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
   managed_games_message("SET SERVER AND SSH USER IN SETTINGS");
@@ -1142,7 +1158,16 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
  if(!stop && !status_only && !has_moonlight()){
   on_games_setup(NULL,NULL);return;
  }
- memset(&managed_games,0,sizeof managed_games);
+ if(!stop){
+  /* No existing owned Moonlight process is active for a new Start. */
+  memset(&managed_games,0,sizeof managed_games);
+ }else{
+  /* Preserve the child process handle so a confirmed Stop can close it.
+   * No new Steam launch is attempted by this path. */
+  managed_games.opening_ui=FALSE;
+  managed_games.reconciled_once=FALSE;
+  managed_games.finished_observed=FALSE;
+ }
  managed_games.running=TRUE;
  managed_games.stopping=stop;
  managed_games.status_only=status_only;

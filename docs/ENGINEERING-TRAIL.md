@@ -283,6 +283,29 @@ network/privilege. A regression fixture now reproduces the exact spelling
 difference. The fail-closed diagnostic proves the real image mount layout,
 **not** the API semantics yet.
 
+**Fifth workflow result: first actual real Wolf read-only API PASS.**
+PR #167 run `39757247197` on a disposable Ubuntu 24.04 GitHub-hosted
+runner successfully booted upstream Wolf with `--network none`, no GPU/input
+devices, no Docker socket, a newly created `/etc/wolf` scratch bind and the
+image-declared anonymous `/run/user/wolf` volume. The strict container
+safety gate passed. The **real daemon**, accessed via our tested Python
+HTTP-over-Unix socket adapter inside the running container, returned all five
+allowlisted successful GET inventories with these counts: 2 apps, 1 profile,
+0 clients, 0 sessions, 0 lobbies. The sanitized JSON explicitly reported
+`result: pass`, `steam_stream_tested: false` and `creates_lobbies: false`.
+The job was successful and its cleanup removed the temporary container and
+scratch state. This **does not validate the POST Create/Join protocol** or
+hardware streaming. Exact upstream image digest is echoed in the follow-up
+workflow for future reproducibility; the mutable `:stable` tag is not a
+long-term test pin.
+
+**New executable next step:** a separate GPU-equipped **disposable** Wolf
+host plus an active disposable Moonlight Wolf UI session for the first *real*
+`/api/v1/lobbies/create` and `join` pair. Use owner-independent Steam
+state and the current policy/lease checks. Confirm video buffer caps and
+actual session ID mapping; collect only sanitized outputs. Do **not** use
+the owner's reference Steam environment or invite other users.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

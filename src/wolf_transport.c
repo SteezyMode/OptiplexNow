@@ -75,7 +75,8 @@ void now_wolf_request_async(const char *script, const char *action,
 
     if (!script || !*script || !action || !host || !user ||
         (g_strcmp0(action, "pending-text") != 0 &&
-         g_strcmp0(action, "pair") != 0)) {
+         g_strcmp0(action, "pair") != 0 &&
+         g_strcmp0(action, "owner-status") != 0)) {
         g_task_return_new_error(task, G_IO_ERROR, G_IO_ERROR_INVALID_ARGUMENT,
                                 "Invalid Wolf bridge request");
         g_object_unref(task);

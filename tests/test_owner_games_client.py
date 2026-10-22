@@ -98,6 +98,24 @@ class RestrictedGamesClientTests(unittest.TestCase):
             self.assertEqual(out.getvalue(), "unavailable" + chr(10))
             self.assertNotIn("PRIVATE", out.getvalue())
 
+    def test_reconcile_uses_same_restricted_key_and_exact_action(self):
+        self.path.mkdir(mode=0o700)
+        private = self.path / "id_ed25519"
+        private.write_bytes(b"private")
+        private.chmod(0o600)
+        seen = []
+        def run(argv, **kwargs):
+            seen.append((list(argv), kwargs["input"]))
+            return SimpleNamespace(
+                returncode=0,
+                stdout=b'{"success":true,"status":"idle","lease_archived":true}')
+        output = game.invoke("host", "owner", "reconcile",
+                             key_dir=self.path, runner=run)
+        self.assertEqual(output["status"], "idle")
+        self.assertEqual(seen[0][1],
+                         b'{"version":1,"action":"reconcile"}' + bytes([10]))
+        self.assertNotIn("docker", " ".join(seen[0][0]))
+
     def test_rejects_invalid_destination_and_response(self):
         for host in ("--ProxyCommand=x","a..b","bad host"):
             with self.assertRaises(ValueError):

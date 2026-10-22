@@ -31,7 +31,11 @@ jobs:
           chmod 700 "${data}"
           cleanup() {
             docker rm -f "${name}" >/dev/null 2>&1 || true
-            rm -rf -- "${data}"
+            # Wolf initializes root-owned cert/config files. Remove only
+            # this runner-scoped scratch directory after strict path match.
+            if [[ "${data}" == "${RUNNER_TEMP}/now-wolf-compat-${GITHUB_RUN_ID}" ]]; then
+              sudo rm -rf --one-file-system -- "${data}"
+            fi
           }
           trap cleanup EXIT
 
@@ -68,5 +72,7 @@ jobs:
             echo "Real Wolf API BLOCKED or incompatible in non-GPU runner; no Create/Join attempted" >> "${GITHUB_STEP_SUMMARY}"
           fi
           cat "${RUNNER_TEMP}/now-real-wolf-report.json" >> "${GITHUB_STEP_SUMMARY}"
+          # Also provide the scrubbed result in run logs for auditability.
+          cat "${RUNNER_TEMP}/now-real-wolf-report.json"
           # Do not mark 'Wolf works' based on the workflow's job status.
           # Physical GPU/Moonlight/lobby Create+Join acceptance remains separate.

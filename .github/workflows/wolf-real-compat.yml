@@ -58,6 +58,13 @@ jobs:
             exit 0
           fi
 
+          # Do not leak mount sources, keys, environment variables or raw
+          # Wolf JSON. This helps explain strictly refused image volumes.
+          docker inspect --format '{{json .Mounts}}' "${name}" |
+            python3 -c 'import json,re,sys; x=json.load(sys.stdin); print("Wolf disposable mount layout:",[{"type":m.get("Type"),"destination":m.get("Destination"),"anonymous_hex64":bool(re.fullmatch(r"[0-9a-f]{64}",m.get("Name") or ""))} for m in x])'
+          docker inspect --format '{{json .Config.Volumes}}' "${name}" |
+            python3 -c 'import json,sys; x=json.load(sys.stdin); print("Image-declared volume destinations:",sorted((x or {}).keys()))'
+
           ok=false
           for attempt in $(seq 1 12); do
             if python3 server/probe_real_wolf.py --container "${name}" > "${RUNNER_TEMP}/now-real-wolf-report.json"; then

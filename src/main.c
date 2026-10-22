@@ -25,6 +25,7 @@
 #include "config.h"
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
+#include "games_flow.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "service_probe.h"
@@ -825,7 +826,155 @@ static void launch_wolf_app(const char *app){
  else {char *args[]={"flatpak","run","com.moonlight_stream.Moonlight","stream",cfg[0],(char*)app,NULL};now_launch(args);}
  say("MOONLIGHT LAUNCHED — STREAM STATUS NOT VERIFIED");
 }
-static void launch_steam(void){launch_wolf_app("Steam");}
+/*
+ * Games P0: the MacBook physically verified owner-only Steam lifecycle.
+ * GTK must now use the separate restricted device key, not the old direct
+ * moonlight-profile-id Steam app or the administrative SSH credentials.
+ * This is a source-only alpha handoff; the reference host still denies Start.
+ */
+#define NOW_GAMES_HELPER "/usr/lib/optiplex-now/owner-games-client.py"
+typedef struct {
+ gboolean running;
+ gboolean opening_ui;
+ gboolean stopping;
+ guint poll_id;
+ gint64 deadline;
+ GCancellable *cancel;
+ char host[512];
+ char user[512];
+} ManagedGamesFlow;
+static ManagedGamesFlow managed_games={0};
+static void managed_games_send(const char *action);
+
+static void managed_games_message(const char *message){
+ say(message);
+ if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),message);
+}
+static void managed_games_finish(const char *message){
+ if(managed_games.poll_id){
+  g_source_remove(managed_games.poll_id);
+  managed_games.poll_id=0;
+ }
+ g_clear_object(&managed_games.cancel);
+ managed_games.running=FALSE;
+ managed_games_message(message);
+}
+static gboolean managed_games_poll(gpointer data){
+ (void)data;
+ managed_games.poll_id=0;
+ if(managed_games.running)managed_games_send("status");
+ return G_SOURCE_REMOVE;
+}
+static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer data){
+ (void)source;
+ const char *action=data;
+ NowGamesReply answer=NOW_GAMES_BUSY;
+ GError *error=NULL;
+ gboolean ok=now_games_request_finish(result,&answer,&error);
+ if(error)g_error_free(error);
+ if(!managed_games.running)return;
+ if(!ok){
+  managed_games_finish(managed_games.stopping?
+    "STEAM STOP UNCONFIRMED. CHECK HOST STATUS BEFORE RETRY":
+    "GAMES HOST REFUSED OR UNAVAILABLE. NO DIRECT STEAM FALLBACK");
+  return;
+ }
+ if(managed_games.stopping){
+  managed_games_finish(answer==NOW_GAMES_IDLE?
+    "STEAM LOBBY STOP CONFIRMED":
+    "STEAM STOP NOT CONFIRMED. CHECK HOST STATUS");
+  return;
+ }
+ if(strcmp(action,"start")==0){
+  managed_games_finish(answer==NOW_GAMES_JOINED?
+    "OWNER STEAM JOINED. CONTINUE IN MOONLIGHT":
+    "STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
+  return;
+ }
+ if(answer==NOW_GAMES_WOLF_UI_CONNECTED){
+  managed_games_message("OWNER DEVICE AUTHORIZED. REQUESTING STEAM...");
+  managed_games_send("start");
+  return;
+ }
+ if(answer==NOW_GAMES_NEEDS_WOLF_UI){
+  if(g_get_monotonic_time()>=managed_games.deadline){
+   managed_games_finish("WOLF UI DID NOT CONNECT. NO STEAM LAUNCH ATTEMPTED");
+   return;
+  }
+  if(!managed_games.opening_ui){
+   managed_games.opening_ui=TRUE;
+   managed_games_message("OPENING MOONLIGHT WOLF UI");
+   launch_wolf_app("Wolf UI");
+  }
+  managed_games_message("WAITING FOR AUTHENTICATED WOLF UI STREAM");
+  managed_games.poll_id=g_timeout_add_seconds(3,managed_games_poll,NULL);
+  return;
+ }
+ if(answer==NOW_GAMES_IN_USE){
+  managed_games_finish("OWNER STEAM ALREADY IN USE. CHECK SESSION BEFORE RETRY");
+ }else if(answer==NOW_GAMES_BUSY){
+  managed_games_finish("WOLF BUSY WITH ANOTHER SESSION. NO STEAM LAUNCH");
+ }else{
+  managed_games_finish("UNEXPECTED GAMES STATUS. NO STEAM LAUNCH");
+ }
+}
+static void managed_games_send(const char *action){
+ if(!managed_games.running || !managed_games.cancel)return;
+ now_games_request_async(NOW_GAMES_HELPER,action,managed_games.host,
+                         managed_games.user,managed_games.cancel,
+                         managed_games_reply,(gpointer)action);
+}
+static void managed_games_begin(gboolean stop){
+ if(managed_games.running){
+  managed_games_message("GAMES REQUEST ALREADY IN PROGRESS");
+  return;
+ }
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  managed_games_message("SET SERVER AND SSH USER IN SETTINGS");
+  return;
+ }
+ if(access(NOW_GAMES_HELPER,R_OK)!=0){
+  managed_games_message("MANAGED GAMES CLIENT MISSING. UPDATE NOW INSTALLER");
+  return;
+ }
+ char *key=g_build_filename(g_get_home_dir(),".local","share",
+   "optiplex-now","games-client","id_ed25519",NULL);
+ gboolean has_key=g_file_test(key,G_FILE_TEST_IS_REGULAR);
+ g_free(key);
+ if(!has_key){
+  managed_games_message("THIS DEVICE NEEDS OWNER GAMES APPROVAL");
+  return;
+ }
+ if(!stop && !has_moonlight()){on_games_setup(NULL,NULL);return;}
+ memset(&managed_games,0,sizeof managed_games);
+ managed_games.running=TRUE;
+ managed_games.stopping=stop;
+ managed_games.cancel=g_cancellable_new();
+ managed_games.deadline=g_get_monotonic_time()+90*G_USEC_PER_SEC;
+ g_strlcpy(managed_games.host,cfg[0],sizeof managed_games.host);
+ g_strlcpy(managed_games.user,cfg[1],sizeof managed_games.user);
+ managed_games_message(stop?"REQUESTING GUARDED OWNER STEAM STOP":
+  "CHECKING APPROVED GAMES CONNECTION...");
+ managed_games_send(stop?"stop":"status");
+}
+static void on_managed_games_stop(void *widget,void *data){
+ (void)widget;(void)data;
+ if(managed_games.running){
+  managed_games_message("GAMES REQUEST IN PROGRESS. RETRY WHEN FINISHED");
+  return;
+ }
+ GtkWidget *dialog=gtk_message_dialog_new(GTK_WINDOW(win),GTK_DIALOG_MODAL,
+  GTK_MESSAGE_WARNING,GTK_BUTTONS_NONE,
+  "Stop the owner's current Steam session?");
+ gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
+  "This may close a running game. Stop only the session you own.");
+ gtk_dialog_add_buttons(GTK_DIALOG(dialog),"Cancel",GTK_RESPONSE_CANCEL,
+                        "Stop Steam",GTK_RESPONSE_OK,NULL);
+ int response=gtk_dialog_run(GTK_DIALOG(dialog));
+ gtk_widget_destroy(dialog);
+ if(response==GTK_RESPONSE_OK)managed_games_begin(TRUE);
+}
+static void launch_steam(void){managed_games_begin(FALSE);}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){
  if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
@@ -1322,7 +1471,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
- add(col,label("Games launches Steam directly. Open Moonlight here for setup.","helper"),0);
+ add(col,label("Games requires an approved device key. Owner Steam opens through Wolf UI.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
@@ -1334,6 +1483,8 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
+ GtkWidget*stop=button("STOP OWNER STEAM (CONFIRM)","setupaction");
+ g_signal_connect_data(stop,"clicked",(GCallback)on_managed_games_stop,NULL,NULL,0);add(col,stop,0);
  games_notice=label("","gameshint");add(col,games_notice,0);
  gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));
  games_notice=NULL;games_state=NULL;games_install=NULL;gtk_widget_destroy(d);

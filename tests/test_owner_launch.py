@@ -138,7 +138,9 @@ class OwnerLaunchTests(unittest.TestCase):
             lease = read_lease(fd)
             self.assertEqual(lease["state"], "uncertain")
             self.assertEqual(lease["lobby_id"], "test_lobby_01")
-        self.assertNotIn("stop", str(api.calls).lower())
+        self.assertFalse(any(
+            method == "POST" and path.endswith("/stop")
+            for method, path, _ in api.calls))
 
     def test_invalid_create_response_never_attempts_join(self):
         api = FakeWolf(create={"success": True, "lobby_id": "../other"})

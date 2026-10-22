@@ -9,7 +9,7 @@
 
 #define EXPECT(condition) do { \
     if (!(condition)) { \
-        fprintf(stderr, "Wizard service persistence test line %d: %s\\n", \
+        fprintf(stderr, "Wizard service persistence test line %d: %s\n", \
                 __LINE__, #condition); \
         return 1; \
     } \
@@ -23,7 +23,7 @@ static int test_save_round_trip(void)
         "https://music.example.test",
         "https://downloads.example.test"
     };
-    EXPECT(now_wizard_store_services(cfg, urls));
+    EXPECT(now_wizard_store_services(cfg, urls) == 0);
     EXPECT(strcmp(cfg[5], urls[0]) == 0);
 
     char path[] = "/tmp/now-wizard-service-test-XXXXXX";
@@ -40,7 +40,7 @@ static int test_save_round_trip(void)
     return 0;
 }
 
-static int test_invalid_url_is_atomic(void)
+static int test_invalid_url_does_not_block_other_services(void)
 {
     memset(cfg, 0, sizeof cfg);
     snprintf(cfg[5], CONFIG_VALUE_SIZE, "%s", "https://existing.example.test");
@@ -51,18 +51,19 @@ static int test_invalid_url_is_atomic(void)
         "https://wrong.example.test@other.example.test",
         "https://new-downloads.example.test"
     };
-    EXPECT(!now_wizard_store_services(cfg, urls));
-    EXPECT(strcmp(cfg[5], "https://existing.example.test") == 0);
+    EXPECT(now_wizard_store_services(cfg, urls) == (1u << 1));
+    EXPECT(strcmp(cfg[5], "https://replacement.example.test") == 0);
     EXPECT(strcmp(cfg[6], "https://music.example.test") == 0);
-    EXPECT(strcmp(cfg[7], "https://downloads.example.test") == 0);
-    EXPECT(!now_wizard_store_services(cfg, NULL));
+    EXPECT(strcmp(cfg[7], "https://new-downloads.example.test") == 0);
+    EXPECT(now_wizard_store_services(cfg, NULL) == 7u);
+    EXPECT(strcmp(cfg[5], "https://replacement.example.test") == 0);
     return 0;
 }
 
 static int test_intentional_clear(void)
 {
     const char *urls[3] = {"https://media.example.test", "", ""};
-    EXPECT(now_wizard_store_services(cfg, urls));
+    EXPECT(now_wizard_store_services(cfg, urls) == 0);
     EXPECT(strcmp(cfg[5], urls[0]) == 0);
     EXPECT(cfg[6][0] == '\0');
     EXPECT(cfg[7][0] == '\0');
@@ -72,8 +73,8 @@ static int test_intentional_clear(void)
 int main(void)
 {
     EXPECT(test_save_round_trip() == 0);
-    EXPECT(test_invalid_url_is_atomic() == 0);
+    EXPECT(test_invalid_url_does_not_block_other_services() == 0);
     EXPECT(test_intentional_clear() == 0);
-    puts("Wizard service URLs: atomic validation, persistence and clear passed.");
+    puts("Wizard service URLs: independent validation, persistence and clear passed.");
     return 0;
 }

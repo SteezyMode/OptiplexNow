@@ -16,19 +16,24 @@ import uuid
 
 from owner_access import (OwnerStore, PolicyError, STORE_LIMIT, _valid_client_id, _uuid,
                           resolve_games)
-from owner_lobby import plan_owner_steam_lobby, fill_join_lobby, LOBBY_ID
+from owner_lobby import plan_owner_steam_lobby, fill_join_lobby, LOBBY_ID, _inventory
 
 LEASE_FILE = "owner-steam-lease.json"
-LEASE_VERSION = 1
+LEASE_VERSION = 2
+LEGACY_LEASE_VERSION = 1
 LEASE_STATES = frozenset(("creating", "created", "joined", "uncertain"))
 
 
 def _validate_lease(lease):
-    if not isinstance(lease, dict) or set(lease) != {
-            "version", "id", "client_id", "workspace_id", "state", "lobby_id"}:
+    if not isinstance(lease, dict):
+        raise PolicyError("Invalid owner Steam lease")
+    version = lease.get("version")
+    common = {"version", "id", "client_id", "workspace_id", "state", "lobby_id"}
+    expected = common | ({"pin"} if version == LEASE_VERSION else set())
+    if version not in (LEGACY_LEASE_VERSION, LEASE_VERSION) or set(lease) != expected:
         raise PolicyError("Invalid owner Steam lease")
     if (type(lease["version"]) is not int or
-            lease["version"] != LEASE_VERSION or not _uuid(lease["id"])
+            not _uuid(lease["id"])
             or not _uuid(lease["workspace_id"]) or
             not _valid_client_id(lease["client_id"]) or
             not isinstance(lease["state"], str) or
@@ -40,7 +45,117 @@ def _validate_lease(lease):
         raise PolicyError("Invalid owner Steam lease lobby")
     if lease["state"] in ("created", "joined") and lobby_id is None:
         raise PolicyError("Missing created Steam lobby ID")
+    if version == LEASE_VERSION:
+        pin = lease["pin"]
+        if (not isinstance(pin, list) or len(pin) != 8 or
+                any(type(digit) is not int or not 0 <= digit <= 9 for digit in pin)):
+            raise PolicyError("Invalid private Steam lobby PIN")
     return lease
+
+
+def _archive_lease(dir_fd, lease):
+    """Move the validated blocker to a non-public evidence file under the lock.
+
+    The state directory is owner-only; never return the archived PIN.
+    """
+    name = "owner-steam-lease.closed-" + lease["id"] + ".json"
+    try:
+        os.stat(name, dir_fd=dir_fd, follow_symlinks=False)
+    except FileNotFoundError:
+        pass
+    else:
+        raise PolicyError("Owner Steam recovery archive already exists")
+    os.rename(LEASE_FILE, name, src_dir_fd=dir_fd, dst_dir_fd=dir_fd)
+    os.fsync(dir_fd)
+
+
+def _require_idle_wolf(wolf_api):
+    """Fail closed unless runtime state is definitively empty."""
+    lobbies = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+    sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+    if lobbies or sessions:
+        raise PolicyError("Wolf has active sessions or lobbies; recovery blocked")
+
+
+def reconcile_stopped_owner_steam(wolf_api, *, store, confirmed_runtime_stopped=False,
+                                  confirmed_no_other_steam_writer=False):
+    """Operator-only release of an old lease AFTER verified out-of-band stop.
+
+    In particular, v1 lacks the PIN needed to stop a live Wolf lobby. This
+    function does NOT stop one, restart Wolf or infer an idle Steam process.
+    """
+    if not (confirmed_runtime_stopped and confirmed_no_other_steam_writer):
+        raise PolicyError("Explicit runtime shutdown and Steam writer review required")
+    if not callable(wolf_api):
+        raise PolicyError("Missing trusted host-local Wolf API")
+    with store.locked() as fd:
+        lease = read_lease(fd)
+        if lease is None:
+            raise PolicyError("No owner Steam lease to reconcile")
+        policy = store.read(fd)
+        if policy is None or lease["workspace_id"] != policy["workspaces"][0]["id"]:
+            raise PolicyError("Owner policy/lease mismatch")
+        _require_idle_wolf(wolf_api)
+        _archive_lease(fd, lease)
+    return {"success": True, "status": "idle", "lease_archived": True}
+
+
+def stop_owner_steam(wolf_api, *, store, confirmed_stop=False):
+    """Host-local, one-shot PIN-gated StopLobby; no retries on uncertain POST.
+
+    Only version 2 leases contain the PIN. Existing version 1 sessions remain
+    playable and require supervised out-of-band shutdown and reconciliation.
+    """
+    if not confirmed_stop:
+        raise PolicyError("Explicit owner Steam stop approval required")
+    if not callable(wolf_api):
+        raise PolicyError("Missing trusted host-local Wolf API")
+    with store.locked() as fd:
+        lease = read_lease(fd)
+        if lease is None:
+            raise PolicyError("No active owner Steam lease")
+        if lease["version"] != LEASE_VERSION:
+            raise PolicyError("Legacy owner Steam lease has no recoverable PIN")
+        if lease["state"] != "joined" or lease["lobby_id"] is None:
+            raise PolicyError("Steam lobby state uncertain; refuse automatic stop")
+        policy = store.read(fd)
+        if policy is None or lease["workspace_id"] != policy["workspaces"][0]["id"]:
+            raise PolicyError("Owner policy/lease mismatch")
+        matching_grants = [
+            dev for dev in policy["devices"]
+            if dev["client_id"] == lease["client_id"] and not dev["revoked"]]
+        if len(matching_grants) != 1:
+            raise PolicyError("Lease owner device is no longer authorized")
+        current = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+        if len(current) != 1:
+            raise PolicyError("Ambiguous or absent Wolf lobby; stop refused")
+        lobby = current[0]
+        connected = lobby.get("connected_sessions")
+        if (lobby.get("id") != lease["lobby_id"] or
+                lobby.get("name") != "Steam" or
+                lobby.get("started_by_profile_id") != policy["workspaces"][0]["profile_id"] or
+                lobby.get("pin_required") is not True or
+                lobby.get("multi_user") is not False or
+                not isinstance(connected, list) or
+                len(connected) > 1 or
+                any(client != lease["client_id"] for client in connected)):
+            raise PolicyError("Wolf lobby differs from authorized owner Steam")
+        sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+        if len(sessions) > 1 or any(s.get("client_id") != lease["client_id"] for s in sessions):
+            raise PolicyError("Another Wolf session is active")
+        # On timeout or malformed response, keep the lease and NEVER retry.
+        response = wolf_api("POST", "/api/v1/lobbies/stop", {
+            "lobby_id": lease["lobby_id"], "pin": lease["pin"]})
+        if not isinstance(response, dict) or response.get("success") is not True:
+            raise PolicyError("Wolf stop result uncertain; inspect before retry")
+        remaining = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+        if remaining:
+            raise PolicyError("Wolf still reports a lobby; lease retained")
+        live = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+        if len(live) > 1 or any(s.get("client_id") != lease["client_id"] for s in live):
+            raise PolicyError("Unexpected Wolf session after stop; lease retained")
+        _archive_lease(fd, lease)
+    return {"success": True, "status": "idle", "lease_archived": True}
 
 
 def read_lease(dir_fd):
@@ -142,6 +257,7 @@ def launch_owner_steam(trusted_client_id, wolf_api, *,
             "version": LEASE_VERSION, "id": str(uuid.uuid4()),
             "client_id": trusted_client_id, "workspace_id": plan["workspace_id"],
             "state": "creating", "lobby_id": None,
+            "pin": list(plan["create_body"]["pin"]),
         }
         # Write durable blocker BEFORE any mutating Wolf API request.
         write_lease(fd, lease)

@@ -206,6 +206,74 @@ to test the writing path against their live Steam state. Then implement
 authenticated host broker, Wolf direct-app admission denial, lease recovery
 and physical fresh-client P0 acceptance.
 
+## 2026-10-22: PR #168 pinned real Wolf lobby schema and disposable Create
+
+**Gap discovered:** PR #164/165 fixtures provided a Docker runner with
+`type`, `name`, `image`, `env` but OMITTED required Wolf fields
+`mounts`, `devices`, and `ports`. All earlier FakeWolf Create requests
+were accepted without schema validation; that was **not proof a real Wolf
+daemon would accept an owner's Steam runner**. Read current upstream
+Wolf `CreateLobbyRequest`, `AppDocker__tagged` and `JoinLobbyEvent`
+schema in `games-on-whales/wolf/docs/modules/dev/partials/spec.json` and
+upstream `tests/testWolfAPI.cpp`. A session `moonlight_session_id` is
+represented as a STRING in the API schema despite its C++ integer type;
+do **not** convert it to an integer based on the native implementation.
+
+**Code correction:** `src/owner_lobby.py` now fails closed unless the named
+Steam runner is a tagged `docker` runner with all seven required fields
+(`type/name/image/mounts/env/devices/ports`) and correct basic types;
+the shared lobby fixture and missing-field denial cases were updated.
+This does not alter the working host or Steam data.
+
+**Real contract attempt:** The pinned-image disposable-only GitHub workflow
+calls `GET /api/v1/openapi-schema` through the actual Wolf Unix socket.
+`server/verify_wolf_lobby_contract.py` compares the live required fields,
+Docker runner type and JoinLobby string-ID representation to NOW's fixed
+request contract. Only after confirming the exact pinned image, per-run
+scratch bind, no network privileges, no paired clients, no sessions and no
+lobbies, it attempts at most ONE real `POST /api/v1/lobbies/create`, using
+a harmless `process` runner (`sleep 10`), isolated profile data and
+no Steam credentials. It never issues Join, Stop or cleanup POST; the
+entire disposable container is removed afterward. A successful create
+still does **not** validate Steam, named profile permissions, input/audio,
+reconnection or a real Moonlight session.
+
+**Actual pinned real Wolf result:** [GHA run 39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+completed its isolated daemon job successfully. The live schema was compatible:
+CreateLobby has 10 required request fields, tagged Docker runner has seven,
+and Join's Moonlight session ID is a string. The exact one-shot
+`POST /api/v1/lobbies/create` using ONLY disposable process runner
+`sleep 10` returned `success: true` with a lobby ID. The sanitized report
+recorded `actual_disposable_create: created_disposable_lobby`,
+`actual_join_executed: false`, `actual_moonlight_session: false`,
+`actual_steam_state_used: false`. This is the **first genuine Wolf lobby
+Create POST accepted by NOW's HTTP adapter**; it is not real Steam launch.
+The GHA container was disposed of after the test; no production state used.
+Standard package build and sanitizer results are tracked separately in PR #168.
+
+Reproduction: `python3 -m unittest discover -s tests -p
+'test_real_wolf_lobby_contract.py' -v`; the pinned GitHub CI workflow
+exercises the *real* Wolf implementation, not only that local fixture.
+
+**Regression found in first standard CI:** Although [real Wolf run
+39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+passed, the `build-and-test` job failed
+`test_wolf_socket_protocol.test_rejects_unapproved_operations_before_socket_connect`.
+Its old denylist still contained the intentionally newly allowed
+read-only `GET /api/v1/openapi-schema`. The test drove that request to
+the fake Unix socket, so the assertion that **no** socket call occurred failed.
+Corrected the denylist and added an explicit allowlist assertion while
+preserving POST STOP/pair/settings denials. This is stale-test expectation,
+not a failure of the real Wolf contract or a live security bypass. Full CI
+must be rerun after the fix; final result belongs in PR #168 and #154.
+
+**What NOT to repeat:** Avoid using incomplete Docker runner mocks as proof
+of protocol compatibility. Do not add a live production Wolf helper or
+attempt an owner Steam POST from normal client setup. The next production
+step needs a disposable GPU-equipped host and genuine Moonlight session for
+a verified Create+Join pair, authentication and an upstream bypass security
+test. Previous source-only owner grants still do not enforce Wolf access.
+
 ## 2026-10-22: PR #167 attempted real Wolf daemon on isolated CI runner
 
 **Problem:** PR #166 tests real Unix-socket bytes but its daemon is a Python

@@ -22,6 +22,7 @@ ALLOWED = frozenset({
     ("GET", "/api/v1/apps"),
     ("GET", "/api/v1/sessions"),
     ("GET", "/api/v1/lobbies"),
+    ("GET", "/api/v1/openapi-schema"),
     ("POST", "/api/v1/lobbies/create"),
     ("POST", "/api/v1/lobbies/join"),
 })

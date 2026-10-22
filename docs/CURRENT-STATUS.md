@@ -45,6 +45,18 @@ validation; all fixes are recorded in [engineering trail](ENGINEERING-TRAIL.md).
 The exact image digest is recorded by the workflow, and no owner-host data or
 running services were involved. See [real Wolf validation](REAL-WOLF-VALIDATION.md).
 
+## Wolf lobby protocol verification (PR #168, disposable state only)
+
+[Actual Wolf run 39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+confirmed the pinned daemon's Create/Join schema and **accepted one real
+disposable process-lobby Create POST** via NOW's HTTP adapter. No Join was
+attempted and no Steam account, Moonlight session or GPU was used. The source
+Steam planner was tightened to reject incomplete tagged Docker runners; older
+mock fixtures omitted required fields. **The owner's Games shortcut and host
+remain unchanged. Fresh-client P0 still fails acceptance.** See
+[validation levels](REAL-WOLF-VALIDATION.md) and
+[engineering trail](ENGINEERING-TRAIL.md).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

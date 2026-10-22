@@ -81,15 +81,19 @@ def validate_container(name, info):
     declared = config.get("Volumes") or {}
     if not isinstance(declared, dict):
         raise ProbeError("Unexpected Wolf image volumes metadata")
+    allowed_volumes = {dest.rstrip("/") for dest in declared
+                       if isinstance(dest, str) and dest.startswith("/")}
     for other in mounts:
         if other is m:
             continue
         name = other.get("Name")
+        dest = other.get("Destination")
         if (other.get("Type") != "volume"
                 or not isinstance(name, str)
                 or re.fullmatch(r"[0-9a-f]{64}", name) is None
-                or other.get("Destination") not in declared
-                or other.get("Destination") == "/etc/wolf"):
+                or not isinstance(dest, str)
+                or dest not in allowed_volumes
+                or dest in ("", "/", "/etc/wolf")):
             raise ProbeError("Foreign or persistent Wolf volume refused")
     # GitHub hosted runners create this scratch path. Never allow /etc/wolf,
     # home directories or any other preexisting real server Wolf storage.

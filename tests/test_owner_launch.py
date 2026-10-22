@@ -65,7 +65,7 @@ class OwnerLaunchTests(unittest.TestCase):
     def test_calls_native_wolf_in_safe_order_and_persists_blocking_lease(self):
         api = FakeWolf()
         result = launch_owner_steam(
-            "1001", api, store=self.store, execution_approved=True)
+            "1001", api, store=self.store, execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(result, {
             "success": True, "status": "joined",
             "manual_review_required_for_next_launch": True
@@ -82,6 +82,8 @@ class OwnerLaunchTests(unittest.TestCase):
         self.assertEqual(create["profile_id"], "user")
         self.assertEqual(create["runner_state_folder"],
                          "profile-data/user/WolfSteam")
+        self.assertEqual(create["video_settings"]["video_producer_buffer_caps"],
+                         "video/x-raw")
         self.assertEqual(joined["lobby_id"], "test_lobby_01")
         self.assertEqual(joined["moonlight_session_id"], "1001")
         self.assertEqual(joined["pin"], create["pin"])
@@ -105,31 +107,39 @@ class OwnerLaunchTests(unittest.TestCase):
 
     def test_second_request_fails_before_any_wolf_call(self):
         launch_owner_steam("1001", FakeWolf(), store=self.store,
-                           execution_approved=True)
+                           execution_approved=True, video_caps="video/x-raw")
         another = FakeWolf()
         with self.assertRaisesRegex(PolicyError, "manual review"):
             launch_owner_steam("1001", another, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(another.calls, [])
+
+    def test_missing_caps_refuses_before_lease_or_create(self):
+        api = FakeWolf()
+        with self.assertRaisesRegex(PolicyError, "caps"):
+            launch_owner_steam("1001", api, store=self.store,
+                               execution_approved=True)
+        self.assertFalse(any(call[0] == "POST" for call in api.calls))
+        self.assertEqual(owner_launch_status(self.store), {"status": "idle"})
 
     def test_create_timeout_blocks_retry_without_guessing_rollback(self):
         api = FakeWolf(create=TimeoutError("PRIVATE remote failure"))
         with self.assertRaisesRegex(PolicyError, "state uncertain"):
             launch_owner_steam("1001", api, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(len([c for c in api.calls if c[0] == "POST"]), 1)
         self.assertEqual(owner_launch_status(self.store)["status"], "uncertain")
         with self.store.locked() as fd:
             self.assertIsNone(read_lease(fd)["lobby_id"])
         with self.assertRaisesRegex(PolicyError, "manual review"):
             launch_owner_steam("1001", FakeWolf(), store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
 
     def test_join_failure_keeps_lobby_for_explicit_recovery(self):
         api = FakeWolf(join={"success": False, "error": "PRIVATE"})
         with self.assertRaisesRegex(PolicyError, "state uncertain"):
             launch_owner_steam("1001", api, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(
             [(m, p) for (m, p, _) in api.calls if m == "POST"],
             [("POST", "/api/v1/lobbies/create"),
@@ -146,14 +156,14 @@ class OwnerLaunchTests(unittest.TestCase):
         api = FakeWolf(create={"success": True, "lobby_id": "../other"})
         with self.assertRaisesRegex(PolicyError, "state uncertain"):
             launch_owner_steam("1001", api, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(len([c for c in api.calls if c[0] == "POST"]), 1)
 
     def test_unapproved_client_fails_before_steam_inventory_read(self):
         api = FakeWolf()
         with self.assertRaisesRegex(PolicyError, "not paired"):
             launch_owner_steam("9999", api, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(api.calls, [("GET", "/api/v1/clients", None)])
         self.assertEqual(owner_launch_status(self.store)["status"], "idle")
 
@@ -165,7 +175,7 @@ class OwnerLaunchTests(unittest.TestCase):
         api = FakeWolf()
         with self.assertRaisesRegex(PolicyError, "no owner"):
             launch_owner_steam("1001", api, store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
         self.assertEqual(api.calls, [("GET", "/api/v1/clients", None)])
         self.assertEqual(owner_launch_status(self.store)["status"], "idle")
 
@@ -181,7 +191,7 @@ class OwnerLaunchTests(unittest.TestCase):
                 api = FakeWolf(data=tuple(data))
                 with self.assertRaises(PolicyError):
                     launch_owner_steam("1001", api, store=self.store,
-                                       execution_approved=True)
+                                       execution_approved=True, video_caps="video/x-raw")
                 self.assertFalse(any(c[0] == "POST" for c in api.calls))
                 self.assertEqual(owner_launch_status(self.store)["status"], "idle")
 
@@ -193,7 +203,7 @@ class OwnerLaunchTests(unittest.TestCase):
             owner_launch_status(self.store)
         with self.assertRaises(PolicyError):
             launch_owner_steam("1001", FakeWolf(), store=self.store,
-                               execution_approved=True)
+                               execution_approved=True, video_caps="video/x-raw")
 
     def test_symlinked_lease_refused_without_following(self):
         path = Path(self.root.name) / "private" / "owner-steam-lease.json"

@@ -24,6 +24,11 @@ void now_games_request_async(const char *script, const char *action,
 gboolean now_games_request_finish(GAsyncResult *result, NowGamesReply *reply,
                                   GError **error);
 
+/* Prefer the packaged helper beside a rootlessly extracted usr/bin executable;
+ * use /usr/lib for a normal OS installation. Caller frees returned path.
+ */
+char *now_games_helper_for_executable(const char *executable_path);
+
 /* Safe, exact finite-state parser for the helper's private UI text mode. */
 gboolean now_games_parse_reply(const char *line, NowGamesReply *reply);
 

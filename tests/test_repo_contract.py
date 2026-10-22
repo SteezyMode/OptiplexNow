@@ -13,8 +13,27 @@ class WorkflowSafetyTests(unittest.TestCase):
     def test_only_documented_now_workflows_exist(self):
         found = {p.name for p in WORKFLOWS.glob("*.yml")}
         found |= {p.name for p in WORKFLOWS.glob("*.yaml")}
-        self.assertEqual(found, {"ci.yml", "release.yml"},
+        # Deliberate third workflow: isolated upstream Wolf API compatibility.
+        # It cannot publish releases or inspect the working owner server.
+        self.assertEqual(found, {"ci.yml", "release.yml", "wolf-real-compat.yml"},
                          "New workflows require a deliberate release-safety review.")
+
+    def test_real_wolf_workflow_is_pr_scoped_and_disposable(self):
+        data = (WORKFLOWS / "wolf-real-compat.yml").read_text()
+        self.assertIn("pull_request:", data)
+        self.assertIn("workflow_dispatch:", data)
+        self.assertIn("contents: read", data)
+        self.assertNotIn("push:", data)
+        self.assertNotIn("branches:", data)
+        self.assertNotIn("gh release", data)
+        self.assertNotIn("upload-artifact", data)
+        self.assertNotIn("--privileged", data)
+        self.assertIn("--network none", data)
+        self.assertIn("io.optiplex-now.compat-disposable=true", data)
+        self.assertIn("RUNNER_TEMP", data)
+        self.assertIn("server/probe_real_wolf.py", data)
+        self.assertNotIn("/var/run/docker.sock", data)
+        self.assertIn("@sha256:", data)
 
     def test_release_never_runs_on_main_or_manual_dispatch(self):
         data = (WORKFLOWS / "release.yml").read_text()

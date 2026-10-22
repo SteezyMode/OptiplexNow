@@ -67,6 +67,11 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
             return {"success": True, "status": "busy"}
         if not sessions or sessions[0].get("client_id") != verified_client_id:
             return {"success": True, "status": "needs_wolf_ui"}
+        apps = _inventory(wolf_api("GET", "/api/v1/apps"), "apps", 256)
+        wolf_ui = [item.get("id") for item in apps if item.get("title") == "Wolf UI"]
+        if (len(wolf_ui) != 1 or not isinstance(wolf_ui[0], str)
+                or not wolf_ui[0] or sessions[0].get("app_id") != wolf_ui[0]):
+            return {"success": True, "status": "needs_wolf_ui"}
         return {"success": True, "status": "wolf_ui_connected"}
 
     # Host-only deployment switch, never a field of the request.

@@ -143,17 +143,24 @@ def stop_owner_steam(wolf_api, *, store, confirmed_stop=False):
         sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
         if len(sessions) > 1 or any(s.get("client_id") != lease["client_id"] for s in sessions):
             raise PolicyError("Another Wolf session is active")
-        # On timeout or malformed response, keep the lease and NEVER retry.
-        response = wolf_api("POST", "/api/v1/lobbies/stop", {
-            "lobby_id": lease["lobby_id"], "pin": lease["pin"]})
-        if not isinstance(response, dict) or response.get("success") is not True:
-            raise PolicyError("Wolf stop result uncertain; inspect before retry")
-        remaining = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
-        if remaining:
-            raise PolicyError("Wolf still reports a lobby; lease retained")
-        live = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
-        if len(live) > 1 or any(s.get("client_id") != lease["client_id"] for s in live):
-            raise PolicyError("Unexpected Wolf session after stop; lease retained")
+        # Persist uncertainty BEFORE mutating Wolf. A crash, timeout or bad
+        # response then blocks any further stop or create attempt.
+        lease["state"] = "uncertain"
+        write_lease(fd, lease)
+        try:
+            response = wolf_api("POST", "/api/v1/lobbies/stop", {
+                "lobby_id": lease["lobby_id"], "pin": lease["pin"]})
+            if not isinstance(response, dict) or response.get("success") is not True:
+                raise PolicyError("Wolf stop result uncertain")
+            remaining = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+            if remaining:
+                raise PolicyError("Wolf still reports a lobby")
+            live = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+            if len(live) > 1 or any(s.get("client_id") != lease["client_id"] for s in live):
+                raise PolicyError("Unexpected Wolf session after stop")
+        except Exception:
+            # Never reveal raw Wolf failure / private PIN or retry a POST.
+            raise PolicyError("Steam stop unverified; lease retained for manual review") from None
         _archive_lease(fd, lease)
     return {"success": True, "status": "idle", "lease_archived": True}
 

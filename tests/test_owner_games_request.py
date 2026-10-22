@@ -69,6 +69,8 @@ class TrustedGamesGateTests(unittest.TestCase):
             {"version": 1, "action": "start", "client_id": "1001"},
             {"version": 1, "action": "start", "host_video_caps": "video/x-raw"},
             {"version": 1, "action": "exec", "command": "docker ps"},
+            {"version": 1, "action": []},
+            {"version": 1, "action": {"start": True}},
             {"version": True, "action": "start"},
             {"version": 2, "action": "stop"},
             "status", {}, [], None,

@@ -102,6 +102,19 @@ Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
   honor `client_id` as the actual lobby join session identifier, accept the exact payload
   on the pinned host image, or protect upstream direct-app access.
 
+### PR #165 regression history
+
+- **First CI run:** native sanitizer checks passed. The build/package tests reached
+  `test_join_failure_keeps_lobby_for_explicit_recovery` and failed because its
+  assertion searched for the substring `stop` in the *entire request body*.
+  Wolf's legitimate JSON key `stop_when_everyone_leaves` contains that word.
+  This was a **false-positive test assertion**, not an observed Wolf stop call.
+- **Correction:** inspect `(HTTP method, API path)` and reject only an actual
+  `POST .../stop` request. Retest through the full PR CI pipeline. Never infer
+  that a Wolf stop operation occurred from text matching serialized request data.
+- The transaction is only exercised with fake Wolf replies and a disposable
+  local state directory. Real Wolf Create/Join and recovery remain untested.
+
 ### Required next team actions, in order
 
 1. **Disposable Wolf host/session only:** record exact Wolf image digest, APIs, app IDs, the

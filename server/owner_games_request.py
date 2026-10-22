@@ -9,12 +9,13 @@ this function as a web endpoint, generic SSH command or client-side import
 until the caller performs independently verified device authentication.
 """
 from owner_access import OwnerStore, PolicyError, _valid_client_id, resolve_games
-from owner_launch import read_lease, launch_owner_steam, stop_owner_steam
+from owner_launch import (read_lease, launch_owner_steam, stop_owner_steam,
+                          reconcile_finished_owner_steam)
 from owner_lobby import _inventory
 from owner_host_pilot import inspect_candidate
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile"))
 
 
 def _validated_request(request):
@@ -79,6 +80,15 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
     # Host-only deployment switch, never a field of the request.
     if host_approved is not True:
         raise PolicyError("Host has not enabled owner Games control")
+
+    if action == "reconcile":
+        # This is NOT a forced stop or a blind lease clear. It only archives a
+        # joined lease belonging to this credential if the entire Wolf runtime
+        # and Steam writer census are definitively idle. Otherwise it refuses.
+        return reconcile_finished_owner_steam(
+            wolf_api, store=store,
+            expected_client_id=verified_client_id,
+            host_writer_check=host_writer_check)
 
     if action == "start":
         if lease is not None:

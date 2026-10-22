@@ -34,6 +34,60 @@ Do not conflate the following:
 
 The current beta uses Tailscale peer access, SSH trust and native Moonlight/Wolf pairing, **not** one unified NOW identity. Future email approval authorizes a new device under an existing account. It cannot bypass host-owner authorization or grant a new host automatically.
 
+## Personal Server identity and access contract
+
+**Architecture decision:** Personal Server is the **one-owner configuration of the future Shared Server model**, not a second or temporary identity system. It ships first and works without hosted NOW accounts, multi-member administration or an extra user-selection screen. The server, not a client-provided profile name, decides which workspace an approved device may launch. **This is a required design for future code, not yet implemented server-side enforcement.**
+
+### Durable entities
+
+| Entity | Independent identity and lifetime | Rule |
+| --- | --- | --- |
+| Host | Locally assigned immutable server ID | DNS, Tailnet IP and SSH username are connection coordinates, not host identity or proof of user permission |
+| Principal | Stable server-local ID; exactly one **owner** initially | A person authorized on this host. Shared Server later adds individual **members**, never extra owners merely because more devices pair |
+| Device enrollment | Own revocable credential bound to a host and principal | Moonlight certificate, Tailscale connectivity and SSH trust are independent transport credentials, not authorization to choose any Steam profile |
+| Gaming workspace | Durable logical profile ID, owner principal ID and Wolf adapter reference | One persistent Steam home per principal by default; profile data never follows the device ID and must not be cloned into a client |
+| Service grant | Principal + service + permitted operations | Games, Videos, Downloads, Files, Power and Admin require distinct server-side checks; media playback never implies Docker/SSH/file access |
+| Session/lease | Transient owner principal, device and gaming workspace binding | A reconnect is not a new profile. Coordinate simultaneous requests to one mutable Steam home; no double-writer promise |
+
+A **Personal Server** creates one owner principal with multiple independently revocable devices, one owner gaming workspace, and the existing authorized Jellyfin/media endpoint. The initial UI hides this machinery. The same persisted schema can add member principals, separate workspaces and narrower grants later without reassigning or moving the owner's Steam data.
+
+### Owner enrollment and first Games launch
+
+1. **Clean managed server:** initialize server-local owner identity and one durable named Wolf gaming workspace. **Adopt existing host:** inspect the already working Wolf/Steam profile **read-only** and request specific owner approval before associating it. Do not reinstall Steam, generate a new empty profile, reset login, or migrate owner data automatically.
+2. **Enroll another device:** the server owner approves the exact requesting client credential and binds it to the **existing owner principal**. Reuse that owner's grants and workspace. The device itself is not a new Steam user; it has its own revocation record.
+3. **Launch Games:** the device sends a request to a narrow **local host authority**. Validate its host-bound enrollment and principal/grant, resolve the authorized workspace, coordinate any existing active session, then call Wolf through a tested supported path. A device-supplied Wolf profile ID or filesystem path is never trusted. The eventual GUI simply launches Games.
+4. **First sign-in:** Steam login/Steam Guard occur inside the remote owner's Steam application, not inside NOW. Steam authentication stays stored on the host in the owner's profile; NOW never collects, embeds or copies those credentials.
+5. **Return/reconnect:** resolve the same durable workspace regardless of which approved device connects. After host/client restart and NOW upgrade, saved Steam state and other provider logins remain intact. If a device is revoked, it loses access; the workspace is not deleted.
+
+**Single-owner concurrency rule:** Default to one active writer to a single Steam workspace. If an old game session remains active, reconnect to it only if Wolf supports safe handoff; otherwise display an actionable "already in use" result and require deliberate owner intervention. Do not silently spawn another Steam container against the same mutable home, stop someone's stream, or share a second account by reusing owner credentials.
+
+### Shared Server compatibility without implementing it now
+
+Adding Joe later means adding an **independent member principal**, explicitly granted services and a separately owned gaming workspace, not just pairing Joe's Moonlight certificate to the owner's profile. Members never inherit owner SSH credentials, privileged Wolf/Docker APIs, host filesystem mounts, profile-data directories, or owner-service admin tokens. Media-only member access can use Jellyfin's native accounts/library permissions; it does not require granting Steam access or creating another Jellyfin server.
+
+A future storage pool is a **service resource separately permissioned to principals**. It is not the workspace, never grants a Steam game license, and never merges Steam login/saves. Every future public interface must be subject to server-enforced authorization, including direct upstream Wolf application selection, API calls, direct Jellyfin URLs and alternate client paths; merely hiding an option in NOW is not isolation.
+
+The host administrator remains technically capable of inspecting server-local data. We must promise privacy between ordinary members where verified, **not secrecy from the owner of the physical host**.
+
+### Integration and migration constraints
+
+- **P0 uses one narrow host-side authority**, not a broad multi-tenant platform or hosted sign-in service. Separate policy/identity resolution from Wolf profile IDs so an eventual provider/OS adapter can change without changing a person's identity. A Python/GTK client must not gain unrestricted Docker or Wolf management socket access.
+- Current Wolf direct `moonlight stream HOST Steam` selects the special `moonlight-profile-id` application with per-device state. Physical tests also found a named `user` Wolf profile with persistent Steam state. **Do not assume the Wolf client-wide `app_state_folder` API selects that named profile.** Verify upstream named-profile launch semantics in a disposable test. The existing per-device Steam symlinks are a temporary reference-host workaround, not the intended data model.
+- Use explicit, versioned local state for host/principal/device/workspace/grants and an idempotent migration path. A new owner enrollment must not overwrite or regenerate unrelated Wolf configuration, Steam files, Jellyfin libraries, client certificates, Tailscale state or SSH keys. Refuse ambiguous mappings rather than guess.
+- Preserve `~/.config/optiplex-desk/config.ini`, `.onp` presets and `.onb` backups. These are connection and device settings, **not authoritative server permissions**. Old client installs may continue working while adoption is opt-in; never infer that old client access is equivalent to a newly verified member grant.
+- Do not start the Shared Server permissions UI, second Steam account support, pooled games or private Jellyfin instances until the Personal Server acceptance test below passes.
+
+### Required tests before shipping the owner-profile integration
+
+- [ ] Fresh unpaired laptop with owner-authorized device enrollment, one-click Games, original Steam login/library, real game video/audio/input; **no terminal, symlink or Wolf UI profile selection**.
+- [ ] A second approved owner device resumes the same persistent state after first device exits; restart/reboot and NOW package upgrade preserve Steam auth and configured Videos endpoint.
+- [ ] A second concurrent launch of the same owner's active Steam home cannot create independent writable instances, and a safe reconnect or clear busy message works.
+- [ ] An unknown/revoked client, forged client-reported principal, different Wolf app choice or profile ID cannot access the owner workspace via NOW **or direct accessible Wolf paths**.
+- [ ] Existing-host adoption is explicit, non-destructive, fails safely for unknown/duplicate client IDs, preserves the original working state and has a tested rollback.
+- [ ] Unit tests cover binding/permission decisions in a GUI-free module; host/Wolf integration tests use disposable identities and state; physical acceptance is recorded separately from CI.
+
+**Next execution path:** [owner-device continuity #154](https://github.com/SteezyMode/OptiplexNow/issues/154) first, then verified physical onboarding and media access [Beta acceptance](BETA-ACCEPTANCE.md). [Multiple member Steam profiles #153](https://github.com/SteezyMode/OptiplexNow/issues/153) is deferred implementation but its isolation rules constrain all owner-code changes today.
+
 ## Configuration compatibility
 
 - Persisted client settings: `~/.config/optiplex-desk/config.ini` (or configured XDG config directory). `src/config.c/.h` now owns file parsing, defaults, compatibility migration, and atomic private saves. It retains an indexed compatibility array for the current GTK controller; a future typed settings API can remove index coupling after its callers and migration tests are converted. Preserve all field positions and user-defined links during upgrades.

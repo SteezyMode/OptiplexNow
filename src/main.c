@@ -832,7 +832,15 @@ static void launch_wolf_app(const char *app){
  * moonlight-profile-id Steam app or the administrative SSH credentials.
  * This is a source-only alpha handoff; the reference host still denies Start.
  */
-#define NOW_GAMES_HELPER "/usr/lib/optiplex-now/owner-games-client.py"
+/* Rootless .deb extraction is supported for MacBook beta testing when
+ * the current Linux user cannot apt-install packages. The helper must
+ * come from the same extracted .deb, never another local installation. */
+static char *managed_games_helper(void){
+ char *exe=g_file_read_link("/proc/self/exe",NULL);
+ char *path=now_games_helper_for_executable(exe);
+ g_free(exe);
+ return path;
+}
 typedef struct {
  gboolean running;
  gboolean opening_ui;
@@ -940,9 +948,11 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
 }
 static void managed_games_send(const char *action){
  if(!managed_games.running || !managed_games.cancel)return;
- now_games_request_async(NOW_GAMES_HELPER,action,managed_games.host,
+ char *helper=managed_games_helper();
+ now_games_request_async(helper,action,managed_games.host,
                          managed_games.user,managed_games.cancel,
                          managed_games_reply,(gpointer)action);
+ g_free(helper);
 }
 static void managed_games_begin(gboolean stop,gboolean status_only){
  if(managed_games.running){
@@ -953,8 +963,11 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
   managed_games_message("SET SERVER AND SSH USER IN SETTINGS");
   return;
  }
- if(access(NOW_GAMES_HELPER,R_OK)!=0){
-  managed_games_message("MANAGED GAMES CLIENT MISSING. UPDATE NOW INSTALLER");
+ char *helper=managed_games_helper();
+ gboolean helper_ready=g_file_test(helper,G_FILE_TEST_IS_REGULAR);
+ g_free(helper);
+ if(!helper_ready){
+  managed_games_message("MANAGED GAMES HELPER MISSING FROM THIS PACKAGE");
   return;
  }
  char *key=g_build_filename(g_get_home_dir(),".local","share",

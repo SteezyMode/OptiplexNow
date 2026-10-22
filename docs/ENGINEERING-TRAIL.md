@@ -260,6 +260,17 @@ failure** rather than an API pass. Changed cleanup to use `sudo rm -rf
 container. The workflow now emits a sanitized actual probe report to logs as
 well as its summary. Recheck both physical-read-only outcome and cleanup.
 
+**Third workflow result:** Run `39756053115` successfully pulled the
+actual upstream image, booted the container and cleaned up the scratch state,
+but the read-only probe reported `Disposable Wolf must have exactly one
+isolated mount`. No GETs were executed. The original gate assumed Wolf
+would use only the explicit scratch bind. The image also supplies other Docker
+mounts. Updated the gate to accept **only image-declared Docker-generated
+64-character hex-named anonymous volumes**, and still refuse any other bind,
+named/persistent volume, privileged container or host network. Added positive
+and negative volume tests. This is a strict probe-gate compatibility change,
+not a real Wolf API result. Rerun and record the actual gate result.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

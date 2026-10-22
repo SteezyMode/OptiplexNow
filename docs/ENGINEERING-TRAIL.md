@@ -238,9 +238,19 @@ entire disposable container is removed afterward. A successful create
 still does **not** validate Steam, named profile permissions, input/audio,
 reconnection or a real Moonlight session.
 
-**Evidence to record:** exact PR #168 GHA run, `schema_compatible`,
-`actual_disposable_create` = `created_disposable_lobby` or
-`rejected_or_blocked`, any failed unit test and its correction.
+**Actual pinned real Wolf result:** [GHA run 39761010450](https://github.com/SteezyMode/OptiplexNow/actions/runs/39761010450)
+completed its isolated daemon job successfully. The live schema was compatible:
+CreateLobby has 10 required request fields, tagged Docker runner has seven,
+and Join's Moonlight session ID is a string. The exact one-shot
+`POST /api/v1/lobbies/create` using ONLY disposable process runner
+`sleep 10` returned `success: true` with a lobby ID. The sanitized report
+recorded `actual_disposable_create: created_disposable_lobby`,
+`actual_join_executed: false`, `actual_moonlight_session: false`,
+`actual_steam_state_used: false`. This is the **first genuine Wolf lobby
+Create POST accepted by NOW's HTTP adapter**; it is not real Steam launch.
+The GHA container was disposed of after the test; no production state used.
+Standard package build and sanitizer results are tracked separately in PR #168.
+
 Reproduction: `python3 -m unittest discover -s tests -p
 'test_real_wolf_lobby_contract.py' -v`; the pinned GitHub CI workflow
 exercises the *real* Wolf implementation, not only that local fixture.

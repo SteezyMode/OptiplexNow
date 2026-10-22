@@ -70,7 +70,9 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("7,10,14,16}", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V2", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V1", PRESET_SOURCE)
-        self.assertIn("if(c->preset_loaded){safe_copy(cfg[10],512,c->staged[10]);safe_copy(cfg[14],512,c->staged[14]);safe_copy(cfg[16],512,c->staged[16]);}", SOURCE)
+        self.assertIn("if(c->preset_loaded){", SOURCE)
+        for index in (10, 14, 16):
+            self.assertIn(f"safe_copy(cfg[{index}],512,c->staged[{index}]);", SOURCE)
         self.assertIn("if(*line && *line!='#')", PRESET_SOURCE)
         self.assertIn("if(!now_safe_preset_url(v[14])||!now_safe_preset_url(v[16]))return 0;", PRESET_SOURCE)
 

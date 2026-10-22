@@ -48,6 +48,7 @@ jobs:
           fi
           digest="$(docker image inspect --format '{{index .RepoDigests 0}}' "${image}")"
           echo "Attempted upstream image: \`${digest}\`" >> "${GITHUB_STEP_SUMMARY}"
+          echo "Actual upstream image digest: ${digest}"
           if ! docker run -d \
             --name "${name}" \
             --network none \

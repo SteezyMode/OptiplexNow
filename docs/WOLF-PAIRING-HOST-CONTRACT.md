@@ -35,6 +35,14 @@ The action is passed through the explicit trusted SSH allowlist and GTK-independ
 
 Owner profile continuity and revocation remain blocked on [#154](https://github.com/SteezyMode/OptiplexNow/issues/154), with the [one-owner identity contract](application-design.md#personal-server-identity-and-access-contract) governing the implementation. A future change may add a narrowly authorized mapping operation **only after** a disposable-client test confirms Wolf's native launch/ownership semantics and refusal paths.
 
+## Owner-device policy module (not deployed)
+
+`src/owner_access.py` adds a developer-only, host-local authorization foundation for [#154](https://github.com/SteezyMode/OptiplexNow/issues/154). The owner profile, server-local principal and Moonlight client IDs are stored in a private, versioned NOW policy file, separate from Wolf's Steam homes and client-side presets. Only an explicit local administrator operation can initialize the store or approve a device. A paired client with no approval resolves to no Games permission. Repeated identical Wolf client records are accepted; conflicting records refuse access. Local owner policy resolution itself is read-only and does not launch Steam.
+
+`src/owner-access-local.py` is a **developer-only** CLI with `initialize`, `approve-device` and `resolve-games` operations. It requires the local root administrator and queries Wolf's existing read-only APIs to verify that named Steam profiles and device IDs exist. It is **not called by the normal client, not included in the public setup workflow, and not installed automatically on the live reference server**. A local policy grant does **not** revoke or constrain Wolf's independent pairing/stream access. Direct Wolf bypass and safe session-launch enforcement are still outstanding; do not invite a separate person onto the existing owner server on the strength of this file.
+
+The code and tests preserve the path to a future `principals` list containing members and separate workspaces without making them available in the current release. Version 1 enforces one owner and one Steam workspace; adding member records later requires a validated schema migration and actual host security controls, not a GUI switch.
+
 ## Packaged code and deployment
 
 | Component | Location / action |

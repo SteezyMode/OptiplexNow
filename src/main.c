@@ -846,6 +846,7 @@ typedef struct {
  gboolean opening_ui;
  gboolean stopping;
  gboolean status_only;
+ gboolean reconciled_once;
  guint poll_id;
  gint64 deadline;
  GCancellable *cancel;
@@ -913,6 +914,17 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
     "STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
   return;
  }
+ if(strcmp(action,"reconcile")==0){
+  if(answer!=NOW_GAMES_IDLE){
+   managed_games_finish("STEAM EXIT NOT VERIFIED. OWNER LEASE RETAINED");
+   return;
+  }
+  /* Only after the host confirms *zero sessions/lobbies/writers* and
+   * archives our own joined lease may we request fresh status. */
+  managed_games_message("PREVIOUS STEAM SESSION FINISHED. RECONNECTING...");
+  managed_games_send("status");
+  return;
+ }
  /* A delayed status must not trigger a new Start after the deadline.
   * A Start already sent above is never automatically repeated. */
  if(g_get_monotonic_time()>=managed_games.deadline){
@@ -939,6 +951,14 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
   return;
  }
  if(answer==NOW_GAMES_IN_USE){
+  if(!managed_games.reconciled_once){
+   managed_games.reconciled_once=TRUE;
+   managed_games_message("CHECKING WHETHER PREVIOUS STEAM SESSION FINISHED...");
+   /* Exactly one checked reconciliation attempt. No Wolf stop and no
+    * automatic second Create after an ambiguous Start. */
+   managed_games_send("reconcile");
+   return;
+  }
   managed_games_finish("OWNER STEAM ALREADY IN USE. CHECK SESSION BEFORE RETRY");
  }else if(answer==NOW_GAMES_BUSY){
   managed_games_finish("WOLF BUSY WITH ANOTHER SESSION. NO STEAM LAUNCH");

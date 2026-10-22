@@ -1,13 +1,13 @@
 # Documentation map
 
-Read in this order when joining development or starting a new review.
+Read in this order when joining development or starting a new review. Coding agents must also follow [root AGENTS.md](../AGENTS.md).
 
 | File | Authority |
 | --- | --- |
-| [Product direction](PRODUCT.md) | Vision, modular product roadmap, immediate development order and exclusions |
-| [Public alpha](PUBLIC-ALPHA.md) | Three required workflows: independent gaming, Jellyfin video and VPN-isolated downloads; role boundaries and physical acceptance |
+| [Private Alpha 1](PRIVATE-ALPHA.md) | **Active release gate:** three pillars, role boundaries, supported scope and physical acceptance |\n| [Product direction](PRODUCT.md) | Vision, modular product roadmap, immediate development order and exclusions |
+| [Public alpha](PUBLIC-ALPHA.md) | Later public release contract; not the active private-alpha acceptance gate |
 | [Current status](CURRENT-STATUS.md) | What code, CI and device observations support today |
-| [Beta acceptance](BETA-ACCEPTANCE.md) | Required end-to-end tester evidence |
+| [Beta acceptance](BETA-ACCEPTANCE.md) | Older, narrower existing-host client beta; supporting evidence only |
 | [MacBook physical beta report](QA-MACBOOK-2026-10-21.md) | October 21 v1.18.0 Linux Mint client observations, failures and regression requirements |
 | [Host installation and alpha acceptance](HOST-INSTALLER.md) | Current guarded installer, NVIDIA limits, safety gates and clean-host test |
 | [Architecture](application-design.md) | Code ownership, protocols, data compatibility and safe boundaries |

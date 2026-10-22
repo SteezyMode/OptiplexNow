@@ -1,30 +1,24 @@
-## Problem and observed evidence
-<!-- Real device / Wolf version / exact failure, or label as offline-only hypothesis. -->
+## Private Alpha 1 outcome or maintenance need
+<!-- Link exact alpha gate in docs/PRIVATE-ALPHA.md and issue, or explain a necessary security/reliability/doc maintenance change. -->
 
-## Change, owner and touched files
-<!-- Modules, API contracts and any current data migration. -->
+## Observed problem and root-cause evidence
+<!-- Distinguish physical evidence, real upstream API, mock, and hypothesis. -->
 
-## Decision and rejected shortcuts
-<!-- Upstream references, mistaken previous assumptions, safety rationale. -->
+## Minimal change and explicit non-goals
+<!-- Affected modules; why an existing component was not enough; what was deliberately left untouched. -->
 
-## Tests performed
-- [ ] Python/native unit tests (name commands and results)
-- [ ] GitHub build/package CI (run link, passing/failing)
-- [ ] Sanitizer diagnostics (run link, passing/failing)
-- [ ] Physical acceptance (exact host/client build and result, or explicitly **not tested**)
+## Verification
+- [ ] Focused regression tests (name command and observed result)
+- [ ] Relevant project test/CI, sanitizer and package checks (link run and status, or explain not run)
+- [ ] Real supported-device acceptance (version/hardware and outcome, or **NOT RUN**)
+- [ ] No simulated, source-only, or CI result presented as actual physical acceptance
 
-## Security, privileges, data preservation
-<!-- Device credentials, roles, Wolf direct-API bypass, concurrent sessions,
-     exposed secrets, affected mounts; clarify untouched production services. -->
+## Security, live host, rollback
+<!-- Protected files, role/auth checks, host mutation/non-mutation, secrets, ambiguous retries, owner confirmation and rollback. -->
 
-## Rollback and failure behavior
-<!-- Bad upgrade, partial state, interrupted POST, restore steps; never assume success. -->
-
-## Next-team handoff
-<!-- Exact next executable action, prerequisites, blocked issues, expected evidence. -->
-
-- [ ] Updated `docs/ENGINEERING-TRAIL.md` with dated evidence, failed attempts and
-      why the next team should not repeat them.
-- [ ] Updated `docs/CURRENT-STATUS.md` only for actual implementation/evidence changes.
-- [ ] Tracked outstanding acceptance gates in the owning GitHub issue.
-- [ ] Did not describe mocks/CI/source code as a verified deployment.
+## End of task
+- One concrete next executable action:
+- Remaining blocker and exact release acceptance state:
+- [ ] Updated docs/CURRENT-STATUS.md only when implementation or evidence changed
+- [ ] Recorded consequential decisions/incidents concisely in docs/ENGINEERING-TRAIL.md if applicable
+- [ ] No unrelated scope expansion or duplicated roadmap

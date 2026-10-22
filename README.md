@@ -4,7 +4,9 @@
 
 **Your own entertainment server. Games, video, and private downloads.**
 
-**OptiPlex NOW is an internal development codename, not the future commercial name.** The goal is a single, easy host-and-client application that makes one compatible personal computer a remotely accessible entertainment server. Think **your own GeForce NOW-style game streaming and Netflix-style personal library**, using your hardware and content, without needing to learn Docker, VPN networking, or streaming servers. These comparisons describe user experience, not affiliations or provided catalogs.
+**OptiPlex NOW is an internal development codename, not the future commercial name.**
+
+**Current development milestone:** [Private Alpha 1](docs/PRIVATE-ALPHA.md). The immediate release target is a physically tested, GUI-managed three-pillar system for a small approved tester group. No existing release meets this contract yet. Coding agents should follow [AGENTS.md](AGENTS.md); the public-alpha contract describes the later, broader launch. The goal is a single, easy host-and-client application that makes one compatible personal computer a remotely accessible entertainment server. Think **your own GeForce NOW-style game streaming and Netflix-style personal library**, using your hardware and content, without needing to learn Docker, VPN networking, or streaming servers. These comparisons describe user experience, not affiliations or provided catalogs.
 
 ### The three public-alpha pillars
 

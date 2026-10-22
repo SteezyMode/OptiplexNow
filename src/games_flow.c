@@ -18,6 +18,41 @@ static void games_free(gpointer data)
     g_free(request);
 }
 
+char *now_games_helper_for_executable(const char *executable_path)
+{
+    const char *installed = "/usr/lib/optiplex-now/owner-games-client.py";
+    if (!executable_path || !g_path_is_absolute(executable_path)) {
+        return g_strdup(installed);
+    }
+    gchar *bin_dir = g_path_get_dirname(executable_path);
+    gchar *bin_name = g_path_get_basename(bin_dir);
+    gchar *usr_dir = g_path_get_dirname(bin_dir);
+    gchar *usr_name = g_path_get_basename(usr_dir);
+
+    /*
+     * A .deb unpacked under a user's own directory retains usr/bin and
+     * usr/lib/optiplex-now. Use only that SAME extracted package helper.
+     * Never fall through to the system helper if this package is incomplete.
+     */
+    gboolean is_portable = (g_strcmp0(bin_name, "bin") == 0 &&
+                            g_strcmp0(usr_name, "usr") == 0 &&
+                            g_strcmp0(bin_dir, "/usr/bin") != 0);
+    gchar *result = NULL;
+    if (is_portable) {
+        gchar *root = g_path_get_dirname(usr_dir);
+        result = g_build_filename(root, "usr", "lib", "optiplex-now",
+                                  "owner-games-client.py", NULL);
+        g_free(root);
+    } else {
+        result = g_strdup(installed);
+    }
+    g_free(usr_name);
+    g_free(usr_dir);
+    g_free(bin_name);
+    g_free(bin_dir);
+    return result;
+}
+
 gboolean now_games_parse_reply(const char *line, NowGamesReply *reply)
 {
     if (!line || !reply || strlen(line) > 48) {

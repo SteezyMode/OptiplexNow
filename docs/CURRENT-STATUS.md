@@ -1,6 +1,6 @@
 # Current implementation and verification
 
-Updated October 22, 2026 (JST). **Source code, published releases, CI and physical acceptance are different evidence levels.** This is the current status page, not a chronological PR log.
+Updated October 23, 2026 (JST). **Source code, published releases, CI and physical acceptance are different evidence levels.** This is the current status page, not a chronological PR log.
 
 ## Release status
 
@@ -8,18 +8,39 @@ Updated October 22, 2026 (JST). **Source code, published releases, CI and physic
 - **Physical client acceptance and follow-up:** [October 21 MacBook test report](QA-MACBOOK-2026-10-21.md) on Linux Mint XFCE v1.18.0 observed Tailscale/server discovery, Moonlight pairing, Wolf XFCE and Jellyfin playback **after manual URL Settings correction** (audio not separately measured). Steam initially failed. On **October 22**, direct Moonlight Steam launch succeeded on the MacBook **after backing up its fresh Wolf Steam directory and manually symlinking it to the existing owner Steam state** (details in [#152](https://github.com/SteezyMode/OptiplexNow/issues/152) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154)). This verifies a working streamed Steam application, **not** a complete game/input/performance acceptance or zero-terminal first-run setup. Pairing and persistence defects remain; **Beta 1 not accepted.**
 - **Source and release distinction:** [PR #142](https://github.com/SteezyMode/OptiplexNow/pull/142) removed Music Server Profiles from the onboarding wizard on `main` after v1.18.0 was tagged. [PR #143](https://github.com/SteezyMode/OptiplexNow/pull/143) proposes collapsed optional wake controls. Neither should be represented as included in the tested v1.18.0 install. CI and existing host pilot checks do not prove a clean host deployment or an actual Steam game stream.
 
+## October 23 physical owner Steam acceptance (source-only pilot)
+
+**Physically exercised, not released:** After safely backing up the Wolf
+configuration, owner Steam workspace and uncertain launch lease, the owner
+cleared a stale lobby with a Wolf-only restart. A new host-local pilot run
+using verified legacy NVIDIA `video/x-raw` caps passed CreateLobby and
+JoinLobby on the actual OptiPlex. The MacBook transitioned from Wolf UI to
+Steam and ran **Resident Evil 2 Remake with working gameplay**, while the
+OptiPlex physical desktop remained independently usable. The named Steam
+workspace was backed up and verified before launch. See [issue
+#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+
+The successful session still has a **version 1 joined lease without a
+persisted lobby PIN**. This session must NOT be stopped using the new
+version 2 PIN-gated StopLobby path. The unreleased lifecycle branch adds
+owner-only PIN persistence for future launches, a guarded stop, and manual
+idle reconciliation for legacy leases. These new lifecycle paths are not
+yet physically tested, and the NOW Games GUI still uses the legacy direct
+Steam shortcut. No authenticated client-to-host broker or one-click Games
+acceptance has occurred. **Private Alpha 1 remains unaccepted.**
+
 ## October 22 owner Steam source-only development (unreleased)
 
 Following the physical MacBook/Mac mini tests, merged PRs #162, #163 and #164
 added **read-only Wolf profile inventory**, **developer-only owner/device
-policy**, and an **offline named Steam lobby request planner**. Current PR #165
-adds a guarded **host-local Create/Join transaction** with a durable
+policy**, and an **offline named Steam lobby request planner**. PR #165
+added a guarded **host-local Create/Join transaction** with a durable
 fail-closed launch lease and simulated failure-path tests. These files are
 source-level preparation, not installed operational host services. Normal
 client Games still launches the legacy direct Moonlight Steam app, Wolf's
 direct-app permissions are not restricted by NOW's policy, and fresh-owner
-client P0 remains **unaccepted**. The transaction has not been executed on
-the user's Wolf server. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+client P0 remains **unaccepted**. That source-only work subsequently passed a physical Create+Join on
+October 23, as recorded above. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
 ## October 22 Wolf protocol fixture (PR #166, source-only)
 
@@ -79,7 +100,8 @@ producer. This is a strong candidate, **not a verified root-cause fix**.
 Source PR #174 requires explicit host-verified software or NVIDIA-zero-copy
 caps and refuses a create attempt otherwise, without writing a lease.
 The previous physical failed lobby/uncertain lease is unchanged. GitHub tests
-are fixture/protocol evidence only; no new physical Steam launch occurred.
+were fixture/protocol evidence on merge; the corrected caps subsequently
+passed a physical Steam + RE2R test on October 23.
 See [host pilot](HOST-OWNER-PILOT.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
 
 ## Capability status

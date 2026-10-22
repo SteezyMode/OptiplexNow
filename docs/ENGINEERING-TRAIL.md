@@ -249,6 +249,17 @@ selected HTTP method (`argv[-2] == "GET"`) for each of the five requests.
 This is a false-positive assertion; it is not a real Wolf startup failure.
 Rerun PR CI before updating the real-daemon evidence.
 
+**Second workflow result:** Run `39755752062` passed the Python
+preflight and pulled/started the upstream Wolf container far enough for Wolf to
+create root-owned `cfg/config.toml`, `cfg/key.pem` and `cfg/cert.pem` in the
+disposable scratch directory. The job failed in trap cleanup because the hosted
+runner user could not remove root-owned files. This is a **fixture cleanup
+failure** rather than an API pass. Changed cleanup to use `sudo rm -rf
+--one-file-system` only if the target path exactly matches the current runner
+`$RUNNER_TEMP/now-wolf-compat-$GITHUB_RUN_ID`, after removing that specific
+container. The workflow now emits a sanitized actual probe report to logs as
+well as its summary. Recheck both physical-read-only outcome and cleanup.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

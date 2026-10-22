@@ -66,6 +66,28 @@ non-GPU container cannot boot, capture that as a hardware dependency, not a
 Wolf application defect. The read-only probe cannot prove profile switching,
 Steam data continuity, client isolation or successful Wolf Create/Join.
 
+## Disposable real Wolf lobby schema and process-Create test (PR #168)
+
+The pinned CI workflow now checks Wolf's live `GET /api/v1/openapi-schema`
+against NOW's required lobby fields, tagged Docker runner and string-valued
+Join session ID. Earlier tests exposed that NOW's mock Steam runner lacked
+three Wolf-required fields: `mounts`, `devices`, `ports`. The current
+planner validates these before permitting a lobby plan.
+
+Only if the daemon is running with empty clients/sessions/lobbies and its
+pinned image, scratch-only state and isolation are independently confirmed,
+the workflow attempts ONE disposable `CreateLobby` POST using a `process`
+runner with `sleep 10`. A Create result is reported separately from
+schema compatibility. No real Steam runner is used, and no Join is attempted
+without an authentic Moonlight session. A blocked result is not mislabeled
+as a passing stream. GitHub's temporary container cleanup discards the
+entire test state.
+
+**Do not confuse this with gameplay acceptance.** Physical GPU hardware,
+Moonlight pairing, Wolf UI session, real owner Steam Create+Join, safe
+session handoff, bypass denial and final fresh-client acceptance remain
+unverified and outside this CI environment. See #154 and ENGINEERING-TRAIL.
+
 ## Independent GPU host acceptance (future)
 
 Use a **second disposable host**, not the personal OptiPlex that holds the

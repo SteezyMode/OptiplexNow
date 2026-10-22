@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - 'server/probe_real_wolf.py'
+      - 'server/verify_wolf_lobby_contract.py'
+      - 'src/wolf_socket_adapter.py'
+      - 'src/owner_lobby.py'
       - 'tests/test_real_wolf_probe.py'
+      - 'tests/test_real_wolf_lobby_contract.py'
       - '.github/workflows/wolf-real-compat.yml'
   workflow_dispatch:
 
@@ -20,7 +24,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Re-check the production-container refusal tests
-        run: python3 -m unittest discover -s tests -p 'test_real_wolf_probe.py' -v
+        run: |
+          python3 -m unittest discover -s tests -p 'test_real_wolf_probe.py' -v
+          python3 -m unittest discover -s tests -p 'test_real_wolf_lobby_contract.py' -v
       - name: Attempt actual isolated Wolf API without GPU or Docker socket
         shell: bash
         run: |
@@ -84,5 +90,19 @@ jobs:
           cat "${RUNNER_TEMP}/now-real-wolf-report.json" >> "${GITHUB_STEP_SUMMARY}"
           # Also provide the scrubbed result in run logs for auditability.
           cat "${RUNNER_TEMP}/now-real-wolf-report.json"
+          if [ "${ok}" = true ]; then
+            # The newly initialized Wolf container has no clients or sessions.
+            # This is the first REAL disposable Create POST, using only
+            # a harmless 10-second process runner and scratch state.
+            # No Join is attempted without an actual Moonlight session.
+            if python3 server/verify_wolf_lobby_contract.py --container "${name}" > "${RUNNER_TEMP}/now-wolf-lobby-contract.json"; then
+              echo "Pinned Wolf schema compatible; disposable Create attempted" >> "${GITHUB_STEP_SUMMARY}"
+            else
+              echo "Pinned Wolf lobby contract BLOCKED; no production systems affected" >> "${GITHUB_STEP_SUMMARY}"
+            fi
+            cat "${RUNNER_TEMP}/now-wolf-lobby-contract.json"
+            cat "${RUNNER_TEMP}/now-wolf-lobby-contract.json" >> "${GITHUB_STEP_SUMMARY}"
+          fi
+          # A successful workflow job is not proof of actual Steam launch.
           # Do not mark 'Wolf works' based on the workflow's job status.
           # Physical GPU/Moonlight/lobby Create+Join acceptance remains separate.

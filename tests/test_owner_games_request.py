@@ -27,10 +27,12 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.api = StatefulWolf()
         self.requests = lambda action: {"version": 1, "action": action}
 
-    def call(self, action, *, client="1001", approved=False, caps="video/x-raw"):
+    def call(self, action, *, client="1001", approved=False, caps="video/x-raw",
+             writer_check=lambda: True):
         return handle_owner_games_request(
             self.requests(action), verified_client_id=client, store=self.store,
-            wolf_api=self.api, host_video_caps=caps, host_approved=approved)
+            wolf_api=self.api, host_video_caps=caps, host_approved=approved,
+            host_writer_check=writer_check)
 
     def test_status_is_read_only_and_never_leaks_client_or_private_fields(self):
         self.assertEqual(self.call("status"),
@@ -147,6 +149,30 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.assertTrue(self.api.lobby)
         with self.store.locked() as fd:
             self.assertIsNotNone(read_lease(fd))
+
+    def test_start_refuses_missing_or_failed_host_writer_preflight(self):
+        for preflight in (None, lambda: False, lambda: "true"):
+            with self.subTest(preflight=preflight):
+                with self.assertRaises(PolicyError):
+                    self.call("start", approved=True, writer_check=preflight)
+                self.assertFalse(any(m == "POST" for m, _, _ in self.api.calls))
+                with self.store.locked() as fd:
+                    self.assertIsNone(read_lease(fd))
+        def broken():
+            raise RuntimeError("PRIVATE")
+        with self.assertRaisesRegex(PolicyError, "preflight failed") as err:
+            self.call("start", approved=True, writer_check=broken)
+        self.assertNotIn("PRIVATE", str(err.exception))
+
+    def test_host_writer_check_is_invoked_once_for_each_start(self):
+        count = []
+        def preflight():
+            count.append("checked")
+            return True
+        self.call("start", approved=True, writer_check=preflight)
+        self.assertEqual(count, ["checked"])
+        self.call("stop", approved=True, writer_check=preflight)
+        self.assertEqual(count, ["checked"])
 
     def test_missing_verified_caps_cannot_write_lease(self):
         with self.assertRaisesRegex(PolicyError, "caps"):

@@ -151,6 +151,13 @@ class WolfProtocolTests(unittest.TestCase):
         self.assertTrue(joined["success"])
         self.assertEqual(len(self.server.requests), 3)
 
+    def test_stop_lobby_has_explicit_narrow_allowlist_entry(self):
+        body = {"lobby_id": "my_lobby", "pin": [1,2,3,4,5,6,7,8]}
+        self.assertEqual(json.loads(check_request(
+            "POST", "/api/v1/lobbies/stop", body)), body)
+        self.assertEqual(socket_timeout("POST", "/api/v1/lobbies/stop"),
+                         DEFAULT_SOCKET_TIMEOUT)
+
     def test_rejects_unapproved_operations_before_socket_connect(self):
         for method, path, payload in (
             ("POST", "/api/v1/sessions/stop", {}),

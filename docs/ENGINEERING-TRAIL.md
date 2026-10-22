@@ -461,3 +461,26 @@ against the working reference server by interpreting this code's existence as ap
 - **Code:** source-only planner/host-pilot rejects absent or unsupported caps before lease/POST. Operator must establish host-selected format from read-only Wolf startup logs and pass explicit `--video-caps`. No remote broker, automatic discovery or host runtime mutation was added.
 - **Tests:** mock planning, durable lease and socket-protocol regressions distinguish intended input and rejected missing caps; GitHub CI applies to source only. It does not prove actual Steam gameplay, video encoding, or secure broker.
 - **Next:** inspect current stalled lobby and uncertain lease read-only; verify Wolf's startup producer mode. Develop safe manual recovery for the existing failed attempt separately and only test a new Create+Join with explicit owner approval and an idle writer-safe host.
+
+## 2026-10-23: Physical owner Steam success and PIN-gated lifecycle follow-up
+
+- The reference OptiPlex's legacy NVIDIA pipeline needs `video/x-raw`. After
+  PR #174, one real host-local CreateLobby/JoinLobby returned success and the
+  MacBook actually played RE2R while the physical OptiPlex desktop remained
+  independently usable. Evidence recorded in issue #154. This validates the
+  gaming transport, **not** one-click NOW Games.
+- The original failed Create left an orphan and a v1 `uncertain` lease. Wolf-only
+  maintenance, read-only verification, archived lease and verified private
+  owner Steam backup restored a clean host. No owner account/data was deleted.
+- Upstream StopLobby checks the private lobby PIN, but the v1 lease did not
+  persist it and the API's public reflector only exposes `pin_required`.
+  We rejected guessed PINs, direct socket bypass and automatic retry.
+- The follow-up source changes persist the PIN in a private 0600 version 2
+  lease before Create; a host-only checked StopLobby marks uncertainty before
+  POST and archives only after verifying state. The current physical v1
+  session is intentionally left running; after planned shutdown, an explicit
+  idle reconciliation can archive that old lease.
+- Automated tests remain fabricated-state evidence until a version 2 physical
+  stop/reconnect cycle is exercised. Immediate next check: finish current
+  game naturally, verify runtime, test the guarded session lifecycle without
+  modifying the host's desktop or unrelated services.

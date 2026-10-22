@@ -35,7 +35,7 @@ def launch_enrolled_owner(*args, **kwargs):
                                   **kwargs)
 from owner_launch import owner_launch_status
 from owner_steam_pilot import run as cli_run
-from test_owner_launch import FakeWolf
+from test_owner_launch import FakeWolf, StatefulWolf
 from test_owner_lobby import fixtures
 
 
@@ -174,6 +174,23 @@ class HostPilotTests(unittest.TestCase):
                 confirmed_legacy_links_reviewed=True)
         self.assertFalse(any(call[0] == "POST" for call in api.calls))
         self.assertEqual(owner_launch_status(self.store)["status"], "idle")
+
+    def test_host_cli_stop_reconciles_only_explicitly_approved_owner(self):
+        enroll_current_owner(FakeWolf(), self.store,
+                             confirmed_owner=True, confirmed_device=True)
+        api = StatefulWolf()
+        launch_enrolled_owner(
+            api, self.store, confirmed_live_steam=True,
+            confirmed_no_other_steam_writer=True,
+            confirmed_legacy_links_reviewed=True)
+        with self.assertRaisesRegex(PolicyError, "approval"):
+            cli_run(SimpleNamespace(
+                action="stop", profile="user", state_dir=self.store.directory,
+                confirm_stop=False), api=api)
+        result = cli_run(SimpleNamespace(
+            action="stop", profile="user", state_dir=self.store.directory,
+            confirm_stop=True), api=api)
+        self.assertEqual(result["status"], "idle")
 
     def test_launch_cli_refuses_relative_state_path(self):
         args = SimpleNamespace(action="launch", profile="user",

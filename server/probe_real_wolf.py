@@ -65,14 +65,32 @@ def validate_container(name, info):
     if not info.get("State", {}).get("Running"):
         raise ProbeError("Disposable Wolf container is not running")
     mounts = info.get("Mounts")
-    if not isinstance(mounts, list) or len(mounts) != 1:
-        raise ProbeError("Disposable Wolf must have exactly one isolated mount")
-    m = mounts[0]
+    if not isinstance(mounts, list) or not mounts or len(mounts) > 16:
+        raise ProbeError("Disposable Wolf mount layout is invalid")
+    primary = [m for m in mounts if m.get("Type") == "bind"]
+    if len(primary) != 1 or primary[0].get("Destination") != "/etc/wolf":
+        raise ProbeError("Disposable Wolf must have only the scratch bind mount")
+    m = primary[0]
     src = m.get("Source")
     if (not isinstance(src, str) or not os.path.isabs(src)
-            or m.get("Destination") != "/etc/wolf" or not m.get("RW")
-            or m.get("Type") != "bind"):
+            or not m.get("RW")):
         raise ProbeError("Disposable Wolf storage layout is unsafe")
+    # The image may declare extra Docker-created anonymous volumes. Accept
+    # only 64-hex anonymous names at destinations declared by the image.
+    # Reject named/persistent volumes or any second host bind.
+    declared = config.get("Volumes") or {}
+    if not isinstance(declared, dict):
+        raise ProbeError("Unexpected Wolf image volumes metadata")
+    for other in mounts:
+        if other is m:
+            continue
+        name = other.get("Name")
+        if (other.get("Type") != "volume"
+                or not isinstance(name, str)
+                or re.fullmatch(r"[0-9a-f]{64}", name) is None
+                or other.get("Destination") not in declared
+                or other.get("Destination") == "/etc/wolf"):
+            raise ProbeError("Foreign or persistent Wolf volume refused")
     # GitHub hosted runners create this scratch path. Never allow /etc/wolf,
     # home directories or any other preexisting real server Wolf storage.
     norm = os.path.realpath(src)

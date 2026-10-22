@@ -117,8 +117,10 @@ def attempt(name, docker_call=isolated.docker, *, ci_run_id=None, runner_temp=No
     if name != expected:
         raise isolated.ProbeError("Requested Wolf container is not this CI run")
     info = isolated.inspect_container(name, docker_call)
+    scratch = [m["Source"] for m in info["Mounts"] if m.get("Type") == "bind"]
     if (info.get("Config", {}).get("Image") != WOLF_IMAGE or
-            os.path.realpath(info["Mounts"][0]["Source"]) !=
+            len(scratch) != 1 or
+            os.path.realpath(scratch[0]) !=
             os.path.realpath(os.path.join(runner_temp, expected))):
         raise isolated.ProbeError("Unexpected pinned image or scratch directory")
     schema = invoke(name, "GET", "/api/v1/openapi-schema", docker_call)

@@ -200,6 +200,55 @@ class TrustedGamesGateTests(unittest.TestCase):
         with self.store.locked() as fd:
             self.assertEqual(read_lease(fd)["state"], "joined")
 
+    def test_observe_tracks_managed_runner_without_mutation_or_lease_clear(self):
+        self.call("start", approved=True)
+        posts_before = [p for m, p, _ in self.api.calls if m == "POST"]
+        self.assertEqual(self.call("observe", approved=True)["status"], "running")
+        self.api.lobby = None
+        # Wolf returns from the Steam lobby to the existing Wolf UI stream,
+        # not necessarily to the user's local desktop.
+        self.assertEqual(self.call("observe", approved=True)["status"], "finished")
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+        self.assertEqual(posts_before,
+                         [p for m, p, _ in self.api.calls if m == "POST"])
+        # Finished is not lease reconciliation, which requires no sessions.
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+
+    def test_observe_fails_closed_with_legacy_or_other_device(self):
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.call("start", approved=True)
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=False)
+        with self.assertRaises(PolicyError):
+            self.call("observe", client="2002", approved=True)
+        self.api.lobby = None
+        # Another active stream or Steam writer is never considered completion.
+        self.api.data[4]["sessions"].append(
+            {"client_id": "foreign-client", "app_id": "wolf-ui"})
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.data[4]["sessions"].pop()
+        self.assertEqual(self.call("observe", approved=True,
+                                   writer_check=lambda: False)["status"], "running")
+        def failed_writer_census():
+            raise RuntimeError("PRIVATE_HOST_DETAIL")
+        with self.assertRaises(PolicyError) as err:
+            self.call("observe", approved=True, writer_check=failed_writer_census)
+        self.assertNotIn("PRIVATE_HOST_DETAIL", str(err.exception))
+
+    def test_observe_rejects_lobby_substitution_and_unknown_stream(self):
+        self.call("start", approved=True)
+        self.api.lobby["started_by_profile_id"] = "other"
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"][0]["app_id"] = "wrong-app"
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+
     def test_natural_full_exit_archives_own_joined_lease_and_allows_next_start(self):
         self.call("start", approved=True)
         self.assertEqual(self.call("status")["status"], "in_use")

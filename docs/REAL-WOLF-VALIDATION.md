@@ -24,6 +24,22 @@ This is the next part of [#154](https://github.com/SteezyMode/OptiplexNow/issues
    conflict/recovery and a genuinely clean client, with gameplay/input/audio.
    None of the previous levels establish this milestone.
 
+## Verified upstream daemon result (October 22, 2026)
+
+In PR #167, GitHub Actions [run 39757247197](https://github.com/SteezyMode/OptiplexNow/actions/runs/39757247197)
+booted an isolated **actual** Wolf daemon and our adapter received valid
+read-only GET responses: **2 apps, 1 profile, 0 paired clients, 0 sessions,
+0 lobbies**. The image's own Docker volume at `/run/user/wolf/` had to be
+handled explicitly, without allowing arbitrary external data volumes.
+Prior CI failures were fixture assertion, cleanup and mount-path normalization
+errors, **not** evidence of defects in Wolf. The complete fixes are in
+[ENGINEERING-TRAIL.md](ENGINEERING-TRAIL.md).
+
+The first actual POST to create/join a persistent Steam lobby **has not
+been made**. All code paths that would manipulate a Steam workspace remain
+unconnected to the owner reference host. The validated GET contract is the
+narrowest meaningful real-Wolf compatibility milestone so far.
+
 ## Read-only disposable-container probe
 
 `server/probe_real_wolf.py --container now-wolf-compat-EXAMPLE` only uses the

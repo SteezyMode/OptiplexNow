@@ -531,3 +531,30 @@ against the working reference server by interpreting this code's existence as ap
   boundary. Next acceptance step after CI: independently authenticate a
   remote owner device at host boundary and prove denial of forged, revoked
   and concurrent requests; only then wire the GTK Games button.
+
+## 2026-10-23: Restricted per-client Games SSH key boundary
+
+- The prior host-local owner Games request gate was unexposed, because it
+  had no way to associate an incoming remote credential with the exact
+  enrolled Moonlight device. Existing admin SSH keys have general host
+  and Docker power, so using them for the one-click UI would be unsafe.
+- Added an isolated Ed25519 client key and fixed SSH transport, paired with
+  an OpenSSH `restrict,command=...` operator-reviewed public key line whose
+  **fixed** command pins the corresponding host-approved Wolf client ID.
+  This transport sends one bounded JSON `status/start/stop` request and
+  never lets the client choose its device ID, profile, Steam PIN, container
+  path or remote command. The host reads owner-only 0600 configuration and
+  performs writer/process preflight before Start.
+- Key issuance, host owner approval, authorized_keys installation, private
+  host config and UI activation are **not automatic**, and no reference
+  server files or running sessions were modified. This is an owner-only
+  alpha approach, not cryptographic Moonlight certificate matching or
+  shared-member privilege separation.
+- Remaining risk: `restrict` limits what this SSH key can request but the
+  host OS account may still have Docker privileges. Upstream Wolf direct
+  Steam launch may bypass NOW's single-writer lock. A dedicated limited
+  host authority and direct-app ACL need further acceptance before sharing.
+- Next acceptance: offline tests, real restricted-key denial checks on
+  disposable or status-only host, then graphical Moonlight Wolf UI startup,
+  authenticated one-shot Start and actual RE2R playback without a terminal.
+  See [owner Games SSH](OWNER-GAMES-SSH.md) and issue #154.

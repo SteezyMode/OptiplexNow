@@ -38,6 +38,10 @@ shutil.copy2(root/'server/LICENSE-nvidia-driver-upstream.txt', pkg/'usr/share/do
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)
 shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-client.py')
+# Restricted per-device Games SSH transport. This is NOT a host admin key and
+# does not enable a host broker or retarget the Games button in this release.
+shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
+(pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
 shutil.copy2(root/'server/wolf-driver-maintenance.py',pkg/'usr/lib/optiplex-now/wolf-driver-maintenance')
 (pkg/'usr/lib/optiplex-now/wolf-driver-maintenance').chmod(0o755)

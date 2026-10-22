@@ -100,7 +100,8 @@ def reconcile_stopped_owner_steam(wolf_api, *, store, confirmed_runtime_stopped=
     return {"success": True, "status": "idle", "lease_archived": True}
 
 
-def stop_owner_steam(wolf_api, *, store, confirmed_stop=False):
+def stop_owner_steam(wolf_api, *, store, confirmed_stop=False,
+                     expected_client_id=None, expected_lease_id=None):
     """Host-local, one-shot PIN-gated StopLobby; no retries on uncertain POST.
 
     Only version 2 leases contain the PIN. Existing version 1 sessions remain
@@ -118,6 +119,12 @@ def stop_owner_steam(wolf_api, *, store, confirmed_stop=False):
             raise PolicyError("Legacy owner Steam lease has no recoverable PIN")
         if lease["state"] != "joined" or lease["lobby_id"] is None:
             raise PolicyError("Steam lobby state uncertain; refuse automatic stop")
+        # Prevent a verified client request from stopping a replacement lease
+        # created between initial status authorization and the StopLobby lock.
+        if expected_client_id is not None and lease["client_id"] != expected_client_id:
+            raise PolicyError("Steam lease belongs to a different owner device")
+        if expected_lease_id is not None and lease["id"] != expected_lease_id:
+            raise PolicyError("Steam lease changed before stop; retry refused")
         policy = store.read(fd)
         if policy is None or lease["workspace_id"] != policy["workspaces"][0]["id"]:
             raise PolicyError("Owner policy/lease mismatch")

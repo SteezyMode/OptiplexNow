@@ -904,6 +904,13 @@ static void managed_games_message(const char *message){
  say(message);
  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),message);
 }
+/* Do not strand an owner in selectable Wolf UI when NOW refused the
+ * managed launch. Close only the subprocess opened by THIS click. A Steam
+ * Create with uncertain result is never retried or forcibly stopped. */
+static void managed_games_abort_owned_stream(void){
+ if(managed_games.stream_process && !managed_games.playing)
+  g_subprocess_send_signal(managed_games.stream_process,SIGTERM);
+}
 static void managed_games_finish(const char *message){
  if(managed_games.poll_id){
   g_source_remove(managed_games.poll_id);
@@ -996,9 +1003,11 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
  if(error)g_error_free(error);
  if(!managed_games.running)return;
  if(!ok){
+  if(!managed_games.stopping && !managed_games.status_only)
+   managed_games_abort_owned_stream();
   managed_games_finish(managed_games.stopping?
     "STEAM STOP UNCONFIRMED. CHECK HOST STATUS BEFORE RETRY":
-    "GAMES HOST REFUSED OR UNAVAILABLE. NO DIRECT STEAM FALLBACK");
+    "GAMES HOST REFUSED. MANAGED STREAM CLOSED; NO STEAM FALLBACK");
   return;
  }
  if(managed_games.stopping){
@@ -1027,7 +1036,8 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
    managed_games.observe_id=g_timeout_add_seconds(5,
     managed_games_observe_timer,NULL);
   }else{
-   managed_games_finish("STEAM LAUNCH NOT CONFIRMED. CHECK GAMES STATUS");
+   managed_games_abort_owned_stream();
+   managed_games_finish("STEAM LAUNCH UNCONFIRMED. NO AUTOMATIC RETRY");
   }
   return;
  }
@@ -1045,6 +1055,7 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
  /* A delayed status must not trigger a new Start after the deadline.
   * A Start already sent above is never automatically repeated. */
  if(g_get_monotonic_time()>=managed_games.deadline){
+  managed_games_abort_owned_stream();
   managed_games_finish("GAMES CONNECT TIMEOUT. NO STEAM LAUNCH ATTEMPTED");
   return;
  }
@@ -1055,6 +1066,7 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
  }
  if(answer==NOW_GAMES_NEEDS_WOLF_UI){
   if(g_get_monotonic_time()>=managed_games.deadline){
+   managed_games_abort_owned_stream();
    managed_games_finish("WOLF UI DID NOT CONNECT. NO STEAM LAUNCH ATTEMPTED");
    return;
   }
@@ -1079,10 +1091,13 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
    managed_games_send("reconcile");
    return;
   }
+  managed_games_abort_owned_stream();
   managed_games_finish("OWNER STEAM ALREADY IN USE. CHECK SESSION BEFORE RETRY");
  }else if(answer==NOW_GAMES_BUSY){
+  managed_games_abort_owned_stream();
   managed_games_finish("WOLF BUSY WITH ANOTHER SESSION. NO STEAM LAUNCH");
  }else{
+  managed_games_abort_owned_stream();
   managed_games_finish("UNEXPECTED GAMES STATUS. NO STEAM LAUNCH");
  }
 }

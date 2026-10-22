@@ -10,7 +10,9 @@ typedef enum {
     NOW_GAMES_BUSY,
     NOW_GAMES_IN_USE,
     NOW_GAMES_JOINED,
-    NOW_GAMES_IDLE
+    NOW_GAMES_IDLE,
+    NOW_GAMES_RUNNING,
+    NOW_GAMES_FINISHED
 } NowGamesReply;
 
 /* Invoke only the installed, fixed Python Games helper off the GTK thread.

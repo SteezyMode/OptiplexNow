@@ -44,6 +44,18 @@ def _single_steam_app(profiles_reply, profile_id):
     name = runner.get("name")
     if not isinstance(name, str) or not RUNNER_NAME.fullmatch(name) or ".." in name:
         raise PolicyError("Unsupported Steam runner state identity")
+    # Wolf's actual CreateLobbyRequest schema requires the complete tagged
+    # runner object, not just the name and image. Earlier Python fakes omitted
+    # mounts/devices/ports and could therefore pass without a valid real POST.
+    if (runner.get("type") != "docker" or
+            not isinstance(runner.get("image"), str) or not runner["image"] or
+            any(not isinstance(runner.get(key), list) or
+                any(not isinstance(value, str) for value in runner[key])
+                for key in ("mounts", "env", "devices", "ports")) or
+            ("base_create_json" in runner and
+             runner["base_create_json"] is not None and
+             not isinstance(runner["base_create_json"], str))):
+        raise PolicyError("Incomplete Wolf Docker Steam runner configuration")
     # State path comes from a server-verified profile and runner, never client input.
     folder = f'profile-data/{profile_id}/{runner["name"]}'
     render_node = app.get("render_node")

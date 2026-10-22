@@ -109,6 +109,54 @@ are host administrators; this is intentionally not a multi-user trust boundary.
 The future NOW broker must independently authenticate its requesting device,
 deny non-owner direct Wolf app access and safely handle reconnects.
 
+## Operator-only stop and legacy recovery (new source, not installed)
+
+**Do not stop the current reference RE2R session for a source-only test.**
+The first successful physical Create+Join on October 23 wrote a **version 1**
+lease with a lobby ID but no PIN. Wolf's StopLobby endpoint requires the
+actual private lobby PIN, which Wolf's read-only lobby API deliberately
+does not reveal. **The new `stop` operation refuses version 1 leases**.
+
+Future owner Steam launches save an 8-digit random PIN alongside the
+version 2 lease under the existing 0700 owner directory and 0600 lease
+file. This PIN never belongs in client requests, diagnostics, logs or
+GitHub. It is available only to the trusted host-local operator process.
+
+After finishing a future version 2 game session, an administrator may
+deliberately stop that exact session (this will terminate the game):
+
+```sh
+python3 server/owner_steam_pilot.py stop \
+  --state-dir "$HOME/.local/state/optiplex-now-owner-pilot" \
+  --confirm-stop
+```
+
+The stop path requires the one matching owner Steam lobby, the enrolled
+device and matching owner workspace, no other active client, and its
+original PIN. It marks the lease `uncertain` **before** issuing exactly
+one StopLobby POST. Only a confirmed successful stop with no remaining
+lobbies and no unexpected sessions archives the lease. An error/timeout
+blocks retries and requires manual inspection. A stop confirmation alone
+does not prove every Steam process has terminated; verify this before
+the next launch. This operation has **no public NOW client endpoint**.
+
+For a legacy v1 lease or an uncertain stop, end the game and use a
+separately approved controlled Wolf shutdown/restart or confirmed
+out-of-band stop. After the operator independently verifies there are
+**zero Wolf lobbies, zero Wolf sessions and no surviving Steam writers**,
+the lease may be archived with:
+
+```sh
+python3 server/owner_steam_pilot.py reconcile \
+  --state-dir "$HOME/.local/state/optiplex-now-owner-pilot" \
+  --confirm-runtime-stopped --confirm-no-other-steam-writer
+```
+
+`reconcile` does not stop anything, change Wolf/Steam settings, or
+restart a container. It refuses all nonempty Wolf runtimes, preserves
+private archived evidence, and never clears a lease on a guessed state.
+**It is not safe to use merely because a client window closed.**
+
 ## Rollback and verification boundaries
 
 Before live testing, preserve Wolf `/etc/wolf`, Steam workspace data,

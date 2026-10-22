@@ -15,6 +15,7 @@ Read in this order when joining development or starting a new review.
 | [Contributing](../CONTRIBUTING.md) | Build, test, PR discipline and code map |
 | [Release process](RELEASE-PROCESS.md) | Immutable tags, artifact verification and rollback |
 | [Wolf pairing contract](WOLF-PAIRING-HOST-CONTRACT.md) | Actual host API, client bridge, privilege model and unverified checks |
+| [Real Wolf validation gate](REAL-WOLF-VALIDATION.md) | Disposable actual Wolf API probe, GPU-host requirements and evidence levels |
 | [Wolf integration and fork policy](UPSTREAM-FIRST-WOLF-INTEGRATION.md) | Future host manager design and evidence gate for a fork |
 
 ## Specialized references

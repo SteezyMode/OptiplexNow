@@ -31,6 +31,20 @@ on the reference host, and does not change the Games shortcut, authenticate
 a remote client, or prevent direct Wolf bypass. The fresh-client owner Steam
 acceptance gate remains open (#154). See [engineering trail](ENGINEERING-TRAIL.md).
 
+## Real Wolf read-only API compatibility (PR #167)
+
+**Verified actual upstream Wolf daemon, read-only:** GitHub Actions run
+`39757247197` started Wolf in a disposable, network-isolated Ubuntu 24.04
+container with empty temporary Wolf state and no GPU/input devices or Docker
+management socket. The actual daemon's five API GETs returned success:
+`apps=2`, `profiles=1`, `clients=0`, `sessions=0`, `lobbies=0`.
+This is **not** physical GPU streaming, native lobby Create/Join, an authorized
+owner broker, or accepted fresh-client Games. Earlier probe failures were
+caused by test assertion, scratch cleanup and restrictive image-volume
+validation; all fixes are recorded in [engineering trail](ENGINEERING-TRAIL.md).
+The exact image digest is recorded by the workflow, and no owner-host data or
+running services were involved. See [real Wolf validation](REAL-WOLF-VALIDATION.md).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

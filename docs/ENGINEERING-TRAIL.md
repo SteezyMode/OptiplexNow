@@ -206,5 +206,132 @@ to test the writing path against their live Steam state. Then implement
 authenticated host broker, Wolf direct-app admission denial, lease recovery
 and physical fresh-client P0 acceptance.
 
-**Owner-host operations in PR #165:** none. A developer must not run a real Wolf POST
+## 2026-10-22: PR #167 attempted real Wolf daemon on isolated CI runner
+
+**Problem:** PR #166 tests real Unix-socket bytes but its daemon is a Python
+simulation. Real Wolf could reject our socket/framing or fail to start. This
+iteration probes the *real upstream image* without using the user's running
+OptiPlex or pretending a mock is Wolf.
+
+**Change:** `server/probe_real_wolf.py` refuses any container except one
+with a unique `now-wolf-compat-*` name, explicit disposable label, exactly
+one scratch `/etc/wolf` storage mount, nonprivileged execution and
+`--network none`. It reads only the five GET inventory endpoints and reports
+counts, not raw Wolf profile/client/session fields. The special
+`.github/workflows/wolf-real-compat.yml` job on GitHub's hosted runner
+attempts to boot upstream `:stable` with no GPU, no uinput/uhid, no Docker
+socket and no port exposure, and records its **resolved image digest**. No
+POST and no credentials; one-use container and scratch volume are cleaned up.
+`tests/test_real_wolf_probe.py` checks production-container rejection and
+allowlisted read-only operations with a mocked Docker command.
+
+**Verification category:** an actual upstream image **boot attempt** on a
+hosted non-GPU runner. If Wolf refuses to start, the step reports BLOCKED
+(no daemon test performed), even when the workflow status is success.
+If the five APIs respond, that proves only the *real daemon read-only GET*
+subset with this exact image and environment. **No active Moonlight session,
+GPU stream, actual lobby Create/Join, or fresh owner setup is verified.**
+
+**Rejected approaches:** do not run a second Wolf on the personal server,
+mount `/etc/wolf` or the real host's Docker socket, reuse Steam data,
+enable host ports or mark real session behavior accepted from this job.
+Wolf's official quickstart requires render/input devices, which hosted
+runners lack. A dedicated **disposable GPU-equipped machine** is needed
+for Create/Join/session/reconnect physical acceptance. See
+[REAL-WOLF-VALIDATION.md](REAL-WOLF-VALIDATION.md).
+
+**First workflow result:** Run `39755626372` stopped in the *preflight
+unit test* before running Docker. Test `test_probe_only_uses_five_gets_and_redacts_session_keys`
+incorrectly scanned the whole Docker argv for the string `POST`, even though
+the embedded **reviewed source code** in argv legitimately contains that
+word. No POST request was executed. The corrected test checks the exact
+selected HTTP method (`argv[-2] == "GET"`) for each of the five requests.
+This is a false-positive assertion; it is not a real Wolf startup failure.
+Rerun PR CI before updating the real-daemon evidence.
+
+**Second workflow result:** Run `39755752062` passed the Python
+preflight and pulled/started the upstream Wolf container far enough for Wolf to
+create root-owned `cfg/config.toml`, `cfg/key.pem` and `cfg/cert.pem` in the
+disposable scratch directory. The job failed in trap cleanup because the hosted
+runner user could not remove root-owned files. This is a **fixture cleanup
+failure** rather than an API pass. Changed cleanup to use `sudo rm -rf
+--one-file-system` only if the target path exactly matches the current runner
+`$RUNNER_TEMP/now-wolf-compat-$GITHUB_RUN_ID`, after removing that specific
+container. The workflow now emits a sanitized actual probe report to logs as
+well as its summary. Recheck both physical-read-only outcome and cleanup.
+
+**Third workflow result:** Run `39756053115` successfully pulled the
+actual upstream image, booted the container and cleaned up the scratch state,
+but the read-only probe reported `Disposable Wolf must have exactly one
+isolated mount`. No GETs were executed. The original gate assumed Wolf
+would use only the explicit scratch bind. The image also supplies other Docker
+mounts. Updated the gate to accept **only image-declared Docker-generated
+64-character hex-named anonymous volumes**, and still refuse any other bind,
+named/persistent volume, privileged container or host network. Added positive
+and negative volume tests. This is a strict probe-gate compatibility change,
+not a real Wolf API result. Rerun and record the actual gate result.
+
+**Fourth workflow result:** Run `39756922735` printed sanitized mounts
+from the running upstream Wolf image:
+`/etc/wolf` (single scratch bind), plus an anonymous 64-hex Docker volume at
+`/run/user/wolf`. The image declares `/run/user/wolf/` **with a trailing
+slash**, which Docker normalizes off `Mounts[].Destination`. The gate rejected
+that safe mount before its first GET. Corrected the comparator by normalizing
+only declared destination trailing slashes; still requires a Docker-generated
+64-character hex name, a declaration in the image, no extra binds and no host
+network/privilege. A regression fixture now reproduces the exact spelling
+difference. The fail-closed diagnostic proves the real image mount layout,
+**not** the API semantics yet.
+
+**Fifth workflow result: first actual real Wolf read-only API PASS.**
+PR #167 run `39757247197` on a disposable Ubuntu 24.04 GitHub-hosted
+runner successfully booted upstream Wolf with `--network none`, no GPU/input
+devices, no Docker socket, a newly created `/etc/wolf` scratch bind and the
+image-declared anonymous `/run/user/wolf` volume. The strict container
+safety gate passed. The **real daemon**, accessed via our tested Python
+HTTP-over-Unix socket adapter inside the running container, returned all five
+allowlisted successful GET inventories with these counts: 2 apps, 1 profile,
+0 clients, 0 sessions, 0 lobbies. The sanitized JSON explicitly reported
+`result: pass`, `steam_stream_tested: false` and `creates_lobbies: false`.
+The job was successful and its cleanup removed the temporary container and
+scratch state. This **does not validate the POST Create/Join protocol** or
+hardware streaming. Exact upstream image digest is echoed in the follow-up
+workflow for future reproducibility; the mutable `:stable` tag is not a
+long-term test pin.
+
+**New executable next step:** a separate GPU-equipped **disposable** Wolf
+host plus an active disposable Moonlight Wolf UI session for the first *real*
+`/api/v1/lobbies/create` and `join` pair. Use owner-independent Steam
+state and the current policy/lease checks. Confirm video buffer caps and
+actual session ID mapping; collect only sanitized outputs. Do **not** use
+the owner's reference Steam environment or invite other users.
+
+**Sixth workflow result, verified and reproducible:** Run `39757678257`
+completed the isolated **real Wolf** read-only probe successfully. The exact
+resolved upstream image was
+`ghcr.io/games-on-whales/wolf@sha256:b0ef253739f9bd49b71eba7e150c955fd05990c0d409e666d89236995351551a`.
+Wolf returned `success: true` for all five inventories: **2 apps, 1
+profile, 0 clients, 0 sessions, 0 lobbies**. The scope is actual daemon GETs
+only; there was no paired client, GPU encoding, Steam lobby Create/Join POST,
+or playback. The workflow was subsequently **pinned to the verified image
+digest** to avoid test drift from the moving `:stable` tag. No owner hardware
+or Steam state was involved.
+
+**Release-safety CI failure and resolution:** The new third GitHub workflow
+passed its *own* pinned-real-Wolf GET test in run `39757974832`, but the
+standard build/test workflow `39757974840` correctly rejected its filename:
+`test_repo_contract.WorkflowSafetyTests.test_only_documented_now_workflows_exist`
+allowlisted only `ci.yml` and `release.yml`. This was an intentional
+repository release-safety contract, not a test that should be bypassed or
+deleted. After reviewing `wolf-real-compat.yml`, explicitly added that
+single third workflow to the allowlist and added negative tests for release
+publication, push triggers, privileged containers, host networking and Docker
+socket mounting. The compatibility workflow uses `contents: read` and only
+a disposable GitHub-hosted runner. All changes need full CI revalidation.
+No reference-host deployment or Steam test is implied.
+
+**Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
+result and any CI fix here. Do not speculate from a missing API.
+
+ A developer must not run a real Wolf POST
 against the working reference server by interpreting this code's existence as approval.

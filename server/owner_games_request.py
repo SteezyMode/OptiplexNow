@@ -20,7 +20,7 @@ ACTIONS = frozenset(("status", "start", "stop"))
 def _validated_request(request):
     if (not isinstance(request, dict) or set(request) != {"version", "action"}
             or type(request["version"]) is not int or request["version"] != VERSION
-            or request["action"] not in ACTIONS):
+            or not isinstance(request["action"], str) or request["action"] not in ACTIONS):
         raise PolicyError("Unsupported owner Games request")
     return request["action"]
 

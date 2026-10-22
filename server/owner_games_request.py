@@ -98,7 +98,10 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                     lobby.get("name") != "Steam" or
                     lobby.get("started_by_profile_id") != profile_id or
                     lobby.get("pin_required") is not True or
-                    lobby.get("multi_user") is not False):
+                    lobby.get("multi_user") is not False or
+                    not isinstance(lobby.get("connected_sessions"), list) or
+                    any(c != verified_client_id
+                        for c in lobby["connected_sessions"])):
                 raise PolicyError("Observed lobby differs from owner Steam")
             return {"success": True, "status": "running"}
         # Wolf's runner-exit StopLobby returns its stream producer to Wolf UI
@@ -120,9 +123,17 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                 return {"success": True, "status": "running"}
         except Exception:
             raise PolicyError("Host Steam writer observation failed") from None
-        # Still does NOT archive the lease: ordinary Steam completion is not
-        # enough for reconcile, which requires zero sessions after Moonlight
-        # has exited. Client may close only its OWN spawned Moonlight process.
+        # Lease identity may have changed while the Wolf GETs ran. Read again
+        # under the same owner lock; only the original joined transaction may
+        # be described as finished. Still do not archive or stop anything.
+        with store.locked() as fd:
+            current = read_lease(fd)
+            if (current is None or current["id"] != lease["id"] or
+                    current["state"] != "joined" or
+                    current["client_id"] != verified_client_id):
+                raise PolicyError("Owner Steam lease changed while observing")
+        # The actual reconciliation still requires zero Wolf sessions after
+        # the client's OWN Moonlight process exits.
         return {"success": True, "status": "finished"}
 
     if action == "reconcile":

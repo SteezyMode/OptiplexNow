@@ -9,6 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 CONFIG = (ROOT / "src" / "config.c").read_text(encoding="utf-8")
+SERVICE_SAVER = (ROOT / "src" / "wizard_services.c").read_text(encoding="utf-8")
 
 
 class FreshClientMediaTests(unittest.TestCase):
@@ -34,7 +35,10 @@ class FreshClientMediaTests(unittest.TestCase):
         # A user may navigate away after Next without pressing Finish.
         self.assertIn("if(page==c->finish_page)wizard_save(c);", SOURCE)
         self.assertIn("c->finish_page=six;", SOURCE)
-        self.assertIn("if(now_safe_preset_url(url))safe_copy(cfg[5+i],512,url);", SOURCE)
+        # Implementation details live in a GTK-free helper, whose actual
+        # persistence behavior is tested by make check-wizard-services.
+        self.assertIn("now_wizard_store_services(cfg,urls)", SOURCE)
+        self.assertIn("now_safe_preset_url(urls[i])", SERVICE_SAVER)
 
     def test_wolf_pairing_search_is_bounded_and_owner_approved(self):
         # Structural guards: full behavior still requires physical GTK tests.

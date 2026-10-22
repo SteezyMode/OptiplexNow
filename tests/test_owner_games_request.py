@@ -204,6 +204,10 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.call("start", approved=True)
         posts_before = [p for m, p, _ in self.api.calls if m == "POST"]
         self.assertEqual(self.call("observe", approved=True)["status"], "running")
+        self.api.lobby["connected_sessions"] = ["different-device"]
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.lobby["connected_sessions"] = ["1001"]
         self.api.lobby = None
         # Wolf returns from the Steam lobby to the existing Wolf UI stream,
         # not necessarily to the user's local desktop.

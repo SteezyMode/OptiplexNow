@@ -10,7 +10,7 @@ import secrets
 
 from owner_access import PolicyError, resolve_games, named_steam_profiles
 
-RUNNER_NAME = re.compile(r"[A-Za-z0-9_.-]{1,100}\Z")
+RUNNER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}\Z")
 LOBBY_ID = re.compile(r"[A-Za-z0-9_-]{1,128}\Z")
 
 
@@ -39,7 +39,10 @@ def _single_steam_app(profiles_reply, profile_id):
         raise PolicyError("Ambiguous Steam application in owner profile")
     app = apps[0]
     runner = app.get("runner")
-    if not isinstance(runner, dict) or not RUNNER_NAME.fullmatch(str(runner.get("name", ""))):
+    if not isinstance(runner, dict):
+        raise PolicyError("Unsupported Steam runner state identity")
+    name = runner.get("name")
+    if not isinstance(name, str) or not RUNNER_NAME.fullmatch(name) or ".." in name:
         raise PolicyError("Unsupported Steam runner state identity")
     # State path comes from a server-verified profile and runner, never client input.
     folder = f'profile-data/{profile_id}/{runner["name"]}'

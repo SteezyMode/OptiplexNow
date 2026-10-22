@@ -95,8 +95,8 @@ def plan_owner_steam_lobby(
     if lobbies:
         raise PolicyError("Existing Wolf lobby; reconnect or stop it safely before launching")
 
-    if not isinstance(video_caps, str) or len(video_caps) > 512 or
-            "\x00" in video_caps or "\n" in video_caps:
+    if (not isinstance(video_caps, str) or len(video_caps) > 512 or
+            "\x00" in video_caps or "\n" in video_caps):
         raise PolicyError("Invalid host video caps")
     if pin_digits is None:
         pin_digits = [secrets.randbelow(10) for _ in range(8)]

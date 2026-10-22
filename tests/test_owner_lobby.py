@@ -23,7 +23,8 @@ def fixtures():
              "render_node": "/dev/dri/renderD128",
              "runner": {"type": "docker", "name": "WolfSteam",
                         "image": "example.invalid/steam:test",
-                        "env": ["A=1"]}}]}
+                        "mounts": [], "env": ["A=1"],
+                        "devices": [], "ports": []}}]}
     ]}
     clients = {"success": True, "clients": [
         {"client_id": "1001", "app_state_folder": "1001"}]}
@@ -160,6 +161,19 @@ class OwnerLobbyTests(unittest.TestCase):
                 data[2]["profiles"][1]["apps"][0]["runner"]["name"] = bad
                 with self.assertRaises(PolicyError):
                     self.plan(tuple(data))
+
+    def test_runner_missing_required_wolf_fields_refused(self):
+        for missing in ("type", "name", "image", "mounts", "env",
+                        "devices", "ports"):
+            with self.subTest(missing=missing):
+                data = list(fixtures())
+                del data[2]["profiles"][1]["apps"][0]["runner"][missing]
+                with self.assertRaises(PolicyError):
+                    self.plan(tuple(data))
+        data = list(fixtures())
+        data[2]["profiles"][1]["apps"][0]["runner"]["type"] = "process"
+        with self.assertRaisesRegex(PolicyError, "Incomplete Wolf Docker"):
+            self.plan(tuple(data))
 
     def test_pin_is_validated_and_not_guessed_by_client(self):
         data = fixtures()

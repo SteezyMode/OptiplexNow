@@ -306,6 +306,17 @@ state and the current policy/lease checks. Confirm video buffer caps and
 actual session ID mapping; collect only sanitized outputs. Do **not** use
 the owner's reference Steam environment or invite other users.
 
+**Sixth workflow result, verified and reproducible:** Run `39757678257`
+completed the isolated **real Wolf** read-only probe successfully. The exact
+resolved upstream image was
+`ghcr.io/games-on-whales/wolf@sha256:b0ef253739f9bd49b71eba7e150c955fd05990c0d409e666d89236995351551a`.
+Wolf returned `success: true` for all five inventories: **2 apps, 1
+profile, 0 clients, 0 sessions, 0 lobbies**. The scope is actual daemon GETs
+only; there was no paired client, GPU encoding, Steam lobby Create/Join POST,
+or playback. The workflow was subsequently **pinned to the verified image
+digest** to avoid test drift from the moving `:stable` tag. No owner hardware
+or Steam state was involved.
+
 **Outcome:** see latest PR #167 GitHub Actions and comments; append exact observed
 result and any CI fix here. Do not speculate from a missing API.
 

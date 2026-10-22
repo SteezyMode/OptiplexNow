@@ -31,6 +31,16 @@ on the reference host, and does not change the Games shortcut, authenticate
 a remote client, or prevent direct Wolf bypass. The fresh-client owner Steam
 acceptance gate remains open (#154). See [engineering trail](ENGINEERING-TRAIL.md).
 
+## Real Wolf container compatibility attempt (PR #167, isolated runner)
+
+A GitHub Actions workflow now attempts a read-only API probe against an actual
+upstream Wolf image in a disposable container **without GPU/virtual-input devices**.
+A blocked result is expected when Wolf requires its hardware; the test is
+explicitly not physical GPU streaming, native lobby Create/Join or accepted
+fresh-client Games. The reported image digest and outcome are recorded on PR
+#167 and [real Wolf validation](REAL-WOLF-VALIDATION.md). No owner-host data
+or running services are involved.
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

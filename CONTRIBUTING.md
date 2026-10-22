@@ -1,6 +1,8 @@
 # Contributing to OptiPlex NOW
 
-Read [Product direction](docs/PRODUCT.md), [Current status](docs/CURRENT-STATUS.md) and [Beta acceptance](docs/BETA-ACCEPTANCE.md) before proposing new scope.
+Read [Product direction](docs/PRODUCT.md), [Current status](docs/CURRENT-STATUS.md), [Engineering trail](docs/ENGINEERING-TRAIL.md) and [Beta acceptance](docs/BETA-ACCEPTANCE.md) before proposing new scope.
+
+**Mandatory iteration handoff:** Every behavior-changing PR includes evidence, design and rejected alternatives, exact tests (mock/CI/physical distinguished), unsafe boundaries, rollback, and the next executable acceptance step. Append a dated entry or update its existing iteration entry in `docs/ENGINEERING-TRAIL.md`; update `docs/CURRENT-STATUS.md` only when an implementation/evidence claim changes. The PR template is the review checklist, and #154 is the running Steam continuity issue. No undocumented live-host adjustments. Never imply a passing CI test means the reference machine was physically tested.
 
 Published v1.17.0 is an amd64 GTK3 Linux client for an already prepared server. Unreleased development source additionally includes a **clean-host Wolf installation pilot** with separate GTK setup and a root-authorized helper, not yet physically accepted. NOW does not own Wolf's protocol, Jellyfin's service, Tailscale's network or Studio's tools. Keep privileged host operations outside the ordinary client; see [Host installer](docs/HOST-INSTALLER.md).
 

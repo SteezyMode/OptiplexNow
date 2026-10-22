@@ -34,6 +34,7 @@ Published v1.17.0 is an amd64 GTK3 Linux client for an already prepared server. 
 | `src/wolf-pair-client.py` | SSH-mediated client pairing requests |
 | `src/wolf-pair-local.py` | Privileged host-side Wolf socket mediation; not auto-installed on the host |
 | `src/owner_access.py` | Host-local owner/device/workspace policy: strict grant resolution, private atomic state; no Wolf session launcher |
+| `src/owner_lobby.py` | Pure, offline Wolf named-profile Steam lobby request planner; does not call Wolf or bypass upstream access checks |
 | `src/owner-access-local.py` | Developer-only root/admin enrollment CLI; no NOW client integration or host deployment yet |
 | `src/server-profile.py` | Existing music stack export/staged import; not a host installer |
 | `src/open-remote-files.sh`, `src/open-web-gaming-admin.py` | SFTP and opt-in browser administration |

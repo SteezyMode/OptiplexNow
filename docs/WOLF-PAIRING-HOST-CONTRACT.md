@@ -43,6 +43,22 @@ Owner profile continuity and revocation remain blocked on [#154](https://github.
 
 The code and tests preserve the path to a future `principals` list containing members and separate workspaces without making them available in the current release. Version 1 enforces one owner and one Steam workspace; adding member records later requires a validated schema migration and actual host security controls, not a GUI switch.
 
+## Owner Steam lobby request planner (not activated)
+
+`src/owner_lobby.py` mirrors the verified upstream Wolf-UI source sequence for launching a named Steam profile:
+
+1. Verify the exact paired Wolf client is authorized by the host-local owner policy.
+2. Verify the client's **currently running session is Wolf UI**, not direct Steam, and validate its video/audio settings. Never copy or log API session encryption keys.
+3. Resolve the Steam app and `runner.name` exclusively from the existing named owner profile; derive `profile-data/<profile_id>/<runner.name>`, not a client-supplied folder.
+4. Refuse to construct a new lobby if **another Wolf session or any existing lobby** is present. In this one-owner preflight we cannot prove that an old direct-launch symlink or a detached lobby does not already use the same Steam home.
+5. Construct the documented `POST /api/v1/lobbies/create` body with the owner profile, renderer/audio settings, private eight-digit lobby PIN and `stop_when_everyone_leaves=false`. Once Wolf returns a valid lobby id, construct `POST /api/v1/lobbies/join` for the approved Moonlight session. This reproduces Wolf UI's `CreateLobby` / `JoinLobby` protocol, but does **not** execute either operation.
+
+Upstream source reference: [Wolf UI Apps/App.cs](https://github.com/games-on-whales/wolf-ui/blob/main/src/Scenes/Main/Body/Apps/App.cs) and [Wolf API Lobbies.cs](https://github.com/games-on-whales/wolf-ui/blob/main/src/Resources/WolfAPI/v1/Lobbies.cs). This planner uses the upstream `client_id`-as-session-id behavior, which must be **physically verified** with a disposable stream before any POST. Some host-specific pipeline values (notably video buffer caps) and lobby persistence/rejoin details are also unverified.
+
+**Security:** Lobby PINs are only defense in depth. Unapproved but already-paired Moonlight clients can currently bypass NOW policy through Wolf's other launch paths. The planner does not install a host agent, reserve the shared state atomically, start a session, revoke Wolf pairing or make Shared Server invitations safe. Its output bodies must remain host-internal and never be shown to clients or logged. A real lobby launcher must enforce a single writer in the host broker, apply server-side device policy to all relevant upstream entry points, and prove rejection of direct Wolf/other-profile bypass before use with unrelated people.
+
+**Live-host safety:** This is an offline plan builder and tests only. It does not alter the working owner's Steam folders or existing Wolf profile state and is not wired to the Games shortcut.
+
 ## Packaged code and deployment
 
 | Component | Location / action |

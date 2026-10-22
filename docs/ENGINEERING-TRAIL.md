@@ -484,3 +484,28 @@ against the working reference server by interpreting this code's existence as ap
   stop/reconnect cycle is exercised. Immediate next check: finish current
   game naturally, verify runtime, test the guarded session lifecycle without
   modifying the host's desktop or unrelated services.
+
+## 2026-10-23: Reference-host physical owner Steam lifecycle
+
+- One source-only host operator pilot used verified NVIDIA legacy caps
+  `video/x-raw` to Create+Join a named owner Steam lobby. The MacBook
+  played RE2R while the OptiPlex physical desktop remained independent.
+- After natural game exit and Moonlight disconnect, Wolf showed zero sessions
+  and lobbies. With no Steam writer present, merged PR #175's host-local
+  `reconcile` archived the older v1 lease; no Wolf restart or Steam data
+  deletion was needed.
+- One v2 Create+Join opened Steam. The lease persisted an owner-only PIN;
+  the explicit guarded `stop` returned
+  `{lease_archived:true,status:"idle",success:true}`, leaving the MacBook on
+  Wolf UI. A subsequent preflight found one Wolf UI stream, zero lobbies, and
+  an enrolled paired owner; a fresh v2 Create+Join reopened Steam without
+  restarting Wolf or changing Steam/lease files manually.
+- This is physical **source-only host operator** evidence, not accepted NOW
+  Games-button usability. The GTK Games action still invokes the old direct
+  `moonlight stream HOST Steam`; a trusted remote device-authenticated
+  host-side authority, approved-client handoff, zero-terminal onboarding,
+  sound measurements and a disposable clean-host test remain unverified.
+- The new v2 lobby was left joined at end of test. Do not Create again
+  without a verified stop and archived lease. Next implementation: connect
+  the named owner lifecycle to Games through a narrow authenticated host
+  request, without giving ordinary clients unrestricted SSH/Docker access.

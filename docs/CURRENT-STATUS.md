@@ -8,6 +8,19 @@ Updated October 22, 2026 (JST). **Source code, published releases, CI and physic
 - **Physical client acceptance and follow-up:** [October 21 MacBook test report](QA-MACBOOK-2026-10-21.md) on Linux Mint XFCE v1.18.0 observed Tailscale/server discovery, Moonlight pairing, Wolf XFCE and Jellyfin playback **after manual URL Settings correction** (audio not separately measured). Steam initially failed. On **October 22**, direct Moonlight Steam launch succeeded on the MacBook **after backing up its fresh Wolf Steam directory and manually symlinking it to the existing owner Steam state** (details in [#152](https://github.com/SteezyMode/OptiplexNow/issues/152) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154)). This verifies a working streamed Steam application, **not** a complete game/input/performance acceptance or zero-terminal first-run setup. Pairing and persistence defects remain; **Beta 1 not accepted.**
 - **Source and release distinction:** [PR #142](https://github.com/SteezyMode/OptiplexNow/pull/142) removed Music Server Profiles from the onboarding wizard on `main` after v1.18.0 was tagged. [PR #143](https://github.com/SteezyMode/OptiplexNow/pull/143) proposes collapsed optional wake controls. Neither should be represented as included in the tested v1.18.0 install. CI and existing host pilot checks do not prove a clean host deployment or an actual Steam game stream.
 
+## October 22 owner Steam source-only development (unreleased)
+
+Following the physical MacBook/Mac mini tests, merged PRs #162, #163 and #164
+added **read-only Wolf profile inventory**, **developer-only owner/device
+policy**, and an **offline named Steam lobby request planner**. Current PR #165
+adds a guarded **host-local Create/Join transaction** with a durable
+fail-closed launch lease and simulated failure-path tests. These files are
+source-level preparation, not installed operational host services. Normal
+client Games still launches the legacy direct Moonlight Steam app, Wolf's
+direct-app permissions are not restricted by NOW's policy, and fresh-owner
+client P0 remains **unaccepted**. The transaction has not been executed on
+the user's Wolf server. See [engineering trail](ENGINEERING-TRAIL.md) and [#154](https://github.com/SteezyMode/OptiplexNow/issues/154).
+
 ## Capability status
 
 | Capability | In current source | Real-world acceptance |

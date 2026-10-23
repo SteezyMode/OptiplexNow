@@ -113,6 +113,20 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
         self.assertFalse(any(method == "POST" for method, _, _ in self.api.calls))
 
+    def test_cleanup_refuses_session_without_verifiable_id(self):
+        self.call("start", approved=True)
+        # Steam finished, but Wolf reports only client_id/app_id.
+        # A client_id must never be used as the stop endpoint session_id.
+        self.api.lobby = None
+        posts_before = [path for method, path, _ in self.api.calls
+                        if method == "POST"]
+        with self.assertRaisesRegex(PolicyError, "session_id"):
+            self.call("cleanup", approved=True)
+        self.assertEqual(posts_before, [path for method, path, _ in
+                                       self.api.calls if method == "POST"])
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+
     def test_stale_existing_lease_blocks_second_start(self):
         self.call("start", approved=True)
         n = len([p for m, p, _ in self.api.calls if m == "POST"])
@@ -199,6 +213,169 @@ class TrustedGamesGateTests(unittest.TestCase):
             p for m, p, _ in self.api.calls if m == "POST"]))
         with self.store.locked() as fd:
             self.assertEqual(read_lease(fd)["state"], "joined")
+
+    def test_observe_tracks_managed_runner_without_mutation_or_lease_clear(self):
+        self.call("start", approved=True)
+        posts_before = [p for m, p, _ in self.api.calls if m == "POST"]
+        self.assertEqual(self.call("observe", approved=True)["status"], "running")
+        self.api.lobby["connected_sessions"] = ["different-device"]
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.lobby["connected_sessions"] = ["1001"]
+        self.api.lobby = None
+        # Wolf returns from the Steam lobby to the existing Wolf UI stream,
+        # not necessarily to the user's local desktop.
+        self.assertEqual(self.call("observe", approved=True)["status"], "finished")
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+        self.assertEqual(posts_before,
+                         [p for m, p, _ in self.api.calls if m == "POST"])
+        # A verified residual owner Wolf UI may be preserved: no POST needed.
+        self.assertEqual(self.call("reconcile", approved=True)["status"], "idle")
+
+    def test_observe_fails_closed_with_legacy_or_other_device(self):
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.call("start", approved=True)
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=False)
+        with self.assertRaises(PolicyError):
+            self.call("observe", client="2002", approved=True)
+        self.api.lobby = None
+        # Another active stream or Steam writer is never considered completion.
+        self.api.data[4]["sessions"].append(
+            {"client_id": "foreign-client", "app_id": "wolf-ui"})
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.data[4]["sessions"].pop()
+        self.assertEqual(self.call("observe", approved=True,
+                                   writer_check=lambda: False)["status"], "running")
+        def failed_writer_census():
+            raise RuntimeError("PRIVATE_HOST_DETAIL")
+        with self.assertRaises(PolicyError) as err:
+            self.call("observe", approved=True, writer_check=failed_writer_census)
+        self.assertNotIn("PRIVATE_HOST_DETAIL", str(err.exception))
+
+    def test_observe_rejects_lobby_substitution_and_unknown_stream(self):
+        self.call("start", approved=True)
+        self.api.lobby["started_by_profile_id"] = "other"
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"][0]["app_id"] = "wrong-app"
+        with self.assertRaises(PolicyError):
+            self.call("observe", approved=True)
+
+    def test_natural_full_exit_archives_own_joined_lease_and_allows_next_start(self):
+        self.call("start", approved=True)
+        self.assertEqual(self.call("status")["status"], "in_use")
+        # Simulate the previously desired experience: Steam Exit has ended
+        # the full stream, with zero Wolf lobbies and zero Wolf sessions.
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        before_posts = [p for method, p, _ in self.api.calls if method == "POST"]
+        result = self.call("reconcile", approved=True, writer_check=lambda: True)
+        self.assertEqual(result, {
+            "success": True, "status": "idle", "lease_archived": True})
+        self.assertEqual(
+            before_posts, [p for method, p, _ in self.api.calls if method == "POST"])
+        with self.store.locked() as fd:
+            self.assertIsNone(read_lease(fd))
+        self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
+        # Reconnected Wolf UI must present full real session settings.
+        self.api.data[4]["sessions"] = copy.deepcopy(fixtures()[4]["sessions"])
+        self.assertEqual(self.call("start", approved=True)["status"], "joined")
+
+    def test_reconcile_refuses_active_lobby_even_when_stream_disconnected(self):
+        self.call("start", approved=True)
+        self.api.data[4]["sessions"] = []
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+        self.assertIsNotNone(self.api.lobby)
+
+    def test_reconcile_preserves_verified_owner_wolf_ui_and_allows_next_start(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        before_posts = [p for m,p,_ in self.api.calls if m == "POST"]
+        self.assertEqual(self.call("reconcile", approved=True)["status"], "idle")
+        self.assertEqual(before_posts, [p for m,p,_ in self.api.calls if m == "POST"])
+        self.assertEqual(self.call("status")["status"], "wolf_ui_connected")
+        self.assertEqual(self.call("start", approved=True)["status"], "joined")
+
+    def test_reconcile_refuses_foreign_or_unexpected_residual_session(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        session = self.api.data[4]["sessions"][0]
+        old = copy.deepcopy(session)
+        for changes in ({"client_id": "other"}, {"app_id": "steam-direct"}):
+            session.update(changes)
+            with self.assertRaises(PolicyError):
+                self.call("reconcile", approved=True)
+            session.clear()
+            session.update(old)
+        self.api.data[4]["sessions"].append(copy.deepcopy(old))
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+
+    def test_reconcile_refuses_steam_process_and_preflight_failure(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        for preflight in (lambda: False, lambda: "yes", None):
+            with self.subTest(preflight=preflight):
+                with self.assertRaises(PolicyError):
+                    self.call("reconcile", approved=True, writer_check=preflight)
+        def private_error():
+            raise RuntimeError("SECRET HOST DETAIL")
+        with self.assertRaises(PolicyError) as err:
+            self.call("reconcile", approved=True, writer_check=private_error)
+        self.assertNotIn("SECRET", str(err.exception))
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
+    def test_reconcile_rechecks_wolf_runtime_after_writer_preflight(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        def race():
+            # An unrelated Wolf lobby appeared after the first idle snapshot.
+            self.api.lobby = {"id": "unexpected", "name": "Other",
+                              "started_by_profile_id": "other"}
+            return True
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True, writer_check=race)
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
+
+    def test_reconcile_cannot_clear_foreign_revoked_uncertain_or_unapproved_lease(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        self.api.data[4]["sessions"] = []
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", client="2002", approved=True)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=False)
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["state"] = "uncertain"
+            write_lease(fd, lease)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["state"] = "joined"
+            write_lease(fd, lease)
+            policy = self.store.read(fd)
+            policy["devices"][0]["revoked"] = True
+            self.store.write(fd, policy)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        with self.store.locked() as fd:
+            self.assertIsNotNone(read_lease(fd))
 
     def test_no_request_can_stop_unrelated_lease(self):
         self.call("start", approved=True)

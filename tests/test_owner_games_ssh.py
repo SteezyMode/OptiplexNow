@@ -61,6 +61,17 @@ class ForcedGamesBridgeTests(unittest.TestCase):
             "/api/v1/lobbies/stop", "/api/v1/lobbies/create",
             "/api/v1/lobbies/join"])
 
+    def test_forced_key_observe_is_read_only_until_actual_runner_exit(self):
+        self.assertEqual(self.handler("start")["status"], "joined")
+        previous_posts = [p for m, p, _ in self.api.calls if m == "POST"]
+        self.assertEqual(self.handler("observe")["status"], "running")
+        self.api.lobby = None
+        self.assertEqual(self.handler("observe")["status"], "finished")
+        self.assertEqual(previous_posts,
+                         [p for m, p, _ in self.api.calls if m == "POST"])
+        # Only later idle reconciliation archives the lease.
+        self.assertEqual(self.handler("status")["status"], "in_use")
+
     def test_env_denies_non_ssh_and_remote_exec(self):
         for env in ({}, {"SSH_CONNECTION": "x", "SSH_ORIGINAL_COMMAND": "sh"},
                     {"SSH_CONNECTION": "x", "SSH_ORIGINAL_COMMAND": "status"}):

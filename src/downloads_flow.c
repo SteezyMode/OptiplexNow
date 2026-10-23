@@ -1,14 +1,22 @@
 #include "downloads_flow.h"
+#include "downloads_webview.h"
 #include "presets.h"
 #include <gio/gio.h>
 #include <string.h>
 
 static GtkWidget *queue_label;
+static GtkWidget *queue_stack;
+static GtkWidget *view_holder;
+static GtkWidget *web_button;
+static GtkWidget *status_label;
+static GtkWidget *webview;
+static gchar *loaded_url;
 static gboolean running;
+static gchar *last_host;
+static gchar *last_user;
 
 typedef struct {
  GSubprocess *proc;
- char *host;
 } QueueJob;
 
 static char *helper_path(void){
@@ -39,7 +47,7 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
  }
  running=FALSE;
  g_clear_error(&err);g_free(out);
- g_object_unref(job->proc);g_free(job->host);g_free(job);
+ g_object_unref(job->proc);g_free(job);
 }
 void now_downloads_refresh(const char *host,const char *user){
  if(!queue_label || running)return;
@@ -62,25 +70,86 @@ void now_downloads_refresh(const char *host,const char *user){
    g_clear_error(&error);return;
  }
  QueueJob *job=g_new0(QueueJob,1);
- job->proc=proc;job->host=g_strdup(host);
+ job->proc=proc;
  running=TRUE;
  gtk_label_set_text(GTK_LABEL(queue_label),"Reading authorized download queue...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,complete,job);
 }
+static void show_queue(GtkWidget *button,gpointer unused){
+ (void)button;(void)unused;
+ if(!queue_stack)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
+ if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+   "Read-only queue from the approved NOW device connection.");
+ if(last_host && last_user)now_downloads_refresh(last_host,last_user);
+}
+static void show_web(GtkWidget *button,gpointer unused){
+ (void)button;(void)unused;
+ if(!queue_stack || !webview)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web");
+ if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+  "WebUI controls use qBittorrent's own login and permissions.");
+}
+void now_downloads_open(const char *host,const char *user,const char *webui_url){
+ g_free(last_host);last_host=g_strdup(host);
+ g_free(last_user);last_user=g_strdup(user);
+ if(!queue_stack)return;
+ if(webview && (!webui_url || g_strcmp0(loaded_url,webui_url)!=0 ||
+               !now_downloads_webview_url_allowed(webui_url,host))){
+   gtk_container_remove(GTK_CONTAINER(view_holder),webview);
+   webview=NULL;g_clear_pointer(&loaded_url,g_free);
+ }
+ if(!webview && webui_url && now_downloads_webview_url_allowed(webui_url,host)){
+   webview=now_downloads_webview_new(webui_url,host);
+   if(webview){
+     loaded_url=g_strdup(webui_url);
+     gtk_box_pack_start(GTK_BOX(view_holder),webview,TRUE,TRUE,0);
+     gtk_widget_show_all(view_holder);
+   }
+ }
+ gtk_widget_set_sensitive(web_button,webview!=NULL);
+ if(webview)show_web(NULL,NULL);
+ else{
+   show_queue(NULL,NULL);
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+     "Embedded WebUI unavailable. Configure a private Downloads URL on this server and install WebKitGTK 4.1; the queue remains available.");
+ }
+}
 GtkWidget *now_downloads_page(void){
+ GtkWidget *root=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ gtk_container_set_border_width(GTK_CONTAINER(root),8);
+ GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+ gtk_box_pack_start(GTK_BOX(root),toolbar,FALSE,FALSE,0);
+ web_button=gtk_button_new_with_label("VUE TORRENT");
+ gtk_widget_set_sensitive(web_button,FALSE);
+ gtk_box_pack_start(GTK_BOX(toolbar),web_button,FALSE,FALSE,0);
+ g_signal_connect(web_button,"clicked",G_CALLBACK(show_web),NULL);
+ GtkWidget *snapshot=gtk_button_new_with_label("QUEUE SNAPSHOT");
+ gtk_box_pack_start(GTK_BOX(toolbar),snapshot,FALSE,FALSE,0);
+ g_signal_connect(snapshot,"clicked",G_CALLBACK(show_queue),NULL);
+ status_label=gtk_label_new("Connecting to approved server...");
+ gtk_label_set_xalign(GTK_LABEL(status_label),0);
+ gtk_label_set_ellipsize(GTK_LABEL(status_label),PANGO_ELLIPSIZE_END);
+ gtk_box_pack_start(GTK_BOX(root),status_label,FALSE,FALSE,0);
+
+ queue_stack=gtk_stack_new();
+ gtk_widget_set_vexpand(queue_stack,TRUE);
+ gtk_box_pack_start(GTK_BOX(root),queue_stack,TRUE,TRUE,0);
+ view_holder=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ gtk_stack_add_named(GTK_STACK(queue_stack),view_holder,"web");
  GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
- GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);
- gtk_container_set_border_width(GTK_CONTAINER(body),20);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+ GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);
+ gtk_container_set_border_width(GTK_CONTAINER(body),12);
  gtk_container_add(GTK_CONTAINER(scroll),body);
- GtkWidget *head=gtk_label_new("DOWNLOAD QUEUE  •  READ ONLY");
- gtk_label_set_xalign(GTK_LABEL(head),0);
- gtk_box_pack_start(GTK_BOX(body),head,FALSE,FALSE,0);
  queue_label=gtk_label_new("Select Downloads to inspect the approved server.");
  gtk_label_set_selectable(GTK_LABEL(queue_label),TRUE);
  gtk_label_set_xalign(GTK_LABEL(queue_label),0);
  gtk_label_set_yalign(GTK_LABEL(queue_label),0);
  gtk_label_set_line_wrap(GTK_LABEL(queue_label),TRUE);
  gtk_box_pack_start(GTK_BOX(body),queue_label,FALSE,FALSE,0);
- return scroll;
+ gtk_stack_add_named(GTK_STACK(queue_stack),scroll,"queue");
+ gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
+ return root;
 }

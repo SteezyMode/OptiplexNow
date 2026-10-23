@@ -23,6 +23,15 @@ Keep the latest **implementation status** in CURRENT-STATUS, not here. An unmerg
 or a passing simulation is **not** a new deployable beta. Do not copy secrets,
 Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
 
+## 2026-10-23: Fresh Linux-profile owner enrollment failure, PR #184 / issue #154
+
+- **Observed:** On the Mint MacBook's normal `macbook` login, PR #184 build #608 found saved host/SSH user and a working ordinary SSH key; Moonlight was already paired, but Games refused and Downloads stayed on a misleading discovery/failure page. The fresh profile initially lacked its distinct `games-client/id_ed25519`. Repeating the wizard's `AUTHORIZE SSH KEY` did not create this restricted key or grant owner-device rights.
+- **Identified:** A separate Wolf session disappeared when that profile closed Moonlight. The owner identified and approved its client ID using the existing host policy and manually enrolled the matching new restricted SSH public key via a forced-command entry. The original approved device was preserved and Downloads then worked. This is a **reference-host manual workaround**, not a shippable enrollment flow.
+- **Change:** `src/downloads_flow.c` checks missing restricted credentials before the SSH queue call, stops stale discovery text on failed calls, and explains the distinct approval boundary. `src/main.c` states that SSH authorization and Moonlight pairing do not complete Games/Downloads owner enrollment, including the wizard's final page and SSH success message. Tests cover no-key fail-closed behavior and source/GTK regressions.
+- **Rejected shortcut:** Never `ssh-copy-id` the restricted key as an unrestricted owner login, duplicate an existing private key across Linux accounts, or auto-bind arbitrary Wolf client IDs from Tailscale membership. Leave actual owner approval host-enforced.
+- **Safety/test level:** Source patch only pending exact-head CI and physical UI test. No host containers, Steam directories, downloads, Jellyfin libraries, VPN or authorized keys changed by this source patch. Rollback is reverting these client-only text/guard changes; no config migration.
+- **Still blocking Private Alpha 1:** Implement and physically test complete owner-approved graphical device enrollment, including independent certificate/client-ID binding, restricted forced-command installation, error recovery and revocation. A missing-key diagnostic is not the enrollment fix.
+
 ## 2026-10-22: Fresh owner Steam client launch, issue #154
 
 ### Verified physical observations, not inferred causes

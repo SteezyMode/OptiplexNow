@@ -40,6 +40,25 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")', FLOW)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web")', FLOW)
 
+    def test_fresh_linux_profile_explains_missing_owner_enrollment(self):
+        # Diagnostics must be specific and stop BEFORE any SSH/Docker request.
+        first = FLOW.split("void now_downloads_refresh(", 1)[1].split(
+            "static void show_web(", 1)[0]
+        self.assertIn("owner_device_key_exists()", first)
+        self.assertLess(first.index("owner_device_key_exists()"),
+                        first.index("g_subprocess_newv("))
+        self.assertIn("ordinary SSH authorization and Moonlight pairing do not enroll it", first)
+        self.assertIn("OWNER DEVICE NOT ENROLLED", first)
+        self.assertIn("DOWNLOADS NOT AVAILABLE", FLOW)
+        self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
+
+    def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
+        self.assertIn("This authorizes ordinary SSH only.", SHELL)
+        self.assertIn("separate restricted device key", SHELL)
+        self.assertIn("Automatic owner enrollment is not available in this build.", SHELL)
+        self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
+        self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
+
     def test_does_not_repeat_owner_approval_or_leak_password(self):
         self.assertIn("if(same && webview && loaded_url", FLOW)
         self.assertNotIn("password=", FLOW.lower())

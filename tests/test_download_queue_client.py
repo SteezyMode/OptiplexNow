@@ -14,7 +14,7 @@ spec.loader.exec_module(mod)
 
 
 class QueueClientTests(unittest.TestCase):
-    def run_payload(self, payload, status=0):
+    def run_payload(self, payload, status=0, include_port=False):
         with tempfile.TemporaryDirectory() as tmp:
             key = Path(tmp) / "id_ed25519"
             key.write_text("test only")
@@ -26,7 +26,7 @@ class QueueClientTests(unittest.TestCase):
                 self.assertEqual(kwargs["input"], b'{"version":1,"action":"downloads_queue"}\n')
                 return subprocess.CompletedProcess(cmd, status, payload, b"")
             with patch.object(mod, "KEY", key):
-                return mod.fetch("100.121.156.34", "optiplex", runner=runner)
+                return mod.fetch("100.121.156.34", "optiplex", runner=runner, include_port=include_port)
 
     def test_sanitized_queue_display(self):
         payload = json.dumps({"success":True,"service":"qbittorrent",
@@ -50,6 +50,22 @@ class QueueClientTests(unittest.TestCase):
                         b"x" * 65537):
             with self.subTest(payload=payload[:40]), self.assertRaises(ValueError):
                 self.run_payload(payload)
+
+    def test_bounded_auto_discovery_and_old_server_fallback(self):
+        payload = json.dumps({"success": True, "service": "qbittorrent",
+            "queue": [], "webui_port": 8085}).encode()
+        self.assertEqual(self.run_payload(payload, include_port=True),
+                         "WEBUI_PORT=8085\nNo downloads in queue.")
+        old = b'{"success":true,"service":"qbittorrent","queue":[]}'
+        self.assertEqual(self.run_payload(old, include_port=True),
+                         "WEBUI_PORT=0\nNo downloads in queue.")
+
+    def test_discovery_rejects_untrusted_port(self):
+        for port in (True, -1, 22, 0.5, 65536, "8085"):
+            payload = json.dumps({"success": True, "service": "qbittorrent",
+                                  "queue": [], "webui_port": port}).encode()
+            with self.subTest(port=port), self.assertRaises(ValueError):
+                self.run_payload(payload, include_port=True)
 
     def test_invalid_host_and_user(self):
         self.assertFalse(mod.valid_host("-oProxyCommand=anything"))

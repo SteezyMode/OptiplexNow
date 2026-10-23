@@ -160,6 +160,28 @@ def cleanup_finished_owner_wolf_ui(wolf_api, *, store,
 
 
 
+
+def _require_no_other_wolf_activity(wolf_api, expected_client_id):
+    """Allow only an empty Wolf runtime or this owner's residual Wolf UI.
+
+    A Wolf UI session can remain registered after Moonlight exits. It is not
+    an active Steam lobby or Steam writer, and need not be forcibly stopped.
+    Reject other devices, unknown apps, concurrent streams and any lobby.
+    """
+    if _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256):
+        raise PolicyError("Wolf lobby still active")
+    sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+    if not sessions:
+        return
+    if len(sessions) != 1 or sessions[0].get("client_id") != expected_client_id:
+        raise PolicyError("Other Wolf session still active")
+    apps = _inventory(wolf_api("GET", "/api/v1/apps"), "apps", 256)
+    ids = [a.get("id") for a in apps if a.get("title") == "Wolf UI"]
+    if len(ids) != 1 or sessions[0].get("app_id") != ids[0]:
+        raise PolicyError("Unexpected Wolf session still active")
+
+
+
 def reconcile_finished_owner_steam(wolf_api, *, store,
                                    expected_client_id,
                                    host_writer_check):
@@ -169,7 +191,7 @@ def reconcile_finished_owner_steam(wolf_api, *, store,
     device. It does not stop Wolf, stop Steam, kill a stream, or take over another
     client's lease. If the user has not actually exited, refuse and retain the
     blocker. The check is deliberately stricter than a disappearing Moonlight
-    window: zero Wolf lobbies, ZERO Wolf sessions and no Steam writers.
+    window: zero Wolf lobbies, no Steam writers, and no session other than the\n    verified owner's Wolf UI.
     Concurrency isolation against separately privileged Wolf UI/direct users
     must be established independently before enabling Games writes.
     """
@@ -194,7 +216,7 @@ def reconcile_finished_owner_steam(wolf_api, *, store,
             raise PolicyError("Owner Steam grant or workspace changed")
         # A disconnected Moonlight client is not proof of Steam shutdown.
         # GET checks MUST succeed; incomplete or unexpected Wolf state blocks.
-        _require_idle_wolf(wolf_api)
+        _require_no_other_wolf_activity(wolf_api, expected_client_id)
         try:
             clear = host_writer_check()
         except Exception:
@@ -203,7 +225,7 @@ def reconcile_finished_owner_steam(wolf_api, *, store,
             raise PolicyError("Steam still has another writer")
         # Narrow the gap between writer snapshot and final archive; not an
         # atomic exclusion barrier, hence separate Wolf admission is required.
-        _require_idle_wolf(wolf_api)
+        _require_no_other_wolf_activity(wolf_api, expected_client_id)
         _archive_lease(fd, lease)
     return {"success": True, "status": "idle", "lease_archived": True}
 

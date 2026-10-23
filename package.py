@@ -41,6 +41,21 @@ shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-
 # Restricted per-device Games SSH transport. This is NOT a host admin key. Host enrollment and authorization
 # remain explicit owner actions.
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
+# Owner-only alpha enrollment: client stage request, local host approval.
+# Never install a new host authorized_keys line or grant access on package setup.
+for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui.py'):
+ shutil.copy2(root/'src'/name, pkg/'usr/lib/optiplex-now'/name)
+ (pkg/'usr/lib/optiplex-now'/name).chmod(0o755)
+bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
+(bridge/'src').mkdir(parents=True,exist_ok=True)
+(bridge/'server').mkdir(parents=True,exist_ok=True)
+shutil.copy2(root/'src/owner_access.py',bridge/'src/owner_access.py')
+for name in ('owner_enrollment.py','owner_games_enroll.py',
+             'wolf_docker_adapter.py','wolf_socket_adapter.py'):
+ shutil.copy2(root/'server'/name,bridge/'server'/name)
+# The owner Games forced broker is NOT installed/enabled by this client .deb.
+# Approval on an existing owner host reuses its separately adopted, reviewed broker.
+
 shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
 shutil.copy2(root/'src/download-queue-client.py',pkg/'usr/lib/optiplex-now/download-queue-client.py')
 (pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
@@ -79,6 +94,16 @@ Categories=Network;Utility;
 StartupNotify=true
 ''')
 (pkg/'usr/share/applications/optiplex-desk.desktop').write_text((pkg/'usr/share/applications/optiplex-now.desktop').read_text()+'NoDisplay=true\n')
+(pkg/'usr/share/applications/optiplex-now-owner-approvals.desktop').write_text('''[Desktop Entry]
+Type=Application
+Name=NOW Owner Device Approvals (Host)
+Comment=Local owner-only approval of paired streaming devices
+Exec=/usr/bin/python3 /usr/lib/optiplex-now/owner-approvals-ui.py
+Icon=optiplex-now
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=true
+''')
 shutil.copy2(root/'OFL-1.1.txt',pkg/'usr/share/doc/optiplex-now/OFL-1.1.txt')
 (pkg/'DEBIAN/control').write_text(f'''Package: optiplex-now
 Replaces: optiplex-desk
@@ -89,7 +114,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: OptiPlex Now <local@localhost>
-Depends: python3, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
+Depends: python3, python3-gi, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
 Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, owner-managed Steam streaming, live hardware info and encrypted backup.

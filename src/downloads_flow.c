@@ -16,6 +16,18 @@ static gchar *last_user;
 static gchar *last_override;
 static gchar *pending_web_url;
 static gchar *pending_web_host;
+/* One bounded, read-only recovery after a transient first-open SSH failure.
+ * Owner approval errors still fail closed; never retry state-changing work. */
+static guint reconnect_source;
+static gboolean reconnect_used;
+static gboolean reconnect_once(gpointer unused){
+ (void)unused;
+ reconnect_source=0;
+ if(!queue_stack || !gtk_widget_get_mapped(queue_stack) ||
+    !last_host || !last_user || webview)return G_SOURCE_REMOVE;
+ now_downloads_open(last_host,last_user,last_override);
+ return G_SOURCE_REMOVE;
+}
 
 /* Local credential presence is not server authorization; it is a quick,
  * no-network diagnostic for fresh Linux accounts. The trusted host still
@@ -92,6 +104,14 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
      "DOWNLOADS NOT AVAILABLE — SEE AUTHORIZATION DETAILS BELOW");
  }
  running=FALSE;
+ if(!accepted && pending_web_host && !reconnect_used && !reconnect_source){
+   /* Network/Tailscale can become ready just after application startup.
+    * Make one delayed, bounded, read-only retry, never an endless poll. */
+   reconnect_used=TRUE;
+   reconnect_source=g_timeout_add_seconds(4,reconnect_once,NULL);
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+     "DOWNLOADS UNAVAILABLE — RETRYING CONNECTION ONCE");
+ }
  if(pending_web_host && accepted &&
     g_strcmp0(last_host,job->host)==0 &&
     g_strcmp0(last_user,job->user)==0){
@@ -190,6 +210,8 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  /* Host identity, SSH user and explicit override are separate from the
   * WebUI session. Only a changed connection invalidates an existing view. */
  if(!same){
+   reconnect_used=FALSE;
+   if(reconnect_source){g_source_remove(reconnect_source);reconnect_source=0;}
    g_free(last_host);last_host=g_strdup(host);
    g_free(last_user);last_user=g_strdup(user);
    g_free(last_override);last_override=g_strdup(webui_url);
@@ -202,6 +224,9 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  /* If the initial authorization is still in flight, leave it alone;
   * selecting this tab again must not restart or duplicate the request. */
  if(same && running)return;
+ /* A user-initiated revisit immediately retries instead of leaving a
+  * previously scheduled one-shot recovery running behind this request. */
+ if(reconnect_source){g_source_remove(reconnect_source);reconnect_source=0;}
  gtk_widget_show(status_label);
  g_clear_pointer(&pending_web_url,g_free);
  g_clear_pointer(&pending_web_host,g_free);

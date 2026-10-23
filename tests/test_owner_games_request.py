@@ -113,6 +113,20 @@ class TrustedGamesGateTests(unittest.TestCase):
         self.assertEqual(self.call("status")["status"], "needs_wolf_ui")
         self.assertFalse(any(method == "POST" for method, _, _ in self.api.calls))
 
+    def test_cleanup_refuses_session_without_verifiable_id(self):
+        self.call("start", approved=True)
+        # Steam finished, but Wolf reports only client_id/app_id.
+        # A client_id must never be used as the stop endpoint session_id.
+        self.api.lobby = None
+        posts_before = [path for method, path, _ in self.api.calls
+                        if method == "POST"]
+        with self.assertRaisesRegex(PolicyError, "session_id"):
+            self.call("cleanup", approved=True)
+        self.assertEqual(posts_before, [path for method, path, _ in
+                                       self.api.calls if method == "POST"])
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "joined")
+
     def test_stale_existing_lease_blocks_second_start(self):
         self.call("start", approved=True)
         n = len([p for m, p, _ in self.api.calls if m == "POST"])

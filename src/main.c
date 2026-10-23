@@ -2955,8 +2955,13 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  /* Page 3: pair SSH keys once. Relay is optional. */
  GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);
  add(three,label("SECURE ACCESS","modalheading"),0);
- add(three,label("Existing SSH keys are reused.","helper"),0);
+ add(three,label("Existing SSH keys are reused for ordinary server access.","helper"),0);
  wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
+ GtkWidget*owner_access_note=label(
+   "IMPORTANT: This authorizes ordinary SSH only. Games and Downloads require a separate restricted device key and explicit server-owner approval. Moonlight pairing is not that approval. Automatic owner enrollment is not available in this build.",
+   "helper");
+ gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
+ add(three,owner_access_note,0);
  GtkWidget*wake_options=gtk_expander_new("WAKE OPTIONS (OPTIONAL)");
  GtkWidget*wake_fields=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
  gtk_container_set_border_width(GTK_CONTAINER(wake_fields),12);
@@ -2999,7 +3004,12 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
  /* Page 6: nothing else needed for existing clients. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
- add(six,label("READY","modalheading"),0);
+ add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
+ GtkWidget*owner_ready_note=label(
+   "Verify owner-service enrollment separately before using Games or Downloads. Completing ordinary SSH and Moonlight setup does not grant owner-device access.",
+   "helper");
+ gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
+ add(six,owner_ready_note,0);
  add(six,label("Saved settings carry over between updates.","helper"),0);
  add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"FINISH");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);

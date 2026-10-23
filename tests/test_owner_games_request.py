@@ -34,6 +34,22 @@ class TrustedGamesGateTests(unittest.TestCase):
             wolf_api=self.api, host_video_caps=caps, host_approved=approved,
             host_writer_check=writer_check)
 
+    def test_downloads_queue_owner_only_and_no_private_fields(self):
+        from unittest.mock import patch
+        queue = {"service": "qbittorrent", "queue": [
+            {"name": "Example", "state": "downloading", "progress_percent": 22.0}
+        ], "truncated": False}
+        with patch("owner_games_request.inspect_queue", return_value=queue):
+            self.assertEqual(self.call("downloads_queue"), {"success": True, **queue})
+            with self.assertRaises(PolicyError):
+                self.call("downloads_queue", client="99999999")
+            self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
+        from download_inventory import InventoryError
+        with patch("owner_games_request.inspect_queue",
+                   side_effect=InventoryError("private info")):
+            self.assertEqual(self.call("downloads_queue"),
+                             {"success": False, "status": "queue_unavailable"})
+
     def test_downloads_status_owner_only_and_read_only(self):
         from unittest.mock import patch
         inventory = {"version": 1, "downloaders": [

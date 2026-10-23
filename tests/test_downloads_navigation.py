@@ -83,7 +83,7 @@ class DownloadsNavigationContract(unittest.TestCase):
     def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
         self.assertIn("This authorizes ordinary SSH only.", SHELL)
         self.assertIn("separate restricted device key", SHELL)
-        self.assertIn("Automatic owner enrollment is not available in this build.", SHELL)
+        self.assertIn("Use REQUEST OWNER DEVICE APPROVAL on the Games page", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)

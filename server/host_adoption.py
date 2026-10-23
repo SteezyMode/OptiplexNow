@@ -97,6 +97,11 @@ def plan(report: dict) -> dict:
         blockers.append("downloader_network")
     if report["docker_access"] == "unavailable":
         outcome = "cannot_inspect"
+    elif all(states[k] == "not_detected_in_docker" for k in SERVICE_KEYS):
+        # No Docker candidates does NOT imply a clean host. Look for native
+        # services before any installation is considered; the absent VPN
+        # relationship is not a conflict when both services are absent.
+        outcome = "native_service_scan_required"
     elif blockers:
         outcome = "manual_review_required"
     elif any(states[k] == "not_detected_in_docker" for k in SERVICE_KEYS):

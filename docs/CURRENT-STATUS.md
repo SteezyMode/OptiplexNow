@@ -1,3 +1,9 @@
+## October 23 — Downloads page uses full available window (source-only, awaiting MacBook retest)
+
+The owner pointed out that the two temporary top-of-page buttons (“VUE TORRENT” and “QUEUE SNAPSHOT”) waste precious space on the 2012 MacBook Air. Removed the toolbar and suppressed the informational status label while an authorized WebKitGTK VueTorrent view is active; the authenticated read-only queue is still rendered automatically if an embedded view cannot be opened. This changes only GTK layout and does **not** touch VueTorrent, qBittorrent, server processes or VPN. CI runs independently from physical acceptance; latest client build must be visually checked before claiming release acceptance.
+
+**Next critical path:** host-side safe install/adopt (Wolf, Jellyfin, Gluetun/qBittorrent/VueTorrent with reviewed search plugins), authenticated owner/viewer access isolation and VPN fail-closed testing. Existing reference host is not an installation test; do not replace it in the name of alpha readiness.
+
 ## October 23 — MacBook automatic Downloads discovery ACCEPTED on reference devices
 
 After the authenticated host-side `download_queue.py` update (WebUI port 8085; five torrents), the owner cleared the manually configured client **Downloads override** and reopened NOW Downloads. **VueTorrent successfully appeared automatically**, with no manually supplied address. This closes the *reference-device URL discovery test* only. Other physical successes: embedded VueTorrent login/search, tabs retaining the existing WebView, and tray Downloads navigation. Host module rollback backup: `/home/optiplex/.local/share/optiplex-now/backups/download-queue-20261023-171108-510144.py`.

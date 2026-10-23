@@ -1844,7 +1844,7 @@ static void on_bruiser_admin(void*w,void*p){
 }
 static void open_downloads_page(void){
  now_nav_show_page(main_pages,"downloads");
- now_downloads_refresh(cfg[0],cfg[1]);
+ now_downloads_open(cfg[0],cfg[1],cfg[7]);
 }
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;
@@ -3325,7 +3325,7 @@ int main(int argc,char**argv) {
  if(!first_run){
   const char *start=now_ui_state_start_page();
   if(strcmp(start,"dashboard")!=0)now_nav_show_page(main_pages,start);
-  if(!strcmp(start,"downloads"))now_downloads_refresh(cfg[0],cfg[1]);
+  if(!strcmp(start,"downloads"))now_downloads_open(cfg[0],cfg[1],cfg[7]);
  }
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();

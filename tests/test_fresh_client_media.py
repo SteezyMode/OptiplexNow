@@ -29,7 +29,10 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('now_media_bind(say,browser_open);', SOURCE)
         self.assertIn('now_media_browser_open(now_media_fallback());', (ROOT / 'src' / 'media_flow.c').read_text())
         self.assertIn('browser_open(cfg[6]);', SOURCE)
-        self.assertIn('browser_open(cfg[7]);', SOURCE)
+        # Downloads now opens the authenticated in-window queue, not the legacy URL.
+        self.assertIn('now_downloads_refresh(cfg[0],cfg[1]);', SOURCE)
+        self.assertIn('now_nav_show_page(main_pages,"downloads");', SOURCE)
+        self.assertNotIn('browser_open(cfg[7]);', SOURCE)
         self.assertNotIn('"Legacy Downloads URL (unused)"', SOURCE)
         self.assertNotIn('snprintf(cfg[7],512,"http://%s:8085"', SOURCE)
 

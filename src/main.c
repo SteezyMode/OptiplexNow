@@ -27,6 +27,7 @@
 #include "wolf_transport.h"
 #include "games_flow.h"
 #include "media_flow.h"
+#include "downloads_flow.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "service_probe.h"
@@ -1845,7 +1846,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
  }else if(n==1)now_media_open_videos();
  else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
- else if(n==4)launch_torrents();
+ else if(n==4){gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"downloads");now_downloads_refresh(cfg[0],cfg[1]);}
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
@@ -3238,6 +3239,9 @@ int main(int argc,char**argv) {
  GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");
  gtk_container_add(GTK_CONTAINER(dash_scroll),shell);
  gtk_stack_add_named(GTK_STACK(main_pages),dash_scroll,"dashboard");
+ GtkWidget*downloads_page=now_downloads_page();
+ gtk_stack_add_named(GTK_STACK(main_pages),downloads_page,"downloads");
+ gtk_widget_show_all(downloads_page);
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);

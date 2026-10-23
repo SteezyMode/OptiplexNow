@@ -100,6 +100,55 @@ def reconcile_stopped_owner_steam(wolf_api, *, store, confirmed_runtime_stopped=
     return {"success": True, "status": "idle", "lease_archived": True}
 
 
+
+def reconcile_finished_owner_steam(wolf_api, *, store,
+                                   expected_client_id,
+                                   host_writer_check):
+    """Archive a previously JOINED owner lease only after observed full exit.
+
+    This is a bounded, non-Wolf-mutating operation for an authenticated owner
+    device. It does not stop Wolf, stop Steam, kill a stream, or take over another
+    client's lease. If the user has not actually exited, refuse and retain the
+    blocker. The check is deliberately stricter than a disappearing Moonlight
+    window: zero Wolf lobbies, ZERO Wolf sessions and no Steam writers.
+    Concurrency isolation against separately privileged Wolf UI/direct users
+    must be established independently before enabling Games writes.
+    """
+    if not _valid_client_id(expected_client_id) or not callable(wolf_api):
+        raise PolicyError("Trusted finished-owner Steam authority required")
+    if not callable(host_writer_check):
+        raise PolicyError("Host Steam writer preflight required")
+    with store.locked() as fd:
+        lease = read_lease(fd)
+        if lease is None:
+            return {"success": True, "status": "idle", "lease_archived": False}
+        if lease["version"] != LEASE_VERSION or lease["state"] != "joined":
+            raise PolicyError("Uncertain/legacy Steam lease needs operator review")
+        if lease["client_id"] != expected_client_id:
+            raise PolicyError("Steam lease belongs to a different owner device")
+        policy = store.read(fd)
+        if (policy is None or not policy.get("workspaces") or
+                lease["workspace_id"] != policy["workspaces"][0]["id"] or
+                len([dev for dev in policy["devices"]
+                     if dev["client_id"] == expected_client_id
+                     and not dev["revoked"]]) != 1):
+            raise PolicyError("Owner Steam grant or workspace changed")
+        # A disconnected Moonlight client is not proof of Steam shutdown.
+        # GET checks MUST succeed; incomplete or unexpected Wolf state blocks.
+        _require_idle_wolf(wolf_api)
+        try:
+            clear = host_writer_check()
+        except Exception:
+            raise PolicyError("Cannot verify Steam writers after exit") from None
+        if clear is not True:
+            raise PolicyError("Steam still has another writer")
+        # Narrow the gap between writer snapshot and final archive; not an
+        # atomic exclusion barrier, hence separate Wolf admission is required.
+        _require_idle_wolf(wolf_api)
+        _archive_lease(fd, lease)
+    return {"success": True, "status": "idle", "lease_archived": True}
+
+
 def stop_owner_steam(wolf_api, *, store, confirmed_stop=False,
                      expected_client_id=None, expected_lease_id=None):
     """Host-local, one-shot PIN-gated StopLobby; no retries on uncertain POST.

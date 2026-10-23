@@ -2973,7 +2973,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  add(three,label("Existing SSH keys are reused for ordinary server access.","helper"),0);
  wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
  GtkWidget*owner_access_note=label(
-   "IMPORTANT: This authorizes ordinary SSH only. Games and Downloads require a separate restricted device key and explicit server-owner approval. Moonlight pairing is not that approval. Automatic owner enrollment is not available in this build.",
+   "IMPORTANT: Ordinary SSH and Moonlight pairing are not owner-service approval. Use REQUEST OWNER DEVICE APPROVAL on the Games page, then have the host owner confirm the request and verified Wolf client ID. The host approval path is an alpha pilot, not yet release accepted.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
  add(three,owner_access_note,0);
@@ -3022,7 +3022,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Verify owner-service enrollment separately before using Games or Downloads. Completing ordinary SSH and Moonlight setup does not grant owner-device access.",
+   "Before Games or Downloads can connect, request owner-device access in Games and have the server owner approve it on the host. Confirm restricted access from the client. This pilot flow still requires physical acceptance.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);

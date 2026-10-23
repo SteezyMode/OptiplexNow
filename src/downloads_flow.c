@@ -17,6 +17,17 @@ static gchar *last_override;
 static gchar *pending_web_url;
 static gchar *pending_web_host;
 
+/* Local credential presence is not server authorization; it is a quick,
+ * no-network diagnostic for fresh Linux accounts. The trusted host still
+ * checks the restricted key and its owner-device grant on every request. */
+static gboolean owner_device_key_exists(void){
+ gchar *path=g_build_filename(g_get_home_dir(),".local","share",
+   "optiplex-now","games-client","id_ed25519",NULL);
+ gboolean present=g_file_test(path,G_FILE_TEST_IS_REGULAR);
+ g_free(path);
+ return present;
+}
+
 typedef struct {
  GSubprocess *proc;
  gchar *host;
@@ -75,7 +86,10 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
  }
  if(queue_label){
    if(accepted)gtk_label_set_text(GTK_LABEL(queue_label),queue_text);
-   else gtk_label_set_text(GTK_LABEL(queue_label),"Queue unavailable. Check server connection.");
+   else gtk_label_set_text(GTK_LABEL(queue_label),
+     "Owner service request failed. Check restricted device approval and server/downloads availability. Ordinary SSH and Moonlight pairing are separate.");
+   if(!accepted && status_label)gtk_label_set_text(GTK_LABEL(status_label),
+     "DOWNLOADS NOT AVAILABLE — SEE AUTHORIZATION DETAILS BELOW");
  }
  running=FALSE;
  if(pending_web_host && accepted &&
@@ -120,11 +134,20 @@ void now_downloads_refresh(const char *host,const char *user){
  if(!queue_label || running)return;
  if(!now_valid_host(host) || !now_valid_user(user)){
    gtk_label_set_text(GTK_LABEL(queue_label),"Connect an approved NOW host in Settings.");
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),"SERVER NOT CONFIGURED");
+   return;
+ }
+ if(!owner_device_key_exists()){
+   gtk_label_set_text(GTK_LABEL(queue_label),
+     "This Linux profile has no restricted owner-device key. Games and Downloads require separate server-owner enrollment; ordinary SSH authorization and Moonlight pairing do not enroll it.");
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+     "OWNER DEVICE NOT ENROLLED — SEE DETAILS BELOW");
    return;
  }
  char *helper=helper_path();
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
    gtk_label_set_text(GTK_LABEL(queue_label),"Downloads helper missing.");
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),"DOWNLOADS COMPONENT MISSING");
    g_free(helper);return;
  }
  const char *argv[]={"/usr/bin/python3",helper,host,user,"--with-port",NULL};
@@ -134,6 +157,7 @@ void now_downloads_refresh(const char *host,const char *user){
  g_free(helper);
  if(!proc){
    gtk_label_set_text(GTK_LABEL(queue_label),"Unable to start queue request.");
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),"DOWNLOADS CHECK FAILED");
    g_clear_error(&error);return;
  }
  QueueJob *job=g_new0(QueueJob,1);

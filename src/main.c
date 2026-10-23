@@ -28,6 +28,8 @@
 #include "games_flow.h"
 #include "media_flow.h"
 #include "downloads_flow.h"
+#include "ui_navigation.h"
+#include "ui_state.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "service_probe.h"
@@ -83,6 +85,7 @@ static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static volatile sig_atomic_t reopen_requested = 0;
 static int instance_fd = -1;
 static int tray_restoring = 0;
+static guint geometry_save_timer=0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
 static GtkWidget *model_heading=NULL;
 static GtkWidget *metric_cpu,*metric_gpu,*metric_ram,*metric_vram,*metric_network,*metric_vpn,*metric_wolf,*metric_wolf_sessions,*metric_free,*drive_combo;
@@ -105,6 +108,7 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
+static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
 static void on_system_info(void*w,void*p);
 static void settings_discard(GtkWidget*w,gpointer unused);
@@ -1245,10 +1249,7 @@ static void on_managed_games_check(void *widget,void *data){
 }
 static void launch_steam(void){managed_games_begin(FALSE,FALSE);}
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
-static void launch_torrents(void){
- if(!*cfg[7] || !now_safe_preset_url(cfg[7])){say("SET DOWNLOADS URL IN SETTINGS");return;}
- browser_open(cfg[7]);
-}
+static void launch_torrents(void){open_downloads_page();}
 typedef struct {
     GtkWidget *dialog;
     GtkWidget *status;
@@ -1841,12 +1842,19 @@ static void on_bruiser_admin(void*w,void*p){
  browser_open(url);
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
+static void open_downloads_page(void){
+ now_nav_show_downloads(main_pages,cfg[0],cfg[1]);
+}
+static void on_downloads_tab(GtkWidget *widget,gpointer unused){
+ (void)widget;(void)unused;
+ open_downloads_page();
+}
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
  }else if(n==1)now_media_open_videos();
  else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
- else if(n==4){gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"downloads");now_downloads_refresh(cfg[0],cfg[1]);}
+ else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
  else if(n==6)launch_desktop();
@@ -1882,6 +1890,26 @@ static void reflow(int width) {
    for(int i=0;i<4;i++){gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1);g_object_unref(powers[i]);}
    gtk_widget_show_all(power_grid);
  }
+}
+static gboolean save_window_geometry(gpointer unused){
+ (void)unused;
+ geometry_save_timer=0;
+ now_ui_state_save();
+ return G_SOURCE_REMOVE;
+}
+static gboolean on_window_configure(GtkWidget*widget,GdkEventConfigure*event,gpointer unused){
+ (void)unused;
+ if(!gtk_widget_get_mapped(widget))return FALSE;
+ GdkWindow *surface=gtk_widget_get_window(widget);
+ if(!surface)return FALSE;
+ GdkWindowState state=gdk_window_get_state(surface);
+ if(state&(GDK_WINDOW_STATE_MAXIMIZED|GDK_WINDOW_STATE_FULLSCREEN))return FALSE;
+ if(event->width>=480 && event->height>=360){
+  now_ui_state_remember_size(event->width,event->height);
+  if(geometry_save_timer)g_source_remove(geometry_save_timer);
+  geometry_save_timer=g_timeout_add(650,save_window_geometry,NULL);
+ }
+ return FALSE;
 }
 static void on_size(void*widget,void*allocation,void*unused) {
  (void)widget;(void)unused;
@@ -2019,7 +2047,12 @@ static gboolean minimize_to_tray(void *widget,void*event,void*unused){
  }
  return 0;
 }
-static void on_window_destroy(void*widget,void*unused){(void)widget;(void)unused;gtk_main_quit();}
+static void on_window_destroy(void*widget,void*unused){
+ (void)widget;(void)unused;
+ if(geometry_save_timer){g_source_remove(geometry_save_timer);geometry_save_timer=0;}
+ now_ui_state_save();
+ gtk_main_quit();
+}
 
 typedef struct { GtkWidget* inputs[8]; int relay; GtkWidget*parent; } PairContext;
 static void on_pair_click(void*w,void*p){
@@ -2247,19 +2280,6 @@ static void restore_full_backup(void*w,void*p){
  if(p && GTK_IS_DIALOG(parent))
   gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);
 }
-static void main_nav_update_back(GObject *stack,GParamSpec *param,gpointer data){
- (void)param;
- GtkWidget *back=GTK_WIDGET(data);
- const char *page=gtk_stack_get_visible_child_name(GTK_STACK(stack));
- if(page && strcmp(page,"dashboard")==0)gtk_widget_hide(back);
- else gtk_widget_show(back);
-}
-static void settings_open_page(GtkWidget *button,gpointer unused){
- (void)unused;
- GtkStack *stack=GTK_STACK(g_object_get_data(G_OBJECT(button),"settings-stack"));
- const char *page=g_object_get_data(G_OBJECT(button),"settings-page");
- if(stack&&page)gtk_stack_set_visible_child_name(stack,page);
-}
 static GtkWidget *settings_page(GtkWidget *stack,const char *name){
  GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
@@ -2273,9 +2293,7 @@ static void settings_link(GtkWidget *container,GtkWidget *stack,const char *capt
  gboolean back=g_str_has_prefix(caption,"‹");
  GtkWidget *b=button(caption,back?"navback":"setupaction");
  if(back)gtk_widget_set_halign(b,GTK_ALIGN_START);
- g_object_set_data(G_OBJECT(b),"settings-stack",stack);
- g_object_set_data(G_OBJECT(b),"settings-page",(gpointer)page);
- g_signal_connect(b,"clicked",G_CALLBACK(settings_open_page),NULL);
+ now_nav_bind_link(b,stack,page);
  add(container,b,0);
 }
 /* XFCE-style list ordering: move the existing row, preserving its checkboxes. */
@@ -2295,7 +2313,7 @@ static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
 }
 typedef struct {
  GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];
- GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *root;
+ GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *startup_choice, *root;
  PairContext server_context, relay_context;
  PresetExportContext export_context;
 } NowSettingsForm;
@@ -2343,6 +2361,9 @@ static void settings_save(GtkWidget*w,gpointer data){
     const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
     if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
     else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
+    const char *start=gtk_combo_box_get_active_id(GTK_COMBO_BOX(form->startup_choice));
+    now_ui_state_set_start_page(start);
+    now_ui_state_save();
     config_save();/* Never destroy the activating tray menu from its own callback. */
     g_timeout_add(200,tray_rebuild_after_settings,NULL);
     last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
@@ -2432,6 +2453,15 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  col=preferences;
+ add(col,label("OPEN ON STARTUP","modalheading"),0);
+ add(col,label("Choose the first page when NOW opens. Window size is remembered automatically.","helper"),0);
+ GtkWidget*startup_choice=gtk_combo_box_text_new();
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"dashboard","Dashboard");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"software","Software");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(startup_choice),now_ui_state_start_page());
+ form->startup_choice=startup_choice;
+ add(col,startup_choice,0);
  add(col,label("DESKTOP SHORTCUT NAME","modalheading"),0);
  add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
  char desktop_label[128];now_tray_desktop_caption(desktop_label,sizeof desktop_label);
@@ -3172,8 +3202,10 @@ int main(int argc,char**argv) {
  /* Give the dashboard enough height for server controls on normal displays.
    Bound it to the monitor's usable area so older laptops and projectors can
    still access everything through the existing scrolled container. */
-  int initial_width = 760;
-  int initial_height = 600;
+  now_ui_state_load();
+  int initial_width=640;
+  int initial_height=500;
+  now_ui_state_window_size(&initial_width,&initial_height);
   GdkDisplay *display = gdk_display_get_default();
   if (display) {
     GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
@@ -3183,14 +3215,9 @@ int main(int argc,char**argv) {
     if (monitor) {
       GdkRectangle workarea;
       gdk_monitor_get_workarea(monitor, &workarea);
-      /* Keep both ultrawide and notebook windows compact. Content scrolls. */
-      if (workarea.width >= 1920 && workarea.height >= 900) {
-        initial_width = MIN(820, MAX(400, workarea.width - 96));
-        initial_height = MIN(680, MAX(340, workarea.height - 120));
-      } else {
-        initial_width = MIN(760, MAX(400, workarea.width - 96));
-        initial_height = MIN(600, MAX(340, workarea.height - 120));
-      }
+      /* Keep saved geometry within the current display's work area. */
+      initial_width=MIN(initial_width,MAX(400,workarea.width-64));
+      initial_height=MIN(initial_height,MAX(340,workarea.height-100));
     }
   }
   win=gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -3202,6 +3229,7 @@ int main(int argc,char**argv) {
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"window-state-event",(GCallback)minimize_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
+ g_signal_connect(win,"configure-event",G_CALLBACK(on_window_configure),NULL);
  /* Keep navigation visible while only the active page body changes. */
  GtkWidget*window_root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  gtk_container_add(GTK_CONTAINER(win),window_root);
@@ -3211,19 +3239,18 @@ int main(int argc,char**argv) {
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
  GtkWidget*back=button("‹ DASHBOARD","navback");
- g_object_set_data(G_OBJECT(back),"settings-stack",main_pages);
- g_object_set_data(G_OBJECT(back),"settings-page","dashboard");
- g_signal_connect(back,"clicked",G_CALLBACK(settings_open_page),NULL);
+ now_nav_bind_link(back,main_pages,"dashboard");
  gtk_widget_set_no_show_all(back,TRUE);
  gtk_widget_hide(back);
- g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(main_nav_update_back),back);
+ g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(now_nav_update_back),back);
  add(nav,back,0);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
  gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);
+ GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
+ g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
+ add(nav,downloads_tab,0);
  GtkWidget*software_tab=button("SOFTWARE","navtab");
- g_object_set_data(G_OBJECT(software_tab),"settings-stack",main_pages);
- g_object_set_data(G_OBJECT(software_tab),"settings-page","software");
- g_signal_connect(software_tab,"clicked",G_CALLBACK(settings_open_page),NULL);
+ now_nav_bind_link(software_tab,main_pages,"software");
  add(nav,software_tab,0);
  GtkWidget*settings_tab=button("SETTINGS","navtab");
  g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
@@ -3294,6 +3321,11 @@ int main(int argc,char**argv) {
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);
  reflow(initial_width);
+ if(!first_run){
+  const char *start=now_ui_state_start_page();
+  if(strcmp(start,"dashboard")!=0)gtk_stack_set_visible_child_name(GTK_STACK(main_pages),start);
+  if(!strcmp(start,"downloads"))now_downloads_refresh(cfg[0],cfg[1]);
+ }
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();
  if(!start_in_tray || first_run)gtk_widget_show_all(win);

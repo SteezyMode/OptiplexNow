@@ -1846,24 +1846,6 @@ static void open_downloads_page(void){
  now_nav_show_page(main_pages,"downloads");
  now_downloads_open(cfg[0],cfg[1],cfg[7]);
 }
-/* Choosing a saved Downloads startup page must only select its navigation
- * child during construction. Launch its SSH/WebKit load after the window is
- * mapped: opening it before show_all can leave an apparently blank page until
- * the user clicks Downloads again. For --start-in-tray, defer until first show. */
-static gboolean load_startup_downloads(gpointer unused){
- (void)unused;
- if(win && gtk_widget_get_mapped(win) && main_pages &&
-    g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(main_pages)),
-              "downloads")==0)
-   now_downloads_open(cfg[0],cfg[1],cfg[7]);
- return G_SOURCE_REMOVE;
-}
-static void startup_downloads_mapped(GtkWidget *widget,gpointer unused){
- (void)unused;
- g_signal_handlers_disconnect_by_func(widget,
-   G_CALLBACK(startup_downloads_mapped),NULL);
- g_idle_add(load_startup_downloads,NULL);
-}
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;
  open_downloads_page();
@@ -2473,11 +2455,10 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  col=preferences;
  add(col,label("OPEN ON STARTUP","modalheading"),0);
- add(col,label("Choose the first page when NOW opens. Window size is remembered automatically.","helper"),0);
+ add(col,label("Beta: open on Dashboard or Software. Downloads remains available in the app and tray. Window size is remembered automatically.","helper"),0);
  GtkWidget*startup_choice=gtk_combo_box_text_new();
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"dashboard","Dashboard");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"software","Software");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(startup_choice),now_ui_state_start_page());
  form->startup_choice=startup_choice;
  add(col,startup_choice,0);
@@ -3353,8 +3334,6 @@ int main(int argc,char**argv) {
  if(!first_run){
   const char *start=now_ui_state_start_page();
   if(strcmp(start,"dashboard")!=0)now_nav_show_page(main_pages,start);
-  if(!strcmp(start,"downloads"))
-   g_signal_connect(win,"map",G_CALLBACK(startup_downloads_mapped),NULL);
  }
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();

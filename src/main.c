@@ -75,6 +75,8 @@ static int status_notifier_watcher_present(void){
 }
 
 static GtkWidget *tray_menu = NULL;
+/* One main GTK window: the dashboard, Software, Settings, and Info pages. */
+static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static volatile sig_atomic_t reopen_requested = 0;
 static int instance_fd = -1;
 static int tray_restoring = 0;
@@ -100,6 +102,8 @@ static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
+static void on_settings(void*w,void*p);
+static void on_system_info(void*w,void*p);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
@@ -118,6 +122,9 @@ static const char *CSS =
 "#shell {background:#101111;}"
 "#setting {background:#1d201f; border:1px solid #414743;color:#ece8e0;padding:5px 11px;font-size:10px;font-weight:700;min-height:24px;border-radius:2px;}"
 "#setting:hover {background:#c47d65;color:#101111;border-color:#c47d65;}"
+"#mainnav {background:#181b19;border-bottom:1px solid #414743;padding:6px 10px;}"
+"#navback,#navtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:4px 9px;min-height:25px;font-size:11px;font-weight:700;}"
+"#navback:hover,#navtab:hover {background:#c47d65;color:#101111;}"
 "#title {font-family:'Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-1.4px;color:#ece8e0;}"
 "#state {color:#bcb8af;background:#202523;border:1px solid #515b56;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;}"
 "#state.online {color:#e8c28f;border-color:#c47d65;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
@@ -1631,24 +1638,39 @@ static void on_server_readiness(void *w,void *p)
  }
 }
 
+/* Hardware details stay in the same GTK window. Refresh on each visit. */
 static void on_system_info(void*w,void*p){
  (void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("System Info",GTK_WINDOW(win),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
- gtk_window_set_default_size(GTK_WINDOW(d),490,390);
- GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
- GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,1);
- add(box,label("SYSTEM INFO","modalheading"),0);
- spec_status=label("READING HARDWARE...","helper");add(box,spec_status,0);
- GtkWidget*rows=gtk_grid_new();gtk_grid_set_row_spacing(GTK_GRID(rows),13);gtk_grid_set_column_spacing(GTK_GRID(rows),18);add(box,rows,1);
- const char*names[]={"MODEL","PROCESSOR","GRAPHICS","VIDEO MEMORY","SYSTEM RAM","OPERATING SYSTEM","NVIDIA DRIVER"};
- for(int i=0;i<7;i++){
-   GtkWidget*name=label(names[i],"specname");gtk_widget_set_size_request(name,135,-1);gtk_grid_attach(GTK_GRID(rows),name,0,i,1,1);
-   spec_values[i]=label("...","specvalue");gtk_label_set_ellipsize(GTK_LABEL(spec_values[i]),3);gtk_widget_set_hexpand(spec_values[i],1);
+ if(!main_pages)return;
+ if(!info_view){
+  info_view=gtk_scrolled_window_new(NULL,NULL);
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(info_view),
+   GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+  GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);
+  gtk_container_set_border_width(GTK_CONTAINER(box),18);
+  gtk_container_add(GTK_CONTAINER(info_view),box);
+  add(box,label("SYSTEM INFO","modalheading"),0);
+  spec_status=label("READING HARDWARE...","helper");add(box,spec_status,0);
+  GtkWidget*rows=gtk_grid_new();
+  gtk_grid_set_row_spacing(GTK_GRID(rows),13);
+  gtk_grid_set_column_spacing(GTK_GRID(rows),14);
+  add(box,rows,0);
+  const char*names[]={"MODEL","PROCESSOR","GRAPHICS","VIDEO MEMORY",
+                      "SYSTEM RAM","OPERATING SYSTEM","NVIDIA DRIVER"};
+  for(int i=0;i<7;i++){
+   GtkWidget*name=label(names[i],"specname");
+   gtk_widget_set_size_request(name,120,-1);
+   gtk_grid_attach(GTK_GRID(rows),name,0,i,1,1);
+   spec_values[i]=label("...","specvalue");
+   gtk_label_set_ellipsize(GTK_LABEL(spec_values[i]),PANGO_ELLIPSIZE_END);
+   gtk_widget_set_hexpand(spec_values[i],TRUE);
    gtk_grid_attach(GTK_GRID(rows),spec_values[i],1,i,1,1);
+  }
+  gtk_stack_add_named(GTK_STACK(main_pages),info_view,"info");
+  gtk_widget_show_all(info_view);
  }
- gtk_widget_show_all(d);begin_job(6);gtk_dialog_run(GTK_DIALOG(d));
- for(int i=0;i<7;i++)spec_values[i]=NULL;
- spec_status=NULL;gtk_widget_destroy(d);
+ gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"info");
+ begin_job(6);
 }
 
 typedef struct {GtkWidget*parent,*fields[8],*disk;} PresetExportContext;

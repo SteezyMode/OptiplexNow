@@ -11,6 +11,7 @@
 
 #define PREFLIGHT "/usr/lib/optiplex-now/host_preflight.py"
 #define PLAN "/usr/lib/optiplex-now/host_plan.py"
+#define SERVICES "/usr/lib/optiplex-now/host_services.py"
 #define INSTALLER "/usr/lib/optiplex-now/host_install.py"
 #define MAX_RESULT 24576
 
@@ -84,8 +85,8 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         } else {
             append_result(ui, output);
             append_result(ui, "\n\n");
-            if (ui->step == 0) {
-                ui->step = 1;
+            if (ui->step < 2) {
+                ui->step++;
                 run_read_only_step(ui);
             } else {
                 report_complete(ui, "REVIEW COMPLETE. INSTALLATION NOT AVAILABLE.");
@@ -101,7 +102,8 @@ static void run_read_only_step(HostSetupUI *ui)
 {
     if (ui->closing)
         return;
-    const gchar *script = ui->step == 0 ? PREFLIGHT : PLAN;
+    const gchar *script = ui->step == 0 ? PREFLIGHT :
+                          ui->step == 1 ? PLAN : SERVICES;
     const gchar *args[] = {"/usr/bin/python3", script, NULL};
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
@@ -116,9 +118,12 @@ static void run_read_only_step(HostSetupUI *ui)
     if (ui->step == 0) {
         append_result(ui, "HOST PREFLIGHT\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING THIS COMPUTER...");
-    } else {
+    } else if (ui->step == 1) {
         append_result(ui, "INSTALLATION PLAN\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "REVIEWING REQUIREMENTS...");
+    } else {
+        append_result(ui, "EXISTING SERVICES | ADOPTION CANDIDATES\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING EXISTING SERVICES...");
     }
     g_subprocess_communicate_utf8_async(
         process, NULL, ui->cancel, read_only_done,
@@ -417,8 +422,8 @@ int main(int argc, char **argv)
         ui->output,
         "Install is only available after clean-host eligibility and OS approval.\n"
         "Select CHECK THIS PC to see the actual local hardware findings,\n"
-        "service conflicts and outstanding installation requirements.\n"
-        "You can safely run this on a PC already hosting Wolf.",
+        "existing Wolf/Jellyfin/downloader candidates and requirements.\n"
+        "You can safely run this on a PC already hosting these services.",
         -1);
 
     GtkWidget *advanced = gtk_expander_new(

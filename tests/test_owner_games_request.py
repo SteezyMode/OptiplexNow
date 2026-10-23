@@ -230,9 +230,8 @@ class TrustedGamesGateTests(unittest.TestCase):
             self.assertEqual(read_lease(fd)["state"], "joined")
         self.assertEqual(posts_before,
                          [p for m, p, _ in self.api.calls if m == "POST"])
-        # Finished is not lease reconciliation, which requires no sessions.
-        with self.assertRaises(PolicyError):
-            self.call("reconcile", approved=True)
+        # A verified residual owner Wolf UI may be preserved: no POST needed.
+        self.assertEqual(self.call("reconcile", approved=True)["status"], "idle")
 
     def test_observe_fails_closed_with_legacy_or_other_device(self):
         with self.assertRaises(PolicyError):
@@ -296,13 +295,31 @@ class TrustedGamesGateTests(unittest.TestCase):
             self.assertEqual(read_lease(fd)["state"], "joined")
         self.assertIsNotNone(self.api.lobby)
 
-    def test_reconcile_refuses_lingering_wolf_ui_stream(self):
+    def test_reconcile_preserves_verified_owner_wolf_ui_and_allows_next_start(self):
         self.call("start", approved=True)
         self.api.lobby = None
+        before_posts = [p for m,p,_ in self.api.calls if m == "POST"]
+        self.assertEqual(self.call("reconcile", approved=True)["status"], "idle")
+        self.assertEqual(before_posts, [p for m,p,_ in self.api.calls if m == "POST"])
+        self.assertEqual(self.call("status")["status"], "wolf_ui_connected")
+        self.assertEqual(self.call("start", approved=True)["status"], "joined")
+
+    def test_reconcile_refuses_foreign_or_unexpected_residual_session(self):
+        self.call("start", approved=True)
+        self.api.lobby = None
+        session = self.api.data[4]["sessions"][0]
+        old = copy.deepcopy(session)
+        for changes in ({"client_id": "other"}, {"app_id": "steam-direct"}):
+            session.update(changes)
+            with self.assertRaises(PolicyError):
+                self.call("reconcile", approved=True)
+            session.clear()
+            session.update(old)
+        self.api.data[4]["sessions"].append(copy.deepcopy(old))
         with self.assertRaises(PolicyError):
             self.call("reconcile", approved=True)
         with self.store.locked() as fd:
-            self.assertIsNotNone(read_lease(fd))
+            self.assertEqual(read_lease(fd)["state"], "joined")
 
     def test_reconcile_refuses_steam_process_and_preflight_failure(self):
         self.call("start", approved=True)

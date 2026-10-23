@@ -96,6 +96,30 @@ class OwnerEnrollmentTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(policy_backup.stat().st_mode), 0o600)
         self.assertEqual(len(json.loads(policy_backup.read_text())["devices"]), 1)
 
+    def test_existing_host_broker_is_discovered_without_installing_another(self):
+        from owner_games_enroll import authorized_line
+        existing = authorized_line(public_key(b"o"), "1001", self.broker)
+        self.auth.write_text(self.original + existing + "\n")
+        request = self.stage(public_key(b"n"))
+        result = approve_request(
+            self.state, request["request_id"], request["code"], "1002",
+            confirmed=True, auth_path=self.auth, wolf_api=self.wolf,
+            now=self.now)
+        self.assertEqual(result["status"], "approved")
+        text = self.auth.read_text()
+        self.assertEqual(text.count(str(self.broker)), 2)
+        self.assertIn("--client-id 1001", text)
+        self.assertIn("--client-id 1002", text)
+
+    def test_without_existing_broker_or_explicit_reviewed_path_denies(self):
+        request = self.stage()
+        with self.assertRaisesRegex(PolicyError, "existing owner-restricted broker"):
+            approve_request(self.state, request["request_id"], request["code"],
+                            "1002", confirmed=True, auth_path=self.auth,
+                            wolf_api=self.wolf, now=self.now)
+        self.assertEqual(self.auth.read_text(), self.original)
+        self.assertEqual([d["client_id"] for d in self.load()["devices"]], ["1001"])
+
     def test_atomic_rollback_if_policy_write_fails(self):
         from unittest.mock import patch
         request = self.stage()

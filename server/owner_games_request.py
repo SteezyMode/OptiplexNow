@@ -9,12 +9,13 @@ this function as a web endpoint, generic SSH command or client-side import
 until the caller performs independently verified device authentication.
 """
 from owner_access import OwnerStore, PolicyError, _valid_client_id, resolve_games
-from owner_launch import read_lease, launch_owner_steam, stop_owner_steam
+from owner_launch import (read_lease, launch_owner_steam, stop_owner_steam,
+                          reconcile_finished_owner_steam)
 from owner_lobby import _inventory
 from owner_host_pilot import inspect_candidate
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe"))
 
 
 def _validated_request(request):
@@ -79,6 +80,70 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
     # Host-only deployment switch, never a field of the request.
     if host_approved is not True:
         raise PolicyError("Host has not enabled owner Games control")
+
+    if action == "observe":
+        # Read-only observation after a successful managed Start. No automatic
+        # StopLobby and no lease deletion. Distinguish Steam runner exit from
+        # the still-running Wolf UI Moonlight session.
+        if lease is None or lease["state"] != "joined" or not lease["lobby_id"]:
+            raise PolicyError("No confirmed owner Games session to observe")
+        if lease["client_id"] != verified_client_id:
+            raise PolicyError("Owner Games session belongs to another device")
+        lobbies = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+        if lobbies:
+            if len(lobbies) != 1:
+                raise PolicyError("Unexpected concurrent Wolf lobby")
+            lobby = lobbies[0]
+            if (lobby.get("id") != lease["lobby_id"] or
+                    lobby.get("name") != "Steam" or
+                    lobby.get("started_by_profile_id") != profile_id or
+                    lobby.get("pin_required") is not True or
+                    lobby.get("multi_user") is not False or
+                    not isinstance(lobby.get("connected_sessions"), list) or
+                    any(c != verified_client_id
+                        for c in lobby["connected_sessions"])):
+                raise PolicyError("Observed lobby differs from owner Steam")
+            return {"success": True, "status": "running"}
+        # Wolf's runner-exit StopLobby returns its stream producer to Wolf UI
+        # rather than necessarily closing Moonlight. Verify only this bound
+        # client remains, and no Steam writer exists. Otherwise fail closed.
+        sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+        if len(sessions) > 1 or any(
+                item.get("client_id") != verified_client_id for item in sessions):
+            raise PolicyError("Another Wolf session remains active")
+        if sessions:
+            apps = _inventory(wolf_api("GET", "/api/v1/apps"), "apps", 256)
+            wolf_ui = [a.get("id") for a in apps if a.get("title") == "Wolf UI"]
+            if len(wolf_ui) != 1 or sessions[0].get("app_id") != wolf_ui[0]:
+                raise PolicyError("Unexpected Wolf stream after owner Steam")
+        if not callable(host_writer_check):
+            raise PolicyError("Host Steam writer observation unavailable")
+        try:
+            if host_writer_check() is not True:
+                return {"success": True, "status": "running"}
+        except Exception:
+            raise PolicyError("Host Steam writer observation failed") from None
+        # Lease identity may have changed while the Wolf GETs ran. Read again
+        # under the same owner lock; only the original joined transaction may
+        # be described as finished. Still do not archive or stop anything.
+        with store.locked() as fd:
+            current = read_lease(fd)
+            if (current is None or current["id"] != lease["id"] or
+                    current["state"] != "joined" or
+                    current["client_id"] != verified_client_id):
+                raise PolicyError("Owner Steam lease changed while observing")
+        # The actual reconciliation still requires zero Wolf sessions after
+        # the client's OWN Moonlight process exits.
+        return {"success": True, "status": "finished"}
+
+    if action == "reconcile":
+        # This is NOT a forced stop or a blind lease clear. It only archives a
+        # joined lease belonging to this credential if the entire Wolf runtime
+        # and Steam writer census are definitively idle. Otherwise it refuses.
+        return reconcile_finished_owner_steam(
+            wolf_api, store=store,
+            expected_client_id=verified_client_id,
+            host_writer_check=host_writer_check)
 
     if action == "start":
         if lease is not None:

@@ -81,7 +81,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
 
     def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
-        self.assertIn("This authorizes ordinary SSH only.", SHELL)
+        self.assertIn("Ordinary SSH and Moonlight pairing are not owner-service approval.", SHELL)
         self.assertIn("separate restricted device key", SHELL)
         self.assertIn("Use REQUEST OWNER DEVICE APPROVAL on the Games page", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)

@@ -40,6 +40,21 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")', FLOW)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web")', FLOW)
 
+    def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
+        self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)
+        self.assertIn("g_timeout_add_seconds(4,reconnect_once,NULL)", FLOW)
+        self.assertIn("!reconnect_used && !reconnect_source", FLOW)
+        self.assertIn("reconnect_used=TRUE;", FLOW)
+        self.assertIn("if(reconnect_source){g_source_remove(reconnect_source);reconnect_source=0;}", FLOW)
+        self.assertIn("gtk_widget_get_mapped(queue_stack)", FLOW)
+        # Recovery must reuse the fixed read-only queue helper, not start a
+        # Steam or download mutation or circumvent owner authorization.
+        cb = FLOW.split("static gboolean reconnect_once(", 1)[1].split(
+            "/* Local credential presence", 1)[0]
+        self.assertIn("now_downloads_open(last_host,last_user,last_override);", cb)
+        self.assertNotIn("ssh-copy-id", FLOW)
+        self.assertNotIn("games_start", cb)
+
     def test_fresh_linux_profile_explains_missing_owner_enrollment(self):
         # Diagnostics must be specific and stop BEFORE any SSH/Docker request.
         first = FLOW.split("void now_downloads_refresh(", 1)[1].split(

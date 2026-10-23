@@ -34,6 +34,19 @@ class TrustedGamesGateTests(unittest.TestCase):
             wolf_api=self.api, host_video_caps=caps, host_approved=approved,
             host_writer_check=writer_check)
 
+    def test_media_requires_authorized_device_and_never_changes_wolf(self):
+        from unittest.mock import patch
+        with patch("owner_games_request.inspect_local_jellyfin",
+                   return_value={"service": "jellyfin",
+                                 "available": True, "name": "OptiPlex"}):
+            result = self.call("media")
+            self.assertEqual(result,
+                             {"success": True, "service": "jellyfin",
+                              "available": True, "name": "OptiPlex"})
+            self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
+            with self.assertRaises(PolicyError):
+                self.call("media", client="99999999")
+
     def test_status_is_read_only_and_never_leaks_client_or_private_fields(self):
         self.assertEqual(self.call("status"),
                          {"success": True, "status": "wolf_ui_connected"})

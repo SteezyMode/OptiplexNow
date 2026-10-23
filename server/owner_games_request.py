@@ -13,9 +13,10 @@ from owner_launch import (read_lease, launch_owner_steam, stop_owner_steam,
                           reconcile_finished_owner_steam, cleanup_finished_owner_wolf_ui)
 from owner_lobby import _inventory
 from owner_host_pilot import inspect_candidate
+from media_endpoint import inspect_local_jellyfin
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media"))
 
 
 def _validated_request(request):
@@ -57,6 +58,9 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         profile_id = binding["wolf_profile_id"]
         if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
             raise PolicyError("Owner Steam lease/workspace mismatch")
+
+    if action == "media":
+        return {"success": True, **inspect_local_jellyfin()}
 
     if action == "status":
         if lease is not None:

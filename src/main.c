@@ -26,6 +26,7 @@
 #include "wolf_pairing.h"
 #include "wolf_transport.h"
 #include "games_flow.h"
+#include "media_flow.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "service_probe.h"
@@ -1842,7 +1843,8 @@ static void on_bruiser_admin(void*w,void*p){
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
- }else if(n==1||n==2){int ix=n==1?5:6;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ }else if(n==1)now_media_open_videos();
+ else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
  else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
@@ -3163,7 +3165,7 @@ int main(int argc,char**argv) {
  }
  int instance_result=claim_instance();
  if(instance_result<=0)return instance_result==0?0:1;
- fonts_register();gtk_init(&argc,&argv);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
+ fonts_register();gtk_init(&argc,&argv);now_media_bind(say,browser_open);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
  /* Give the dashboard enough height for server controls on normal displays.

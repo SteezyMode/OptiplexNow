@@ -14,6 +14,7 @@ static gchar *loaded_url;
 static gboolean running;
 static gchar *last_host;
 static gchar *last_user;
+static gchar *last_override;
 static gchar *pending_web_url;
 static gchar *pending_web_host;
 
@@ -44,6 +45,17 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
  char *out=NULL;
  GError *err=NULL;
  gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&err);
+ /* Never consume an earlier host's response after settings change. Reissue
+  * one request for the currently selected approved device instead. */
+ if(g_strcmp0(last_host,job->host)!=0 ||
+    g_strcmp0(last_user,job->user)!=0){
+   running=FALSE;
+   g_clear_error(&err);g_free(out);
+   g_object_unref(job->proc);
+   g_free(job->host);g_free(job->user);g_free(job);
+   if(last_host && last_user)now_downloads_refresh(last_host,last_user);
+   return;
+ }
  gboolean accepted=ok && g_subprocess_get_successful(job->proc) &&
                      out && strlen(out)<32768;
  guint port=0;
@@ -150,25 +162,46 @@ static void show_web(GtkWidget *button,gpointer unused){
   "WebUI controls use qBittorrent's own login and permissions.");
 }
 void now_downloads_open(const char *host,const char *user,const char *webui_url){
- g_free(last_host);last_host=g_strdup(host);
- g_free(last_user);last_user=g_strdup(user);
  if(!queue_stack)return;
- /* Recheck the paired owner credential on every entry. Never let an
-  * unapproved device load a full-management WebUI just by editing cfg[7]. */
- if(webview){
-   gtk_container_remove(GTK_CONTAINER(view_holder),webview);
-   webview=NULL;
-   g_clear_pointer(&loaded_url,g_free);
+ /* A verified, active owner WebView is kept in its GTK stack while other
+  * pages are selected. Do not discard login/JS/search state or relaunch the
+  * entire page merely because the user switched tabs. */
+ gboolean same=g_strcmp0(last_host,host)==0 &&
+               g_strcmp0(last_user,user)==0 &&
+               g_strcmp0(last_override,webui_url)==0;
+ if(same && webview && loaded_url &&
+    now_downloads_webview_url_allowed(loaded_url,host)){
+   show_web(NULL,NULL);
+   return;
  }
+ /* Host identity, SSH user and explicit override are separate from the
+  * WebUI session. Only a changed connection invalidates an existing view. */
+ if(!same){
+   g_free(last_host);last_host=g_strdup(host);
+   g_free(last_user);last_user=g_strdup(user);
+   g_free(last_override);last_override=g_strdup(webui_url);
+   if(webview){
+     gtk_container_remove(GTK_CONTAINER(view_holder),webview);
+     webview=NULL;
+     g_clear_pointer(&loaded_url,g_free);
+   }
+ }
+ /* If the initial authorization is still in flight, leave it alone;
+  * selecting this tab again must not restart or duplicate the request. */
+ if(same && running)return;
  gtk_widget_set_sensitive(web_button,FALSE);
- show_queue(NULL,NULL);
+ g_clear_pointer(&pending_web_url,g_free);
+ g_clear_pointer(&pending_web_host,g_free);
  if(now_valid_host(host) && now_valid_user(user)){
    pending_web_host=g_strdup(host);
    if(webui_url && now_downloads_webview_url_allowed(webui_url,host))
      pending_web_url=g_strdup(webui_url);
+   gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
    gtk_label_set_text(GTK_LABEL(status_label),
      "Discovering VPN-bound downloader through approved server...");
+   now_downloads_refresh(host,user);
  }else{
+   gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
    gtk_label_set_text(GTK_LABEL(status_label),
      "Connect an approved server to discover downloads.");
  }

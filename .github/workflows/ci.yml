@@ -58,6 +58,7 @@ jobs:
           make check-config
           make check-wolf-pairing
           make check-wolf-transport
+          make check-games-flow
           make check-tailscale
           make check-host-metrics
           make check-host-job-target

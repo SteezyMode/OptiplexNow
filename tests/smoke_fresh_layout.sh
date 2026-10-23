@@ -43,18 +43,26 @@ for screen in 3440x1440 1024x768; do
     height="$(awk "/^[[:space:]]*Height:/{print \$2}" <<<"$info")"
     IFS=x read -r maxw maxh <<<"$screen"
 
-    # Full-height dashboard expected, while both dimensions stay on screen.
-    [[ "$width" -ge 850 && "$height" -ge 575 &&
-       "$width" -le "$maxw" && "$height" -le "$maxh" ]] || {
-      echo "Dashboard too small/clipped at $screen: ${width}x${height}" >&2
-      exit 1
-    }
+    # The user explicitly requested a compact normal window even on an
+    # ultrawide monitor. Each page has its own scrolling container; size
+    # should be comfortable without filling a substantial part of the screen.
     if [[ "$screen" == "3440x1440" ]]; then
-      [[ "$width" -ge 1000 && "$height" -ge 680 ]] || {
-        echo "Ultrawide dashboard not scaled: ${width}x${height}" >&2
+      [[ "$width" -ge 760 && "$width" -le 860 &&
+         "$height" -ge 600 && "$height" -le 730 ]] || {
+        echo "Ultrawide initial window not compact: ${width}x${height}" >&2
+        exit 1
+      }
+    else
+      [[ "$width" -ge 680 && "$width" -le 820 &&
+         "$height" -ge 490 && "$height" -le 650 ]] || {
+        echo "Notebook initial window not compact: ${width}x${height}" >&2
         exit 1
       }
     fi
+    [[ "$width" -le "$maxw" && "$height" -le "$maxh" ]] || {
+      echo "Dashboard clipped by monitor at $screen: ${width}x${height}" >&2
+      exit 1
+    }
     # A fresh launch should not create or overwrite a stored connection.
     [[ ! -f "$XDG_CONFIG_HOME/optiplex-desk/config.ini" ]] || {
       echo "Fresh startup wrote a connection file before setup" >&2

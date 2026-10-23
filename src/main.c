@@ -1671,6 +1671,7 @@ static void on_system_info(void*w,void*p){
   gtk_widget_show_all(info_view);
  }
  gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"info");
+ if(!gtk_widget_get_visible(win))tray_show_window();
  begin_job(6);
 }
 
@@ -1936,6 +1937,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  if(!main_pages)return;
  if(settings_view){
   gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
+  if(!gtk_widget_get_visible(win))tray_show_window();
   return;
  }
  NowSettingsForm *form=g_new0(NowSettingsForm,1);
@@ -2104,6 +2106,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_widget_show_all(settings_view);
  gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");
  gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
+ if(!gtk_widget_get_visible(win))tray_show_window();
 }
 
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */

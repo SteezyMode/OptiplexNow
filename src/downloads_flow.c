@@ -46,19 +46,45 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
  gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&err);
  gboolean accepted=ok && g_subprocess_get_successful(job->proc) &&
                      out && strlen(out)<32768;
+ guint port=0;
+ const char *queue_text=out;
+ if(accepted){
+   if(!g_str_has_prefix(out,"WEBUI_PORT="))accepted=FALSE;
+   else{
+     const char *endline=strchr(out,'\n');
+     char *parsed_end=NULL;
+     gint64 value=g_ascii_strtoll(out+strlen("WEBUI_PORT="),&parsed_end,10);
+     if(!endline || parsed_end!=endline || value<0 || value>65535 ||
+        (value!=0 && value<1024))accepted=FALSE;
+     else{
+       port=(guint)value;
+       queue_text=endline+1;
+     }
+   }
+ }
  if(queue_label){
-   if(accepted)gtk_label_set_text(GTK_LABEL(queue_label),out);
+   if(accepted)gtk_label_set_text(GTK_LABEL(queue_label),queue_text);
    else gtk_label_set_text(GTK_LABEL(queue_label),"Queue unavailable. Check server connection.");
  }
  running=FALSE;
- if(pending_web_url && accepted &&
+ if(pending_web_host && accepted &&
     g_strcmp0(last_host,job->host)==0 &&
-    g_strcmp0(last_user,job->user)==0 &&
-    now_downloads_webview_url_allowed(pending_web_url,pending_web_host)){
-   if(!webview){
-     webview=now_downloads_webview_new(pending_web_url,pending_web_host);
+    g_strcmp0(last_user,job->user)==0){
+   /* The host supplied the port through the existing authenticated owner
+    * queue request. The host address comes ONLY from the paired NOW config. */
+   char *discovered=NULL;
+   if(port>0){
+     discovered=strchr(job->host,':') ?
+       g_strdup_printf("http://[%s]:%u/",job->host,port) :
+       g_strdup_printf("http://%s:%u/",job->host,port);
+   }
+   const char *target=(discovered &&
+      now_downloads_webview_url_allowed(discovered,job->host)) ?
+      discovered : pending_web_url;
+   if(target && now_downloads_webview_url_allowed(target,job->host)){
+     webview=now_downloads_webview_new(target,job->host);
      if(webview){
-       loaded_url=g_strdup(pending_web_url);
+       loaded_url=g_strdup(target);
        gtk_box_pack_start(GTK_BOX(view_holder),webview,TRUE,TRUE,0);
        gtk_widget_show_all(view_holder);
      }
@@ -67,9 +93,10 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
    if(webview){
      gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web");
      gtk_label_set_text(GTK_LABEL(status_label),
-       "WebUI management uses qBittorrent's separate login and permissions.");
+       "Downloads discovered automatically; qBittorrent login remains required.");
    }else gtk_label_set_text(GTK_LABEL(status_label),
-       "WebKitGTK 4.1 is unavailable; the approved read-only queue remains accessible.");
+       "WebUI unavailable. Read-only queue works; check optional WebKitGTK and approved host.");
+   g_free(discovered);
  }
  g_clear_pointer(&pending_web_url,g_free);
  g_clear_pointer(&pending_web_host,g_free);
@@ -88,7 +115,7 @@ void now_downloads_refresh(const char *host,const char *user){
    gtk_label_set_text(GTK_LABEL(queue_label),"Downloads helper missing.");
    g_free(helper);return;
  }
- const char *argv[]={"/usr/bin/python3",helper,host,user,NULL};
+ const char *argv[]={"/usr/bin/python3",helper,host,user,"--with-port",NULL};
  GError *error=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,
    G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
@@ -135,14 +162,15 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  }
  gtk_widget_set_sensitive(web_button,FALSE);
  show_queue(NULL,NULL);
- if(webui_url && now_downloads_webview_url_allowed(webui_url,host)){
-   pending_web_url=g_strdup(webui_url);
+ if(now_valid_host(host) && now_valid_user(user)){
    pending_web_host=g_strdup(host);
+   if(webui_url && now_downloads_webview_url_allowed(webui_url,host))
+     pending_web_url=g_strdup(webui_url);
    gtk_label_set_text(GTK_LABEL(status_label),
-     "Checking approved owner access before opening qBittorrent...");
+     "Discovering VPN-bound downloader through approved server...");
  }else{
    gtk_label_set_text(GTK_LABEL(status_label),
-     "Set a private, same-server Downloads WebUI URL in Settings to enable management. Read-only queue is available.");
+     "Connect an approved server to discover downloads.");
  }
 }
 GtkWidget *now_downloads_page(void){

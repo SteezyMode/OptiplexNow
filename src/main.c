@@ -1699,6 +1699,18 @@ static void on_games_action(void*w,void*arg){
  if(resp==101){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
+ else if(resp==106){
+   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+     say("SET AN APPROVED OWNER SERVER IN SETTINGS FIRST");return;
+   }
+   gchar *argv[]={"/usr/bin/python3",
+     "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
+   GError *error=NULL;
+   if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+     say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
+     g_clear_error(&error);
+   }
+ }
  else if(resp==103)pair_wolf(w);
  else if(resp==104){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
@@ -1749,6 +1761,9 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(choose,"clicked",(GCallback)on_games_action,(void*)(long)105,NULL,0);add(col,choose,0);
  GtkWidget*pairbutton=button("CONNECT TO GAME HOST","setupaction");
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
+ GtkWidget*request_owner=button("REQUEST OWNER DEVICE APPROVAL","setupaction");
+ g_signal_connect_data(request_owner,"clicked",(GCallback)on_games_action,
+   (void*)(long)106,NULL,0);add(col,request_owner,0);
  GtkWidget*pin=button("OPEN WOLF PIN","setupaction");
  g_signal_connect_data(pin,"clicked",(GCallback)on_games_action,(void*)(long)104,NULL,0);add(col,pin,0);
  GtkWidget*restart=button("Restart streaming service…","setupaction");
@@ -2802,7 +2817,7 @@ static void wizard_action(void*w,void*p){
     gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
     return;
  }
- if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
+ if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin")||!strcmp(n,"w_owner_request"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
  else if(!strcmp(n,"w_ts_signup"))browser_open("https://login.tailscale.com/start");
@@ -2811,6 +2826,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf(w);
+ else if(!strcmp(n,"w_owner_request"))on_games_action(NULL,(void*)(long)106);
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
@@ -2981,6 +2997,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
+ wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL","w_owner_request");
  wizard_button(c,four,"ADVANCED PAIRING HELP","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 5: let a fresh installation actually configure each service.

@@ -1,3 +1,9 @@
+## October 24 — PR #184 #620 startup Downloads tab needs second click (physically observed)
+
+The owner reported that build #620 **opened with Downloads visibly selected but did not actually initialize it until the Downloads navigation tab was clicked again**. Selecting `Keep Existing Setup` in the wizard on an earlier run was not a true connection operation. On source review, `src/main.c` selected a saved Downloads startup page and called `now_downloads_open()` before the main GTK window was shown, whereas the navigation-tab handler performed the load after the window was mapped. This ordering is a plausible GTK/WebKit lifecycle cause; it is not yet proven by instrumentation.
+
+In the PR, defer the initial Downloads load to a single idle callback queued on the window's first `map` signal, preserving the configured startup page and `--start-in-tray` path. Manual Downloads selection continues to call the existing loader directly; no new host/service changes. Regression test checks lazy initialization after mapping. **Source-only until exact-head CI and a cold-start physical pass without an extra tab click.** If mapping deferral does not fix the observed symptom, collect detailed first-open errors rather than masking it by overriding the selected startup page.
+
 ## October 24 — #616 initial Downloads recovery regression (physical report; fix source-only)
 
 The owner clarified the #616 test: the Downloads page **hung or did not complete automatic discovery on first opening**, then worked after visiting Settings and clicking "Keep Existing Setup." The current wizard's `w_keep` only closes the dialog; it does not authorize or reconnect anything. The source's Downloads tab/open path can retry the already approved, read-only SSH queue request, so the exact recovery trigger was not isolated. **Do not classify #616 as a clean first-open acceptance pass.**

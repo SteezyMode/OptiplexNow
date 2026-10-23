@@ -101,6 +101,65 @@ def reconcile_stopped_owner_steam(wolf_api, *, store, confirmed_runtime_stopped=
 
 
 
+
+def cleanup_finished_owner_wolf_ui(wolf_api, *, store,
+                                   expected_client_id, host_writer_check):
+    """Stop only a provably identified residual owner Wolf UI session.
+
+    A client_id is NOT a session_id. Some Wolf versions omit session_id from
+    the session inventory; these must fail closed instead of guessing.
+    This is a one-shot mutation: retain the lease if API outcome is uncertain.
+    """
+    if not _valid_client_id(expected_client_id) or not callable(wolf_api):
+        raise PolicyError("Authenticated Games device required")
+    if not callable(host_writer_check):
+        raise PolicyError("Steam writer verification required")
+    with store.locked() as fd:
+        lease = read_lease(fd)
+        if (lease is None or lease["version"] != LEASE_VERSION or
+                lease["state"] != "joined" or lease["client_id"] != expected_client_id):
+            raise PolicyError("No owned completed Games lease to clean up")
+        policy = store.read(fd)
+        if (policy is None or not policy.get("workspaces") or
+                lease["workspace_id"] != policy["workspaces"][0]["id"]):
+            raise PolicyError("Owner workspace changed")
+        lobbies = _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256)
+        sessions = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+        if lobbies or len(sessions) != 1:
+            raise PolicyError("Wolf UI cleanup requires exactly one session and no lobbies")
+        session = sessions[0]
+        apps = _inventory(wolf_api("GET", "/api/v1/apps"), "apps", 256)
+        wolf_ui = [a.get("id") for a in apps if a.get("title") == "Wolf UI"]
+        if (len(wolf_ui) != 1 or session.get("app_id") != wolf_ui[0] or
+                session.get("client_id") != expected_client_id):
+            raise PolicyError("Residual Wolf UI belongs to another stream")
+        session_id = session.get("session_id")
+        if not isinstance(session_id, str) or not session_id:
+            raise PolicyError("Wolf does not expose a verifiable session_id; cleanup refused")
+        if host_writer_check() is not True:
+            raise PolicyError("Steam still has an active writer")
+        # Fail closed if the same stream is no longer present or has changed.
+        again = _inventory(wolf_api("GET", "/api/v1/sessions"), "sessions", 256)
+        if len(again) != 1 or again[0] != session or _inventory(
+                wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256):
+            raise PolicyError("Wolf stream changed before cleanup")
+        lease["state"] = "uncertain"
+        write_lease(fd, lease)
+        try:
+            reply = wolf_api("POST", "/api/v1/sessions/stop",
+                             {"session_id": session_id})
+            if not isinstance(reply, dict) or reply.get("success") is not True:
+                raise PolicyError("Wolf session stop not confirmed")
+            _require_idle_wolf(wolf_api)
+            if host_writer_check() is not True:
+                raise PolicyError("Steam writer detected after cleanup")
+        except Exception:
+            raise PolicyError("Wolf UI cleanup uncertain; manual review required") from None
+        _archive_lease(fd, lease)
+    return {"success": True, "status": "idle", "lease_archived": True}
+
+
+
 def reconcile_finished_owner_steam(wolf_api, *, store,
                                    expected_client_id,
                                    host_writer_check):

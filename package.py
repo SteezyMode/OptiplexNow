@@ -41,6 +41,7 @@ shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-
 # Restricted per-device Games SSH transport. This is NOT a host admin key. Host enrollment and authorization
 # remain explicit owner actions.
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
+shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
 (pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
 shutil.copy2(root/'server/wolf-driver-maintenance.py',pkg/'usr/lib/optiplex-now/wolf-driver-maintenance')

@@ -72,6 +72,19 @@ class EnrollmentClientTests(unittest.TestCase):
                         mod.request("100.121.156.34", "optiplex",
                                     key_module=FakeKeys(public), owner_key=public, runner=runner)
 
+    def test_gui_and_host_bridge_scripts_compile_without_gtk_session(self):
+        import py_compile
+        for source in (
+            "src/owner-enroll-client.py",
+            "src/owner-enroll-ui.py",
+            "src/owner-approvals-ui.py",
+            "server/owner_enrollment.py",
+        ):
+            with self.subTest(source=source), tempfile.TemporaryDirectory() as base:
+                py_compile.compile(str(ROOT / source),
+                                   cfile=str(Path(base) / "check.pyc"),
+                                   doraise=True)
+
     def test_packaged_ui_requires_host_approval(self):
         host_ui = (ROOT / "src/owner-approvals-ui.py").read_text()
         client_ui = (ROOT / "src/owner-enroll-ui.py").read_text()

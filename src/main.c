@@ -1855,7 +1855,9 @@ static GtkWidget *settings_page(GtkWidget *stack,const char *name){
  return content;
 }
 static void settings_link(GtkWidget *container,GtkWidget *stack,const char *caption,const char *page){
- GtkWidget *b=button(caption,"setupaction");
+ gboolean back=g_str_has_prefix(caption,"‹");
+ GtkWidget *b=button(caption,back?"navback":"setupaction");
+ if(back)gtk_widget_set_halign(b,GTK_ALIGN_START);
  g_object_set_data(G_OBJECT(b),"settings-stack",stack);
  g_object_set_data(G_OBJECT(b),"settings-page",(gpointer)page);
  g_signal_connect(b,"clicked",G_CALLBACK(settings_open_page),NULL);

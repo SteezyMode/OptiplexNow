@@ -36,7 +36,11 @@ def request(host, user, *, key_module=None, runner=subprocess.run):
     public = public_path.read_text(encoding="ascii").strip()
     # The transport is the pre-existing, explicitly approved owner SSH
     # credential; enrollment itself creates a SEPARATE restricted key.
-    argv = ["ssh", "-F", "/dev/null",
+    owner_key = Path.home() / ".ssh/id_ed25519"
+    if owner_key.is_symlink() or not owner_key.is_file():
+        raise ValueError("Ordinary owner SSH is not configured")
+    argv = ["ssh", "-F", "/dev/null", "-i", str(owner_key),
+            "-o", "IdentitiesOnly=yes",
             "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
             "-o", "ConnectTimeout=6", "-o", "ConnectionAttempts=1",
             "-o", "ClearAllForwardings=yes", "-T", "-l", user, "--", host,

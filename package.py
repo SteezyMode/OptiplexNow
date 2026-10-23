@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.18.0"
+DEFAULT_VERSION = "1.19.0"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")
@@ -38,8 +38,8 @@ shutil.copy2(root/'server/LICENSE-nvidia-driver-upstream.txt', pkg/'usr/share/do
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)
 shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-client.py')
-# Restricted per-device Games SSH transport. This is NOT a host admin key and
-# does not enable a host broker or retarget the Games button in this release.
+# Restricted per-device Games SSH transport. This is NOT a host admin key. Host enrollment and authorization
+# remain explicit owner actions.
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
 (pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
@@ -90,6 +90,6 @@ Maintainer: OptiPlex Now <local@localhost>
 Depends: python3, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
 Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec
 Description: OptiPlex Now remote server launcher
- Native GTK client with native tray quick actions, direct Steam streaming, live hardware info and encrypted backup.
+ Native GTK client with native tray quick actions, owner-managed Steam streaming, live hardware info and encrypted backup.
 ''')
 subprocess.run(['dpkg-deb','--build','--root-owner-group',str(pkg),str(out/f'OptiPlex-Now_{version}_amd64.deb')],check=True)

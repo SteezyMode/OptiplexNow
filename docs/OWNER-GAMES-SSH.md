@@ -39,6 +39,17 @@ are enforced there.
   coordination, reused without copying the Wolf request planner.
 - `src/owner_launch.py`: durable owner Steam lease, PIN and one-shot stop.
 
+## Proposed graphical owner enrollment pilot (unmerged PR #184, not host-deployed)
+
+The separate owner enrollment pilot replaces *manual public-key copying* **only on an owner-controlled reference host that has been deliberately configured already**. It requires a current NOW package on both host and client, a working **owner** ordinary SSH connection (from the existing wizard), Wolf pairing, an initialized private owner policy and an existing reviewed `restrict,command=.../owner_games_ssh.py` key. It does **not** grant shell access to untrusted members or install Wolf.
+
+- Client: Games → **REQUEST OWNER DEVICE APPROVAL** (also in setup). A GTK dialog generates/reuses a dedicated Ed25519 key under the current Linux login, uploads **only the public key** over preapproved owner SSH and displays a six-digit request code. The private key stays at its restrictive local permissions. The request expires in 10 minutes.
+- Host: the owner runs **NOW Owner Device Approvals (Host)** in its own desktop session (or opens it from local NOW Host Setup), selects the pending request, checks the code displayed on the requesting client, independently verifies the *same* paired Wolf device ID and selects it explicitly. A check box and final confirmation are mandatory. Pairing, IP, tailnet membership, request code and fingerprint do not independently confer owner rights.
+- Host write: only after confirmation, the host checks the current paired inventory and owner policy, retains existing grants and SSH keys, backs up both host `authorized_keys` and `owner-access.json`, then adds one per-device forced-command key pointing to the existing reviewed broker. It does not replace/restart Wolf, Steam, qBittorrent, VPN, Jellyfin or the physical desktop.
+- Client: **VERIFY ACCESS** uses the new restricted SSH credential and the host Games `status` request. Failure remains a denial; no ordinary SSH fallback and no auto-approval.
+
+**Limitations:** This is a trusted-owner alpha workflow, not member onboarding or productized no-terminal host installation. The staged request uses the owner's existing ordinary SSH account; never distribute that account/key to untrusted viewers. The host app is not a daemon, public listener, Tailscale-wide approval agent or proof that the claimed Moonlight certificate matches the SSH key cryptographically; the owner must independently verify identity. Full revocation/user separation, host provisioning/recovery, fresh client proof and physical denial tests remain outstanding. New source-only code has not been installed on the existing reference host. Do not offer the approval UI as a public multi-user feature.
+
 ## Manual operator pilot (not ordinary product onboarding)
 
 1. On a test client, run `python3 src/owner-games-client.py keygen`.

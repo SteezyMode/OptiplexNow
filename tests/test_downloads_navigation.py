@@ -32,6 +32,19 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("static void launch_torrents(void){open_downloads_page();}", SHELL)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', SHELL)
 
+    def test_dashboard_is_explicitly_selected_after_pages_become_visible(self):
+        # Downloads is shown during stack creation. If Dashboard is only the
+        # implicit default, GTK may leave Downloads as the visible child.
+        startup = SHELL.split(" reflow(initial_width);", 1)[1].split(
+            " /* Initialize the tray", 1)[0]
+        self.assertIn("gtk_widget_show_all(downloads_page);", SHELL)
+        self.assertIn("gtk_widget_show_all(dash_scroll);", startup)
+        self.assertIn("gtk_widget_show_all(software_scroll);", startup)
+        self.assertIn('now_nav_show_page(main_pages,first_run?"dashboard":now_ui_state_start_page());', startup)
+        self.assertLess(startup.index("gtk_widget_show_all(dash_scroll);"),
+                        startup.index('now_nav_show_page(main_pages,'))
+        self.assertNotIn('if(strcmp(start,"dashboard")!=0)', startup)
+
     def test_beta_defers_downloads_startup_without_disabling_navigation(self):
         # Earlier beta settings may contain start_page=downloads. The
         # state loader normalizes that to Dashboard and Settings does not

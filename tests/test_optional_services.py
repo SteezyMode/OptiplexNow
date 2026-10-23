@@ -31,7 +31,9 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("now_tray_order_load(order)", SOURCE)
         self.assertIn("now_tray_order_save(ordered)", SOURCE)
         self.assertIn("now_tray_desktop_caption_save(new_caption)", SOURCE)
-        self.assertIn("GtkWidget*featured_checks[8],*tray_checks[8]", SOURCE)
+        # Checkbox widgets now live in the long-lived in-window Settings form.
+        self.assertIn("GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];", SOURCE)
+        self.assertIn("**featured_checks=form->featured_checks,**tray_checks=form->tray_checks", SOURCE)
         self.assertIn('const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};', SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)

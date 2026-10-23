@@ -19,9 +19,10 @@ typedef struct {
 } BrowserAPI;
 static BrowserAPI api;
 static gboolean loader_checked;
+static gboolean browser_available;
 
 static gboolean load_browser(void) {
- if(loader_checked)return !!api.new_view;
+ if(loader_checked)return browser_available;
  loader_checked=TRUE;
  void *lib=dlopen("libwebkit2gtk-4.1.so.0",RTLD_NOW|RTLD_LOCAL);
  if(!lib)return FALSE;
@@ -38,6 +39,7 @@ static gboolean load_browser(void) {
  LOOKUP(get_context,"webkit_web_view_get_context");
  LOOKUP(cancel_download,"webkit_download_cancel");
  #undef LOOKUP
+ browser_available=TRUE;
  return TRUE;
 }
 
@@ -143,8 +145,11 @@ GtkWidget *now_downloads_webview_new(const char *url,const char *approved_host){
  g_signal_connect_data(view,"decide-policy",G_CALLBACK(decide_policy),
                        policy,free_policy,0);
  gpointer context=api.get_context(view);
- if(context)g_signal_connect(context,"download-started",
-                             G_CALLBACK(download_started),NULL);
+ if(context){
+   g_signal_handlers_disconnect_by_func(context,G_CALLBACK(download_started),NULL);
+   g_signal_connect(context,"download-started",
+                    G_CALLBACK(download_started),NULL);
+ }
  api.load_uri(view,url);
  return view;
 }

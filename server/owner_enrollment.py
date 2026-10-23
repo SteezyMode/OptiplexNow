@@ -113,6 +113,25 @@ def _fingerprint(public_key):
     return hashlib.sha256(public_key.encode("ascii")).hexdigest()[:20]
 
 
+def _replace_authorized_keys(path, payload, mode, unique):
+    """Atomically replace a trusted owner authorized_keys file with a pinned mode."""
+    tmp = path.parent / (".now-owner-" + unique)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(tmp, flags, mode)
+        with os.fdopen(fd, "wb") as stream:
+            os.fchmod(stream.fileno(), mode)
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink()
+        except FileNotFoundError:
+            pass
+
+
 def stage_request(state_dir, public_key, *, now=None):
     public = validated_ed25519_public(public_key)
     current = int(time.time() if now is None else now)
@@ -123,6 +142,9 @@ def stage_request(state_dir, public_key, *, now=None):
             if not REQUEST_ID.fullmatch(path.name):
                 raise PolicyError("Unexpected owner enrollment file")
             entry = _read_request_file(path)
+            if entry["created"] + TTL <= current:
+                path.unlink()
+                continue
             if entry["created"] + TTL > current:
                 active.append(entry)
                 if entry["public_key"] == public:
@@ -228,29 +250,26 @@ def approve_request(state_dir, request_id, code, client_id, *,
             stream.flush()
             os.fsync(stream.fileno())
         backup.chmod(0o600)
-        tmp = auth.parent / (".now-owner-" + request_id)
+        policy_backup = backup_dir / ("owner-access-" + request_id)
+        with policy_backup.open("xb") as stream:
+            stream.write((Path(state_dir) / "owner-access.json").read_bytes())
+            stream.flush()
+            os.fsync(stream.fileno())
+        policy_backup.chmod(0o600)
+        # Only change host SSH after both originals are durably backed up.
+        _replace_authorized_keys(auth, changed, stat.S_IMODE(meta.st_mode),
+                                 request_id)
         try:
-            newfd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, stat.S_IMODE(meta.st_mode))
-            with os.fdopen(newfd, "wb") as stream:
-                stream.write(changed)
-                stream.flush()
-                os.fsync(stream.fileno())
-            os.replace(tmp, auth)
-            # A forced key with NO owner policy grant cannot start Games.
-            # Only grant after the restricted authorized_keys line is installed.
+            store.write(fd, policy)
+        except Exception:
+            # Restoring by a second atomic rename avoids a truncated keyfile.
             try:
-                store.write(fd, policy)
-            except Exception:
-                # Do not silently leave a newly usable authorization on failure.
-                auth.write_bytes(old)
-                auth.chmod(stat.S_IMODE(meta.st_mode))
-                raise
-            path.unlink()
-        finally:
-            try:
-                tmp.unlink()
-            except FileNotFoundError:
-                pass
+                _replace_authorized_keys(auth, old, stat.S_IMODE(meta.st_mode),
+                                         request_id + "-rollback")
+            except OSError as exc:
+                raise PolicyError("Incomplete enrollment; manual host recovery required") from exc
+            raise
+        path.unlink()
     return {"success": True, "status": "approved",
             "client_id": client_id, "fingerprint": _fingerprint(entry["public_key"])}
 
@@ -282,8 +301,8 @@ def main(argv=None):
                 confirmed=args.confirm_verified_device)
         print(json.dumps(reply, separators=(",", ":"), sort_keys=True))
         return 0
-    except (PolicyError, OSError, ValueError, TypeError, KeyError, UnicodeError,
-            json.JSONDecodeError):
+    except (PolicyError, OSError, ValueError, TypeError, KeyError, RuntimeError,
+            UnicodeError, json.JSONDecodeError):
         print('{"success":false,"status":"denied"}')
         return 1
 

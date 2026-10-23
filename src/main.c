@@ -1859,11 +1859,79 @@ static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
  g_object_unref(row);
  gtk_widget_show_all(GTK_WIDGET(list));
 }
+typedef struct {
+ GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];
+ GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *root;
+ PairContext server_context, relay_context;
+ PresetExportContext export_context;
+} NowSettingsForm;
+
+/* Cancel discards uncommitted edits; Save commits before discarding the page.
+ * All callback contexts are owned by the GTK page, not a stack frame. */
+static void settings_discard(GtkWidget*w,gpointer unused){
+ (void)w;(void)unused;
+ if(!settings_view)return;
+ GtkWidget*old=settings_view;
+ settings_view=NULL;
+ tailscale_label=NULL;
+ gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"dashboard");
+ gtk_container_remove(GTK_CONTAINER(main_pages),old);
+}
+static void settings_save(GtkWidget*w,gpointer data){
+ (void)w;
+ NowSettingsForm*form=data;
+ GtkWidget **fields=form->fields,*combo=form->combo,*diskentry=form->diskentry,
+  *order_list=form->order_list,*web_url_entry=form->web_url_entry,
+  *desktop_caption_entry=form->desktop_caption_entry;
+ GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
+
+   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
+   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
+   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
+   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
+   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
+        unsigned selected=0,featured=0;
+    for(int i=0;i<8;i++){
+      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
+      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
+    }
+    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
+    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
+    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
+      now_tray_desktop_caption_save(new_caption);
+    int ordered[8];
+    for(int n=0;n<8;n++){
+      GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
+      ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
+    }
+    now_tray_order_save(ordered);
+    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
+    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
+    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
+    config_save();/* Never destroy the activating tray menu from its own callback. */
+    g_timeout_add(200,tray_rebuild_after_settings,NULL);
+    last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
+    reflow(dimensions.width>0?dimensions.width:660);
+    say("SETTINGS SAVED");refresh();
+ settings_discard(NULL,NULL);
+}
 static void on_settings(void*w,void*p){(void)w;(void)p;
- GtkWidget*d=gtk_dialog_new_with_buttons("OptiPlex Now | Settings",GTK_WINDOW(win),1,"CANCEL",GTK_RESPONSE_CANCEL,"SAVE",GTK_RESPONSE_OK,NULL);
- /* A single resizable dialog with internal navigation; suitable for 1024x768. */
- gtk_window_set_default_size(GTK_WINDOW(d),680,550);
- GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
+ if(!main_pages)return;
+ if(settings_view){
+  gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
+  return;
+ }
+ NowSettingsForm *form=g_new0(NowSettingsForm,1);
+ GtkWidget*d=win;
+ settings_view=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(settings_view),
+  GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ form->root=settings_view;
+ g_object_set_data_full(G_OBJECT(settings_view),"now-settings-form",form,g_free);
+ GtkWidget*area=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ gtk_container_add(GTK_CONTAINER(settings_view),area);
+ gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");
  GtkWidget*stack=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(stack,TRUE);
@@ -1892,7 +1960,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
  const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads URL"};
- GtkWidget*fields[8];
+ GtkWidget **fields=form->fields;
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
   GtkWidget*dest=(i<2||i>=5)?gt:advanced_grid;int row=i<2?i:i>=5?i-3:i-2;
@@ -1910,16 +1978,17 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_grid_attach(GTK_GRID(advanced_grid),combo,1,6,1,1);
  GtkWidget*actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  GtkWidget*t=button("TAILSCALE","setupaction");g_signal_connect_data(t,"clicked",(GCallback)on_tail,NULL,NULL,0);add(actions,t,1);
- PairContext server_context={.relay=0},relay_context={.relay=1};
- for(int i=0;i<8;i++){server_context.inputs[i]=fields[i];relay_context.inputs[i]=fields[i];}
- server_context.parent=d;relay_context.parent=d;
- GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,&server_context,NULL,0);add(actions,s,1);
- GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,&relay_context,NULL,0);add(actions,r,1);
+ PairContext *server_context=&form->server_context,*relay_context=&form->relay_context;
+ server_context->relay=0;relay_context->relay=1;
+ for(int i=0;i<8;i++){server_context->inputs[i]=fields[i];relay_context->inputs[i]=fields[i];}
+ server_context->parent=d;relay_context->parent=d;
+ GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,server_context,NULL,0);add(actions,s,1);
+ GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,relay_context,NULL,0);add(actions,r,1);
  add(col,actions,0);
  col=gaming;
  add(col,label("STREAMING","modalheading"),0);
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
- g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,&server_context,NULL,0);add(col,games,0);
+ g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,server_context,NULL,0);add(col,games,0);
  add(col,label("WEB GAMING URL (OPTIONAL)","helper"),0);
  GtkWidget*web_url_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(web_url_entry),"https://your-streaming-host.example");
  gtk_entry_set_text(GTK_ENTRY(web_url_entry),cfg[16]);add(col,web_url_entry,0);
@@ -1937,7 +2006,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  add(col,desktop_caption_entry,0);
  add(col,label("SHORTCUTS","modalheading"),0);
  add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget*featured_checks[8],*tray_checks[8];
+ GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
  GtkWidget*order_list=gtk_list_box_new();
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(order_list),GTK_SELECTION_NONE);
  gtk_widget_set_name(order_list,"trayorder");
@@ -1994,52 +2063,33 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
  g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
  add(col,advanced,0);
- PresetExportContext export_context={.parent=d,.disk=diskentry};
- for(int i=0;i<8;i++)export_context.fields[i]=fields[i];
+ PresetExportContext *export_context=&form->export_context;
+ export_context->parent=d;export_context->disk=diskentry;
+ for(int i=0;i<8;i++)export_context->fields[i]=fields[i];
  GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
- g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,&export_context,NULL,0);add(col,export_btn,0);
+ g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,export_context,NULL,0);add(col,export_btn,0);
   GtkWidget*full_export=button("EXPORT FULL BACKUP","setupaction");
  g_signal_connect_data(full_export,"clicked",(GCallback)export_full_backup,d,NULL,0);add(col,full_export,0);
  GtkWidget*full_import=button("RESTORE FULL BACKUP","setupaction");
- g_signal_connect_data(full_import,"clicked",(GCallback)restore_full_backup,d,NULL,0);add(col,full_import,0);
+ g_signal_connect_data(full_import,"clicked",(GCallback)restore_full_backup,NULL,NULL,0);add(col,full_import,0);
 
  GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
- gtk_widget_show_all(d);
+ form->diskentry=diskentry;form->combo=combo;
+ form->order_list=order_list;form->web_url_entry=web_url_entry;
+ form->desktop_caption_entry=desktop_caption_entry;
+ GtkWidget*actions_footer=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_container_set_border_width(GTK_CONTAINER(actions_footer),10);
+ GtkWidget*cancel=button("CANCEL","navtab"),*save=button("SAVE SETTINGS","setupaction");
+ gtk_box_pack_end(GTK_BOX(actions_footer),save,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(actions_footer),cancel,FALSE,FALSE,0);
+ g_signal_connect(cancel,"clicked",G_CALLBACK(settings_discard),NULL);
+ g_signal_connect(save,"clicked",G_CALLBACK(settings_save),form);
+ add(area,actions_footer,0);
+ gtk_widget_show_all(settings_view);
  gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");
- int resp=gtk_dialog_run(GTK_DIALOG(d));
- if(resp==GTK_RESPONSE_OK){
-   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
-   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
-   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-        unsigned selected=0,featured=0;
-    for(int i=0;i<8;i++){
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
-    }
-    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
-    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
-    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
-    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
-      now_tray_desktop_caption_save(new_caption);
-    int ordered[8];
-    for(int n=0;n<8;n++){
-      GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
-      ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
-    }
-    now_tray_order_save(ordered);
-    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
-    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
-    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
-    config_save();/* Never destroy the activating tray menu from its own callback. */
-    g_timeout_add(200,tray_rebuild_after_settings,NULL);
-    last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
-    reflow(dimensions.width>0?dimensions.width:660);
-    say("SETTINGS SAVED");refresh();
- }
- tailscale_label=NULL;gtk_widget_destroy(d);
+ gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
 }
+
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
     GtkWidget *assistant, *server_page, *games_page, *services_page, *finish_page;

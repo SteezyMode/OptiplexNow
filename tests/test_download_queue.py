@@ -37,7 +37,7 @@ class QueueTests(unittest.TestCase):
                "save_path":"/private/path","hash":"secret","dlspeed":150}]
         self.assertEqual(inspect_queue(runner=fake_runner(records(),json.dumps(data).encode())),{
             "service":"qbittorrent","queue":[{"name":"Example title","state":"downloading",
-                                             "progress_percent":25.0}],"truncated":False})
+                                             "progress_percent":25.0}],"truncated":False,"webui_port":8085})
     def test_no_vpn_binding(self):
         with self.assertRaises(InventoryError):
             inspect_queue(runner=fake_runner(records("bridge")))

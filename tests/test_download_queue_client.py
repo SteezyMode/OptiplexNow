@@ -67,6 +67,15 @@ class QueueClientTests(unittest.TestCase):
             with self.subTest(port=port), self.assertRaises(ValueError):
                 self.run_payload(payload, include_port=True)
 
+    def test_missing_restricted_key_fails_before_ssh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "id_ed25519"
+            def no_ssh(*args, **kwargs):
+                self.fail("SSH must not run without the restricted key")
+            with patch.object(mod, "KEY", missing):
+                with self.assertRaisesRegex(ValueError, "device key unavailable"):
+                    mod.fetch("100.121.156.34", "optiplex", runner=no_ssh)
+
     def test_invalid_host_and_user(self):
         self.assertFalse(mod.valid_host("-oProxyCommand=anything"))
         self.assertFalse(mod.valid_user("-evil"))

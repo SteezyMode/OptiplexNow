@@ -32,21 +32,18 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("static void launch_torrents(void){open_downloads_page();}", SHELL)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', SHELL)
 
-    def test_saved_downloads_startup_activates_only_after_window_mapping(self):
-        # GTK construction selects the page first; loading SSH/WebKit before
-        # the window is mapped caused first-open to need an extra tab click.
-        startup = SHELL.split(" reflow(initial_width);", 1)[1].split(
-            " /* Initialize the tray", 1)[0]
-        self.assertIn('now_nav_show_page(main_pages,start);', startup)
-        self.assertIn('g_signal_connect(win,"map",G_CALLBACK(startup_downloads_mapped),NULL);', startup)
-        self.assertNotIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', startup)
-        callback = SHELL.split("static gboolean load_startup_downloads(", 1)[1].split(
-            "static void on_downloads_tab(", 1)[0]
-        self.assertIn("gtk_widget_get_mapped(win)", callback)
-        self.assertIn("g_idle_add(load_startup_downloads,NULL);", callback)
-        self.assertIn("g_signal_handlers_disconnect_by_func(widget,", callback)
-        self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', callback)
-        self.assertIn('g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(main_pages))', callback)
+    def test_beta_defers_downloads_startup_without_disabling_navigation(self):
+        # Earlier beta settings may contain start_page=downloads. The
+        # state loader normalizes that to Dashboard and Settings does not
+        # advertise an unsupported Downloads startup option.
+        STATE = (ROOT / "src/ui_state.c").read_text(encoding="utf-8")
+        self.assertIn('start_page="dashboard"', STATE)
+        self.assertIn('!strcmp(page,"software")', STATE)
+        self.assertNotIn('!strcmp(page,"downloads")', STATE)
+        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SHELL)
+        self.assertNotIn("startup_downloads_mapped", SHELL)
+        self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SHELL)
+        self.assertIn('g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);', SHELL)
 
     def test_embedded_webview_uses_full_downloads_page(self):
         self.assertNotIn('gtk_button_new_with_label("VUE TORRENT")', FLOW)

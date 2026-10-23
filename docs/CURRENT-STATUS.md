@@ -1,3 +1,11 @@
+## October 24 — Beta startup decision: Dashboard fallback; defer Downloads initial-load issue
+
+Reference MacBook physical test of PR #184 build #623: package checksum verified and installed, but NOW displayed the saved Downloads startup page **without loading its embedded content until the Downloads navigation tab was clicked**. Neither the earlier one-time connection retry (#620) nor the GTK mapped-window startup deferral (#623) received a physical first-open pass. User accepted deferring this noncritical startup-specific issue for beta because selecting Downloads via the main tab or tray works.
+
+**Decision:** Beta may start on Dashboard (or Software by explicit user choice), but **not Downloads**. An old saved `start_page=downloads` is interpreted as Dashboard in memory, without deleting settings; the Settings startup selector no longer offers Downloads. Keep the normal Downloads tab/tray path. Remove the unproven initial Downloads window-map callback and its test; retain ordinary on-demand discovery and fail-closed authorization. Record the known issue for later, and do not claim that startup WebKit rendering was fixed.
+
+No reference-host change. CI and installed-client tests for this new source revision are pending; previously observed #623 second-click behavior is the baseline.
+
 ## October 24 — PR #184 #620 startup Downloads tab needs second click (physically observed)
 
 The owner reported that build #620 **opened with Downloads visibly selected but did not actually initialize it until the Downloads navigation tab was clicked again**. Selecting `Keep Existing Setup` in the wizard on an earlier run was not a true connection operation. On source review, `src/main.c` selected a saved Downloads startup page and called `now_downloads_open()` before the main GTK window was shown, whereas the navigation-tab handler performed the load after the window was mapped. This ordering is a plausible GTK/WebKit lifecycle cause; it is not yet proven by instrumentation.

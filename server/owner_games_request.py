@@ -10,12 +10,12 @@ until the caller performs independently verified device authentication.
 """
 from owner_access import OwnerStore, PolicyError, _valid_client_id, resolve_games
 from owner_launch import (read_lease, launch_owner_steam, stop_owner_steam,
-                          reconcile_finished_owner_steam)
+                          reconcile_finished_owner_steam, cleanup_finished_owner_wolf_ui)
 from owner_lobby import _inventory
 from owner_host_pilot import inspect_candidate
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup"))
 
 
 def _validated_request(request):
@@ -135,6 +135,11 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         # The actual reconciliation still requires zero Wolf sessions after
         # the client's OWN Moonlight process exits.
         return {"success": True, "status": "finished"}
+
+    if action == "cleanup":
+        return cleanup_finished_owner_wolf_ui(
+            wolf_api, store=store, expected_client_id=verified_client_id,
+            host_writer_check=host_writer_check)
 
     if action == "reconcile":
         # This is NOT a forced stop or a blind lease clear. It only archives a

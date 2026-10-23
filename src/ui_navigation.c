@@ -1,5 +1,4 @@
 #include "ui_navigation.h"
-#include "downloads_flow.h"
 #include <string.h>
 
 static void open_page(GtkWidget *button, gpointer unused){
@@ -22,8 +21,8 @@ void now_nav_update_back(GObject *stack,GParamSpec *param,gpointer back_button){
  if(page && strcmp(page,"dashboard")==0)gtk_widget_hide(back);
  else gtk_widget_show(back);
 }
-void now_nav_show_downloads(GtkWidget *stack,const char *host,const char *user){
- if(!stack || !GTK_IS_STACK(stack))return;
- gtk_stack_set_visible_child_name(GTK_STACK(stack),"downloads");
- now_downloads_refresh(host,user);
+void now_nav_show_page(GtkWidget *stack,const char *page){
+ if(!stack || !GTK_IS_STACK(stack) || !page)return;
+ if(gtk_stack_get_child_by_name(GTK_STACK(stack),page))
+   gtk_stack_set_visible_child_name(GTK_STACK(stack),page);
 }

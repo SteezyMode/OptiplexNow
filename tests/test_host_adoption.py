@@ -55,6 +55,14 @@ class AdoptionPlannerTests(unittest.TestCase):
                             for s in adopt.SERVICE_KEYS))
         self.assertFalse(r["may_install"])
 
+    def test_existing_downloader_without_gateway_requires_manual_review(self):
+        only_downloader = [stack()[-1]]
+        r = adopt.plan(services.assess(only_downloader))
+        self.assertEqual(r["decision"], "manual_review_required")
+        self.assertEqual(r["services"]["downloader_network"],
+                         "blocked_until_services_reviewed")
+        self.assertFalse(r["may_install"])
+
     def test_unavailable_docker_is_never_empty(self):
         r = adopt.plan(services.assess(None))
         self.assertEqual(r["decision"], "cannot_inspect")

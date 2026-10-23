@@ -29,14 +29,14 @@ def _client_module():
     return module
 
 
-def request(host, user, *, key_module=None, runner=subprocess.run):
+def request(host, user, *, key_module=None, owner_key=None, runner=subprocess.run):
     games = key_module or _client_module()
     games.validated_target(host, user)
     _, public_path = games.ensure_key()
     public = public_path.read_text(encoding="ascii").strip()
     # The transport is the pre-existing, explicitly approved owner SSH
     # credential; enrollment itself creates a SEPARATE restricted key.
-    owner_key = Path.home() / ".ssh/id_ed25519"
+    owner_key = Path(owner_key) if owner_key else Path.home() / ".ssh/id_ed25519"
     if owner_key.is_symlink() or not owner_key.is_file():
         raise ValueError("Ordinary owner SSH is not configured")
     argv = ["ssh", "-F", "/dev/null", "-i", str(owner_key),

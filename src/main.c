@@ -374,7 +374,7 @@ static void ssh_authorization_done(GObject *source, GAsyncResult *result, gpoint
 
     if (state->dialog) {
         gtk_label_set_text(GTK_LABEL(state->message), success
-            ? "SSH ACCESS AUTHORIZED. YOU CAN CONTINUE SETUP."
+            ? "ORDINARY SSH AUTHORIZED. OWNER GAMES/DOWNLOADS STILL REQUIRE SEPARATE DEVICE APPROVAL."
             : g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
                 ? "SSH AUTHORIZATION CANCELLED."
                 : "COULD NOT AUTHORIZE SSH ACCESS. CHECK YOUR SERVER PASSWORD "

@@ -12,8 +12,9 @@ static int window_height = 500;
 static const char *start_page = "dashboard";
 
 static gboolean allowed_page(const char *page) {
- return page && (!strcmp(page,"dashboard") || !strcmp(page,"software") ||
-                 !strcmp(page,"downloads"));
+ /* Beta: defer Downloads as a first page. Old saved downloads preference
+  * safely falls back to Dashboard; Downloads remains a normal nav/tray page. */
+ return page && (!strcmp(page,"dashboard") || !strcmp(page,"software"));
 }
 
 static char *state_path(void) {
@@ -35,7 +36,6 @@ void now_ui_state_load(void) {
   char *page=g_key_file_get_string(key,"window","start_page",NULL);
   if(allowed_page(page)) {
    if(!strcmp(page,"software"))start_page="software";
-   else if(!strcmp(page,"downloads"))start_page="downloads";
   }
   g_free(page);
  }
@@ -56,8 +56,7 @@ void now_ui_state_remember_size(int width,int height) {
 const char *now_ui_state_start_page(void) {return start_page;}
 void now_ui_state_set_start_page(const char *page) {
  if(!allowed_page(page))return;
- if(!strcmp(page,"downloads"))start_page="downloads";
- else if(!strcmp(page,"software"))start_page="software";
+ if(!strcmp(page,"software"))start_page="software";
  else start_page="dashboard";
 }
 gboolean now_ui_state_save(void) {

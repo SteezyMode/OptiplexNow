@@ -104,6 +104,7 @@ static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
 static void on_settings(void*w,void*p);
 static void on_system_info(void*w,void*p);
+static void settings_discard(GtkWidget*w,gpointer unused);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
@@ -1821,7 +1822,22 @@ static int full_backup_ui(void*parent,int restore){
  return rc==0;
 }
 static void export_full_backup(void*w,void*p){(void)w;full_backup_ui(p?p:win,0);}
-static void restore_full_backup(void*w,void*p){(void)w;void*parent=p?p:win;if(full_backup_ui(parent,1) && p)gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);}
+static void restore_full_backup(void*w,void*p){
+ (void)w;
+ void*parent=p?p:win;
+ if(!full_backup_ui(parent,1))return;
+ /* Restored configuration must not be overwritten by stale form entries. */
+ if(settings_view)settings_discard(NULL,NULL);
+ if(p && GTK_IS_DIALOG(parent))
+  gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);
+}
+static void main_nav_update_back(GObject *stack,GParamSpec *param,gpointer data){
+ (void)param;
+ GtkWidget *back=GTK_WIDGET(data);
+ const char *page=gtk_stack_get_visible_child_name(GTK_STACK(stack));
+ if(page && strcmp(page,"dashboard")==0)gtk_widget_hide(back);
+ else gtk_widget_show(back);
+}
 static void settings_open_page(GtkWidget *button,gpointer unused){
  (void)unused;
  GtkStack *stack=GTK_STACK(g_object_get_data(G_OBJECT(button),"settings-stack"));
@@ -2778,6 +2794,9 @@ int main(int argc,char**argv) {
  g_object_set_data(G_OBJECT(back),"settings-stack",main_pages);
  g_object_set_data(G_OBJECT(back),"settings-page","dashboard");
  g_signal_connect(back,"clicked",G_CALLBACK(settings_open_page),NULL);
+ gtk_widget_set_no_show_all(back,TRUE);
+ gtk_widget_hide(back);
+ g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(main_nav_update_back),back);
  add(nav,back,0);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
  gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);

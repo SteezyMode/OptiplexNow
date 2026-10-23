@@ -1,7 +1,7 @@
-"""Regression checks for the single-dialog Settings navigation.
+"""Regression checks for compact single-window GTK main navigation.
 
-Native GTK compilation, install smoke tests and manual low-resolution UI checks
-remain separate requirements.
+Native GTK compilation, install smoke tests and physical low-resolution
+interaction checks are separate requirements.
 """
 from pathlib import Path
 import unittest
@@ -10,32 +10,53 @@ SOURCE = (Path(__file__).resolve().parents[1] / "src" / "main.c").read_text(enco
 
 
 class SettingsNavigationTests(unittest.TestCase):
-    def test_one_dialog_and_internal_categories(self):
-        section = SOURCE.split("static void on_settings(void*w,void*p)", 1)[1].split("/* Setup assistant.", 1)[0]
-        self.assertEqual(section.count('gtk_dialog_new_with_buttons("OptiPlex Now | Settings"'), 1)
+    def test_settings_reuses_main_stack_and_categories(self):
+        section = SOURCE.split("static void on_settings(void*w,void*p){", 1)[1].split(
+            "/* Setup assistant.", 1)[0]
+        self.assertNotIn('gtk_dialog_new_with_buttons("OptiPlex Now | Settings"', section)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings")', section)
         self.assertIn('GtkWidget*stack=gtk_stack_new();', section)
         for category in ("gaming", "preferences", "connection"):
             self.assertIn(f'settings_page(stack,"{category}")', section)
         self.assertIn('settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home")', section)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");', section)
+        self.assertIn('gtk_widget_show_all(settings_view);', section)
 
-    def test_default_size_and_scrollable_pages(self):
-        self.assertIn('gtk_window_set_default_size(GTK_WINDOW(d),680,550);', SOURCE)
+    def test_compact_initial_width_and_independent_scrolling(self):
+        self.assertIn('int initial_width = 760;', SOURCE)
+        self.assertIn('initial_width = MIN(820, MAX(400, workarea.width - 96));', SOURCE)
+        self.assertIn('initial_width = MIN(760, MAX(400, workarea.width - 96));', SOURCE)
+        self.assertIn('gtk_window_set_resizable(GTK_WINDOW(win),TRUE);', SOURCE)
         self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC)', SOURCE)
+        self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(settings_view),', SOURCE)
+        self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),', SOURCE)
 
-    def test_dashboard_and_software_are_internal_pages(self):
-        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),shell,"dashboard");', SOURCE)
+    def test_software_dashboard_info_and_settings_share_one_stack(self):
+        self.assertIn('gtk_container_add(GTK_CONTAINER(win),window_root);', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),dash_scroll,"dashboard");', SOURCE)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
-        self.assertIn('settings_link(tools,main_pages,"SOFTWARE","software");', SOURCE)
-        self.assertIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard");', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),info_view,"info");', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");', SOURCE)
+        self.assertIn('GtkWidget*back=button("‹ DASHBOARD","navback");', SOURCE)
+        self.assertIn('gtk_widget_set_no_show_all(back,TRUE);', SOURCE)
+        self.assertIn('g_signal_connect(main_pages,"notify::visible-child"', SOURCE)
+        self.assertNotIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard")', SOURCE)
         self.assertIn('add(software,grid,0);', SOURCE)
         self.assertIn('add(software,extras,0);', SOURCE)
 
-    def test_existing_save_path_and_admin_actions(self):
-        section = SOURCE.split("static void on_settings(void*w,void*p)", 1)[1].split("/* Setup assistant.", 1)[0]
-        for expected in ('gtk_dialog_run(GTK_DIALOG(d))', 'if(resp==GTK_RESPONSE_OK)', 'g_timeout_add(200,tray_rebuild_after_settings,NULL);',
-                         'on_web_gaming_admin', 'on_web_gaming_settings', 'on_games_setup_from_settings'):
-            self.assertIn(expected, section)
+    def test_settings_save_cancel_and_pair_callbacks_have_valid_lifetimes(self):
+        self.assertIn('PairContext server_context, relay_context;', SOURCE)
+        self.assertIn('PresetExportContext export_context;', SOURCE)
+        self.assertIn('g_object_set_data_full(G_OBJECT(settings_view),"now-settings-form",form,g_free)', SOURCE)
+        self.assertIn('g_signal_connect(save,"clicked",G_CALLBACK(settings_save),form);', SOURCE)
+        self.assertIn('g_signal_connect(cancel,"clicked",G_CALLBACK(settings_discard),NULL);', SOURCE)
+        self.assertIn('config_save();', SOURCE)
+        self.assertIn('g_timeout_add(200,tray_rebuild_after_settings,NULL);', SOURCE)
+        self.assertIn('on_web_gaming_admin', SOURCE)
+        self.assertIn('on_web_gaming_settings', SOURCE)
+        self.assertIn('on_games_setup_from_settings', SOURCE)
+        self.assertIn('if(settings_view)settings_discard(NULL,NULL);', SOURCE)
+        self.assertNotIn('gtk_dialog_run(GTK_DIALOG(d));\n if(resp==GTK_RESPONSE_OK)', SOURCE)
 
 
 if __name__ == "__main__":

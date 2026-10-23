@@ -1843,7 +1843,8 @@ static void on_bruiser_admin(void*w,void*p){
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
 static void open_downloads_page(void){
- now_nav_show_downloads(main_pages,cfg[0],cfg[1]);
+ now_nav_show_page(main_pages,"downloads");
+ now_downloads_refresh(cfg[0],cfg[1]);
 }
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;
@@ -3323,7 +3324,7 @@ int main(int argc,char**argv) {
  reflow(initial_width);
  if(!first_run){
   const char *start=now_ui_state_start_page();
-  if(strcmp(start,"dashboard")!=0)gtk_stack_set_visible_child_name(GTK_STACK(main_pages),start);
+  if(strcmp(start,"dashboard")!=0)now_nav_show_page(main_pages,start);
   if(!strcmp(start,"downloads"))now_downloads_refresh(cfg[0],cfg[1]);
  }
  /* Initialize the tray before showing the window to avoid login flicker. */

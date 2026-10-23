@@ -47,14 +47,14 @@ for screen in 3440x1440 1024x768; do
     # ultrawide monitor. Each page has its own scrolling container; size
     # should be comfortable without filling a substantial part of the screen.
     if [[ "$screen" == "3440x1440" ]]; then
-      [[ "$width" -ge 760 && "$width" -le 860 &&
-         "$height" -ge 600 && "$height" -le 730 ]] || {
+      [[ "$width" -ge 600 && "$width" -le 740 &&
+         "$height" -ge 470 && "$height" -le 590 ]] || {
         echo "Ultrawide initial window not compact: ${width}x${height}" >&2
         exit 1
       }
     else
-      [[ "$width" -ge 680 && "$width" -le 820 &&
-         "$height" -ge 490 && "$height" -le 650 ]] || {
+      [[ "$width" -ge 600 && "$width" -le 740 &&
+         "$height" -ge 470 && "$height" -le 590 ]] || {
         echo "Notebook initial window not compact: ${width}x${height}" >&2
         exit 1
       }

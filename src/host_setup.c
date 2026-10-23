@@ -1,9 +1,10 @@
 /*
- * NOW Host Setup: real, read-only local hardware and installation review.
+ * NOW Host Setup: host readiness review plus separately gated pilot install.
  *
  * Separate GTK3 program; avoids adding server state to the client main.c.
- * Executes only the packaged read-only Python scanner and planner. No shell,
- * sudo, Docker mutation, approval token, image pull or installation action.
+ * The normal CHECK THIS PC action only runs packaged read-only hardware,
+ * planning and service-inventory helpers. A distinct ADVANCED clean-host
+ * installer requires owner confirmation and OS authorization.
  */
 #include <gtk/gtk.h>
 #include <gio/gio.h>
@@ -89,7 +90,7 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
                 ui->step++;
                 run_read_only_step(ui);
             } else {
-                report_complete(ui, "REVIEW COMPLETE. INSTALLATION NOT AVAILABLE.");
+                report_complete(ui, "REVIEW COMPLETE. NO CHANGES MADE.");
             }
         }
     }

@@ -75,4 +75,5 @@ def inspect_queue(*, runner=subprocess.run):
             raise InventoryError("Queue progress invalid")
         result.append({"name": name[:MAX_NAME], "state": state[:48],
                        "progress_percent": round(progress * 100, 1)})
-    return {"service": "qbittorrent", "queue": result, "truncated": False}
+    return {"service": "qbittorrent", "queue": result, "truncated": False,
+            "webui_port": port}

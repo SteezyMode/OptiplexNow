@@ -18,7 +18,7 @@ int main(void){
  g_assert_cmpstr(now_ui_state_start_page(),==,"dashboard");
 
  now_ui_state_remember_size(880,540);
- now_ui_state_set_start_page("downloads");
+ now_ui_state_set_start_page("software");
  g_assert_true(now_ui_state_save());
  now_ui_state_set_start_page("dashboard");
  now_ui_state_remember_size(640,500);
@@ -26,10 +26,10 @@ int main(void){
  now_ui_state_window_size(&w,&h);
  g_assert_cmpint(w,==,880);
  g_assert_cmpint(h,==,540);
- g_assert_cmpstr(now_ui_state_start_page(),==,"downloads");
+ g_assert_cmpstr(now_ui_state_start_page(),==,"software");
 
  now_ui_state_set_start_page("arbitrary-ssh-page");
- g_assert_cmpstr(now_ui_state_start_page(),==,"downloads");
+ g_assert_cmpstr(now_ui_state_start_page(),==,"software");
  now_ui_state_remember_size(9999,100);
  now_ui_state_window_size(&w,&h);
  g_assert_cmpint(w,==,880);
@@ -43,6 +43,19 @@ int main(void){
  now_ui_state_window_size(&w,&h);
  g_assert_cmpint(w,==,640);
  g_assert_cmpint(h,==,500);
+ g_assert_cmpstr(now_ui_state_start_page(),==,"dashboard");
+
+ /* An earlier beta could save Downloads as the startup page. Defer it
+  * rather than leave the first view uninitialized; keep saved geometry. */
+ g_assert_true(g_file_set_contents(path,
+   "[window]\\nwidth=880\\nheight=540\\nstart_page=downloads\\n",-1,&error));
+ g_assert_no_error(error);
+ now_ui_state_load();
+ now_ui_state_window_size(&w,&h);
+ g_assert_cmpint(w,==,880);
+ g_assert_cmpint(h,==,540);
+ g_assert_cmpstr(now_ui_state_start_page(),==,"dashboard");
+ now_ui_state_set_start_page("downloads");
  g_assert_cmpstr(now_ui_state_start_page(),==,"dashboard");
 
  g_assert_cmpint(g_remove(path),==,0);

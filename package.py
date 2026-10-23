@@ -49,9 +49,9 @@ for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui
 bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 (bridge/'src').mkdir(parents=True,exist_ok=True)
 (bridge/'server').mkdir(parents=True,exist_ok=True)
-shutil.copy2(root/'src/owner_access.py',bridge/'src/owner_access.py')
-for name in ('owner_enrollment.py','owner_games_enroll.py',
-             'wolf_docker_adapter.py','wolf_socket_adapter.py'):
+for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'):
+ shutil.copy2(root/'src'/name,bridge/'src'/name)
+for name in ('owner_enrollment.py','owner_games_enroll.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)
 # The owner Games forced broker is NOT installed/enabled by this client .deb.
 # Approval on an existing owner host reuses its separately adopted, reviewed broker.

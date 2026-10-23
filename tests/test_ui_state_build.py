@@ -32,7 +32,8 @@ class UIStateTests(unittest.TestCase):
         self.assertIn('now_nav_bind_link(back,main_pages,"dashboard");', main)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', main)
         self.assertIn('now_ui_state_save();', main)
-        self.assertIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', main)
+        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', main)
+        self.assertIn('now_ui_state_start_page()', main)
         self.assertIn('src/ui_state.c', make)
         self.assertIn('src/ui_navigation.c', make)
 

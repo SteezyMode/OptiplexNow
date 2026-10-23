@@ -45,7 +45,7 @@ Critical issues: [#171](https://github.com/SteezyMode/OptiplexNow/issues/171), [
 
 ## Pillar 3: private downloads and protected files
 
-**User story:** The owner uses NOW to queue an authorized download, select an allowed destination, inspect and organize resulting files. The downloader alone is VPN-isolated; gaming and video work independently.
+**User story:** The owner uses NOW to queue an authorized download, see where it landed on the real host, open that folder, organize media within their ordinary Linux account permissions, and then play it through Jellyfin. The downloader alone is VPN-isolated; gaming and video work independently. Invited viewers receive no torrent or host-file privileges by default.
 
 Acceptance:
 - [ ] GUI installs or safely adopts supported qBittorrent/VueTorrent + Gluetun + bring-your-own VPN configuration on the supported host without taking over the host network.

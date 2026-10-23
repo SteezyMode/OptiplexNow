@@ -1,3 +1,11 @@
+## October 23 — VueTorrent real-device acceptance and navigation fixes (PR #184)
+
+The owner physically verified VueTorrent's login and torrent **search** using existing plugins inside NOW's MacBook GTK embedded Downloads view. This validates the existing adopted qBittorrent/VueTorrent/search environment, **not** automatic provisioning on a new server.
+
+The owner also observed two client UX regressions: (1) reopening Downloads after visiting other NOW tabs reloaded VueTorrent and repeated the authenticated queue check; (2) choosing Downloads from the system-tray menu did not bring the app/window forward. Source fix now retains the existing WebKitGTK view, login state and JS search state when host/SSH user/Downloads override are unchanged, and rechecks/rebuilds only when a different host/config is selected or the prior attempt failed. The tray dispatcher restores the GTK app before invoking the standard Downloads navigation (same page as the top navigation button). Regression tests cover both paths. **Latest package CI and physical client acceptance still required.** This reuse cache is a client UX optimization, not server-side role authorization or revocation protection.
+
+For alpha, owner-approved qBittorrent search engine plugins must be adopted or reproducibly provisioned during server setup (#187). Third-party search engines are Python programs; source inspection, pinned hashes, explicit owner authorization and preservation of existing engine configurations are mandatory. No new plugin was installed or fetched on the reference machine; no live Docker, qBittorrent, Gluetun or credential changes.
+
 ## October 23 — Download WebUI auto-discovery (PR #184, awaiting host deployment)
 
 **Physical client observation:** the owner tested the embedded VueTorrent WebUI on the MacBook and reached the qBittorrent login screen after manually entering a Downloads URL. The user subsequently recovered access to their qBittorrent account. NO credentials, passwords, auth cookies, or personal account details have been recorded in this repository.

@@ -1,3 +1,7 @@
+## October 23 — MacBook acceptance: Downloads persistence and tray routing
+
+The owner **physically confirmed** on the MacBook that the latest Downloads client retains VueTorrent when switching NOW tabs and that choosing Downloads from the system-tray menu opens the existing in-app Downloads page. The embedded VueTorrent interface, login and torrent search were also previously verified on this machine. CI build #573 passed; the tested client is a branch artifact, not a published alpha release. The owner has not yet tested automatic WebUI endpoint discovery after deploying the updated restricted host-side queue descriptor, so manually entered Downloads URL remains the verified configuration on this reference system. Full viewer denial, VPN tunnel-failure isolation, server provisioning/search-plugin installation, permitted-root file management and clean-device onboarding are NOT accepted. Do not represent this page as shipped private alpha.
+
 ## October 23 — VueTorrent real-device acceptance and navigation fixes (PR #184)
 
 The owner physically verified VueTorrent's login and torrent **search** using existing plugins inside NOW's MacBook GTK embedded Downloads view. This validates the existing adopted qBittorrent/VueTorrent/search environment, **not** automatic provisioning on a new server.

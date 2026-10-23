@@ -33,6 +33,7 @@ class EnrollmentClientTests(unittest.TestCase):
             def runner(argv, **kwargs):
                 self.assertEqual(argv[0], "ssh")
                 self.assertIn("BatchMode=yes", argv)
+                self.assertIn("IdentitiesOnly=yes", argv)
                 self.assertIn("StrictHostKeyChecking=yes", argv)
                 self.assertIn("ClearAllForwardings=yes", argv)
                 self.assertEqual(argv[-2], "100.121.156.34")
@@ -48,7 +49,7 @@ class EnrollmentClientTests(unittest.TestCase):
                 return subprocess.CompletedProcess(
                     argv, 0, json.dumps(result).encode(), b"")
             answer = mod.request("100.121.156.34", "optiplex",
-                                 key_module=FakeKeys(public), runner=runner)
+                                 key_module=FakeKeys(public), owner_key=public, runner=runner)
             self.assertEqual(answer["status"], "pending")
             self.assertEqual(answer["code"], "123456")
 
@@ -69,7 +70,7 @@ class EnrollmentClientTests(unittest.TestCase):
                             argv, 0, json.dumps(obj).encode(), b"")
                     with self.assertRaises(ValueError):
                         mod.request("100.121.156.34", "optiplex",
-                                    key_module=FakeKeys(public), runner=runner)
+                                    key_module=FakeKeys(public), owner_key=public, runner=runner)
 
     def test_packaged_ui_requires_host_approval(self):
         host_ui = (ROOT / "src/owner-approvals-ui.py").read_text()

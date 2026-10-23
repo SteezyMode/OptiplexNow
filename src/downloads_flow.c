@@ -14,9 +14,13 @@ static gchar *loaded_url;
 static gboolean running;
 static gchar *last_host;
 static gchar *last_user;
+static gchar *pending_web_url;
+static gchar *pending_web_host;
 
 typedef struct {
  GSubprocess *proc;
+ gchar *host;
+ gchar *user;
 } QueueJob;
 
 static char *helper_path(void){
@@ -40,14 +44,38 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
  char *out=NULL;
  GError *err=NULL;
  gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&err);
+ gboolean accepted=ok && g_subprocess_get_successful(job->proc) &&
+                     out && strlen(out)<32768;
  if(queue_label){
-   if(ok && g_subprocess_get_successful(job->proc) && out && strlen(out)<32768)
-     gtk_label_set_text(GTK_LABEL(queue_label),out);
+   if(accepted)gtk_label_set_text(GTK_LABEL(queue_label),out);
    else gtk_label_set_text(GTK_LABEL(queue_label),"Queue unavailable. Check server connection.");
  }
  running=FALSE;
+ if(pending_web_url && accepted &&
+    g_strcmp0(last_host,job->host)==0 &&
+    g_strcmp0(last_user,job->user)==0 &&
+    now_downloads_webview_url_allowed(pending_web_url,pending_web_host)){
+   if(!webview){
+     webview=now_downloads_webview_new(pending_web_url,pending_web_host);
+     if(webview){
+       loaded_url=g_strdup(pending_web_url);
+       gtk_box_pack_start(GTK_BOX(view_holder),webview,TRUE,TRUE,0);
+       gtk_widget_show_all(view_holder);
+     }
+   }
+   gtk_widget_set_sensitive(web_button,webview!=NULL);
+   if(webview){
+     gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web");
+     gtk_label_set_text(GTK_LABEL(status_label),
+       "WebUI management uses qBittorrent's separate login and permissions.");
+   }else gtk_label_set_text(GTK_LABEL(status_label),
+       "WebKitGTK 4.1 is unavailable; the approved read-only queue remains accessible.");
+ }
+ g_clear_pointer(&pending_web_url,g_free);
+ g_clear_pointer(&pending_web_host,g_free);
  g_clear_error(&err);g_free(out);
- g_object_unref(job->proc);g_free(job);
+ g_object_unref(job->proc);
+ g_free(job->host);g_free(job->user);g_free(job);
 }
 void now_downloads_refresh(const char *host,const char *user){
  if(!queue_label || running)return;
@@ -71,6 +99,8 @@ void now_downloads_refresh(const char *host,const char *user){
  }
  QueueJob *job=g_new0(QueueJob,1);
  job->proc=proc;
+ job->host=g_strdup(host);
+ job->user=g_strdup(user);
  running=TRUE;
  gtk_label_set_text(GTK_LABEL(queue_label),"Reading authorized download queue...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,complete,job);
@@ -78,6 +108,8 @@ void now_downloads_refresh(const char *host,const char *user){
 static void show_queue(GtkWidget *button,gpointer unused){
  (void)button;(void)unused;
  if(!queue_stack)return;
+ g_clear_pointer(&pending_web_url,g_free);
+ g_clear_pointer(&pending_web_host,g_free);
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
  if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
    "Read-only queue from the approved NOW device connection.");
@@ -94,25 +126,23 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  g_free(last_host);last_host=g_strdup(host);
  g_free(last_user);last_user=g_strdup(user);
  if(!queue_stack)return;
- if(webview && (!webui_url || g_strcmp0(loaded_url,webui_url)!=0 ||
-               !now_downloads_webview_url_allowed(webui_url,host))){
+ /* Recheck the paired owner credential on every entry. Never let an
+  * unapproved device load a full-management WebUI just by editing cfg[7]. */
+ if(webview){
    gtk_container_remove(GTK_CONTAINER(view_holder),webview);
-   webview=NULL;g_clear_pointer(&loaded_url,g_free);
+   webview=NULL;
+   g_clear_pointer(&loaded_url,g_free);
  }
- if(!webview && webui_url && now_downloads_webview_url_allowed(webui_url,host)){
-   webview=now_downloads_webview_new(webui_url,host);
-   if(webview){
-     loaded_url=g_strdup(webui_url);
-     gtk_box_pack_start(GTK_BOX(view_holder),webview,TRUE,TRUE,0);
-     gtk_widget_show_all(view_holder);
-   }
- }
- gtk_widget_set_sensitive(web_button,webview!=NULL);
- if(webview)show_web(NULL,NULL);
- else{
-   show_queue(NULL,NULL);
-   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
-     "Embedded WebUI unavailable. Configure a private Downloads URL on this server and install WebKitGTK 4.1; the queue remains available.");
+ gtk_widget_set_sensitive(web_button,FALSE);
+ show_queue(NULL,NULL);
+ if(webui_url && now_downloads_webview_url_allowed(webui_url,host)){
+   pending_web_url=g_strdup(webui_url);
+   pending_web_host=g_strdup(host);
+   gtk_label_set_text(GTK_LABEL(status_label),
+     "Checking approved owner access before opening qBittorrent...");
+ }else{
+   gtk_label_set_text(GTK_LABEL(status_label),
+     "Set a private, same-server Downloads WebUI URL in Settings to enable management. Read-only queue is available.");
  }
 }
 GtkWidget *now_downloads_page(void){

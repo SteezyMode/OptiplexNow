@@ -57,6 +57,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("separate restricted device key", SHELL)
         self.assertIn("Automatic owner enrollment is not available in this build.", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
+        self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
 
     def test_does_not_repeat_owner_approval_or_leak_password(self):

@@ -27,7 +27,9 @@ def record(cid, image, name=None, mode="bridge", status="running",
 
 def fake_docker(records, *, fail=False):
     def invoke(cmd, **kwargs):
-        assert cmd[:3] == ["docker", "--host", "unix:///var/run/docker.sock"]
+        assert cmd[:3] == ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
+        assert kwargs["env"]["DOCKER_CONFIG"] == "/nonexistent/now-host-docker-config"
+        assert kwargs["env"]["HOME"] == "/nonexistent/now-host-check"
         assert kwargs["stdin"] is subprocess.DEVNULL
         assert kwargs["timeout"] == 8
         if fail:

@@ -1839,10 +1839,103 @@ static void on_bruiser_admin(void*w,void*p){
  browser_open(url);
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
+/* Videos discovery is authenticated by the existing per-device SSH credential.
+ * The helper returns a fixed token, never an untrusted URL. Construct the
+ * known Jellyfin port from the trusted NOW host only after verification. */
+typedef struct {
+ GSubprocess *process;
+ char *host;
+} MediaDiscovery;
+
+static gboolean media_discovery_running=FALSE;
+
+static char *media_helper_path(void){
+ char *exe=g_file_read_link("/proc/self/exe",NULL);
+ if(!exe)return g_strdup("/usr/lib/optiplex-now/media-discover.py");
+ char *bin=g_path_get_dirname(exe);
+ char *usr=g_path_get_dirname(bin);
+ char *name=g_path_get_basename(usr);
+ char *path;
+ if(!strcmp(name,"usr") && strcmp(usr,"/usr")){
+  char *root=g_path_get_dirname(usr);
+  path=g_build_filename(root,"usr","lib","optiplex-now","media-discover.py",NULL);
+  g_free(root);
+ }else path=g_strdup("/usr/lib/optiplex-now/media-discover.py");
+ g_free(name);g_free(usr);g_free(bin);g_free(exe);
+ return path;
+}
+
+static void media_discovery_complete(GObject *unused,GAsyncResult *res,gpointer userdata){
+ (void)unused;
+ MediaDiscovery *job=userdata;
+ gchar *reply=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(
+   job->process,res,&reply,NULL,&error);
+ media_discovery_running=FALSE;
+ if(ok && g_subprocess_get_successful(job->process) &&
+    g_strcmp0(reply,"available\n")==0 &&
+    g_strcmp0(job->host,cfg[0])==0 &&
+    now_valid_host(job->host)){
+  char *url;
+  if(strchr(job->host,':'))
+   url=g_strdup_printf("http://[%s]:8096/",job->host);
+  else url=g_strdup_printf("http://%s:8096/",job->host);
+  say("OPENING AUTHORIZED JELLYFIN");
+  browser_open(url);
+  g_free(url);
+ }else if(*cfg[5] && now_safe_preset_url(cfg[5])){
+  /* Explicit legacy override remains functional when automatic discovery
+   * is unavailable. Never open an address from the SSH response. */
+  say("DISCOVERY UNAVAILABLE. USING SAVED VIDEOS URL");
+  browser_open(cfg[5]);
+ }else{
+  say("JELLYFIN NOT VERIFIED. CHECK SERVER CONNECTION OR MEDIA SETUP");
+ }
+ g_clear_error(&error);
+ g_free(reply);
+ g_object_unref(job->process);
+ g_free(job->host);
+ g_free(job);
+}
+static void open_discovered_videos(void){
+ if(media_discovery_running){say("CHECKING JELLYFIN CONNECTION");return;}
+ if(!now_valid_host(cfg[0]) || !now_valid_user(cfg[1])){
+  if(*cfg[5] && now_safe_preset_url(cfg[5]))browser_open(cfg[5]);
+  else say("CONNECT AN AUTHORIZED HOST IN SETTINGS");
+  return;
+ }
+ char *helper=media_helper_path();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  if(*cfg[5] && now_safe_preset_url(cfg[5]))browser_open(cfg[5]);
+  else say("JELLYFIN DISCOVERY HELPER MISSING");
+  g_free(helper);return;
+ }
+ const gchar *argv[]={"/usr/bin/python3",helper,cfg[0],cfg[1],NULL};
+ GError *error=NULL;
+ GSubprocess *process=g_subprocess_newv(argv,
+    G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+    &error);
+ g_free(helper);
+ if(!process){
+  g_clear_error(&error);
+  say("UNABLE TO CHECK JELLYFIN");
+  return;
+ }
+ MediaDiscovery *job=g_new0(MediaDiscovery,1);
+ job->process=process;
+ job->host=g_strdup(cfg[0]);
+ media_discovery_running=TRUE;
+ say("DISCOVERING JELLYFIN THROUGH AUTHORIZED HOST...");
+ g_subprocess_communicate_utf8_async(process,NULL,NULL,
+                                     media_discovery_complete,job);
+}
+
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
- }else if(n==1||n==2){int ix=n==1?5:6;if(!*cfg[ix]){say("ADD URL IN SETTINGS");return;}browser_open(cfg[ix]);}
+ }else if(n==1)open_discovered_videos();
+ else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
  else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);

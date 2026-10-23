@@ -48,7 +48,7 @@ int main(void){
  /* An earlier beta could save Downloads as the startup page. Defer it
   * rather than leave the first view uninitialized; keep saved geometry. */
  g_assert_true(g_file_set_contents(path,
-   "[window]\\nwidth=880\\nheight=540\\nstart_page=downloads\\n",-1,&error));
+   "[window]\nwidth=880\nheight=540\nstart_page=downloads\n",-1,&error));
  g_assert_no_error(error);
  now_ui_state_load();
  now_ui_state_window_size(&w,&h);

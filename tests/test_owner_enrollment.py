@@ -89,8 +89,24 @@ class OwnerEnrollmentTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(self.auth.stat().st_mode), 0o600)
         self.assertEqual(pending_requests(self.state, now=self.now), [])
         backups = list((self.state / "enrollment-backups").iterdir())
-        self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_text(), self.original)
+        self.assertEqual(len(backups), 2)
+        key_backup = next(p for p in backups if p.name.startswith("authorized_keys-"))
+        policy_backup = next(p for p in backups if p.name.startswith("owner-access-"))
+        self.assertEqual(key_backup.read_text(), self.original)
+        self.assertEqual(stat.S_IMODE(policy_backup.stat().st_mode), 0o600)
+        self.assertEqual(len(json.loads(policy_backup.read_text())["devices"]), 1)
+
+    def test_atomic_rollback_if_policy_write_fails(self):
+        from unittest.mock import patch
+        request = self.stage()
+        # The forced key is installed first, but must be removed atomically
+        # if owner policy cannot be committed. The original access survives.
+        with patch.object(OwnerStore, "write", side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                self.approve(request)
+        self.assertEqual(self.auth.read_text(), self.original)
+        self.assertEqual([d["client_id"] for d in self.load()["devices"]], ["1001"])
+        self.assertEqual(len(pending_requests(self.state, now=self.now)), 1)
 
     def test_no_approval_without_verified_binding(self):
         request = self.stage()

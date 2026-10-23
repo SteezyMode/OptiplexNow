@@ -1,4 +1,7 @@
 """Restricted Games SSH client tests; do not connect to live hosts."""
+import contextlib
+import io
+from unittest.mock import patch
 import importlib.util
 from pathlib import Path
 import os
@@ -77,6 +80,41 @@ class RestrictedGamesClientTests(unittest.TestCase):
         self.assertIn("BatchMode=yes",argv)
         self.assertEqual(kw["input"],b'{"version":1,"action":"status"}\n')
         self.assertEqual(kw["timeout"],25)
+
+    def test_ui_mode_emits_one_safe_token_and_denies_failure(self):
+        with patch.object(game, "invoke",
+                          return_value={"success": True, "status": "joined"}):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(game.main(
+                    ["--ui", "start", "127.0.0.1", "owner"]), 0)
+            self.assertEqual(out.getvalue(), "joined" + chr(10))
+        with patch.object(game, "invoke",
+                          side_effect=RuntimeError("PRIVATE HOST DETAIL")):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(game.main(
+                    ["--ui", "status", "127.0.0.1", "owner"]), 1)
+            self.assertEqual(out.getvalue(), "unavailable" + chr(10))
+            self.assertNotIn("PRIVATE", out.getvalue())
+
+    def test_reconcile_uses_same_restricted_key_and_exact_action(self):
+        self.path.mkdir(mode=0o700)
+        private = self.path / "id_ed25519"
+        private.write_bytes(b"private")
+        private.chmod(0o600)
+        seen = []
+        def run(argv, **kwargs):
+            seen.append((list(argv), kwargs["input"]))
+            return SimpleNamespace(
+                returncode=0,
+                stdout=b'{"success":true,"status":"idle","lease_archived":true}')
+        output = game.invoke("host", "owner", "reconcile",
+                             key_dir=self.path, runner=run)
+        self.assertEqual(output["status"], "idle")
+        self.assertEqual(seen[0][1],
+                         b'{"version":1,"action":"reconcile"}' + bytes([10]))
+        self.assertNotIn("docker", " ".join(seen[0][0]))
 
     def test_rejects_invalid_destination_and_response(self):
         for host in ("--ProxyCommand=x","a..b","bad host"):

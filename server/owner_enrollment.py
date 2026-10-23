@@ -22,7 +22,6 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 from owner_access import OwnerStore, PolicyError, approve_device, paired_client_ids
 from owner_games_enroll import authorized_line, validated_ed25519_public
-from owner_games_ssh import _read_private_config
 from wolf_docker_adapter import WolfDockerAPI
 
 MAX_REQUEST = 2048
@@ -31,6 +30,47 @@ MAX_PENDING = 16
 TTL = 600
 REQUEST_ID = re.compile(r"[0-9a-f]{32}\Z")
 CODE = re.compile(r"[0-9]{6}\Z")
+
+
+def _read_private_config():
+    """Read only the owner-managed host policy location; do not import broker runtime."""
+    path = Path.home() / ".config/optiplex-now/owner-games-host.json"
+    if path.is_symlink() or not path.is_file():
+        raise PolicyError("Owner host is not configured")
+    meta = path.stat()
+    if (meta.st_uid != os.geteuid() or stat.S_IMODE(meta.st_mode) != 0o600
+            or meta.st_size > 2048 or meta.st_nlink != 1):
+        raise PolicyError("Owner host configuration is unsafe")
+    data = json.loads(path.read_text("utf-8"))
+    if (not isinstance(data, dict) or
+            set(data) != {"version", "state_dir", "video_caps", "enabled",
+                          "legacy_links_reviewed"} or
+            data["version"] != 1 or
+            not isinstance(data["state_dir"], str) or
+            not Path(data["state_dir"]).is_absolute()):
+        raise PolicyError("Invalid owner host configuration")
+    return data
+
+
+def existing_broker_path(auth_text):
+    """Reuse only one reviewed, already-installed restricted host broker."""
+    found = set()
+    for line in auth_text.splitlines():
+        matched = re.fullmatch(
+            r'restrict,command="/usr/bin/python3 (/[A-Za-z0-9_./-]+/owner_games_ssh[.]py) --client-id [0-9]{1,20}" ssh-ed25519 [A-Za-z0-9+/=]+',
+            line.strip())
+        if matched:
+            found.add(matched.group(1))
+    if len(found) != 1:
+        raise PolicyError("One existing owner-restricted broker required")
+    path = Path(found.pop())
+    if path.is_symlink() or not path.is_file():
+        raise PolicyError("Owner broker is unavailable")
+    info = path.stat()
+    if (info.st_uid not in (0, os.geteuid())
+            or info.st_mode & 0o022 or info.st_nlink != 1):
+        raise PolicyError("Owner broker is not trusted")
+    return path
 
 
 def _stage_dir(state_dir):
@@ -136,9 +176,6 @@ def approve_request(state_dir, request_id, code, client_id, *,
         raise PolicyError("Invalid code")
     current = int(time.time() if now is None else now)
     auth = Path(auth_path or Path.home() / ".ssh/authorized_keys")
-    broker = Path(broker_path or ROOT / "server/owner_games_ssh.py").resolve()
-    if not broker.is_file():
-        raise PolicyError("Restricted broker not installed")
     api = wolf_api or WolfDockerAPI()
 
     with OwnerStore(str(state_dir)).locked() as fd:
@@ -161,8 +198,6 @@ def approve_request(state_dir, request_id, code, client_id, *,
             raise PolicyError("Revoked device needs separate owner review")
         if not grants:
             approve_device(policy, client_id, clients)
-        line = authorized_line(entry["public_key"], client_id, broker)
-
         if auth.is_symlink() or not auth.is_file() or auth.parent.is_symlink():
             raise PolicyError("Unsafe authorized_keys location")
         meta = auth.stat()
@@ -171,6 +206,10 @@ def approve_request(state_dir, request_id, code, client_id, *,
                 or stat.S_IMODE(meta.st_mode) & 0o022):
             raise PolicyError("Unsafe authorized_keys permissions")
         old = auth.read_bytes()
+        broker = Path(broker_path) if broker_path else existing_broker_path(old.decode("ascii"))
+        if not broker.is_file() or broker.is_symlink():
+            raise PolicyError("Restricted broker not installed")
+        line = authorized_line(entry["public_key"], client_id, broker)
         key = entry["public_key"].split(" ", 1)[1].encode("ascii")
         if key in old:
             raise PolicyError("Key already installed; inspect its privileges")

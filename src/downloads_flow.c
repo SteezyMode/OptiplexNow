@@ -144,19 +144,6 @@ void now_downloads_refresh(const char *host,const char *user){
  gtk_label_set_text(GTK_LABEL(queue_label),"Reading authorized download queue...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,complete,job);
 }
-static void show_queue(GtkWidget *button,gpointer unused){
- (void)button;(void)unused;
- if(!queue_stack)return;
- g_clear_pointer(&pending_web_url,g_free);
- g_clear_pointer(&pending_web_host,g_free);
- gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
- if(status_label){
-   gtk_widget_show(status_label);
-   gtk_label_set_text(GTK_LABEL(status_label),
-     "Read-only queue from the approved NOW device connection.");
- }
- if(last_host && last_user)now_downloads_refresh(last_host,last_user);
-}
 static void show_web(GtkWidget *button,gpointer unused){
  (void)button;(void)unused;
  if(!queue_stack || !webview)return;
@@ -191,6 +178,7 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  /* If the initial authorization is still in flight, leave it alone;
   * selecting this tab again must not restart or duplicate the request. */
  if(same && running)return;
+ gtk_widget_show(status_label);
  g_clear_pointer(&pending_web_url,g_free);
  g_clear_pointer(&pending_web_host,g_free);
  if(now_valid_host(host) && now_valid_user(user)){

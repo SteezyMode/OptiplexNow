@@ -14,7 +14,7 @@ def valid_host(s):
 def valid_user(s):
     return bool(re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]{0,31}", s))
 
-def fetch(host, user, runner=subprocess.run):
+def fetch(host, user, runner=subprocess.run, include_port=False):
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device key unavailable")
     cmd = ["ssh", "-F", "/dev/null", "-T", "-i", str(KEY),
@@ -45,13 +45,20 @@ def fetch(host, user, runner=subprocess.run):
         clean_name = "".join(ch if ch.isprintable() else " " for ch in name)[:160]
         clean_state = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in state)[:48]
         lines.append(f"{progress:5.1f}%   {clean_state:<16}   {clean_name}")
-    return "\n".join(lines) if lines else "No downloads in queue."
+    display = "\n".join(lines) if lines else "No downloads in queue."
+    if not include_port:
+        return display
+    # Bounded host-derived metadata only; never return credentials or Docker paths.
+    port = obj.get("webui_port", 0)
+    if type(port) is not int or not (port == 0 or 1024 <= port <= 65535):
+        raise ValueError("Unusable download endpoint")
+    return f"WEBUI_PORT={port}\n{display}"
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) != 3:
+        if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "--with-port"):
             raise ValueError("Expected server and SSH user")
-        print(fetch(sys.argv[1], sys.argv[2]))
+        print(fetch(sys.argv[1], sys.argv[2], include_port=len(sys.argv) == 4))
     except (ValueError, OSError, subprocess.SubprocessError, json.JSONDecodeError):
         print("Queue unavailable. Check approved host and downloader.")
         sys.exit(1)

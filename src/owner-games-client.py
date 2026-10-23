@@ -18,7 +18,7 @@ import sys
 
 HOST_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}\Z")
 USER_RE = re.compile(r"[a-z_][a-z0-9_-]{0,31}\Z", re.I)
-ACTIONS = frozenset(("status", "start", "stop"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe"))
 KEY_DIR = Path.home() / ".local/share/optiplex-now/games-client"
 MAX_RESPONSE = 2048
 
@@ -101,7 +101,8 @@ def invoke(host, user, action, *, key_dir=KEY_DIR, runner=subprocess.run):
             reply.get("success") is not True or
             reply.get("status") not in ("needs_wolf_ui",
                                         "wolf_ui_connected", "busy",
-                                        "in_use", "joined", "idle")):
+                                        "in_use", "joined", "idle",
+                                        "running", "finished")):
         raise RuntimeError("Games request denied by host")
     # No key, Steam account data or raw Wolf API object is forwarded.
     return reply
@@ -109,6 +110,8 @@ def invoke(host, user, action, *, key_dir=KEY_DIR, runner=subprocess.run):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--ui", action="store_true",
+                        help="Emit only a finite validated status token for GTK")
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("keygen", help="Create a restricted per-device Games key")
     for action in ACTIONS:
@@ -118,15 +121,23 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.action == "keygen":
+            if args.ui:
+                raise ValueError("UI output is not supported for key generation")
             _, public = ensure_key()
             print(public.read_text(encoding="ascii").strip())
         else:
-            print(json.dumps(invoke(args.host, args.user, args.action),
-                             sort_keys=True))
+            result = invoke(args.host, args.user, args.action)
+            # The GTK bridge accepts only one of these six exact tokens.
+            # Never write arbitrary SSH/Wolf output, PINs or error strings.
+            if args.ui:
+                print(result["status"])
+            else:
+                print(json.dumps(result, sort_keys=True))
         return 0
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             subprocess.CalledProcessError):
-        print('{"success":false,"status":"unavailable"}')
+        print("unavailable" if args.ui else
+              '{"success":false,"status":"unavailable"}')
         return 1
 
 

@@ -32,6 +32,14 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("static void launch_torrents(void){open_downloads_page();}", SHELL)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', SHELL)
 
+    def test_embedded_webview_uses_full_downloads_page(self):
+        self.assertNotIn('gtk_button_new_with_label("VUE TORRENT")', FLOW)
+        self.assertNotIn('gtk_button_new_with_label("QUEUE SNAPSHOT")', FLOW)
+        self.assertIn('gtk_widget_hide(status_label);', FLOW)
+        self.assertIn('gtk_widget_set_no_show_all(status_label,TRUE);', FLOW)
+        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")', FLOW)
+        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web")', FLOW)
+
     def test_does_not_repeat_owner_approval_or_leak_password(self):
         self.assertIn("if(same && webview && loaded_url", FLOW)
         self.assertNotIn("password=", FLOW.lower())

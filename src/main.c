@@ -3348,10 +3348,13 @@ int main(int argc,char**argv) {
  for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
  footer=label("","footer");add(body,footer,0);
  reflow(initial_width);
- if(!first_run){
-  const char *start=now_ui_state_start_page();
-  if(strcmp(start,"dashboard")!=0)now_nav_show_page(main_pages,start);
- }
+ /* Downloads is shown during stack construction for its fallback page.
+  * GTK may select that first visible child while Dashboard is still hidden.
+  * Show all supported startup children, then explicitly choose the requested
+  * startup page, including Dashboard. Do this before showing the window. */
+ gtk_widget_show_all(dash_scroll);
+ gtk_widget_show_all(software_scroll);
+ now_nav_show_page(main_pages,first_run?"dashboard":now_ui_state_start_page());
  /* Initialize the tray before showing the window to avoid login flicker. */
  tray_initialize();
  if(!start_in_tray || first_run)gtk_widget_show_all(win);

@@ -39,6 +39,26 @@ typedef struct {
     unsigned step;
 } HostSetupUI;
 
+/* Explicit owner action on this HOST only. Never performs enrollment
+ * automatically when a client launches or when CHECK THIS PC runs. */
+static void open_owner_approvals(GtkButton *button, gpointer data)
+{
+    (void)button;
+    (void)data;
+    gchar *argv[] = {"/usr/bin/python3",
+                     "/usr/lib/optiplex-now/owner-approvals-ui.py", NULL};
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT,
+                       NULL, NULL, NULL, &error)) {
+        GtkWidget *alert = gtk_message_dialog_new(
+            NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+            "Owner approvals are not installed on this host.");
+        gtk_dialog_run(GTK_DIALOG(alert));
+        gtk_widget_destroy(alert);
+    }
+    g_clear_error(&error);
+}
+
 static void host_ui_free(gpointer data)
 {
     HostSetupUI *ui = data;
@@ -567,6 +587,11 @@ int main(int argc, char **argv)
     gtk_container_add(GTK_CONTAINER(actions), ui->run_button);
     g_signal_connect(ui->run_button, "clicked",
                      G_CALLBACK(on_check_clicked), ui);
+    GtkWidget *approve_owner = gtk_button_new_with_label(
+        "OWNER DEVICE APPROVALS (HOST ONLY)");
+    gtk_container_add(GTK_CONTAINER(actions), approve_owner);
+    g_signal_connect(approve_owner, "clicked",
+                     G_CALLBACK(open_owner_approvals), NULL);
     ui->verify_services_button = gtk_button_new_with_label(
         "VERIFY EXISTING SERVICES (OS APPROVAL)");
     gtk_container_add(GTK_CONTAINER(actions), ui->verify_services_button);

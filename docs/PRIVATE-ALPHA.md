@@ -52,6 +52,7 @@ Acceptance:
 - [ ] Only designated download service traffic uses the VPN; actual public exit IP is independently verified.
 - [ ] On a deliberately interrupted VPN tunnel, downloader transfers stop safely and do not leak through host routing. During failure, approved games, Jellyfin, remote access and host networking remain reachable.
 - [ ] Owner/admin can add permitted torrent/magnet inputs, use explicitly enabled/reviewed search providers, view/pause/resume/remove queue items, and select a per-item destination from approved server paths.
+- [ ] Server setup detects and preserves existing qBittorrent search plugins or provisions Python plus owner-approved, content-pinned search plugins automatically on a fresh host; verifies plugin operation, supports recovery and cannot install unreviewed Python engines silently. Track #187.
 - [ ] Owner/admin can inspect, move and organize files **only within server-enforced permitted roots**. Avoid unrestricted SFTP or arbitrary client-supplied filesystem paths in the ordinary interface.
 - [ ] Viewer/member can stream permitted media but cannot administer downloads, files, VPN, or host services via UI, direct URL or forged request. No downloader admin interface is exposed publicly.
 - [ ] Downloads survive reboots and transient failures without data loss; show accurate status (VPN container health alone is not proof of egress or safety).

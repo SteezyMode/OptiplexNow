@@ -2736,8 +2736,8 @@ int main(int argc,char**argv) {
  /* Give the dashboard enough height for server controls on normal displays.
    Bound it to the monitor's usable area so older laptops and projectors can
    still access everything through the existing scrolled container. */
-  int initial_width = 900;
-  int initial_height = 620;
+  int initial_width = 760;
+  int initial_height = 600;
   GdkDisplay *display = gdk_display_get_default();
   if (display) {
     GdkMonitor *monitor = gdk_display_get_primary_monitor(display);
@@ -2747,14 +2747,13 @@ int main(int argc,char**argv) {
     if (monitor) {
       GdkRectangle workarea;
       gdk_monitor_get_workarea(monitor, &workarea);
-      /* Preserve the roomy ultrawide desktop layout tested by CI.
-       * Prefer a smaller normal window on 1366x768 notebook screens. */
+      /* Keep both ultrawide and notebook windows compact. Content scrolls. */
       if (workarea.width >= 1920 && workarea.height >= 900) {
-        initial_width = MIN(1100, MAX(400, workarea.width - 96));
-        initial_height = MIN(720, MAX(340, workarea.height - 120));
+        initial_width = MIN(820, MAX(400, workarea.width - 96));
+        initial_height = MIN(680, MAX(340, workarea.height - 120));
       } else {
-        initial_width = MIN(900, MAX(400, workarea.width - 96));
-        initial_height = MIN(620, MAX(340, workarea.height - 120));
+        initial_width = MIN(760, MAX(400, workarea.width - 96));
+        initial_height = MIN(600, MAX(340, workarea.height - 120));
       }
     }
   }
@@ -2767,17 +2766,40 @@ int main(int argc,char**argv) {
  g_signal_connect_data(win,"delete-event",(GCallback)close_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"window-state-event",(GCallback)minimize_to_tray,NULL,NULL,0);
  g_signal_connect_data(win,"size-allocate",(GCallback)on_size,NULL,NULL,0);
- GtkWidget*sc=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sc),GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
- /* The stack's wider pages must scroll, not set an enormous window minimum. */
- gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sc),320);
- gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sc),280);
- gtk_container_add(GTK_CONTAINER(win),sc);
- GtkWidget*main_pages=gtk_stack_new();
+ /* Keep navigation visible while only the active page body changes. */
+ GtkWidget*window_root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ gtk_container_add(GTK_CONTAINER(win),window_root);
+ GtkWidget*nav=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ gtk_widget_set_name(nav,"mainnav");add(window_root,nav,0);
+ main_pages=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
- gtk_container_add(GTK_CONTAINER(sc),main_pages);
+ gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
+ GtkWidget*back=button("‹ DASHBOARD","navback");
+ g_object_set_data(G_OBJECT(back),"settings-stack",main_pages);
+ g_object_set_data(G_OBJECT(back),"settings-page","dashboard");
+ g_signal_connect(back,"clicked",G_CALLBACK(settings_open_page),NULL);
+ add(nav,back,0);
+ GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
+ gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);
+ GtkWidget*software_tab=button("SOFTWARE","navtab");
+ g_object_set_data(G_OBJECT(software_tab),"settings-stack",main_pages);
+ g_object_set_data(G_OBJECT(software_tab),"settings-page","software");
+ g_signal_connect(software_tab,"clicked",G_CALLBACK(settings_open_page),NULL);
+ add(nav,software_tab,0);
+ GtkWidget*settings_tab=button("SETTINGS","navtab");
+ g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
+ add(nav,settings_tab,0);
+ GtkWidget*info_tab=button("INFO","navtab");
+ g_signal_connect(info_tab,"clicked",G_CALLBACK(on_system_info),NULL);
+ add(nav,info_tab,0);
+ GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),
+  GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(dash_scroll),320);
+ gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(dash_scroll),280);
  GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");
- gtk_stack_add_named(GTK_STACK(main_pages),shell,"dashboard");
+ gtk_container_add(GTK_CONTAINER(dash_scroll),shell);
+ gtk_stack_add_named(GTK_STACK(main_pages),dash_scroll,"dashboard");
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
@@ -2788,8 +2810,7 @@ int main(int argc,char**argv) {
  GtkWidget*right=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);gtk_widget_set_valign(right,GTK_ALIGN_CENTER);add(head,right,0);
  GtkWidget*tools=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(right,tools,0);
  indicator=label("● CHECKING","state");add(tools,indicator,0);
- GtkWidget*sys=button("SYSTEM INFO","setting");g_signal_connect_data(sys,"clicked",(GCallback)on_system_info,NULL,NULL,0);add(tools,sys,0);
- GtkWidget*sett=button("SETTINGS","setting");g_signal_connect_data(sett,"clicked",(GCallback)on_settings,NULL,NULL,0);add(tools,sett,0);
+ /* Page links live in the fixed navigation bar, not duplicated here. */
  status_detail=label("","detail");add(right,status_detail,0);
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
  GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
@@ -2810,12 +2831,11 @@ int main(int argc,char**argv) {
   metric_wolf_sessions=label("WOLF DESKTOPS  --","statusmetric");add(body,metric_wolf_sessions,0);
  /* The dashboard prioritizes host state. Launchers live on Software page. */
  GtkWidget*software=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
+ gtk_container_set_border_width(GTK_CONTAINER(software),14);
  GtkWidget*software_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(software_scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_container_add(GTK_CONTAINER(software_scroll),software);
  gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");
- settings_link(tools,main_pages,"SOFTWARE","software");
- settings_link(software,main_pages,"‹ DASHBOARD","dashboard");
  add(software,label("SOFTWARE","section"),0);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(grid),1);gtk_grid_set_row_spacing(GTK_GRID(grid),7);gtk_grid_set_column_spacing(GTK_GRID(grid),7);
  gtk_widget_set_hexpand(grid,1);add(software,grid,0);

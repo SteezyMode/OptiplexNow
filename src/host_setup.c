@@ -13,6 +13,7 @@
 #define PREFLIGHT "/usr/lib/optiplex-now/host_preflight.py"
 #define PLAN "/usr/lib/optiplex-now/host_plan.py"
 #define SERVICES "/usr/lib/optiplex-now/host_services.py"
+#define ADOPTION "/usr/lib/optiplex-now/host_adoption.py"
 #define INSTALLER "/usr/lib/optiplex-now/host_install.py"
 #define MAX_RESULT 24576
 
@@ -86,7 +87,7 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         } else {
             append_result(ui, output);
             append_result(ui, "\n\n");
-            if (ui->step < 2) {
+            if (ui->step < 3) {
                 ui->step++;
                 run_read_only_step(ui);
             } else {
@@ -104,7 +105,8 @@ static void run_read_only_step(HostSetupUI *ui)
     if (ui->closing)
         return;
     const gchar *script = ui->step == 0 ? PREFLIGHT :
-                          ui->step == 1 ? PLAN : SERVICES;
+                          ui->step == 1 ? PLAN :
+                          ui->step == 2 ? SERVICES : ADOPTION;
     const gchar *args[] = {"/usr/bin/python3", script, NULL};
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
@@ -122,9 +124,12 @@ static void run_read_only_step(HostSetupUI *ui)
     } else if (ui->step == 1) {
         append_result(ui, "INSTALLATION PLAN\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "REVIEWING REQUIREMENTS...");
-    } else {
+    } else if (ui->step == 2) {
         append_result(ui, "EXISTING SERVICES | ADOPTION CANDIDATES\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING EXISTING SERVICES...");
+    } else {
+        append_result(ui, "ADOPT EXISTING / SET UP NEW | SAFETY PLAN\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "PLANNING SAFE SERVICE ADOPTION...");
     }
     g_subprocess_communicate_utf8_async(
         process, NULL, ui->cancel, read_only_done,

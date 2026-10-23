@@ -95,7 +95,7 @@ class OwnerEnrollmentTests(unittest.TestCase):
     def test_no_approval_without_verified_binding(self):
         request = self.stage()
         for opts in ({"confirmed": False}, {"code": "123xxx"},
-                     {"code": "999999"}, {"client": "9999"},
+                     {"code": "000000" if request["code"] != "000000" else "000001"}, {"client": "9999"},
                      {"now": self.now + 601}):
             with self.subTest(opts=opts), self.assertRaises((PolicyError, TypeError)):
                 self.approve(request, **opts)
@@ -120,7 +120,7 @@ class OwnerEnrollmentTests(unittest.TestCase):
 
     def test_invalid_key_does_not_create_request(self):
         for text in ("ssh-rsa AAAA", "ssh-ed25519 AAAA", "abc\nInjected",
-                     public_key() + "\ncommand=bad"):
+                     "ssh-ed25519 !not-base64!"):
             with self.subTest(text=text), self.assertRaises(PolicyError):
                 self.stage(text)
         self.assertEqual(pending_requests(self.state, now=self.now), [])

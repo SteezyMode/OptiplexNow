@@ -1027,7 +1027,7 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
    managed_games_abort_owned_stream();
   managed_games_finish(managed_games.stopping?
     "STEAM STOP UNCONFIRMED. CHECK HOST STATUS BEFORE RETRY":
-    "GAMES HOST REFUSED. MANAGED STREAM CLOSED; NO STEAM FALLBACK");
+    "GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS; NO STEAM FALLBACK");
   return;
  }
  if(managed_games.stopping){

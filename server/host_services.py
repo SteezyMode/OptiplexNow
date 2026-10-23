@@ -54,12 +54,16 @@ def classify_image(value: object) -> str | None:
 
 
 def docker_records(*, runner=subprocess.run) -> list[dict]:
-    base = ["docker", "--host", "unix:///var/run/docker.sock"]
+    base = ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
     def call(args: list[str], *, as_bytes: bool = False):
         try:
             result = runner(
                 base + args, stdin=subprocess.DEVNULL, capture_output=True,
-                timeout=8, check=False, **({} if as_bytes else {"text": True}))
+                timeout=8, check=False,
+                env={"PATH": "/usr/bin:/bin",
+                     "HOME": "/nonexistent/now-host-check",
+                     "DOCKER_CONFIG": "/nonexistent/now-host-docker-config"},
+                **({} if as_bytes else {"text": True}))
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise InventoryUnavailable("Local Docker inventory unavailable") from exc
         if result.returncode != 0 or len(result.stdout) > MAX_OUTPUT:

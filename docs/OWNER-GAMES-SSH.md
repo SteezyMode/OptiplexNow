@@ -5,8 +5,8 @@
 The physically verified owner Steam flow already supports Wolf Create, Join,
 Stop and relaunch. The GUI Games button still selects the legacy direct Steam
 app. This bridge introduces an **independent, per-device SSH credential**
-whose single forced host command can request only `status`, `start`, or
-`stop` from the existing host-side policy and lifecycle code.
+whose single forced host command can request only `status`, `start`,
+`stop`, or checked `reconcile` from the host-side policy and lifecycle code.
 
 **Not deployed or release accepted.** It does not install authorized keys,
 authenticate the Moonlight certificate cryptographically, provision Wolf,
@@ -108,8 +108,10 @@ are enforced there.
 ## Implementation limits and return values
 
 `status` may return `needs_wolf_ui`, `wolf_ui_connected`, `busy`,
-or `in_use`. `start` delegates to the durable Create+Join transaction.
-`stop` delegates to the PIN-gated operation with exact client/lease binding.
+or `in_use`. `start` delegates to durable Create+Join;
+`stop` delegates to PIN-gated StopLobby. `reconcile` is an authenticated,
+non-Wolf-mutating finished-session check for the **same device's** joined
+lease, and can return `idle` only after archiving it under the owner lock.
 The host rereads current Wolf paired clients and the owner grant. It also
 checks host Steam processes and Docker container names before each Start.
 These checks cannot atomically prevent a direct Wolf app race. A live or
@@ -201,6 +203,44 @@ These stages are intentionally explicit: removing direct Steam before
 client integration would break today's working NOW Games button. Enabling
 managed Start while direct Steam still bypasses isolation risks multiple
 writers to the same Steam workspace.
+
+## P0 natural Steam exit and later one-click relaunch (unreleased PR #180)
+
+The owner confirms the previous **direct** Steam experience: Steam's
+**Exit Steam** closed the entire Wolf/Moonlight session and returned the
+client to its local desktop. Preserve that as the **required** managed Games
+UX. The new named-profile lobby has **not** physically demonstrated it.
+
+PR #180 adds a limited safety recovery path for a session that has
+already *fully ended*: when the Games click sees a stale `in_use` lease,
+NOW issues **one** host-authenticated `reconcile` action. It requires the
+same approved owner device, a v2 **joined** lease, a matching owner
+workspace, **zero Wolf lobbies, zero Wolf sessions**, a clean host Steam
+writer census, and a second clean Wolf runtime read, all under the owner
+state lock. If verified, the host archives that lease without posting a
+Stop, killing processes, clearing Steam credentials, or changing Wolf.
+Only then can NOW re-open Wolf UI and request a new managed Steam Start.
+
+Any lingering Wolf UI session, retained lobby, still-running Steam process,
+uncertain/legacy lease, different/revoked device or ambiguous writer census
+**blocks** reconciliation. The normal `status` action stays read-only.
+The host `enabled:false` / `legacy_links_reviewed:false` also
+prevents this new state-changing action from running during status-only
+physical acceptance.
+
+**Critical remaining gap:** Wolf UI's published lobby flow can leave
+`stop_when_everyone_leaves=false` lobbies alive after disconnect. That
+behavior is documented in upstream wolf-ui issue #17:
+https://github.com/games-on-whales/wolf-ui/issues/17 . Thus a stream
+window closing is *not* evidence the server runner or lease is gone.
+The new checked reconciliation helps only if the complete runtime
+actually stops; it is **not yet** a seamless exit implementation.
+Do not flip the lobby stop-on-disconnect flag merely to make a test pass;
+that would break the promised ability to reconnect after transient
+network loss. Determine how Steam **Exit** propagates to Wolf and whether
+Wolf UI remains active on the real host; then implement safe session
+closure without interrupting unrelated Wolf users. The Stop button
+remains an **exceptional recovery control**, not the ordinary exit path.
 
 ## Validation and next acceptance
 

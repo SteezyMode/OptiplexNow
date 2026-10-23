@@ -863,6 +863,7 @@ typedef struct {
  guint observe_id;
  guint reconcile_id;
  gint64 deadline;
+ gint64 moonlight_started_at;
  GCancellable *cancel;
  GSubprocess *stream_process;
  char host[512];
@@ -903,6 +904,7 @@ static gboolean managed_games_open_wolf_ui(void){
   return FALSE;
  }
  managed_games.stream_exited=FALSE;
+ managed_games.moonlight_started_at=g_get_monotonic_time();
  g_subprocess_wait_async(managed_games.stream_process,NULL,
   managed_games_stream_exited,NULL);
  return TRUE;
@@ -1077,11 +1079,41 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
   return;
  }
  if(answer==NOW_GAMES_WOLF_UI_CONNECTED){
-  managed_games_message("OWNER DEVICE AUTHORIZED. REQUESTING STEAM...");
+  /* Wolf can retain a registered session after the local Moonlight process
+   * exits. Never interpret that server record as proof of a visible stream.
+   * NOW must launch and still own the local client before creating Steam. */
+  if(managed_games.stream_exited){
+   managed_games_finish("MOONLIGHT EXITED. STEAM NOT LAUNCHED");
+   return;
+  }
+  if(!managed_games.stream_process){
+   managed_games.opening_ui=TRUE;
+   managed_games_message("RECONNECTING MOONLIGHT BEFORE STEAM...");
+   if(!managed_games_open_wolf_ui()){
+    managed_games_finish("MOONLIGHT COULD NOT OPEN WOLF UI");
+    return;
+   }
+  }
+  /* Give a newly started client time to establish its stream, even if
+   * Wolf already advertises a stale matching session. */
+  if(g_get_monotonic_time()-managed_games.moonlight_started_at<4*G_USEC_PER_SEC){
+   managed_games_message("WAITING FOR MOONLIGHT STREAM...");
+   managed_games.poll_id=g_timeout_add_seconds(2,managed_games_poll,NULL);
+   return;
+  }
+  if(managed_games.stream_exited || !managed_games.stream_process){
+   managed_games_finish("MOONLIGHT EXITED. STEAM NOT LAUNCHED");
+   return;
+  }
+  managed_games_message("MOONLIGHT ACTIVE. REQUESTING STEAM...");
   managed_games_send("start");
   return;
  }
  if(answer==NOW_GAMES_NEEDS_WOLF_UI){
+  if(managed_games.stream_exited){
+   managed_games_finish("MOONLIGHT EXITED. STEAM NOT LAUNCHED");
+   return;
+  }
   if(g_get_monotonic_time()>=managed_games.deadline){
    managed_games_abort_owned_stream();
    managed_games_finish("WOLF UI DID NOT CONNECT. NO STEAM LAUNCH ATTEMPTED");

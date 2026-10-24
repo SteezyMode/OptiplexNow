@@ -1,8 +1,9 @@
 #!/usr/bin/python3
-"""Graphical owner-key request on a trusted Linux owner client (alpha pilot).
+"""Graphical request to stage a restricted owner key (alpha pilot).
 
-Uses the already-approved ordinary owner SSH link ONLY to stage a request.
-The separate Ed25519 private key is generated/kept on this Linux profile.
+Prefer an opt-in, owner-authenticated Tailscale host staging listener.
+If the listener is absent, the existing TRUSTED owner SSH pilot can stage
+the request. Neither path grants owner rights. The private key stays local.
 """
 import importlib.machinery
 import importlib.util

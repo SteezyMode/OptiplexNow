@@ -105,6 +105,18 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
 
+    def test_unenrolled_games_button_opens_setup_but_no_stop_or_status_side_effect(self):
+        # The normal wizard is not a privilege grant. A newly paired
+        # device must get a reachable setup path from the Games tile,
+        # without falling back to the direct Wolf Steam app or attempting SSH.
+        guarded = SHELL.split("static void managed_games_begin(", 1)[1].split(
+            "static void on_managed_games_stop(", 1)[0]
+        self.assertIn('MANAGED GAMES REQUIRES RESTRICTED OWNER ACCESS', guarded)
+        self.assertIn("if(!stop && !status_only)on_games_setup(NULL,NULL);", guarded)
+        self.assertLess(guarded.index("if(!has_key){"),
+                        guarded.index("managed_games.running=TRUE"))
+        self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)
+
     def test_normal_wizard_never_offers_unrestricted_admin_ssh(self):
         wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
             "static gboolean first_setup", 1)[0]

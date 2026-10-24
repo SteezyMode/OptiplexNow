@@ -419,10 +419,11 @@ static void pair(int relay)
     GtkWidget *area = gtk_dialog_get_content_area(GTK_DIALOG(state->dialog));
     gtk_container_set_border_width(GTK_CONTAINER(area), 20);
     GtkWidget *instructions = gtk_label_new(
-        "NOW will install this device's SSH public key into your selected "
-        "server account. Approve the host fingerprint if it is correct, "
-        "then enter the server account password in the graphical prompt. "
-        "The private key stays on this computer.");
+        "ADVANCED OWNER ADMINISTRATION ONLY. This installs an ordinary SSH "
+        "public key into the selected server account, granting that account's "
+        "normal shell and file permissions. This is NOT the restricted NOW "
+        "Games/Downloads device approval. Confirm the server fingerprint, "
+        "then enter the server account password. The private key stays local.");
     gtk_label_set_line_wrap(GTK_LABEL(instructions), TRUE);
     gtk_box_pack_start(GTK_BOX(area), instructions, FALSE, FALSE, 8);
 
@@ -2450,13 +2451,25 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_grid_attach(GTK_GRID(advanced_grid),combo,1,6,1,1);
  GtkWidget*actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  GtkWidget*t=button("TAILSCALE","setupaction");g_signal_connect_data(t,"clicked",(GCallback)on_tail,NULL,NULL,0);add(actions,t,1);
+ add(col,actions,0);
+ /* Ordinary SSH access stays available to owners under Advanced Settings,
+  * never in the normal client enrollment wizard. */
  PairContext *server_context=&form->server_context,*relay_context=&form->relay_context;
  server_context->relay=0;relay_context->relay=1;
  for(int i=0;i<8;i++){server_context->inputs[i]=fields[i];relay_context->inputs[i]=fields[i];}
  server_context->parent=d;relay_context->parent=d;
- GtkWidget*s=button("PAIR SERVER","setupaction");g_signal_connect_data(s,"clicked",(GCallback)on_pair_click,server_context,NULL,0);add(actions,s,1);
- GtkWidget*r=button("PAIR RELAY","setupaction");g_signal_connect_data(r,"clicked",(GCallback)on_pair_click,relay_context,NULL,0);add(actions,r,1);
- add(col,actions,0);
+ GtkWidget*admin_ssh=button("AUTHORIZE OWNER ADMIN SSH KEY","setupaction");
+ g_signal_connect_data(admin_ssh,"clicked",(GCallback)on_pair_click,server_context,NULL,0);
+ gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);
+ GtkWidget*relay_ssh=button("AUTHORIZE WAKE RELAY SSH KEY","setupaction");
+ g_signal_connect_data(relay_ssh,"clicked",(GCallback)on_pair_click,relay_context,NULL,0);
+ gtk_grid_attach(GTK_GRID(advanced_grid),relay_ssh,0,9,2,1);
+ GtkWidget*ssh_warning=label(
+   "OWNER ADMIN ONLY. These keys grant ordinary server-account shell access, "
+   "not restricted Games/Downloads authorization. Do not use for client onboarding.",
+   "helper");
+ gtk_label_set_line_wrap(GTK_LABEL(ssh_warning),TRUE);
+ gtk_grid_attach(GTK_GRID(advanced_grid),ssh_warning,0,10,2,1);
  col=gaming;
  add(col,label("STREAMING","modalheading"),0);
  GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
@@ -2574,7 +2587,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
     GtkWidget *assistant, *server_page, *games_page, *services_page, *finish_page;
-    GtkWidget *host, *user, *relay, *relayuser, *wake;
+    GtkWidget *host, *user;
     GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
     GtkWidget *find_button, *tailscale_button, *service_check_button;
     GtkWidget *service_inputs[3], *service_labels[3];
@@ -2599,8 +2612,9 @@ static void wizard_validate(void*w,void*p){
  gtk_label_set_text(GTK_LABEL(c->notice),"");
 }
 static void wizard_save(Wizard*c){
+ /* Advanced wake relay values are not wizard fields. Retain imported settings. */
  const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
-                      gtk_entry_get_text(GTK_ENTRY(c->relay)),gtk_entry_get_text(GTK_ENTRY(c->relayuser)),gtk_entry_get_text(GTK_ENTRY(c->wake))};
+                      c->staged[2],c->staged[3],c->staged[4]};
  int server_valid=now_valid_host(values[0])&&now_valid_user(values[1]);
  for(int i=0;i<5;i++){
    if(strchr(values[i],'\n')||strchr(values[i],'\r'))server_valid=0;
@@ -2809,7 +2823,6 @@ static void wizard_action(void*w,void*p){
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
     c->preset_loaded=1;
     gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
-    gtk_entry_set_text(GTK_ENTRY(c->relay),v[2]);gtk_entry_set_text(GTK_ENTRY(c->relayuser),v[3]);gtk_entry_set_text(GTK_ENTRY(c->wake),v[4]);
     for(int i=0;i<3;i++){
        gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),v[5+i]);
        if(c->service_labels[i])gtk_label_set_text(GTK_LABEL(c->service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
@@ -2817,12 +2830,11 @@ static void wizard_action(void*w,void*p){
     gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
     return;
  }
- if(!strcmp(n,"w_pair")||!strcmp(n,"w_relay")||!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin")||!strcmp(n,"w_owner_request"))wizard_save(c);
+ if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin")||!strcmp(n,"w_owner_request"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
  else if(!strcmp(n,"w_ts_signup"))browser_open("https://login.tailscale.com/start");
- else if(!strcmp(n,"w_pair"))pair(0);
- else if(!strcmp(n,"w_relay"))pair(1);
+ 
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf(w);
@@ -2967,27 +2979,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->notice=label("","helper");add(two,c->notice,0);
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
  gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
- /* Page 3: pair SSH keys once. Relay is optional. */
- GtkWidget*three=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(three),22);
- add(three,label("SECURE ACCESS","modalheading"),0);
- add(three,label("Existing SSH keys are reused for ordinary server access.","helper"),0);
- wizard_button(c,three,"AUTHORIZE SSH KEY","w_pair");
- GtkWidget*owner_access_note=label(
-   "IMPORTANT: Ordinary SSH and Moonlight pairing are not owner-service approval. Use REQUEST OWNER DEVICE APPROVAL on the Games page, then have the host owner confirm the request and verified Wolf client ID. The host approval path is an alpha pilot, not yet release accepted.",
-   "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
- add(three,owner_access_note,0);
- GtkWidget*wake_options=gtk_expander_new("WAKE OPTIONS (OPTIONAL)");
- GtkWidget*wake_fields=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
- gtk_container_set_border_width(GTK_CONTAINER(wake_fields),12);
- gtk_container_add(GTK_CONTAINER(wake_options),wake_fields);
- add(three,wake_options,0);
- c->relay=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relay),"Relay Tailscale IP");gtk_entry_set_text(GTK_ENTRY(c->relay),cfg[2]);add(wake_fields,c->relay,0);
- c->relayuser=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->relayuser),"Relay SSH user");gtk_entry_set_text(GTK_ENTRY(c->relayuser),cfg[3]);add(wake_fields,c->relayuser,0);
- c->wake=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->wake),"Wake script on relay");gtk_entry_set_text(GTK_ENTRY(c->wake),cfg[4]);add(wake_fields,c->wake,0);
- wizard_button(c,wake_fields,"AUTHORIZE RELAY KEY","w_relay");
- gtk_assistant_append_page(GTK_ASSISTANT(a),three);gtk_assistant_set_page_title(GTK_ASSISTANT(a),three,"ACCESS");gtk_assistant_set_page_type(GTK_ASSISTANT(a),three,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),three,1);
- /* Page 4: reuse the existing installed Moonlight, including AppImages. */
+ /* Page 3: independent Moonlight identity for this Linux profile. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("CONNECT TO GAME HOST","modalheading"),0);
  add(four,label("Connect once during setup, then play from Games.","helper"),0);
@@ -2998,9 +2990,16 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
  wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL","w_owner_request");
+ GtkWidget*owner_access_note=label(
+   "Moonlight pairing alone is not owner-service approval. Use REQUEST OWNER "
+   "DEVICE APPROVAL, then confirm the request and Wolf identity on the host. "
+   "This alpha-only pilot still needs preapproved owner SSH for bootstrap; "
+   "ordinary client onboarding is not yet turnkey.", "helper");
+ gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
+ add(four,owner_access_note,0);
  wizard_button(c,four,"ADVANCED PAIRING HELP","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
- /* Page 5: let a fresh installation actually configure each service.
+ /* Page 4: let a fresh installation actually configure each service.
   * Do not claim the server's Wolf stream is missing merely because a URL
   * wasn't configured locally. */
  GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(GTK_CONTAINER(five),20);
@@ -3018,7 +3017,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  }
  c->service_check_button=button("CHECK SERVICES","setupaction");g_signal_connect_data(c->service_check_button,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,c->service_check_button,0);
  gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
- /* Page 6: nothing else needed for existing clients. */
+ /* Page 5: no routine administrative SSH authorization. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
  GtkWidget*owner_ready_note=label(

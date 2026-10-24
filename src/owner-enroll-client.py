@@ -150,7 +150,54 @@ def review_active_wolf(host, *, connection=http.client.HTTPConnection):
         client.close()
 
 
+class NoRecentPairing(ValueError):
+    """A fresh same-node Wolf pairing witness is not available."""
+
+
+def review_recent_pairing(host, request_id, *,
+                          connection=http.client.HTTPConnection):
+    """Ask host for a newly paired Wolf ID witnessed on this same Tailnet node."""
+    host = _tailnet_target(host)
+    if not isinstance(request_id, str) or not HEX32.fullmatch(request_id):
+        raise ValueError("Invalid staged enrollment request ID")
+    payload = json.dumps({"request_id": request_id},
+                         separators=(",", ":")).encode("ascii")
+    client = connection(host, 18793, timeout=7)
+    try:
+        client.request("POST", "/v1/owner/enrollment/paired-candidate",
+                       body=payload,
+                       headers={"Content-Type": "application/json",
+                                "Accept": "application/json"})
+        reply = client.getresponse()
+        raw = reply.read(513)
+        if reply.status in (404, 409):
+            raise NoRecentPairing("No recent same-node pairing witness")
+        if reply.status != 200 or len(raw) > 512:
+            raise ValueError("Owner recent pairing review denied")
+        data = json.loads(raw)
+        ident = data.get("wolf_client_id") if isinstance(data, dict) else None
+        if (not isinstance(data, dict) or set(data) !=
+                {"success", "wolf_client_id"}
+                or data["success"] is not True
+                or not isinstance(ident, str) or not WOLF_ID.fullmatch(ident)):
+            raise ValueError("Untrusted recent Wolf pairing candidate")
+        return ident
+    finally:
+        client.close()
+
+
+def review_for_owner(host, request_id):
+    """Prefer same-node witnessed pairing; only absent proof tries Wolf UI."""
+    try:
+        return {"wolf_client_id": review_recent_pairing(host, request_id),
+                "source": "recent_pair"}
+    except NoRecentPairing:
+        return {"wolf_client_id": review_active_wolf(host),
+                "source": "active_wolf_ui"}
+
+
 def approve_reviewed_tailnet(host, request_id, code, wolf_client_id, *,
+                             source="active_wolf_ui",
                              connection=http.client.HTTPConnection):
     """Explicit owner confirmation, never automatic. No admin SSH fallback."""
     host = _tailnet_target(host)
@@ -159,9 +206,13 @@ def approve_reviewed_tailnet(host, request_id, code, wolf_client_id, *,
             or not isinstance(wolf_client_id, str)
             or not WOLF_ID.fullmatch(wolf_client_id)):
         raise ValueError("Invalid owner review request")
-    payload = json.dumps({"request_id": request_id, "code": code,
-                          "wolf_client_id": wolf_client_id, "confirmed": True},
-                         separators=(",", ":")).encode("ascii")
+    if source not in ("recent_pair", "active_wolf_ui"):
+        raise ValueError("Unknown owner review source")
+    fields = {"request_id": request_id, "code": code,
+              "wolf_client_id": wolf_client_id, "confirmed": True}
+    if source == "recent_pair":
+        fields["source"] = source
+    payload = json.dumps(fields, separators=(",", ":")).encode("ascii")
     client = connection(host, 18793, timeout=12)
     try:
         client.request("POST", "/v1/owner/enrollment/approve", body=payload,

@@ -113,6 +113,74 @@ def request_tailnet(host, *, key_module=None, connection=http.client.HTTPConnect
         client.close()
 
 
+
+WOLF_ID = re.compile(r"[0-9]{1,20}\Z")
+
+
+def _tailnet_target(host):
+    try:
+        ip = ipaddress.ip_address(host)
+    except (TypeError, ValueError):
+        raise ValueError("A Tailscale IPv4 address is required") from None
+    if (ip.version != 4 or ip not in ipaddress.ip_network("100.64.0.0/10")
+            or str(ip) == "100.100.100.100"):
+        raise ValueError("A Tailscale IPv4 address is required")
+    return str(ip)
+
+
+def review_active_wolf(host, *, connection=http.client.HTTPConnection):
+    """Read one host-observed Wolf UI client ID; no privilege granted."""
+    host = _tailnet_target(host)
+    client = connection(host, 18793, timeout=6)
+    try:
+        client.request("GET", "/v1/owner/enrollment/wolf-candidate",
+                       headers={"Accept": "application/json"})
+        reply = client.getresponse()
+        raw = reply.read(513)
+        if reply.status != 200 or len(raw) > 512:
+            raise ValueError("No unique active Wolf UI or remote owner review disabled")
+        data = json.loads(raw)
+        wolf_id = data.get("wolf_client_id") if isinstance(data, dict) else None
+        if (not isinstance(data, dict) or data.get("success") is not True
+                or not isinstance(wolf_id, str) or not WOLF_ID.fullmatch(wolf_id)
+                or set(data) != {"success", "wolf_client_id"}):
+            raise ValueError("Invalid host Wolf review response")
+        return wolf_id
+    finally:
+        client.close()
+
+
+def approve_reviewed_tailnet(host, request_id, code, wolf_client_id, *,
+                             connection=http.client.HTTPConnection):
+    """Explicit owner confirmation, never automatic. No admin SSH fallback."""
+    host = _tailnet_target(host)
+    if (not isinstance(request_id, str) or not HEX32.fullmatch(request_id)
+            or not isinstance(code, str) or not CODE.fullmatch(code)
+            or not isinstance(wolf_client_id, str)
+            or not WOLF_ID.fullmatch(wolf_client_id)):
+        raise ValueError("Invalid owner review request")
+    payload = json.dumps({"request_id": request_id, "code": code,
+                          "wolf_client_id": wolf_client_id, "confirmed": True},
+                         separators=(",", ":")).encode("ascii")
+    client = connection(host, 18793, timeout=12)
+    try:
+        client.request("POST", "/v1/owner/enrollment/approve", body=payload,
+                       headers={"Content-Type": "application/json",
+                                "Accept": "application/json"})
+        reply = client.getresponse()
+        raw = reply.read(513)
+        if reply.status != 200 or len(raw) > 512:
+            raise ValueError("Remote owner approval denied or unavailable")
+        data = json.loads(raw)
+        if (not isinstance(data, dict) or set(data) != {"success", "status"}
+                or data.get("success") is not True
+                or data.get("status") != "approved"):
+            raise ValueError("Invalid owner approval response")
+        return True
+    finally:
+        client.close()
+
+
 def request_using_available_transport(host, user):
     """Prefer narrow authenticated Tailnet staging; retain explicit owner pilot.
 

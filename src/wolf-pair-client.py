@@ -48,6 +48,7 @@ def invoke(host, user, action, payload=None):
 
 PAIR_PORT = 18793
 PAIR_PENDING_ROUTE = "/v1/owner/wolf-pair/pending"
+PAIR_PREPARE_ROUTE = "/v1/owner/wolf-pair/prepare"
 PAIR_APPROVE_ROUTE = "/v1/owner/wolf-pair/approve"
 TAILNET = ipaddress.ip_network("100.64.0.0/10")
 
@@ -61,24 +62,32 @@ def invoke_tailnet(host, action, payload=None, *, connection=http.client.HTTPCon
     if (value.version != 4 or value not in TAILNET or
             str(value) == "100.100.100.100"):
         raise ValueError("Only direct Tailscale IPv4 is supported")
-    if action not in ("pending", "pending-text", "pair"):
+    if action not in ("pending", "pending-text", "pair", "prepare"):
         raise ValueError("Unsupported Tailscale Wolf action")
     if action == "pair":
         if (not isinstance(payload, dict) or set(payload) !=
                 {"index", "client_ip", "pin"}
                 or type(payload["index"]) is not int or payload["index"] < 1
-                or payload["client_ip"] != host
+                or not isinstance(payload["client_ip"], str)
                 or not isinstance(payload["pin"], str)
                 or not 4 <= len(payload["pin"]) <= 12
                 or not all("0" <= x <= "9" for x in payload["pin"])):
             raise ValueError("Invalid Wolf pairing payload")
+        try:
+            source_ip = ipaddress.ip_address(payload["client_ip"])
+        except (TypeError, ValueError):
+            raise ValueError("Invalid client Tailscale source") from None
+        if source_ip.version != 4 or source_ip not in TAILNET or str(
+                source_ip) == "100.100.100.100":
+            raise ValueError("Invalid client Tailscale source")
     elif payload is not None:
         raise ValueError("Unexpected Wolf pending payload")
     client = connection(host, PAIR_PORT, timeout=15)
     try:
-        if action == "pair":
-            client.request("POST", PAIR_APPROVE_ROUTE,
-                           body=json.dumps(payload, separators=(",", ":")).encode(),
+        if action in ("pair", "prepare"):
+            client.request("POST", PAIR_APPROVE_ROUTE if action == "pair"
+                           else PAIR_PREPARE_ROUTE,
+                           body=json.dumps(payload or {}, separators=(",", ":")).encode(),
                            headers={"Content-Type": "application/json",
                                     "Accept": "application/json"})
         else:
@@ -94,6 +103,9 @@ def invoke_tailnet(host, action, payload=None, *, connection=http.client.HTTPCon
         if action == "pair":
             if set(result) != {"success"}:
                 raise ValueError("Unexpected Wolf pairing reply")
+        elif action == "prepare":
+            if set(result) != {"success", "status"} or result["status"] != "prepared":
+                raise ValueError("Unexpected Wolf preparation reply")
         else:
             clients = result.get("clients")
             if (set(result) != {"success", "clients"} or
@@ -115,17 +127,22 @@ def invoke_preferred(host, user, action, payload=None):
     try:
         return invoke_tailnet(host, action, payload)
     except ConnectionRefusedError:
+        # Never send a fresh-window preparation request over SSH.
+        if action == "prepare":
+            raise
         # Compatibility for owners who have not installed the optional host
         # broker. This requires existing trusted admin SSH, never provisions it.
         return invoke(host, user, action, payload)
     except ValueError as exc:
         if str(exc) == "Only direct Tailscale IPv4 is supported":
+            if action == "prepare":
+                raise
             return invoke(host, user, action, payload)
         raise
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("action", choices=("pending", "pending-text", "pair"))
+    parser.add_argument("action", choices=("pending", "pending-text", "pair", "prepare"))
     parser.add_argument("host")
     parser.add_argument("user")
     args = parser.parse_args()

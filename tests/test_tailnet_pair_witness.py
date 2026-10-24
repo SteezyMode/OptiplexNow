@@ -223,5 +223,71 @@ class HttpPairEvidenceTests(unittest.TestCase):
         self.assertEqual(self.approved, [])
 
 
+class ClientPairWitnessTests(unittest.TestCase):
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "witness_owner_client", ROOT / "src/owner-enroll-client.py")
+        self.client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.client)
+
+    def test_recent_pairing_review_and_limited_commit_payload(self):
+        calls = []
+        class Connection:
+            def __init__(self, host, port, timeout):
+                self.route = ""
+            def request(self, method, path, body=None, headers=None):
+                self.route = path
+                calls.append((method, path, json.loads(body) if body else None))
+            def getresponse(self):
+                route = self.route
+                class Reply:
+                    status = 200
+                    def read(self, length):
+                        return json.dumps(
+                            {"success": True, "wolf_client_id": CLIENT}
+                            if route == PAIRED_CANDIDATE_ROUTE else
+                            {"success": True, "status": "approved"}).encode()
+                return Reply()
+            def close(self):
+                pass
+
+        self.assertEqual(self.client.review_recent_pairing(
+            SOURCE, REQ, connection=Connection), CLIENT)
+        self.assertEqual(calls[-1], ("POST", PAIRED_CANDIDATE_ROUTE,
+                                      {"request_id": REQ}))
+        self.assertTrue(self.client.approve_reviewed_tailnet(
+            SOURCE, REQ, "123456", CLIENT, source="recent_pair",
+            connection=Connection))
+        self.assertEqual(calls[-1][2], {
+            "request_id": REQ, "code": "123456",
+            "wolf_client_id": CLIENT, "confirmed": True,
+            "source": "recent_pair"})
+
+    def test_only_missing_recent_witness_allows_active_ui_fallback(self):
+        with patch.object(self.client, "review_recent_pairing",
+                          side_effect=self.client.NoRecentPairing()):
+            with patch.object(self.client, "review_active_wolf",
+                              return_value=OLD) as fallback:
+                self.assertEqual(self.client.review_for_owner(SOURCE, REQ), {
+                    "wolf_client_id": OLD, "source": "active_wolf_ui"})
+                fallback.assert_called_once_with(SOURCE)
+        with patch.object(self.client, "review_recent_pairing",
+                          side_effect=ValueError("403 identity denied")):
+            with patch.object(self.client, "review_active_wolf") as fallback:
+                with self.assertRaises(ValueError):
+                    self.client.review_for_owner(SOURCE, REQ)
+                fallback.assert_not_called()
+
+    def test_ui_confirm_is_required_before_any_recent_pairing_commit(self):
+        ui = (ROOT / "src/owner-enroll-ui.py").read_text()
+        dialog = ui.split("    def review_done(", 1)[1].split(
+            "    def remote_approved(", 1)[0]
+        self.assertIn("dialog.run()", dialog)
+        self.assertLess(dialog.index("result != Gtk.ResponseType.OK"),
+                        dialog.index("approve_reviewed_tailnet("))
+        self.assertIn("source=self.review_source", dialog)
+
+
 if __name__ == "__main__":
     unittest.main()

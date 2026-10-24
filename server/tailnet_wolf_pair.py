@@ -69,3 +69,31 @@ def pair_owner_wolf(peer_ip, payload, *, call_api):
     if not isinstance(result, dict) or result.get("success") is not True:
         raise PolicyError("Wolf refused selected device pairing")
     return {"success": True}
+
+
+def host_wolf_pair_api(method, path, body=None):
+    """Reuse the reviewed host-local Docker/UNIX-socket bridge, fixed routes.
+
+    The pairing helper is statically packaged beside owner_access.py in
+    owner-bridge/src; no user-chosen Docker arguments, executable or endpoint.
+    """
+    if (method, path) not in {
+            ("GET", "/api/v1/pair/pending"),
+            ("POST", "/api/v1/pair/client")}:
+        raise PolicyError("Unallowlisted Wolf pairing operation")
+    if method == "GET" and body is not None:
+        raise PolicyError("GET may not include a body")
+    if method == "POST" and (
+            not isinstance(body, dict) or set(body) != {"pair_secret", "pin"}
+            or not isinstance(body["pair_secret"], str)
+            or not isinstance(body["pin"], str)):
+        raise PolicyError("Malformed Wolf pairing payload")
+    import importlib.util
+    from pathlib import Path
+    helper = Path(__file__).resolve().parents[1] / "src/wolf-pair-local.py"
+    if not helper.is_file() or helper.is_symlink():
+        raise PolicyError("Packaged host Wolf pairing helper missing")
+    spec = importlib.util.spec_from_file_location("now_local_wolf_pair", helper)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.call_api(method, path, body)

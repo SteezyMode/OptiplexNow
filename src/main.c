@@ -1197,7 +1197,11 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
  gboolean has_key=g_file_test(key,G_FILE_TEST_IS_REGULAR);
  g_free(key);
  if(!has_key){
-  managed_games_message("THIS DEVICE NEEDS OWNER GAMES APPROVAL");
+  managed_games_message("MANAGED GAMES REQUIRES RESTRICTED OWNER ACCESS");
+  /* Only a real Games launch opens the guided path. Status checks and
+   * guarded Stop must remain non-interactive and fail without side effects.
+   * This does not grant access or fall back to unrestricted Wolf Steam. */
+  if(!stop && !status_only)on_games_setup(NULL,NULL);
   return;
  }
  if(!stop && !status_only && !has_moonlight()){
@@ -1752,7 +1756,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
- add(col,label("Wolf pairing grants access to published streams, including Steam. NOW-managed Games and owner-only Downloads require a separate restricted host credential.","helper"),0);
+ add(col,label("Moonlight/Wolf pairing and managed owner Games access are different. A paired client may open published Wolf apps, but NOW's managed Steam launch and private Downloads require separately approved restricted access. Alpha enrollment still needs preapproved owner SSH; it does not happen automatically.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);

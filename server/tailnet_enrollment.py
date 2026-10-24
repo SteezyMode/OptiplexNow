@@ -107,11 +107,14 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                     state_dir, obj["request_id"], obj["code"],
                     obj["wolf_client_id"], wolf_api=wolf_factory(),
                     approval=True)
+                if (not isinstance(result, dict)
+                        or result.get("success") is not True
+                        or result.get("status") != "approved"):
+                    raise PolicyError("Host approval was not committed")
                 # Avoid returning Wolf secrets or the host file paths.
-                self._send(200, {"success": result.get("success") is True,
-                                 "status": "approved"})
+                self._send(200, {"success": True, "status": "approved"})
             except (OSError, PolicyError, ValueError, TypeError, UnicodeError,
-                    KeyError):
+                    KeyError, RuntimeError):
                 self._send(400, {"success": False, "status": "denied"})
 
         def do_GET(self):

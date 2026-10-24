@@ -115,6 +115,25 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("c->staged[2],c->staged[3],c->staged[4]", SHELL)
         self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
+    def test_normal_wizard_has_no_manual_service_url_page(self):
+        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
+            "static gboolean first_setup", 1)[0]
+        self.assertNotIn('"SERVICES"', wizard)
+        self.assertNotIn('"VIDEOS URL"', wizard)
+        self.assertNotIn('"MUSIC URL"', wizard)
+        self.assertNotIn('"DOWNLOADS URL"', wizard)
+        self.assertNotIn("service_inputs", wizard)
+        self.assertNotIn("now_service_probe_start", SHELL)
+        self.assertIn("Videos URL (override)", SHELL)
+        self.assertIn("Music URL (optional)", SHELL)
+        self.assertIn("Downloads URL (override)", SHELL)
+        self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SHELL)
+        # A fresh setup must never wipe old or imported service settings.
+        self.assertIn("if(c->preset_loaded && server_valid)", SHELL)
+        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SHELL)
+        self.assertIn("now_media_open_videos();", SHELL)
+        self.assertIn("now_downloads_open(cfg[0],cfg[1],cfg[7]);", SHELL)
+
     def test_does_not_repeat_owner_approval_or_leak_password(self):
         self.assertIn("if(same && webview && loaded_url", FLOW)
         self.assertNotIn("password=", FLOW.lower())

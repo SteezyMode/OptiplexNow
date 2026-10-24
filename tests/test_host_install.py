@@ -14,6 +14,40 @@ PIN = "sha256:" + "a" * 64
 
 
 class CleanHostInstallerTests(unittest.TestCase):
+    def test_existing_wolf_blocks_new_install_even_if_ports_are_unbound(self):
+        def snapshot(image, state="exited"):
+            return {"Id":"a"*64,"Name":"/old-wolf",
+                    "Config":{"Image":image},
+                    "HostConfig":{"NetworkMode":"bridge"},
+                    "State":{"Status":state}}
+        def report(*records):
+            import host_services
+            return host_services.assess(list(records))
+        self.assertIsNone(installer._existing_wolf_check(report()))
+        for existing in (
+            report(snapshot("ghcr.io/games-on-whales/wolf:stable")),
+            report(snapshot("ghcr.io/games-on-whales/wolf:old", "running")),
+            report(snapshot("ghcr.io/games-on-whales/wolf:stable"),
+                   snapshot("ghcr.io/games-on-whales/wolf:old")),
+            report(),
+        ):
+            # A valid empty Docker report is the only installable case.
+            finding = installer._existing_wolf_check(existing)
+            if existing["services"]["wolf"]["docker_count"] == 0:
+                self.assertIsNone(finding)
+            else:
+                self.assertIn("existing Wolf", finding)
+        self.assertIn("cannot inspect", installer._existing_wolf_check(
+            {"tool":"now-host-services", "docker_access":"unavailable",
+             "services":{"wolf":{"status":"unknown","docker_count":0}}}))
+        self.assertIsNotNone(installer._existing_wolf_check({}))
+
+    def test_privileged_install_rechecks_existing_wolf_at_apply_time(self):
+        import inspect
+        source = inspect.getsource(installer._host_checks)
+        self.assertIn("if privileged:", source)
+        self.assertIn("_existing_wolf_check(host_services.collect())", source)
+
     def test_root_required_before_any_host_mutation(self):
         with mock.patch.object(installer.os, "geteuid", return_value=1000):
             with self.assertRaisesRegex(installer.InstallationError, "Root authority"):

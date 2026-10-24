@@ -45,13 +45,14 @@ Critical issues: [#171](https://github.com/SteezyMode/OptiplexNow/issues/171), [
 
 ## Pillar 3: private downloads and protected files
 
-**User story:** The owner uses NOW to queue an authorized download, select an allowed destination, inspect and organize resulting files. The downloader alone is VPN-isolated; gaming and video work independently.
+**User story:** The owner uses NOW to queue an authorized download, see where it landed on the real host, open that folder, organize media within their ordinary Linux account permissions, and then play it through Jellyfin. The downloader alone is VPN-isolated; gaming and video work independently. Invited viewers receive no torrent or host-file privileges by default.
 
 Acceptance:
 - [ ] GUI installs or safely adopts supported qBittorrent/VueTorrent + Gluetun + bring-your-own VPN configuration on the supported host without taking over the host network.
 - [ ] Only designated download service traffic uses the VPN; actual public exit IP is independently verified.
 - [ ] On a deliberately interrupted VPN tunnel, downloader transfers stop safely and do not leak through host routing. During failure, approved games, Jellyfin, remote access and host networking remain reachable.
-- [ ] Owner/admin can add permitted torrent/magnet inputs, use explicitly enabled/reviewed search providers, view/pause/resume/remove queue items, and select a per-item destination from approved server paths.
+- [ ] Owner/admin can search, choose a result and choose its destination before adding it, including **any nested genre folder within the owner's approved media-storage volumes**; preset categories and favorite folders must be optional shortcuts, not the only choices. Reuse native VueTorrent “Append to queue” save-path controls when compatible. On plugins that cannot be imported, explain the limitation rather than silently download elsewhere. Server-authorized browsable media roots, host-to-container path mappings, and viewer denial are essential for safe file-management; the refined per-search-result picker is a post-core-alpha UX improvement (#189).
+- [ ] Server setup detects and preserves existing qBittorrent search plugins or provisions Python plus owner-approved, content-pinned search plugins automatically on a fresh host; verifies plugin operation, supports recovery and cannot install unreviewed Python engines silently. Track #187.
 - [ ] Owner/admin can inspect, move and organize files **only within server-enforced permitted roots**. Avoid unrestricted SFTP or arbitrary client-supplied filesystem paths in the ordinary interface.
 - [ ] Viewer/member can stream permitted media but cannot administer downloads, files, VPN, or host services via UI, direct URL or forged request. No downloader admin interface is exposed publicly.
 - [ ] Downloads survive reboots and transient failures without data loss; show accurate status (VPN container health alone is not proof of egress or safety).

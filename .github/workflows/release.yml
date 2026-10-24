@@ -32,6 +32,7 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           test -n "$version"
           test "$version" != "$GITHUB_REF_NAME"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           make check-process
           make check-presets
           make check-config
@@ -46,7 +47,7 @@ jobs:
           make check-moonlight-install
           make check-wizard-network
           make check-service-probe
-          make package
+          NOW_PACKAGE_VERSION="$version" make package
           bash tests/smoke_gtk.sh
           bash tests/smoke_instance.sh
           python3 -m unittest discover -s tests -v

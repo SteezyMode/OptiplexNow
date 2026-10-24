@@ -1,9 +1,10 @@
 /*
- * NOW Host Setup: real, read-only local hardware and installation review.
+ * NOW Host Setup: host readiness review plus separately gated pilot install.
  *
  * Separate GTK3 program; avoids adding server state to the client main.c.
- * Executes only the packaged read-only Python scanner and planner. No shell,
- * sudo, Docker mutation, approval token, image pull or installation action.
+ * The normal CHECK THIS PC action only runs packaged read-only hardware,
+ * planning and service-inventory helpers. A distinct ADVANCED clean-host
+ * installer requires owner confirmation and OS authorization.
  */
 #include <gtk/gtk.h>
 #include <gio/gio.h>
@@ -11,6 +12,8 @@
 
 #define PREFLIGHT "/usr/lib/optiplex-now/host_preflight.py"
 #define PLAN "/usr/lib/optiplex-now/host_plan.py"
+#define SERVICES "/usr/lib/optiplex-now/host_services.py"
+#define ADOPTION "/usr/lib/optiplex-now/host_adoption.py"
 #define INSTALLER "/usr/lib/optiplex-now/host_install.py"
 #define MAX_RESULT 24576
 
@@ -18,6 +21,7 @@ typedef struct {
     GtkWidget *window;
     GtkWidget *status;
     GtkWidget *run_button;
+    GtkWidget *verify_services_button;
     GtkWidget *gpu_choice;
     GtkWidget *render_entry;
     GtkWidget *digest_entry;
@@ -34,6 +38,26 @@ typedef struct {
     guint eligibility_revision;
     unsigned step;
 } HostSetupUI;
+
+/* Explicit owner action on this HOST only. Never performs enrollment
+ * automatically when a client launches or when CHECK THIS PC runs. */
+static void open_owner_approvals(GtkButton *button, gpointer data)
+{
+    (void)button;
+    (void)data;
+    gchar *argv[] = {"/usr/bin/python3",
+                     "/usr/lib/optiplex-now/owner-approvals-ui.py", NULL};
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT,
+                       NULL, NULL, NULL, &error)) {
+        GtkWidget *alert = gtk_message_dialog_new(
+            NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+            "Owner approvals are not installed on this host.");
+        gtk_dialog_run(GTK_DIALOG(alert));
+        gtk_widget_destroy(alert);
+    }
+    g_clear_error(&error);
+}
 
 static void host_ui_free(gpointer data)
 {
@@ -60,6 +84,7 @@ static void report_complete(HostSetupUI *ui, const char *message)
         "OptiPlex NOW | Server Review Complete" :
         "OptiPlex NOW | Server Review Incomplete");
     gtk_widget_set_sensitive(ui->run_button, TRUE);
+    gtk_widget_set_sensitive(ui->verify_services_button, TRUE);
 }
 
 static void run_read_only_step(HostSetupUI *ui);
@@ -84,11 +109,11 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         } else {
             append_result(ui, output);
             append_result(ui, "\n\n");
-            if (ui->step == 0) {
-                ui->step = 1;
+            if (ui->step < 3) {
+                ui->step++;
                 run_read_only_step(ui);
             } else {
-                report_complete(ui, "REVIEW COMPLETE. INSTALLATION NOT AVAILABLE.");
+                report_complete(ui, "REVIEW COMPLETE. NO CHANGES MADE.");
             }
         }
     }
@@ -101,7 +126,9 @@ static void run_read_only_step(HostSetupUI *ui)
 {
     if (ui->closing)
         return;
-    const gchar *script = ui->step == 0 ? PREFLIGHT : PLAN;
+    const gchar *script = ui->step == 0 ? PREFLIGHT :
+                          ui->step == 1 ? PLAN :
+                          ui->step == 2 ? SERVICES : ADOPTION;
     const gchar *args[] = {"/usr/bin/python3", script, NULL};
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
@@ -116,9 +143,15 @@ static void run_read_only_step(HostSetupUI *ui)
     if (ui->step == 0) {
         append_result(ui, "HOST PREFLIGHT\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING THIS COMPUTER...");
-    } else {
+    } else if (ui->step == 1) {
         append_result(ui, "INSTALLATION PLAN\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "REVIEWING REQUIREMENTS...");
+    } else if (ui->step == 2) {
+        append_result(ui, "EXISTING SERVICES | ADOPTION CANDIDATES\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING EXISTING SERVICES...");
+    } else {
+        append_result(ui, "ADOPT EXISTING / SET UP NEW | SAFETY PLAN\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "PLANNING SAFE SERVICE ADOPTION...");
     }
     g_subprocess_communicate_utf8_async(
         process, NULL, ui->cancel, read_only_done,
@@ -138,7 +171,74 @@ static void on_check_clicked(GtkButton *button, gpointer data)
     ui->cancel = g_cancellable_new();
     gtk_text_buffer_set_text(ui->output, "", -1);
     gtk_widget_set_sensitive(ui->run_button, FALSE);
+    gtk_widget_set_sensitive(ui->verify_services_button, FALSE);
     run_read_only_step(ui);
+}
+
+/* Explicit, local OS authorization to inspect the host Docker socket.
+ * Normal CHECK THIS PC never escalates. Only the fixed installed read-only
+ * planner is launched here; no untrusted server, path or argv is accepted. */
+static void privileged_services_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GtkWidget *window = GTK_WIDGET(data);
+    HostSetupUI *ui = g_object_get_data(G_OBJECT(window), "now-host-ui");
+    gchar *out = NULL;
+    GError *error = NULL;
+    gboolean ok = g_subprocess_communicate_utf8_finish(
+        G_SUBPROCESS(source), result, &out, NULL, &error);
+    if (!ui->closing) {
+        if (ok && g_subprocess_get_successful(G_SUBPROCESS(source)) &&
+            out && strlen(out) <= MAX_RESULT && g_utf8_validate(out, -1, NULL) &&
+            g_str_has_prefix(out, "ADOPT EXISTING / SET UP NEW | READ-ONLY PLAN")) {
+            append_result(ui, out);
+            append_result(ui, "\n");
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                               "EXISTING SERVICES REVIEWED. NO CHANGES MADE.");
+        } else {
+            append_result(ui, "OS-APPROVED SERVICE CHECK CANCELLED OR UNAVAILABLE. "
+                              "Nothing was changed.\n");
+            gtk_label_set_text(GTK_LABEL(ui->status),
+                               "SERVICE REVIEW INCOMPLETE. NO CHANGES MADE.");
+        }
+        ui->running = FALSE;
+        gtk_widget_set_sensitive(ui->run_button, TRUE);
+        gtk_widget_set_sensitive(ui->verify_services_button, TRUE);
+    }
+    g_clear_error(&error);
+    g_free(out);
+    g_object_unref(window);
+}
+
+static void on_verify_services(GtkButton *button, gpointer data)
+{
+    (void)button;
+    HostSetupUI *ui = data;
+    if (ui->running || ui->installing || ui->closing)
+        return;
+    /* A Docker socket is root-equivalent. Use a real OS permission prompt
+     * rather than adding the ordinary NOW user to the docker group. */
+    const gchar *argv[] = {"/usr/bin/pkexec", "/usr/bin/python3", ADOPTION, NULL};
+    GError *error = NULL;
+    GSubprocess *process = g_subprocess_newv(
+        argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE | G_SUBPROCESS_FLAGS_STDERR_SILENCE,
+        &error);
+    if (!process) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+                           "OS SERVICE REVIEW UNAVAILABLE. NO CHANGES MADE.");
+        g_clear_error(&error);
+        return;
+    }
+    ui->running = TRUE;
+    gtk_widget_set_sensitive(ui->run_button, FALSE);
+    gtk_widget_set_sensitive(ui->verify_services_button, FALSE);
+    append_result(ui, "\nEXISTING SERVICES | OS-AUTHORIZED READ-ONLY REVIEW\n"
+                      "==============================\n\n");
+    gtk_label_set_text(GTK_LABEL(ui->status),
+                       "AWAITING LOCAL OS AUTHORIZATION FOR SERVICE REVIEW...");
+    g_subprocess_communicate_utf8_async(
+        process, NULL, NULL, privileged_services_done,
+        g_object_ref(ui->window));
+    g_object_unref(process);
 }
 
 static void on_window_destroy(GtkWidget *window, gpointer data)
@@ -417,8 +517,8 @@ int main(int argc, char **argv)
         ui->output,
         "Install is only available after clean-host eligibility and OS approval.\n"
         "Select CHECK THIS PC to see the actual local hardware findings,\n"
-        "service conflicts and outstanding installation requirements.\n"
-        "You can safely run this on a PC already hosting Wolf.",
+        "existing Wolf/Jellyfin/downloader candidates and requirements.\n"
+        "You can safely run this on a PC already hosting these services.",
         -1);
 
     GtkWidget *advanced = gtk_expander_new(
@@ -487,6 +587,16 @@ int main(int argc, char **argv)
     gtk_container_add(GTK_CONTAINER(actions), ui->run_button);
     g_signal_connect(ui->run_button, "clicked",
                      G_CALLBACK(on_check_clicked), ui);
+    GtkWidget *approve_owner = gtk_button_new_with_label(
+        "OWNER DEVICE APPROVALS (HOST ONLY)");
+    gtk_container_add(GTK_CONTAINER(actions), approve_owner);
+    g_signal_connect(approve_owner, "clicked",
+                     G_CALLBACK(open_owner_approvals), NULL);
+    ui->verify_services_button = gtk_button_new_with_label(
+        "VERIFY EXISTING SERVICES (OS APPROVAL)");
+    gtk_container_add(GTK_CONTAINER(actions), ui->verify_services_button);
+    g_signal_connect(ui->verify_services_button, "clicked",
+                     G_CALLBACK(on_verify_services), ui);
     GtkWidget *close = gtk_button_new_with_label("CLOSE");
     gtk_container_add(GTK_CONTAINER(actions), close);
     g_signal_connect_swapped(close, "clicked",

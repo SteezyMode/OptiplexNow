@@ -24,15 +24,15 @@
 
 [Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
-**Release channel:** [v1.18.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0) is the published **closed-beta prerelease**. One [owner-assisted MacBook fresh-client test](docs/QA-MACBOOK-2026-10-21.md) has produced partial real-device evidence and blocking defects; full Beta 1 acceptance remains open. [v1.17.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0) is the previous published build.
+**Release channel:** [v1.19.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.19.0) is the latest published **closed-beta prerelease**. It adds the owner-managed Steam Games path on an existing, preconfigured Wolf host. The current development work in [draft PR #184](https://github.com/SteezyMode/OptiplexNow/pull/184) adds embedded VueTorrent, authenticated Downloads endpoint discovery, Host Setup inspection and related modularization. This PR's test installer is **not yet a tagged release**.
 
-**What ships today:** v1.18.0 is a GTK3 **existing-host Linux client** with Moonlight/Wolf controls, Tailscale/SSH onboarding, owner-configured media/download links, SFTP and diagnostics, plus a separate **experimental, guarded Wolf-only clean-host installer pilot**. The pilot is not accepted on physical clean hosts. NOW does not yet deliver the full public-alpha stack, enforce owner/member roles across it, or offer Windows builds. See [Current status](docs/CURRENT-STATUS.md).
+**What ships today:** v1.19.0 is a GTK3 **existing-host Linux client**, with guarded owner-managed Games, Tailscale/SSH onboarding, manual media/download integration and diagnostics. A separate experimental Wolf-only clean-host installer is included, but not physically accepted. The full three-pillar Private Alpha 1 installer, server-enforced owner/member separation and VPN fail-closed test have **not** been completed. Refer to [Current status](docs/CURRENT-STATUS.md) for subsequent reference-device test results.
 
 ## Download
 
 - [Versioned releases and closed-beta installers](https://github.com/SteezyMode/OptiplexNow/releases)
-- [v1.18.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0)
-- [Previous v1.17.0 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.17.0)
+- [v1.19.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.19.0)
+- [Previous v1.18.0 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0)
 - [Real-device MacBook acceptance report](docs/QA-MACBOOK-2026-10-21.md)
 - [Current code, release and test status](docs/CURRENT-STATUS.md)
 

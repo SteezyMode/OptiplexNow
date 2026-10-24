@@ -25,6 +25,7 @@ import host_plan
 import host_preflight
 import host_stage
 import host_nvidia
+import host_services
 
 ROOT = Path("/var/lib/optiplex-now")
 WORKSPACE = ROOT / "host"
@@ -62,6 +63,27 @@ def _docker(args: list[str], timeout: int = 30) -> str:
         return cp.stdout.decode("utf-8").strip()
     except UnicodeDecodeError as exc:
         raise InstallationError("Invalid Docker command output") from exc
+
+
+def _existing_wolf_check(report: dict) -> str | None:
+    """Root-verified Docker census: one unmanaged Wolf is already a conflict.
+
+    Image/runtime heuristics only block a new install; they never authorize
+    automatic adoption, removal, or overwrite of existing containers.
+    """
+    if not isinstance(report, dict) or report.get("tool") != "now-host-services":
+        return "existing Docker services could not be inspected"
+    if report.get("docker_access") != "available":
+        return "cannot inspect existing Docker services as administrator"
+    services = report.get("services")
+    if not isinstance(services, dict):
+        return "Docker service census malformed"
+    wolf = services.get("wolf")
+    if not isinstance(wolf, dict):
+        return "Wolf container census missing"
+    if wolf.get("status") != "not_detected_in_docker" or wolf.get("docker_count") != 0:
+        return "existing Wolf container detected; use adoption instead of new install"
+    return None
 
 
 def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
@@ -142,6 +164,13 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
                     blockers.append("cannot verify existing Docker projects")
                 else:
                     needs_admin_verification = True
+    # A pre-existing Wolf container may be stopped, or run behind a bridge
+    # without binding any standard Moonlight ports. Port checks alone cannot
+    # establish that this is a clean install target.
+    if privileged:
+        conflict = _existing_wolf_check(host_services.collect())
+        if conflict:
+            blockers.append(conflict)
     if WORKSPACE.exists() or WORKSPACE.is_symlink():
         blockers.append("NOW Host workspace exists; no overwrite or implicit retry")
     decision = ("blocked" if blockers else

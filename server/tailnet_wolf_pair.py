@@ -96,4 +96,8 @@ def host_wolf_pair_api(method, path, body=None):
     spec = importlib.util.spec_from_file_location("now_local_wolf_pair", helper)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.call_api(method, path, body)
+    import subprocess
+    try:
+        return module.call_api(method, path, body)
+    except (RuntimeError, OSError, ValueError, subprocess.TimeoutExpired) as exc:
+        raise PolicyError("Wolf owner pairing backend unavailable") from None

@@ -21,6 +21,7 @@ from wolf_docker_adapter import WolfDockerAPI
 from tailnet_wolf_pair import (pending_owner_wolf, pair_owner_wolf,
                               host_wolf_pair_api)
 from tailnet_pair_witness import PairingWitness
+from tailnet_wolf_fresh import FreshPairWindow
 from owner_access import paired_client_ids
 
 PORT = 18793
@@ -30,6 +31,7 @@ APPROVE_ROUTE = "/v1/owner/enrollment/approve"
 PAIRED_CANDIDATE_ROUTE = "/v1/owner/enrollment/paired-candidate"
 PAIR_PENDING_ROUTE = "/v1/owner/wolf-pair/pending"
 PAIR_APPROVE_ROUTE = "/v1/owner/wolf-pair/approve"
+PAIR_PREPARE_ROUTE = "/v1/owner/wolf-pair/prepare"
 MAX_BODY = 1024
 MAX_RESPONSE = 512
 
@@ -39,8 +41,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                  approve=approve_reviewed_owner_request,
                  remote_approve_enabled=False, owner_pair_enabled=False,
                  pair_api=host_wolf_pair_api, commit=approve_request,
-                 witness=None):
+                 witness=None, require_fresh_pairing=False, fresh_window=None):
     witness = witness if witness is not None else PairingWitness()
+    fresh_window = fresh_window if fresh_window is not None else FreshPairWindow()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "NOW-Enrollment-Staging"
@@ -86,7 +89,7 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
 
         def do_POST(self):
             if self.path not in (ROUTE, APPROVE_ROUTE, PAIR_APPROVE_ROUTE,
-                                  PAIRED_CANDIDATE_ROUTE):
+                                  PAIR_PREPARE_ROUTE, PAIRED_CANDIDATE_ROUTE):
                 self._send(404, {"success": False, "status": "not_found"})
                 return
             identity = self._verified_owner()
@@ -95,19 +98,33 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                 return
             if ((self.path in (APPROVE_ROUTE, PAIRED_CANDIDATE_ROUTE)
                  and not remote_approve_enabled)
-                    or (self.path == PAIR_APPROVE_ROUTE and not owner_pair_enabled)
+                    or (self.path in (PAIR_APPROVE_ROUTE, PAIR_PREPARE_ROUTE)
+                        and not owner_pair_enabled)
+                    or (self.path == PAIR_PREPARE_ROUTE and not require_fresh_pairing)
                     or (self.path == PAIRED_CANDIDATE_ROUTE and not owner_pair_enabled)):
                 self._send(403, {"success": False, "status": "disabled"})
                 return
             try:
                 obj = self._read_json(MAX_BODY)
+                if self.path == PAIR_PREPARE_ROUTE:
+                    if obj != {}:
+                        raise ValueError("Pair preparation accepts only empty payload")
+                    result = fresh_window.prepare(
+                        identity, self.client_address[0], call_api=pair_api)
+                    self._send(200, result)
+                    return
                 if self.path == PAIR_APPROVE_ROUTE:
                     if remote_approve_enabled:
                         # Source-bound review opt-in captures the baseline.
                         before = paired_client_ids(wolf_factory()(
                             "GET", "/api/v1/clients"))
-                    result = pair_owner_wolf(self.client_address[0], obj,
-                                             call_api=pair_api)
+                    if require_fresh_pairing:
+                        result = fresh_window.pair(
+                            identity, self.client_address[0],
+                            obj, call_api=pair_api)
+                    else:
+                        result = pair_owner_wolf(self.client_address[0], obj,
+                                                 call_api=pair_api)
                     if remote_approve_enabled:
                         # Only a successful host-side PIN approval creates
                         # a candidate. Plain Wolf pairing is unchanged.
@@ -191,15 +208,21 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
             if self.path not in (REVIEW_ROUTE, PAIR_PENDING_ROUTE):
                 self._send(404, {"success": False, "status": "not_found"})
                 return
-            if not self._verified_owner() or (
+            owner = self._verified_owner()
+            if not owner or (
                     self.path == REVIEW_ROUTE and not remote_approve_enabled) or (
                     self.path == PAIR_PENDING_ROUTE and not owner_pair_enabled):
                 self._send(403, {"success": False, "status": "forbidden"})
                 return
             if self.path == PAIR_PENDING_ROUTE:
                 try:
-                    result = pending_owner_wolf(self.client_address[0],
-                                                call_api=pair_api)
+                    if require_fresh_pairing:
+                        result = fresh_window.pending(
+                            owner, self.client_address[0],
+                            call_api=pair_api)
+                    else:
+                        result = pending_owner_wolf(self.client_address[0],
+                                                    call_api=pair_api)
                     self._send(200, result)
                 except (OSError, PolicyError, ValueError, TypeError, RuntimeError):
                     self._send(409, {"success": False, "status": "unavailable"})
@@ -227,8 +250,12 @@ def main(argv=None):
                         help="EXPERIMENTAL: allow pinned owner to confirm one active Wolf UI device remotely")
     parser.add_argument("--enable-owner-wolf-pairing", action="store_true",
                         help="EXPERIMENTAL: allow only pinned owner to pair own Tailscale node to Wolf")
+    parser.add_argument("--require-fresh-wolf-pairing", action="store_true",
+                        help="EXPERIMENTAL: only approve new pairing requests after owner-prepared baseline")
     args = parser.parse_args(argv)
     try:
+        if args.require_fresh_wolf_pairing and not args.enable_owner_wolf_pairing:
+            raise ValueError("Fresh request proof requires owner pairing endpoint")
         owner_id = pinned_owner_id(args.owner_id_file)
         host_ip = own_tailnet_ipv4()
         config = _read_private_config()
@@ -239,7 +266,8 @@ def main(argv=None):
         with HTTPServer((host_ip, PORT), make_handler(
                 owner_id, config["state_dir"],
                 remote_approve_enabled=args.enable_remote_approval,
-                owner_pair_enabled=args.enable_owner_wolf_pairing)) as server:
+                owner_pair_enabled=args.enable_owner_wolf_pairing,
+                require_fresh_pairing=args.require_fresh_wolf_pairing)) as server:
             server.timeout = 3
             print("Owner staging enabled on the host's Tailscale address only.")
             server.serve_forever(poll_interval=0.2)

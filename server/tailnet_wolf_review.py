@@ -5,7 +5,15 @@ A sole visible Wolf UI session is useful evidence for *human owner review*,
 not proof that the staged SSH key and Wolf certificate came from one device.
 """
 from owner_access import PolicyError, paired_client_ids, _valid_client_id
-from owner_lobby import _inventory
+
+
+def _inventory(result, field, limit):
+    if (not isinstance(result, dict) or result.get("success") is not True
+            or not isinstance(result.get(field), list)
+            or len(result[field]) > limit
+            or any(not isinstance(item, dict) for item in result[field])):
+        raise PolicyError("Invalid Wolf inventory for owner device review")
+    return result[field]
 
 
 def single_active_wolf_ui(wolf_api):

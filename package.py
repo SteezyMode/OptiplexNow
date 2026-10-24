@@ -51,7 +51,10 @@ bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 (bridge/'server').mkdir(parents=True,exist_ok=True)
 for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'):
  shutil.copy2(root/'src'/name,bridge/'src'/name)
-for name in ('owner_enrollment.py','owner_games_enroll.py'):
+# Optional owner-only Tailscale staging pilot; packaged but NEVER enabled by .deb.
+# It stages public keys only and cannot approve Wolf or SSH grants.
+for name in ('owner_enrollment.py','owner_games_enroll.py',
+             'tailnet_owner_identity.py','tailnet_enrollment.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)
 # The owner Games forced broker is NOT installed/enabled by this client .deb.
 # Approval on an existing owner host reuses its separately adopted, reviewed broker.

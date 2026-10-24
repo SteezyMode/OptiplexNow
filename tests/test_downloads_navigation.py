@@ -96,7 +96,7 @@ class DownloadsNavigationContract(unittest.TestCase):
     def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
         self.assertIn("Moonlight pairing alone is not owner-service approval.", SHELL)
         self.assertIn("separate restricted device key", SHELL)
-        self.assertIn("Use REQUEST OWNER DEVICE APPROVAL on the Games page", SHELL)
+        self.assertIn('wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL","w_owner_request");', SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)

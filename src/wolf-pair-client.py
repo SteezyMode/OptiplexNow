@@ -115,8 +115,15 @@ def invoke_tailnet(host, action, payload=None, *, connection=http.client.HTTPCon
                 if (not isinstance(item, dict)
                         or set(item) != {"index", "client_ip"}
                         or type(item["index"]) is not int or item["index"] < 1
-                        or item["client_ip"] != host):
+                        or not isinstance(item["client_ip"], str)):
                     raise ValueError("Unexpected Wolf pending device")
+                try:
+                    source = ipaddress.ip_address(item["client_ip"])
+                except ValueError:
+                    raise ValueError("Unexpected Wolf pending source") from None
+                if (source.version != 4 or source not in TAILNET or
+                        str(source) == "100.100.100.100"):
+                    raise ValueError("Unexpected Wolf pending source")
         return result
     finally:
         client.close()

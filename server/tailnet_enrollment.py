@@ -102,13 +102,16 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
             try:
                 obj = self._read_json(MAX_BODY)
                 if self.path == PAIR_APPROVE_ROUTE:
-                    before = paired_client_ids(wolf_factory()(
-                        "GET", "/api/v1/clients"))
+                    if remote_approve_enabled:
+                        # Source-bound review opt-in captures the baseline.
+                        before = paired_client_ids(wolf_factory()(
+                            "GET", "/api/v1/clients"))
                     result = pair_owner_wolf(self.client_address[0], obj,
                                              call_api=pair_api)
-                    # Only the successful, locally executed PIN pairing
-                    # creates a witness; none is taken from client claims.
-                    witness.paired(identity, self.client_address[0], before)
+                    if remote_approve_enabled:
+                        # Only a successful host-side PIN approval creates
+                        # a candidate. Plain Wolf pairing is unchanged.
+                        witness.paired(identity, self.client_address[0], before)
                     self._send(200, result)
                     return
                 if self.path == ROUTE:
@@ -118,8 +121,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                             or obj["version"] != 1):
                         raise ValueError("Invalid public-key request")
                     result = stage(state_dir, obj["public_key"])
-                    witness.staged(identity, self.client_address[0],
-                                   result["request_id"])
+                    if remote_approve_enabled and owner_pair_enabled:
+                        witness.staged(identity, self.client_address[0],
+                                       result["request_id"])
                     self._send(202, result)
                     return
                 if self.path == PAIRED_CANDIDATE_ROUTE:

@@ -120,7 +120,10 @@ def request_using_available_transport(host, user):
     """
     try:
         return request_tailnet(host)
-    except (OSError, ValueError, UnicodeError, TimeoutError, json.JSONDecodeError):
+    except ConnectionRefusedError:
+        # Only an absent pilot service permits the existing trusted owner
+        # alpha path. An explicit 403, malformed response or wrong identity
+        # must NOT be silently routed around through administrator SSH.
         return request(host, user)
 
 

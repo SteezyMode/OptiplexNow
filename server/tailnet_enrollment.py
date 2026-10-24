@@ -131,9 +131,14 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                             or set(obj) != {"request_id"}
                             or not isinstance(obj["request_id"], str)):
                         raise ValueError("Invalid pending owner request")
-                    client_id = witness.candidate(
-                        identity, self.client_address[0],
-                        obj["request_id"], wolf_factory())
+                    try:
+                        client_id = witness.candidate(
+                            identity, self.client_address[0],
+                            obj["request_id"], wolf_factory())
+                    except PolicyError:
+                        self._send(409, {"success": False,
+                                         "status": "no_fresh_pair"})
+                        return
                     self._send(200, {"success": True, "wolf_client_id": client_id})
                     return
                 # A separately authenticated owner must deliberately choose

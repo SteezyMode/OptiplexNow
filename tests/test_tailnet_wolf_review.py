@@ -108,7 +108,7 @@ class ApprovalHttpTests(unittest.TestCase):
                     "fingerprint": "b"*20}
         def approve(path, req, code, selected, *, wolf_api, approval):
             self.approvals.append((path, req, code, selected, approval))
-            return {"success": True}
+            return {"success": True, "status": "approved"}
         self.handler = make_handler("1042", "/private/state", verify=verify,
                                     stage=stage, wolf_factory=lambda: self.wolf,
                                     approve=approve,

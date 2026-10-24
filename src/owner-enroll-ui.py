@@ -97,8 +97,8 @@ class EnrollmentWindow:
         return False
 
     def request(self, *_):
-        self.status.set_text("Contacting your approved owner server...")
-        self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request(
+        self.status.set_text("Contacting owner server through Tailscale...")
+        self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
             self.host, self.user), self.request_done)
 
     def request_done(self, answer, error):

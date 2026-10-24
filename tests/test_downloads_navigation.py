@@ -93,10 +93,14 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("DOWNLOADS NOT AVAILABLE", FLOW)
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
 
-    def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
-        self.assertIn("Moonlight pairing alone is not owner-service approval.", SHELL)
-        self.assertIn("separate restricted device key", SHELL)
-        self.assertIn('wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL","w_owner_request");', SHELL)
+    def test_wizard_does_not_misrepresent_owner_access_as_game_pairing(self):
+        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
+            "static gboolean first_setup", 1)[0]
+        self.assertNotIn('"w_owner_request"', wizard)
+        self.assertNotIn('"REQUEST OWNER DEVICE APPROVAL"', wizard)
+        self.assertIn("Wolf pairing lets this device open the host's published game streams.", wizard)
+        self.assertIn("no-SSH client enrollment is not yet implemented.", wizard)
+        self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)

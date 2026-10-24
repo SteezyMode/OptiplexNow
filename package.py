@@ -49,7 +49,8 @@ for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui
 bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 (bridge/'src').mkdir(parents=True,exist_ok=True)
 (bridge/'server').mkdir(parents=True,exist_ok=True)
-for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'):
+for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py',
+             'wolf-pair-local.py'):
  shutil.copy2(root/'src'/name,bridge/'src'/name)
 # Optional owner-only Tailscale staging pilot; packaged but NEVER enabled by .deb.
 # Disabled-by-default: remote owner confirmation requires an explicit host
@@ -57,7 +58,7 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 # Packaging never opens a listener, changes authorized_keys or grants Wolf access.
 for name in ('owner_enrollment.py','owner_games_enroll.py',
              'tailnet_owner_identity.py','tailnet_enrollment.py',
-             'tailnet_wolf_review.py'):
+             'tailnet_wolf_review.py','tailnet_wolf_pair.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)
 # The owner Games forced broker is NOT installed/enabled by this client .deb.
 # Approval on an existing owner host reuses its separately adopted, reviewed broker.

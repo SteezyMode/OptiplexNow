@@ -59,7 +59,7 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 for name in ('owner_enrollment.py','owner_games_enroll.py',
              'tailnet_owner_identity.py','tailnet_enrollment.py',
              'tailnet_wolf_review.py','tailnet_wolf_pair.py',
-             'tailnet_pair_witness.py'):
+             'tailnet_pair_witness.py','tailnet_wolf_fresh.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)
 # The owner Games forced broker is NOT installed/enabled by this client .deb.
 # Approval on an existing owner host reuses its separately adopted, reviewed broker.

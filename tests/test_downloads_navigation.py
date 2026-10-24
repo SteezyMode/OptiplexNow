@@ -94,12 +94,26 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
 
     def test_wizard_does_not_pretend_ssh_approval_is_owner_enrollment(self):
-        self.assertIn("Ordinary SSH and Moonlight pairing are not owner-service approval.", SHELL)
+        self.assertIn("Moonlight pairing alone is not owner-service approval.", SHELL)
         self.assertIn("separate restricted device key", SHELL)
         self.assertIn("Use REQUEST OWNER DEVICE APPROVAL on the Games page", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
+
+    def test_normal_wizard_never_offers_unrestricted_admin_ssh(self):
+        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
+            "static gboolean first_setup", 1)[0]
+        self.assertNotIn('"w_pair"', wizard)
+        self.assertNotIn('"w_relay"', wizard)
+        self.assertNotIn('"AUTHORIZE SSH KEY"', wizard)
+        self.assertNotIn('"AUTHORIZE RELAY KEY"', wizard)
+        self.assertNotIn('"SECURE ACCESS"', wizard)
+        self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SHELL)
+        self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SHELL)
+        self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SHELL)
+        self.assertIn("c->staged[2],c->staged[3],c->staged[4]", SHELL)
+        self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
     def test_does_not_repeat_owner_approval_or_leak_password(self):
         self.assertIn("if(same && webview && loaded_url", FLOW)

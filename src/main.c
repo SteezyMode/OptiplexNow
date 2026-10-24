@@ -32,8 +32,6 @@
 #include "ui_state.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
-#include "service_probe.h"
-#include "wizard_services.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -2422,6 +2420,7 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  for(int k=0;k<3;k++)settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home");
  GtkWidget*col=connection;
  add(col,label("CONNECTION","modalheading"),0);
+ add(col,label("Videos and Downloads use approved host discovery when available. Manual service URLs are optional in Advanced Settings.","helper"),0);
  GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
  add(col,label("HOST SETUP (READ-ONLY)","modalheading"),0);
  GtkWidget*host_review=button("CHECK THIS PC FOR SERVER SETUP","setupaction");
@@ -2432,11 +2431,11 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
  GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
  GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL","Music URL","Downloads override"};
+ const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL (override)","Music URL (optional)","Downloads URL (override)"};
  GtkWidget **fields=form->fields;
  for(int i=0;i<8;i++){
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
-  GtkWidget*dest=(i<2||i>=5)?gt:advanced_grid;int row=i<2?i:i>=5?i-3:i-2;
+  GtkWidget*dest=i<2?gt:advanced_grid;int row=i<2?i:i-2;
   gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
   fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
@@ -2586,17 +2585,14 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
 
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
-    GtkWidget *assistant, *server_page, *games_page, *services_page, *finish_page;
+    GtkWidget *assistant, *server_page, *games_page, *finish_page;
     GtkWidget *host, *user;
     GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
-    GtkWidget *find_button, *tailscale_button, *service_check_button;
-    GtkWidget *service_inputs[3], *service_labels[3];
-    char checked_urls[NOW_SERVICE_PROBE_COUNT][NOW_SERVICE_PROBE_URL_MAX];
+    GtkWidget *find_button, *tailscale_button;
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
     guint tailscale_poll_id;
     NowWizardNetwork *network;
-    NowServiceProbe *service_probe;
 } Wizard;
 
 static void wizard_unref(Wizard *wizard)
@@ -2628,27 +2624,21 @@ static void wizard_save(Wizard*c){
    }
  }
 
- /* Media URLs must survive leaving Services even if server/SSH identity is
-  * incomplete. An invalid optional service must not block valid ones. */
- const char *urls[3];
- for(int i=0;i<3;i++){
-   urls[i]=c->service_inputs[i]?
-      gtk_entry_get_text(GTK_ENTRY(c->service_inputs[i])):NULL;
+ /* Normal setup never clears old optional service overrides. Explicitly
+  * imported presets retain their validated override URLs. */
+ if(c->preset_loaded && server_valid){
+  const char *urls[]={c->staged[5],c->staged[6],c->staged[7]};
+  int valid=1;
+  for(int i=0;i<3;i++)if(!now_safe_preset_url(urls[i]))valid=0;
+  if(valid)for(int i=0;i<3;i++)safe_copy(cfg[5+i],512,urls[i]);
  }
- unsigned invalid_urls=now_wizard_store_services(cfg,urls);
  if(!config_save()){
-   gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
-   say("SETTINGS COULD NOT BE SAVED");
- }else if(invalid_urls){
-   for(int i=0;i<3;i++)if((invalid_urls&(1u<<i))&&c->service_labels[i]){
-     gtk_label_set_text(GTK_LABEL(c->service_labels[i]),"INVALID URL. PREVIOUS VALUE RETAINED");
-   }
-   gtk_label_set_text(GTK_LABEL(c->notice),"VALID SERVICE URLS SAVED. INVALID URLS RETAINED");
-   say("INVALID SERVICE URL. OTHER URLS SAVED");
+  gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
+  say("SETTINGS COULD NOT BE SAVED");
  }else if(!server_valid){
-   gtk_label_set_text(GTK_LABEL(c->notice),"SERVICE URLS SAVED. SERVER DETAILS INCOMPLETE");
+  gtk_label_set_text(GTK_LABEL(c->notice),"SERVER DETAILS INCOMPLETE");
  }else{
-   gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+  gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
  }
 }
 static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
@@ -2673,15 +2663,12 @@ static gboolean wizard_tailscale_poll(gpointer data)
     }
     return G_SOURCE_CONTINUE;
 }
-static void wizard_service_check(void*w,void*p);
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;Wizard*c=p;
- /* Moving past Services is an explicit Continue action. Commit the entered
-  * URLs now, even if the user closes the final summary without clicking Apply. */
+ /* Finish saves server selection; URL overrides remain optional. */
  if(page==c->finish_page)wizard_save(c);
  wizard_tailscale_poll(c);
  if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
- if(page==c->services_page)wizard_service_check(NULL,c);
  if(page==c->games_page){
    if(c->wolf_state)gtk_label_set_text(GTK_LABEL(c->wolf_state),"CHECKING WOLF CONNECTION...");
    /* Use the address entered in the wizard without saving partial settings. */
@@ -2823,11 +2810,7 @@ static void wizard_action(void*w,void*p){
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
     c->preset_loaded=1;
     gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
-    for(int i=0;i<3;i++){
-       gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),v[5+i]);
-       if(c->service_labels[i])gtk_label_set_text(GTK_LABEL(c->service_labels[i]),*v[5+i]?"READY TO CHECK":"NOT CONFIGURED");
-    }
-    gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. SERVICES WILL BE CHECKED AUTOMATICALLY.");
+    gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
     return;
  }
  if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin")||!strcmp(n,"w_owner_request"))wizard_save(c);
@@ -2858,63 +2841,6 @@ static GtkWidget*wizard_button(Wizard*c,GtkWidget*page,const char*title,const ch
 static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
 static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();g_idle_add(destroy_wizard_idle,w);}
 static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;g_idle_add(destroy_wizard_idle,w);}
-static void wizard_service_result(
-    gpointer context, const NowServiceProbeEntry entries[NOW_SERVICE_PROBE_COUNT],
-    const GError *error)
-{
-    Wizard *wizard = context;
-    wizard->references++;
-    if (!wizard->closing && wizard->assistant) {
-        for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
-            const char *current = gtk_entry_get_text(
-                GTK_ENTRY(wizard->service_inputs[index]));
-            const char *state = "UNREACHABLE";
-            if (strcmp(current, wizard->checked_urls[index]) != 0) {
-                state = "URL CHANGED — CHECK AGAIN";
-            } else if (error) {
-                state = g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT)
-                    ? "TIMED OUT — RETRY" : "CHECK FAILED — RETRY";
-            } else if (entries) {
-                state = entries[index].state;
-            }
-            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]), state);
-        }
-        gtk_widget_set_sensitive(wizard->service_check_button, TRUE);
-    }
-    wizard_unref(wizard);
-}
-
-static void wizard_service_check(void *widget, void *data)
-{
-    (void)widget;
-    Wizard *wizard = data;
-    if (wizard->closing || !wizard->assistant ||
-        now_service_probe_busy(wizard->service_probe)) {
-        return;
-    }
-    const char *urls[NOW_SERVICE_PROBE_COUNT];
-    for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
-        urls[index] = gtk_entry_get_text(GTK_ENTRY(wizard->service_inputs[index]));
-        if (!now_safe_preset_url(urls[index])) {
-            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]),
-                               "INVALID URL — CORRECT TO CHECK");
-            return;
-        }
-    }
-    for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
-        safe_copy(wizard->checked_urls[index],
-                  sizeof wizard->checked_urls[index], urls[index]);
-        gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]), "CHECKING...");
-    }
-    gtk_widget_set_sensitive(wizard->service_check_button, FALSE);
-    if (!now_service_probe_start(wizard->service_probe, urls)) {
-        gtk_widget_set_sensitive(wizard->service_check_button, TRUE);
-        for (int index = 0; index < NOW_SERVICE_PROBE_COUNT; ++index) {
-            gtk_label_set_text(GTK_LABEL(wizard->service_labels[index]),
-                               "COULD NOT START CHECK — RETRY");
-        }
-    }
-}
 static void wizard_destroy(void *widget, void *data)
 {
     if (active_setup_wizard == widget) {
@@ -2929,8 +2855,6 @@ static void wizard_destroy(void *widget, void *data)
     }
     now_wizard_network_close(wizard->network);
     wizard->network = NULL;
-    now_service_probe_close(wizard->service_probe);
-    wizard->service_probe = NULL;
     wizard_wolf_label = NULL;
     wizard_unref(wizard);
 }
@@ -2943,8 +2867,6 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->references=1;
  c->network=now_wizard_network_new(wizard_network_result,c,9000);
  if(!c->network){free(c);return;}
- c->service_probe=now_service_probe_new(wizard_service_result,c,16000);
- if(!c->service_probe){now_wizard_network_close(c->network);free(c);return;}
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
  GtkWidget*a=gtk_assistant_new();c->assistant=a;
  active_setup_wizard=a;
@@ -2999,29 +2921,11 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  add(four,owner_access_note,0);
  wizard_button(c,four,"ADVANCED PAIRING HELP","w_wolfpin");
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
- /* Page 4: let a fresh installation actually configure each service.
-  * Do not claim the server's Wolf stream is missing merely because a URL
-  * wasn't configured locally. */
- GtkWidget*five=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);c->services_page=five;gtk_container_set_border_width(GTK_CONTAINER(five),20);
- add(five,label("SERVICES","modalheading"),0);
- add(five,label("Addresses from your preset are checked automatically.","helper"),0);
- const char*names[]={"VIDEOS URL","MUSIC URL","DOWNLOADS URL"};
- GtkWidget*rows=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(rows),9);gtk_grid_set_row_spacing(GTK_GRID(rows),11);add(five,rows,0);
- for(int i=0;i<3;i++){
-   gtk_grid_attach(GTK_GRID(rows),label(names[i],"specname"),0,i,1,1);
-   c->service_inputs[i]=gtk_entry_new();gtk_widget_set_hexpand(c->service_inputs[i],1);
-   gtk_entry_set_text(GTK_ENTRY(c->service_inputs[i]),c->staged[i+5]);
-   gtk_grid_attach(GTK_GRID(rows),c->service_inputs[i],1,i,1,1);
-   c->service_labels[i]=label(*c->staged[i+5]?"NOT CHECKED":"ADD URL","specvalue");
-   gtk_grid_attach(GTK_GRID(rows),c->service_labels[i],2,i,1,1);
- }
- c->service_check_button=button("CHECK SERVICES","setupaction");g_signal_connect_data(c->service_check_button,"clicked",(GCallback)wizard_service_check,c,NULL,0);add(five,c->service_check_button,0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),five);gtk_assistant_set_page_title(GTK_ASSISTANT(a),five,"SERVICES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),five,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),five,1);
- /* Page 5: no routine administrative SSH authorization. */
+ /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Before Games or Downloads can connect, request owner-device access in Games and have the server owner approve it on the host. Confirm restricted access from the client. This pilot flow still requires physical acceptance.",
+   "Games and Downloads require approved device access. Videos uses authorized Jellyfin discovery when available; Music is optional. Manual service URL overrides remain in Settings > Connections > Advanced Settings. This owner-only pilot still requires physical acceptance.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);

@@ -32,6 +32,7 @@ class EnrollmentWindow:
         self.closed = False
         self.busy = False
         self.pending_request = None
+        self.review_source = None
         self.window = Gtk.Window(title="NOW | Request Owner Access")
         self.window.set_default_size(440, 265)
         self.window.connect("destroy", self.destroy)
@@ -107,6 +108,7 @@ class EnrollmentWindow:
 
     def request(self, *_):
         self.pending_request = None
+        self.review_source = None
         self.review_button.set_sensitive(False)
         self.status.set_text("Contacting owner server through Tailscale...")
         self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
@@ -122,9 +124,9 @@ class EnrollmentWindow:
         self.pending_request = answer
         self.review_button.set_sensitive(True)
         self.status.set_text(
-            "PENDING OWNER APPROVAL. If remote review is enabled, keep the "
-            "new device's Wolf UI stream open and choose Review below. "
-            "Otherwise the owner must approve on the host.")
+            "PENDING OWNER APPROVAL. If this Moonlight identity was just paired "
+            "through the same owner Tailscale service, choose Review below; "
+            "otherwise keep Wolf UI active or use trusted host review.")
         self.code.set_text(
             f"REQUEST CODE: {answer['code']}\n"
             f"KEY FINGERPRINT: {answer['fingerprint']}\n"
@@ -134,32 +136,41 @@ class EnrollmentWindow:
         if self.pending_request is None:
             return
         self.status.set_text(
-            "Checking the host's single currently active paired Wolf UI stream...")
-        self.job(lambda: load("now_owner_client_review", "owner-enroll-client.py").review_active_wolf(
-            self.host), self.review_done)
+            "Checking this node's fresh Wolf pairing; otherwise the active Wolf UI...")
+        request_id = self.pending_request["request_id"]
+        self.job(lambda: load("now_owner_client_review", "owner-enroll-client.py").review_for_owner(
+            self.host, request_id), self.review_done)
 
-    def review_done(self, candidate, error):
-        if error:
+    def review_done(self, review, error):
+        if error or not isinstance(review, dict):
             self.status.set_text(
-                "Remote review unavailable, or multiple/zero Wolf UI streams. "
-                "No approval was granted. Use the host owner approval pilot if needed.")
+                "No fresh witnessed pairing or unique active Wolf UI. "
+                "No approval granted; use the trusted host owner review.")
             return
         request = self.pending_request
         if not request:
             return
+        candidate = review["wolf_client_id"]
+        self.review_source = review["source"]
+        source_label = (
+            "new Wolf ID observed since this node's owner-approved PIN pairing"
+            if self.review_source == "recent_pair" else
+            "sole active paired Wolf UI device")
         dialog = Gtk.MessageDialog(
             transient_for=self.window, modal=True,
             message_type=Gtk.MessageType.WARNING,
             buttons=Gtk.ButtonsType.NONE,
             text="Approve this restricted owner device?")
         dialog.format_secondary_text(
-            f"Host-observed active Wolf UI device: {candidate}\n"
+            f"Host-observed candidate: {candidate}\n"
+            f"Reason: {source_label}\n"
             f"Request code: {request['code']}\n"
             f"Key fingerprint: {request['fingerprint']}\n\n"
-            "Confirm you personally opened this exact Wolf UI stream from "
-            "the requesting device. This grants owner Games/Downloads access, "
-            "not a generic SSH shell. Do not approve if another device "
-            "might be streaming.")
+            "Confirm you personally paired or opened this exact Moonlight "
+            "device from this MacBook. The pairing witness is not cryptographic "
+            "proof of the key/certificate link. Approving installs only a "
+            "forced-command Games/Downloads key, never a generic shell. "
+            "Cancel if there is any ambiguity.")
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("Approve reviewed device", Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.CANCEL)
@@ -170,7 +181,8 @@ class EnrollmentWindow:
             return
         self.status.set_text("Requesting verified host owner authorization...")
         self.job(lambda: load("now_owner_client_approve", "owner-enroll-client.py").approve_reviewed_tailnet(
-            self.host, request["request_id"], request["code"], candidate),
+            self.host, request["request_id"], request["code"], candidate,
+            source=self.review_source),
             self.remote_approved)
 
     def remote_approved(self, success, error):
@@ -180,6 +192,7 @@ class EnrollmentWindow:
                 "The stream may have changed or the host may not allow it.")
             return
         self.pending_request = None
+        self.review_source = None
         self.review_button.set_sensitive(False)
         self.status.set_text(
             "REMOTE OWNER APPROVAL RECORDED. Use VERIFY ACCESS to confirm "

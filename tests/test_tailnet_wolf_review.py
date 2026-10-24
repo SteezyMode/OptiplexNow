@@ -196,5 +196,64 @@ class ApprovalHttpTests(unittest.TestCase):
         self.assertEqual(self.call("POST", APPROVE_ROUTE, self.approval())[0], 403)
 
 
+class RemoteOwnerClientContract(unittest.TestCase):
+    def setUp(self):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "test_now_owner_enroll_client", ROOT / "src/owner-enroll-client.py")
+        self.client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.client)
+
+    def test_client_review_cannot_grant_and_approval_posts_only_fixed_request(self):
+        calls = []
+        class Connection:
+            def __init__(self, host, port, timeout):
+                calls.append(("connection", host, port))
+                self.response = None
+            def request(self, method, path, body=None, headers=None):
+                calls.append((method, path, json.loads(body) if body else None))
+                self.response = (method, path)
+            def getresponse(self):
+                method, path = self.response
+                class Response:
+                    status = 200
+                    def read(self, limit):
+                        return json.dumps(
+                            {"success": True, "wolf_client_id": "1200"}
+                            if method == "GET" else
+                            {"success": True, "status": "approved"}).encode()
+                return Response()
+            def close(self):
+                pass
+
+        self.assertEqual(self.client.review_active_wolf(
+            "100.83.3.4", connection=Connection), "1200")
+        self.assertEqual(calls[-1], ("GET", REVIEW_ROUTE, None))
+        self.assertTrue(self.client.approve_reviewed_tailnet(
+            "100.83.3.4", "a"*32, "123456", "1200",
+            connection=Connection))
+        self.assertEqual(calls[-1][0:2], ("POST", APPROVE_ROUTE))
+        self.assertEqual(calls[-1][2],
+                         {"request_id": "a"*32, "code": "123456",
+                          "wolf_client_id": "1200", "confirmed": True})
+        for host in ("1.2.3.4", "192.168.1.1", "100.100.100.100",
+                     "wolf.example.com"):
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                self.client.review_active_wolf(host, connection=Connection)
+
+    def test_owner_ui_always_requires_approval_dialog(self):
+        ui = (ROOT / "src/owner-enroll-ui.py").read_text()
+        before_post = ui.split("    def review_done(", 1)[1].split(
+            "    def remote_approved(", 1)[0]
+        self.assertIn("dialog.run()", before_post)
+        self.assertIn("result != Gtk.ResponseType.OK", before_post)
+        self.assertLess(before_post.index("result != Gtk.ResponseType.OK"),
+                        before_post.index("approve_reviewed_tailnet("))
+        self.assertNotIn("ssh-copy-id", before_post)
+        package = (ROOT / "package.py").read_text()
+        self.assertIn("'tailnet_wolf_review.py'", package)
+        self.assertNotIn("tailnet_enrollment.py --serve", package)
+
+
 if __name__ == "__main__":
     unittest.main()

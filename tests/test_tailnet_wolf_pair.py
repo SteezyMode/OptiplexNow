@@ -140,7 +140,11 @@ class PairingHttpTests(unittest.TestCase):
         # The test HTTP loopback source is 127.0.0.1, and the fake Wolf
         # inventory must match that source to exercise endpoint plumbing.
         self.wolf.entries=[{"client_ip":"127.0.0.1","pair_secret":"hidden"}]
-        code,result=self.query("GET",PAIR_PENDING_ROUTE)
+        # The loopback fixture stands in for an already-verified Tailnet
+        # connection; production always validates the source in 100.64/10.
+        with mock.patch("tailnet_wolf_pair.tailnet_ipv4",
+                        side_effect=lambda ip: ip):
+            code,result=self.query("GET",PAIR_PENDING_ROUTE)
         self.assertEqual(code,200)
         self.assertEqual(result["clients"], [{"index":1,"client_ip":"127.0.0.1"}])
         self.assertNotIn("hidden",str(result))

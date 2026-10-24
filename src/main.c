@@ -1506,7 +1506,7 @@ static void wolf_ui_finished(GObject *source, GAsyncResult *result, gpointer dat
         gtk_label_set_text(GTK_LABEL(state->status),
             g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
             ? "Pairing request timed out or was cancelled. Refresh and retry."
-            : "Cannot reach pairing helper. Check SSH access and the host helper.");
+            : "Cannot reach pairing helper. Check the owner's Tailscale pairing service (or Advanced SSH fallback).");
         if (pairing) {
             state->count = 0;
             gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(state->clients));
@@ -1677,7 +1677,7 @@ static void wolf_pair_dialog(const char *generated_pin, GtkWindow *parent)
 }
 static void pair_wolf(GtkWidget *origin){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
- if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){say("SET SERVER IN SETTINGS");return;}
+ if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
  unsigned int random_value=0;
  if(getrandom(&random_value,sizeof random_value,0)!=(ssize_t)sizeof random_value){say("CANNOT GENERATE PAIRING PIN");return;}
  char pin[5];snprintf(pin,sizeof pin,"%04u",random_value%10000);
@@ -1756,7 +1756,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
- add(col,label("Moonlight/Wolf pairing and managed owner Games access are different. A paired client may open published Wolf apps, but NOW's managed Steam launch and private Downloads require separately approved restricted access. Alpha enrollment still needs preapproved owner SSH; it does not happen automatically.","helper"),0);
+ add(col,label("Moonlight/Wolf pairing and managed owner Games access are different. A paired client may open published Wolf apps, but NOW's managed Steam launch and private Downloads require separately approved restricted access. Remote Tailscale owner pairing requires an explicitly enabled host service; the legacy alpha fallback still needs preapproved owner SSH.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);

@@ -20,6 +20,8 @@ def _pending_for_peer(peer_ip, call_api):
         raise PolicyError("Wolf pairing requires an authenticated Tailscale source")
     reply = call_api("GET", "/api/v1/pair/pending")
     pending = reply.get("requests") if isinstance(reply, dict) else None
+    if pending is None:
+        pending = []
     if (not isinstance(reply, dict) or reply.get("success") is not True
             or not isinstance(pending, list) or len(pending) > MAX_PENDING):
         raise PolicyError("Wolf pending inventory unavailable")

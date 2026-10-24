@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Request owner-device approval over a known, already authorized owner SSH account.
+"""Stage a restricted owner device public key; no credentials are granted.
 
-This never transfers the private key, grants permissions, or guesses a Wolf
-identity. The actual owner completes the binding on the HOST GUI; end users
-must not receive host-admin SSH credentials.
+An opt-in owner-authenticated Tailscale listener is preferred. Existing trusted
+owner SSH remains as a controlled alpha fallback only when that listener is
+absent. The private key never leaves the client and no Wolf ID is guessed.
+Full remote owner approval and Wolf binding are NOT implemented here.
 """
 import http.client
 import ipaddress

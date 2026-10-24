@@ -195,10 +195,10 @@ class HttpPairEvidenceTests(unittest.TestCase):
             ("GET", "/api/v1/clients"),
             ("GET", "/api/v1/clients"),
             ("GET", "/api/v1/clients")])
-        self.assertEqual(self.candidate()[0], 400)
+        self.assertEqual(self.candidate()[0], 409)
 
     def test_cannot_approve_with_unwitnessed_key_or_other_client(self):
-        self.assertEqual(self.candidate()[0], 400)
+        self.assertEqual(self.candidate()[0], 409)
         self.assertEqual(self.confirm()[0], 400)
         self.assertEqual(self.stage()[0], 202)
         self.assertEqual(self.confirm()[0], 400)
@@ -210,7 +210,7 @@ class HttpPairEvidenceTests(unittest.TestCase):
         self.assertEqual(self.stage()[0], 202)
         self.assertEqual(self.pair()[0], 200)
         self.owner = (IDENTITY[0], "attacker-node")
-        self.assertEqual(self.candidate()[0], 400)
+        self.assertEqual(self.candidate()[0], 409)
         self.assertEqual(self.confirm()[0], 400)
         self.assertEqual(self.approved, [])
 
@@ -218,7 +218,7 @@ class HttpPairEvidenceTests(unittest.TestCase):
         self.assertEqual(self.stage()[0], 202)
         self.assertEqual(self.pair()[0], 200)
         self.wolf.identities.append("99999999999")
-        self.assertEqual(self.candidate()[0], 400)
+        self.assertEqual(self.candidate()[0], 409)
         self.assertEqual(self.confirm()[0], 400)
         self.assertEqual(self.approved, [])
 

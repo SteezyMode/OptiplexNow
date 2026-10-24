@@ -5,6 +5,8 @@ This never transfers the private key, grants permissions, or guesses a Wolf
 identity. The actual owner completes the binding on the HOST GUI; end users
 must not receive host-admin SSH credentials.
 """
+import http.client
+import ipaddress
 import importlib.machinery
 import importlib.util
 import json
@@ -62,6 +64,64 @@ def request(host, user, *, key_module=None, owner_key=None, runner=subprocess.ru
             or not HEX20.fullmatch(answer["fingerprint"])):
         raise ValueError("Untrusted owner enrollment response")
     return answer
+
+
+
+def request_tailnet(host, *, key_module=None, connection=http.client.HTTPConnection):
+    """Stage only a public key using a separately provisioned Tailscale listener.
+
+    The listener authenticates the actual Tailscale WhoIs peer and pinned owner.
+    This does not approve the key, bind Wolf IDs or install authorized_keys.
+    Normal clients never supply SSH usernames or administrator credentials.
+    """
+    try:
+        ip = ipaddress.ip_address(host)
+    except (TypeError, ValueError):
+        raise ValueError("Owner enrollment requires a Tailscale IPv4 host") from None
+    if (ip.version != 4 or ip not in ipaddress.ip_network("100.64.0.0/10")
+            or str(ip) == "100.100.100.100"):
+        raise ValueError("Owner enrollment requires a Tailscale IPv4 host")
+    games = key_module or _client_module()
+    _, public = games.ensure_key()
+    payload = json.dumps({"version": 1,
+                          "public_key": public.read_text(encoding="ascii").strip()},
+                         separators=(",", ":")).encode("ascii")
+    if len(payload) > 1024:
+        raise ValueError("Invalid restricted owner public key")
+    client = connection(host, 18793, timeout=6)
+    try:
+        client.request("POST", "/v1/owner/enrollment/request", body=payload,
+                       headers={"Content-Type": "application/json",
+                                "Accept": "application/json"})
+        response = client.getresponse()
+        raw = response.read(1025)
+        if response.status != 202 or len(raw) > 1024:
+            raise ValueError("Tailnet owner enrollment is unavailable or not authorized")
+        data = json.loads(raw)
+        if (not isinstance(data, dict) or set(data) != REQUIRED
+                or data.get("success") is not True or data.get("status") != "pending"
+                or not isinstance(data.get("request_id"), str)
+                or not HEX32.fullmatch(data["request_id"])
+                or not isinstance(data.get("code"), str)
+                or not CODE.fullmatch(data["code"])
+                or not isinstance(data.get("fingerprint"), str)
+                or not HEX20.fullmatch(data["fingerprint"])):
+            raise ValueError("Invalid tailnet owner enrollment response")
+        return data
+    finally:
+        client.close()
+
+
+def request_using_available_transport(host, user):
+    """Prefer narrow authenticated Tailnet staging; retain explicit owner pilot.
+
+    Existing already-authorized owner SSH is a development fallback only.
+    Neither route approves a key or weakens owner policy.
+    """
+    try:
+        return request_tailnet(host)
+    except (OSError, ValueError, UnicodeError, TimeoutError, json.JSONDecodeError):
+        return request(host, user)
 
 
 def main(argv=None):

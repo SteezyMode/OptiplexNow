@@ -1752,7 +1752,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
- add(col,label("Games requires an approved device key. Owner Steam opens through Wolf UI.","helper"),0);
+ add(col,label("Wolf pairing grants access to published streams, including Steam. NOW-managed Games and owner-only Downloads require a separate restricted host credential.","helper"),0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
@@ -1760,7 +1760,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(choose,"clicked",(GCallback)on_games_action,(void*)(long)105,NULL,0);add(col,choose,0);
  GtkWidget*pairbutton=button("CONNECT TO GAME HOST","setupaction");
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
- GtkWidget*request_owner=button("REQUEST OWNER DEVICE APPROVAL","setupaction");
+ GtkWidget*request_owner=button("ADVANCED: REQUEST RESTRICTED OWNER ACCESS","setupaction");
  g_signal_connect_data(request_owner,"clicked",(GCallback)on_games_action,
    (void*)(long)106,NULL,0);add(col,request_owner,0);
  GtkWidget*pin=button("OPEN WOLF PIN","setupaction");
@@ -2813,7 +2813,7 @@ static void wizard_action(void*w,void*p){
     gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
     return;
  }
- if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin")||!strcmp(n,"w_owner_request"))wizard_save(c);
+ if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
  if(!strcmp(n,"w_find"))find_server(c);
  else if(!strcmp(n,"w_ts"))setup_tailscale();
  else if(!strcmp(n,"w_ts_signup"))browser_open("https://login.tailscale.com/start");
@@ -2821,7 +2821,7 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf(w);
- else if(!strcmp(n,"w_owner_request"))on_games_action(NULL,(void*)(long)106);
+ 
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
@@ -2911,21 +2911,21 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
- wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL","w_owner_request");
  GtkWidget*owner_access_note=label(
-   "Moonlight pairing alone is not owner-service approval. Use REQUEST OWNER "
-   "DEVICE APPROVAL, then confirm the request and Wolf identity on the host. "
-   "This alpha-only pilot still needs preapproved owner SSH for bootstrap; "
-   "ordinary client onboarding is not yet turnkey.", "helper");
+   "Wolf pairing lets this device open the host's published game streams. "
+   "Owner-only Downloads and managed host operations require separate "
+   "restricted authorization under Settings > Gaming & Streaming. "
+   "Alpha limitation: this pairing helper still depends on preapproved owner SSH; "
+   "no-SSH client enrollment is not yet implemented.", "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
  add(four,owner_access_note,0);
- wizard_button(c,four,"ADVANCED PAIRING HELP","w_wolfpin");
+ 
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Games and Downloads require approved device access. Videos uses authorized Jellyfin discovery when available; Music is optional. Manual service URL overrides remain in Settings > Connections > Advanced Settings. This owner-only pilot still requires physical acceptance.",
+   "Wolf-paired devices can open published games. Owner-only Downloads and managed host operations require restricted access from Gaming & Streaming settings. Videos uses authorized Jellyfin discovery when available; Music is optional. Service URL overrides remain in Advanced Settings.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);

@@ -189,15 +189,22 @@ class FreshPairClientTests(unittest.TestCase):
                 class Reply:
                     status = 200
                     def read(self, n):
-                        return json.dumps({"success": True, "status": "prepared"}
-                                          if path == PAIR_PREPARE_ROUTE else
-                                          {"success": True}).encode()
+                        return json.dumps(
+                            {"success": True, "status": "prepared"}
+                            if path == PAIR_PREPARE_ROUTE else
+                            {"success": True, "clients": [
+                                {"index": 2, "client_ip": SOURCE}]}
+                            if path == PAIR_PENDING_ROUTE else
+                            {"success": True}).encode()
                 return Reply()
             def close(self):
                 pass
         self.assertEqual(client.invoke_tailnet(
             HOST, "prepare", connection=Conn)["status"], "prepared")
         self.assertEqual(routes[-1], ("POST", PAIR_PREPARE_ROUTE, {}))
+        self.assertEqual(client.invoke_tailnet(
+            HOST, "pending", connection=Conn)["clients"], [
+                {"index": 2, "client_ip": SOURCE}])
         self.assertEqual(client.invoke_tailnet(
             HOST, "pair", {
                 "index": 2, "client_ip": SOURCE, "pin": "0419"},

@@ -31,6 +31,7 @@ class EnrollmentWindow:
         self.host, self.user = host, user
         self.closed = False
         self.busy = False
+        self.pending_request = None
         self.window = Gtk.Window(title="NOW | Request Owner Access")
         self.window.set_default_size(440, 265)
         self.window.connect("destroy", self.destroy)
@@ -42,8 +43,9 @@ class EnrollmentWindow:
         column.pack_start(heading, False, False, 0)
         info = Gtk.Label(
             label="Request a separate Games/Downloads device credential.\n"
-                  "Only the owner at the server can approve it. This does not "
-                  "alter Moonlight pairing or the server's Steam session.")
+                  "An owner with verified Tailscale access can review the active "
+                  "Wolf UI stream remotely when the host has enabled it. "
+                  "Otherwise use the existing host-only owner pilot.")
         info.set_xalign(0)
         info.set_line_wrap(True)
         column.pack_start(info, False, False, 0)
@@ -65,6 +67,10 @@ class EnrollmentWindow:
         self.check_button = Gtk.Button(label="VERIFY ACCESS")
         self.check_button.connect("clicked", self.verify)
         row.pack_start(self.check_button, True, True, 0)
+        self.review_button = Gtk.Button(label="REVIEW WOLF DEVICE / APPROVE REMOTELY")
+        self.review_button.set_sensitive(False)
+        self.review_button.connect("clicked", self.review)
+        column.pack_start(self.review_button, False, False, 0)
         self.window.show_all()
 
     def destroy(self, *_):
@@ -77,6 +83,7 @@ class EnrollmentWindow:
         self.busy = True
         self.request_button.set_sensitive(False)
         self.check_button.set_sensitive(False)
+        self.review_button.set_sensitive(False)
 
         def run():
             try:
@@ -94,10 +101,13 @@ class EnrollmentWindow:
         self.busy = False
         self.request_button.set_sensitive(True)
         self.check_button.set_sensitive(True)
+        self.review_button.set_sensitive(self.pending_request is not None)
         callback(answer, error)
         return False
 
     def request(self, *_):
+        self.pending_request = None
+        self.review_button.set_sensitive(False)
         self.status.set_text("Contacting owner server through Tailscale...")
         self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
             self.host, self.user), self.request_done)
@@ -109,13 +119,71 @@ class EnrollmentWindow:
                 "The server owner must install and enable the supported "
                 "owner enrollment components. No access was granted.")
             return
+        self.pending_request = answer
+        self.review_button.set_sensitive(True)
         self.status.set_text(
-            "PENDING OWNER APPROVAL. On the host, open NOW Owner Approvals. "
-            "Compare this code and independently verify the Wolf device ID.")
+            "PENDING OWNER APPROVAL. If remote review is enabled, keep the "
+            "new device's Wolf UI stream open and choose Review below. "
+            "Otherwise the owner must approve on the host.")
         self.code.set_text(
             f"REQUEST CODE: {answer['code']}\n"
             f"KEY FINGERPRINT: {answer['fingerprint']}\n"
             "Do not transfer your private key. Click Verify Access after approval.")
+
+    def review(self, *_):
+        if self.pending_request is None:
+            return
+        self.status.set_text(
+            "Checking the host's single currently active paired Wolf UI stream...")
+        self.job(lambda: load("now_owner_client_review", "owner-enroll-client.py").review_active_wolf(
+            self.host), self.review_done)
+
+    def review_done(self, candidate, error):
+        if error:
+            self.status.set_text(
+                "Remote review unavailable, or multiple/zero Wolf UI streams. "
+                "No approval was granted. Use the host owner approval pilot if needed.")
+            return
+        request = self.pending_request
+        if not request:
+            return
+        dialog = Gtk.MessageDialog(
+            transient_for=self.window, modal=True,
+            message_type=Gtk.MessageType.WARNING,
+            buttons=Gtk.ButtonsType.NONE,
+            text="Approve this restricted owner device?")
+        dialog.format_secondary_text(
+            f"Host-observed active Wolf UI device: {candidate}\n"
+            f"Request code: {request['code']}\n"
+            f"Key fingerprint: {request['fingerprint']}\n\n"
+            "Confirm you personally opened this exact Wolf UI stream from "
+            "the requesting device. This grants owner Games/Downloads access, "
+            "not a generic SSH shell. Do not approve if another device "
+            "might be streaming.")
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Approve reviewed device", Gtk.ResponseType.OK)
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        result = dialog.run()
+        dialog.destroy()
+        if result != Gtk.ResponseType.OK:
+            self.status.set_text("Remote approval cancelled. No access granted.")
+            return
+        self.status.set_text("Requesting verified host owner authorization...")
+        self.job(lambda: load("now_owner_client_approve", "owner-enroll-client.py").approve_reviewed_tailnet(
+            self.host, request["request_id"], request["code"], candidate),
+            self.remote_approved)
+
+    def remote_approved(self, success, error):
+        if error or success is not True:
+            self.status.set_text(
+                "Remote owner approval was refused. No privileges assumed. "
+                "The stream may have changed or the host may not allow it.")
+            return
+        self.pending_request = None
+        self.review_button.set_sensitive(False)
+        self.status.set_text(
+            "REMOTE OWNER APPROVAL RECORDED. Use VERIFY ACCESS to confirm "
+            "the separate restricted credential works.")
 
     def verify(self, *_):
         self.status.set_text("Checking the restricted host authorization...")
@@ -126,7 +194,7 @@ class EnrollmentWindow:
         if error:
             self.status.set_text(
                 "Not approved yet, or host unavailable. "
-                "The owner must confirm this device on the host first.")
+                "Request a device review or ask the owner to approve access.")
         else:
             self.status.set_text(
                 "OWNER ACCESS VERIFIED. Games and authorized Downloads can now connect.")

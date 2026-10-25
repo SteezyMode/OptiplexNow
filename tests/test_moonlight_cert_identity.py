@@ -83,7 +83,7 @@ class CertificateBindingTests(unittest.TestCase):
         vectors = {
             b"hello": "2762169579135187400",
             b"": "6142509188972423790",
-            b"-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----\\n":
+            b"-----BEGIN CERTIFICATE-----\nabc\n-----END CERTIFICATE-----\n":
                 "2397079258150423612",
         }
         for raw, expected in vectors.items():

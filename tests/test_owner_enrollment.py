@@ -100,7 +100,7 @@ class OwnerEnrollmentTests(unittest.TestCase):
                 wolf_api=api, now=self.now)
 
         for client, ip, error in (
-            ("1002", source, "differs from requester"),
+            ("1002", source, "differs from verified requester"),
             ("1001", "192.168.40.59", "origin differs"),
         ):
             with self.subTest(client=client, ip=ip):

@@ -63,10 +63,11 @@ class QrCodeTests(unittest.TestCase):
 class PhoneHTTPTests(unittest.TestCase):
     def setUp(self):
         self.owner=True
+        self.node="phoneNode"
         self.entries=[{"request_id":REQUEST,"fingerprint":FP,"seconds_remaining":500}]
         self.approvals=[]
         def verify(addr,owner):
-            return ("1042","phoneNode") if self.owner and owner=="1042" else None
+            return ("1042",self.node) if self.owner and owner=="1042" else None
         def pending(state):
             return self.entries
         def approve(state,rid,code,client,*,wolf_api,approval):
@@ -74,7 +75,8 @@ class PhoneHTTPTests(unittest.TestCase):
             return {"success":True,"status":"approved"}
         self.server=HTTPServer(("127.0.0.1",0),make_handler(
             "1042","/private/owner",verify=verify,pending=pending,
-            remote_approve_enabled=True,approve=approve,wolf_factory=lambda:object()))
+            remote_approve_enabled=True,approver_node_id="phoneNode",
+            approve=approve,wolf_factory=lambda:object()))
         self.worker=threading.Thread(target=self.server.serve_forever,
                                      kwargs={"poll_interval":0.01},daemon=True)
         self.worker.start()
@@ -110,6 +112,16 @@ class PhoneHTTPTests(unittest.TestCase):
         self.entries=[]
         self.assertEqual(self.call("GET",PAGE_PREFIX+REQUEST)[0],404)
         self.assertEqual(self.call("GET",PAGE_PREFIX+REQUEST+"?x=1")[0],404)
+
+    def test_same_tailnet_owner_client_may_not_masquerade_as_phone(self):
+        self.node="unapprovedClient"
+        self.assertEqual(self.call("GET",PAGE_PREFIX+REQUEST)[0],403)
+        target={"request_id":REQUEST,"code":CODE,
+                "wolf_client_id":"100123456","confirmed":True}
+        self.assertEqual(self.call("POST",APPROVE_ROUTE,target)[0],403)
+        self.assertEqual(self.approvals,[])
+        self.node="phoneNode"
+        self.assertEqual(self.call("GET",PAGE_PREFIX+REQUEST)[0],200)
 
     def test_browser_same_origin_and_verified_owner(self):
         target={"request_id":REQUEST,"code":CODE,"wolf_client_id":"100123456","confirmed":True}

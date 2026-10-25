@@ -201,7 +201,12 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                     if remote_approve_enabled and owner_pair_enabled:
                         witness.staged(identity, self.client_address[0],
                                        result["request_id"])
-                    result = dict(result, phone_approval_available=remote_approve_enabled)
+                    # Don't advertise QR when only the older source-based
+                    # review was enabled. The actual client requires a
+                    # configured certificate verifier AND a pinned phone.
+                    result = dict(result, phone_approval_available=(
+                        remote_approve_enabled and wolf_config is not None
+                        and approver_node_id is not None))
                     self._send(202, result)
                     return
                 if self.path == PAIRED_CANDIDATE_ROUTE:

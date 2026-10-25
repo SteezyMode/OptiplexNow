@@ -121,6 +121,7 @@ class PhoneQrHttpEndToEnd(unittest.TestCase):
                                    {"version": 1, "public_key": self.public_key})
         self.assertEqual(status, 202, result)
         self.assertEqual(result["status"], "pending")
+        self.assertIs(result.get("phone_approval_available"), True)
         return result
 
     def signed_proof(self, request):

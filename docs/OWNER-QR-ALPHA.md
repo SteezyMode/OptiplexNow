@@ -11,3 +11,15 @@ The host-local approval UI no longer exposes a list of arbitrary Wolf IDs. A cli
 The phone page requires explicit verified Tailscale owner identity, exact Host/Origin constraints, six-digit code comparison and Approve action; scanning alone grants nothing. The QR is generated locally with qrencode, the code is in a URL fragment, and the owner listener is separately opt-in over the host Tailnet IPv4 at TCP 18793. Installing a client .deb does NOT run this host service, create accounts or modify keys.
 
 **Remaining acceptance:** green CI negatives; clean client QR and direct source match on real hardware; wrong source/identity/owner/replay; mixed LAN/Tailnet certificate-level proof; clean-host recovery/rollback. Keep the repaired Mac mini authorization intact.
+
+## October 25 — Moonlight certificate proof prototype (source-only)
+
+The next secure cross-network binding uses an existing owner-device identity, NOT a public website or new NOW account. Upstream Wolf retains the Moonlight client public certificate in its private host config.toml; Moonlight Qt stores the corresponding private key in the client's own QSettings. Wolf derives its numeric client ID from the certificate. Relevant upstream docs: https://games-on-whales.github.io/wolf/stable/user/configuration.html and https://github.com/moonlight-stream/moonlight-qt/blob/master/app/backend/identitymanager.cpp .
+
+**Implemented in draft PR #184 as an offline-tested, unconnected prototype:**
+- server/moonlight_cert_identity.py constructs a bounded, domain-separated request challenge over the one-time request ID, six-digit code and the exact staged restricted SSH public-key fingerprint; verifies an RSA/SHA-256 detached signature using the submitted PUBLIC certificate; checks that it is in the host-owned Wolf paired-client TOML registry and that Wolf's API still considers the intended ID paired.
+- src/moonlight-identity-proof.py reads one specified Moonlight Qt QSettings identity locally (read-only) and signs the challenge using the corresponding private key. The client sends only a public certificate and signature, NEVER the private key. Ambiguous or unreadable Qt profiles fail closed.
+- tests/test_moonlight_cert_identity.py exercises real generated X.509/RSA keypairs, challenge tampering, wrong/removed registry certificate, unpaired ID, invalid key material, and untrusted registry permissions. No real Wolf, SSH or network state is modified.
+
+**Still NOT done:** A verified host inventory path to the actual running Wolf TOML file; a server-bound staging/attestation endpoint with strict same-request/source access; client identity profile discovery (Moonlight Qt AppImage and non-Qt clients differ); persisting/rechecking the verified Wolf ID in the atomic owner grant; packaging dependency review; real cross-network tests. Until each is implemented and physically verified, the existing source-address guard MUST stay fail-closed, and no QR approval may claim Moonlight certificate verification. Custom app_state_folder mappings also fail closed under the prototype. No certificate proof secret should ever be written to a log or a QR code.
+

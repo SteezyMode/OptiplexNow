@@ -73,7 +73,7 @@ Tracking: [#137](https://github.com/SteezyMode/OptiplexNow/issues/137), [#98](ht
 
 ## Current blocker order (October 25)
 
-1. **P0: owner device identity / enrollment.** No selectable Wolf numeric ID. Source-matched live Wolf UI proof is in draft PR #184, but certificate-level identity proof across LAN and Tailscale remains open. A wrong-ID grant must be impossible from any approval path. Issue #191.
+1. **P0: owner device identity / enrollment.** No selectable Wolf numeric ID. Draft PR #184 now implements a certificate-signed, request-bound QR approval checked against the real Wolf registry, with a separately pinned Tailscale owner phone. Offline HTTP/transaction tests pass and the Mac mini certificate→Wolf ID was verified physically; **the listener is not yet deployed and iPhone QR/clean-client approval is untested**. Mixed LAN/Tailscale transport selection, new-client Wolf pairing, safe deployment/recovery and wrong-phone physical negatives remain blockers. Issue #191.
 2. **P0: Games authorization truth.** Wolf pairing can still permit access to Wolf-published Steam independently of restricted NOW owner credentials. Decide and enforce truthful owner-only service boundaries before onboarding external testers; issue #192.
 3. **P0: complete Games, Video and Private Downloads.** The repaired Mac mini reference client physically passed managed Big Picture launch and natural exit. Fresh-host acceptance, zero-URL Jellyfin, and VPN egress/kill-switch plus owner download management remain incomplete.
 4. **P1: guided safe host install/adopt and reliable recovery.** Independent clean disposable host and client, rollback, understandable errors, tray preservation, incremental main.c modularization.

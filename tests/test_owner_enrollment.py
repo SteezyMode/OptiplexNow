@@ -74,6 +74,57 @@ class OwnerEnrollmentTests(unittest.TestCase):
         self.assertEqual(stat.S_IMODE(request_file.stat().st_mode), 0o600)
         self.assertEqual(stat.S_IMODE(request_file.parent.stat().st_mode), 0o700)
 
+    def test_live_source_binding_rejects_wrong_wolf_id_and_network_route(self):
+        """Regression: wrong numeric picker must never grant another device."""
+        source = "192.168.40.90"
+        request = stage_request(self.state, public_key(b"x"),
+                                source_ip=source, now=self.now)
+        data = {
+            "/api/v1/clients": {"success": True, "clients": [
+                {"client_id": "1001"}, {"client_id": "1002"}]},
+            "/api/v1/apps": {"success": True, "apps": [
+                {"id": "wolf-ui-app", "title": "Wolf UI"}]},
+            "/api/v1/lobbies": {"success": True, "lobbies": []},
+            "/api/v1/sessions": {"success": True, "sessions": [{
+                "client_id": "1001", "client_ip": source,
+                "app_id": "wolf-ui-app"}]},
+        }
+        def api(method, path):
+            self.assertEqual(method, "GET")
+            return data[path]
+        def approve(client):
+            return approve_request(
+                self.state, request["request_id"], request["code"], client,
+                confirmed=True, auth_path=self.auth, broker_path=self.broker,
+                wolf_api=api, now=self.now)
+
+        for client, ip, error in (
+            ("1002", source, "differs from requester"),
+            ("1001", "192.168.40.59", "origin differs"),
+        ):
+            with self.subTest(client=client, ip=ip):
+                data["/api/v1/sessions"]["sessions"][0]["client_ip"] = ip
+                with self.assertRaisesRegex(PolicyError, error):
+                    approve(client)
+                self.assertEqual(self.auth.read_text(), self.original)
+                self.assertEqual([d["client_id"] for d in self.load()["devices"]], ["1001"])
+        # On a correctly matched request, and ONLY then, the existing
+        # atomic owner enrollment transaction may proceed.
+        data["/api/v1/sessions"]["sessions"][0].update(
+            client_id="1002", client_ip=source)
+        self.assertEqual(approve("1002")["status"], "approved")
+        self.assertIn("--client-id 1002", self.auth.read_text())
+
+    def test_legacy_or_ambiguous_stream_cannot_create_new_grant(self):
+        """Old requests without measured source cannot bypass binding."""
+        request = self.stage(public_key(b"z"))
+        with self.assertRaisesRegex(PolicyError, "Legacy request"):
+            approve_request(
+                self.state, request["request_id"], request["code"], "1002",
+                confirmed=True, auth_path=self.auth, broker_path=self.broker,
+                wolf_api=self.wolf, now=self.now)
+        self.assertEqual(self.auth.read_text(), self.original)
+
     def test_verified_owner_approval_preserves_old_owner_and_ssh(self):
         request = self.stage()
         result = self.approve(request)

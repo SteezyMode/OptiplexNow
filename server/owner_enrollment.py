@@ -120,7 +120,6 @@ def _read_request_file(path):
                 {"request_id", "code", "created", "public_key"}):
             raise PolicyError("Invalid enrollment request")
         obj["source_ip"] = None
-        raise PolicyError("Invalid enrollment request")
     if (not REQUEST_ID.fullmatch(obj["request_id"])
             or not CODE.fullmatch(obj["code"])
             or type(obj["created"]) is not int):

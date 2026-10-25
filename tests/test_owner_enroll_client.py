@@ -94,7 +94,7 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertIn("confirmed=True", host_ui)
         self.assertIn("self.verified.get_active()", host_ui)
         self.assertIn("typed != self.requests[request_index]", host_ui)
-        self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", main)
+        self.assertIn("APPROVE THIS DEVICE (OWNER QR)", main)
         self.assertNotIn('wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL"', main)
         self.assertIn("owner-enroll-ui.py", main)
         self.assertIn("owner_enrollment.py", pkg)

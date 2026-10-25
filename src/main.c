@@ -1692,6 +1692,21 @@ static void wolf_pair_dialog(const char *generated_pin, GtkWindow *parent)
     state->auto_refresh_id = g_timeout_add_seconds(3, wolf_ui_auto_refresh, state);
     wolf_ui_start(state, "pending-text", NULL);
 }
+static void on_owner_enrollment(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  say("SET AN APPROVED OWNER SERVER IN SETTINGS FIRST");
+  open_games_settings(NULL,NULL);
+  return;
+ }
+ gchar *argv[]={"/usr/bin/python3",
+  "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
+ GError *error=NULL;
+ if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+  say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
+  g_clear_error(&error);
+ }
+}
 static void pair_wolf(GtkWidget *origin){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
  if(!now_valid_host(cfg[0])){say("SET SERVER IN SETTINGS");return;}
@@ -1713,21 +1728,6 @@ static void pair_wolf(GtkWidget *origin){
  memset(pin,0,sizeof pin);
  /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
-}
-static void on_owner_enrollment(GtkWidget*w,gpointer data){
- (void)w;(void)data;
- if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-  say("SET AN APPROVED OWNER SERVER IN SETTINGS FIRST");
-  open_games_settings(NULL,NULL);
-  return;
- }
- gchar *argv[]={"/usr/bin/python3",
-  "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
- GError *error=NULL;
- if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
-  say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
-  g_clear_error(&error);
- }
 }
 static void on_games_action(void*w,void*arg){
  int resp=(int)(long)arg;

@@ -54,6 +54,31 @@ def pinned_owner_id(path):
         os.close(fd)
 
 
+def pinned_approver_node_id(path):
+    """Pin an existing owner's trusted phone StableID from host-local setup.
+
+    A signed-in computer on the same Tailscale *account* is not automatically
+    trusted to approve itself. Only a separately preapproved phone node may
+    open approval pages or POST an owner grant.
+    """
+    pathname = Path(path)
+    if not pathname.is_absolute() or pathname.is_symlink():
+        raise ValueError("Unsafe pinned owner phone file")
+    fd = os.open(pathname, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    try:
+        meta = os.fstat(fd)
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
+                or stat.S_IMODE(meta.st_mode) != 0o600
+                or meta.st_nlink != 1 or not 1 <= meta.st_size <= 128):
+            raise ValueError("Unsafe pinned owner phone file")
+        raw = os.read(fd, 129).decode("ascii").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", raw):
+            raise ValueError("Invalid owner phone StableID")
+        return raw
+    finally:
+        os.close(fd)
+
+
 def peer_from_whois(source, result):
     """Return verified (user ID, node ID), never names, IP alone or headers."""
     address = tailnet_ipv4(source)

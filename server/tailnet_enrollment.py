@@ -12,7 +12,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import sys
 
-from tailnet_owner_identity import own_tailnet_ipv4, pinned_owner_id, verify_owner_peer
+from tailnet_owner_identity import (own_tailnet_ipv4, pinned_owner_id,
+                                    pinned_approver_node_id, verify_owner_peer)
 from owner_enrollment import (_read_private_config, stage_request,
                               pending_requests, approve_request, REQUEST_ID)
 from owner_qr_approval import PAGE_PREFIX, parse_page_request, render_page
@@ -46,7 +47,8 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                  remote_approve_enabled=False, owner_pair_enabled=False,
                  pair_api=host_wolf_pair_api, commit=approve_request,
                  witness=None, require_fresh_pairing=False, fresh_window=None,
-                 pending=pending_requests, wolf_config=None):
+                 pending=pending_requests, wolf_config=None,
+                 approver_node_id=None):
     witness = witness if witness is not None else PairingWitness()
     fresh_window = fresh_window if fresh_window is not None else FreshPairWindow()
 
@@ -126,7 +128,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                 self._send(404, {"success": False, "status": "not_found"})
                 return
             identity = self._verified_owner()
-            if not identity:
+            if not identity or (self.path == APPROVE_ROUTE
+                                and approver_node_id is not None
+                                and identity[1] != approver_node_id):
                 self._send(403, {"success": False, "status": "forbidden"})
                 return
             if ((self.path in (APPROVE_ROUTE, PAIRED_CANDIDATE_ROUTE)
@@ -264,7 +268,10 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
 
         def do_GET(self):
             if self.path.startswith(PAGE_PREFIX):
-                if not remote_approve_enabled or not self._verified_owner():
+                page_peer = self._verified_owner()
+                if (not remote_approve_enabled or not page_peer or
+                        (approver_node_id is not None and
+                         page_peer[1] != approver_node_id)):
                     self._send(403, {"success": False, "status": "forbidden"})
                     return
                 try:
@@ -340,6 +347,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", action="store_true")
+    parser.add_argument("--approver-node-id-file", help=(
+        "Required host-local private Tailscale StableID of the trusted "
+        "owner phone; same-account clients may request but not self-approve."))
     parser.add_argument("--wolf-config", help=(
         "Opt-in trusted local host Wolf TOML path for certificate-based QR "
         "proof; e.g. /etc/wolf/cfg/config.toml. Never a client-supplied path."))
@@ -355,6 +365,10 @@ def main(argv=None):
     try:
         if args.require_fresh_wolf_pairing and not args.enable_owner_wolf_pairing:
             raise ValueError("Fresh request proof requires owner pairing endpoint")
+        if args.enable_remote_approval and not args.approver_node_id_file:
+            raise PolicyError("Remote approval requires a pre-pinned owner phone")
+        approver_node = (pinned_approver_node_id(args.approver_node_id_file)
+                         if args.approver_node_id_file else None)
         owner_id = pinned_owner_id(args.owner_id_file)
         host_ip = own_tailnet_ipv4()
         config = _read_private_config()
@@ -372,7 +386,8 @@ def main(argv=None):
                 remote_approve_enabled=args.enable_remote_approval,
                 owner_pair_enabled=args.enable_owner_wolf_pairing,
                 require_fresh_pairing=args.require_fresh_wolf_pairing,
-                wolf_config=args.wolf_config)) as server:
+                wolf_config=args.wolf_config,
+                approver_node_id=approver_node)) as server:
             server.timeout = 3
             print("Owner staging enabled on the host's Tailscale address only.")
             server.serve_forever(poll_interval=0.2)

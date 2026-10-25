@@ -58,6 +58,8 @@ def _read_proof(state_dir, request_id):
 
 
 def _load_request(state_dir, request_id, *, now=None):
+    if not isinstance(request_id, str) or REQUEST_ID.fullmatch(request_id) is None:
+        raise PolicyError("Invalid proof request reference")
     current = int(time.time() if now is None else now)
     entry = _read_request_file(_stage_dir(state_dir) / request_id)
     if entry["request_id"] != request_id or entry["created"] + TTL <= current:

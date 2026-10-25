@@ -46,13 +46,13 @@ button:disabled{background:#6d6f69;color:#ddd}.warn{color:#e8c28f}#status{min-he
 <div class="info">
 <p>Device verification code: <strong id="code" class="warn">—</strong></p>
 <p>Restricted key fingerprint: <code>@@FINGERPRINT@@</code></p>
-<p>Wolf device observed by host: <code id="client">Checking…</code></p>
-<small>Request expires in at most @@SECONDS@@ seconds. Only the unique active paired Wolf UI session can be approved. No Steam session can be running during review.</small>
+<p>Moonlight identity: <code id="client">Checking…</code></p>
+<small>Expires in at most @@SECONDS@@ seconds. The host checks the requesting computer's signed Moonlight certificate against Wolf's paired records.</small>
 </div>
-<p id="status" role="status">Checking the live Wolf session…</p>
+<p id="status" role="status">Checking the requesting device's identity…</p>
 <button id="approve" disabled>Approve owner device</button>
-<button id="refresh" type="button">Check Wolf session again</button>
-<p><small>Approval grants this client only the existing restricted Games/Downloads credential, not an administrator shell. No active-session identity: no approval.</small></p>
+<button id="refresh" type="button">Verify device again</button>
+<p><small>Approval grants only the restricted Games/Downloads credential, not a remote administrator shell. A QR code alone never grants access.</small></p>
 <script nonce="@@NONCE@@">
 "use strict";
 (function(){
@@ -68,18 +68,18 @@ button:disabled{background:#6d6f69;color:#ddd}.warn{color:#e8c28f}#status{min-he
   async function inspect(){
     candidate=null;approve.disabled=true;
     if(!/^[0-9]{6}$/.test(code)){message("QR code is incomplete. Rescan it on the requesting device.");return;}
-    message("Checking for one paired Wolf UI session…");
+    message("Checking this computer's proof against Wolf…");
     try {
       var resp=await fetch("/v1/owner/enrollment/wolf-candidate/"+requestId,{cache:"no-store",credentials:"omit"});
       var data=await resp.json();
       if(!resp.ok||data.success!==true||!/^[0-9]{1,20}$/.test(data.wolf_client_id)){
-        wolf.textContent="No unique eligible session";
-        message("No matching device. Stream Wolf UI using the same network path as this computer's enrollment, then check again.");
+        wolf.textContent="Unverified";
+        message("This computer has not been verified. Complete the signed Moonlight proof in NOW and check again.");
         return;
       }
       candidate=data.wolf_client_id;
-      wolf.textContent=candidate;
-      message("Compare the six-digit code and fingerprint on your computer. Approve only if this is your Wolf session.");
+      wolf.textContent="Paired device · …"+candidate.slice(-4);
+      message("The host has verified this computer's Moonlight identity. Compare the request code and key fingerprint before approving.");
       approve.disabled=false;
     }catch(error){wolf.textContent="Unavailable";message("The host cannot verify Wolf. Check Tailscale and retry.");}
   }

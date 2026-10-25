@@ -13,7 +13,7 @@ from threading import Thread
 
 import gi
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk
+from gi.repository import GLib, Gtk, GdkPixbuf
 
 ROOT = Path(__file__).resolve().parent
 
@@ -34,11 +34,14 @@ class EnrollmentWindow:
         self.pending_request = None
         self.review_source = None
         self.window = Gtk.Window(title="NOW | Request Owner Access")
-        self.window.set_default_size(440, 265)
+        self.window.set_default_size(460, 550)
         self.window.connect("destroy", self.destroy)
         column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=13)
         column.set_border_width(22)
-        self.window.add(column)
+        scroll = Gtk.ScrolledWindow()
+        scroll.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        self.window.add(scroll)
+        scroll.add(column)
         heading = Gtk.Label(label="APPROVE THIS DEVICE")
         heading.set_xalign(0)
         column.pack_start(heading, False, False, 0)
@@ -72,7 +75,23 @@ class EnrollmentWindow:
         self.review_button.set_sensitive(False)
         self.review_button.connect("clicked", self.review)
         column.pack_start(self.review_button, False, False, 0)
+        self.qr_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.qr_box.set_no_show_all(True)
+        self.qr_label = Gtk.Label(label="SCAN ON YOUR OWNER PHONE (TAILSCALE ON)")
+        self.qr_label.set_xalign(0)
+        self.qr_box.pack_start(self.qr_label, False, False, 0)
+        self.qr_image = Gtk.Image()
+        self.qr_box.pack_start(self.qr_image, False, False, 0)
+        self.qr_hint = Gtk.Label(
+            label="Keep this device's Wolf UI stream open. On your phone, "
+                  "check the code and fingerprint, then tap Approve. "
+                  "No public website or third-party QR generator is used.")
+        self.qr_hint.set_xalign(0)
+        self.qr_hint.set_line_wrap(True)
+        self.qr_box.pack_start(self.qr_hint, False, False, 0)
+        column.pack_start(self.qr_box, False, False, 0)
         self.window.show_all()
+        self.qr_box.hide()
 
     def destroy(self, *_):
         self.closed = True
@@ -110,9 +129,10 @@ class EnrollmentWindow:
         self.pending_request = None
         self.review_source = None
         self.review_button.set_sensitive(False)
+        self.qr_box.hide()
         self.status.set_text("Contacting owner server through Tailscale...")
         self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
-            self.host, self.user), self.request_done)
+            self.host, self.user, include_transport=True), self.request_done)
 
     def request_done(self, answer, error):
         if error:
@@ -131,6 +151,30 @@ class EnrollmentWindow:
             f"REQUEST CODE: {answer['code']}\n"
             f"KEY FINGERPRINT: {answer['fingerprint']}\n"
             "Do not transfer your private key. Click Verify Access after approval.")
+        if answer.get("transport") == "tailnet":
+            try:
+                qr = load("now_owner_qr", "owner-qr.py")
+                url = qr.approval_url(self.host, answer["request_id"], answer["code"])
+                png = qr.qr_png(url)
+                loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+                loader.write(png)
+                loader.close()
+                self.qr_image.set_from_pixbuf(loader.get_pixbuf())
+                self.qr_box.show_all()
+                self.status.set_text(
+                    "SCAN THE QR WITH YOUR OWNER PHONE. Open the Moonlight "
+                    "Wolf UI session first, then approve the observed device "
+                    "from your phone. The host must explicitly enable remote "
+                    "owner approval; no permissions are granted by scanning.")
+            except (OSError, ValueError):
+                self.status.set_text(
+                    "Request staged, but the QR image could not be made. "
+                    "Check the qrencode package. Host-local approval remains available.")
+        else:
+            self.status.set_text(
+                "Request staged via existing owner SSH; the optional Tailnet "
+                "phone approval service is not running. Approve on the host "
+                "or enable its reviewed owner-only Tailnet listener.")
 
     def review(self, *_):
         if self.pending_request is None:

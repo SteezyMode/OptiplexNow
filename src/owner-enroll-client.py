@@ -232,19 +232,21 @@ def approve_reviewed_tailnet(host, request_id, code, wolf_client_id, *,
         client.close()
 
 
-def request_using_available_transport(host, user):
+def request_using_available_transport(host, user, *, include_transport=False):
     """Prefer narrow authenticated Tailnet staging; retain explicit owner pilot.
 
     Existing already-authorized owner SSH is a development fallback only.
     Neither route approves a key or weakens owner policy.
     """
     try:
-        return request_tailnet(host)
+        result = request_tailnet(host)
+        return dict(result, transport="tailnet") if include_transport else result
     except ConnectionRefusedError:
         # Only an absent pilot service permits the existing trusted owner
         # alpha path. An explicit 403, malformed response or wrong identity
         # must NOT be silently routed around through administrator SSH.
-        return request(host, user)
+        result = request(host, user)
+        return dict(result, transport="ssh") if include_transport else result
 
 
 def main(argv=None):

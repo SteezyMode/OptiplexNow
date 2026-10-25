@@ -156,7 +156,8 @@ class CertificateBindingTests(unittest.TestCase):
             dest.parent.mkdir(parents=True)
             dest.write_bytes(self.clientconf.read_bytes())
             dest.chmod(0o600)
-        with patch("pathlib.Path.home", return_value=home):
+        with (patch("pathlib.Path.home", return_value=home),
+              patch.dict("os.environ", {"XDG_CONFIG_HOME": str(home / ".config")})):
             self.assertEqual(client.unique_moonlight_config(), native)
             other_cert, other_key = credentials()
             flatpak.write_text(

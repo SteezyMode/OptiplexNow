@@ -17,18 +17,40 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding, rsa
 
 MAX_QSETTINGS = 32768
-PEM_RE = re.compile(r"-----BEGIN [A-Z ]+-----\n(?:[A-Za-z0-9+/=\n]+)\n-----END [A-Z ]+-----\n?")
+MAX_PEM = 16000
+# Qt QSettings may store the PEM as raw text, @ByteArray(...), quoted
+# @ByteArray(...), or a mixture of backslash-escaped newlines.
+# Look for the exact PEM block, do not assume an outer Qt wrapper.
+PEM_RE = re.compile(
+    r"-----BEGIN (?P<label>CERTIFICATE|PRIVATE KEY|RSA PRIVATE KEY)-----"
+    r"\s*(?P<body>[A-Za-z0-9+/\s=]+?)\s*"
+    r"-----END (?P=label)-----")
 
 
-def qsettings_bytearray(value):
-    if not isinstance(value, str) or not value.startswith("@ByteArray(") or not value.endswith(")"):
-        raise ValueError("Moonlight Qt certificate or key is not a QSettings byte array")
-    content = value[len("@ByteArray("):-1]
-    # Qt INI encoding escapes newlines, backslashes, and may use CRLF.
-    content = content.replace(r"\r\n", "\n").replace(r"\n", "\n")
-    if len(content) > 16000 or PEM_RE.fullmatch(content) is None:
-        raise ValueError("Moonlight Qt stored PEM is malformed")
-    return content.encode("ascii")
+def qsettings_pem(value, *, expected):
+    """Decode one bounded PEM without printing a Moonlight private key."""
+    if not isinstance(value, str) or len(value) > MAX_PEM:
+        raise ValueError("Invalid Moonlight Qt encoded identity")
+    normalized = (value.replace(r"\r\n", "\n")
+                  .replace(r"\n", "\n")
+                  .replace(r"\r", "\r")
+                  .replace("\r\n", "\n"))
+    found = list(PEM_RE.finditer(normalized))
+    if len(found) != 1 or found[0].group("label") not in expected:
+        raise ValueError("Moonlight identity must contain exactly one PEM block")
+    match = found[0]
+    body = "".join(match.group("body").split())
+    try:
+        decoded = base64.b64decode(body, validate=True)
+    except (ValueError, base64.binascii.Error) as exc:
+        raise ValueError("Moonlight identity base64 is malformed") from exc
+    if not 1 <= len(decoded) <= 10000:
+        raise ValueError("Moonlight PEM data has invalid length")
+    # Canonicalize the PEM spelling. The DER identity/public key is unchanged.
+    label = match.group("label")
+    wrapped = "\n".join(body[i:i + 64] for i in range(0, len(body), 64))
+    return (f"-----BEGIN {label}-----\n{wrapped}\n"
+            f"-----END {label}-----\n").encode("ascii")
 
 
 def identity_from_config(path):
@@ -39,16 +61,20 @@ def identity_from_config(path):
     if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
             or meta.st_nlink != 1 or not 0 < meta.st_size <= MAX_QSETTINGS):
         raise ValueError("Unsafe Moonlight identity configuration")
+    # QSettings often creates mode 0644 by default. This is not safe once
+    # NOW deliberately reads the private key for certificate signing.
+    if stat.S_IMODE(meta.st_mode) & 0o077:
+        raise ValueError("Moonlight Qt identity file is accessible to other users")
     conf = configparser.ConfigParser(interpolation=None, strict=True)
     conf.optionxform = str
     with file.open("r", encoding="utf-8") as source:
         conf.read_file(source)
     if not conf.has_section("General"):
         raise ValueError("Moonlight General settings are missing")
-    # The default Qt identity manager writes General/certificate and General/key
-    # as QByteArray. An AppImage-specific XDG profile may be elsewhere.
-    certificate = qsettings_bytearray(conf.get("General", "certificate"))
-    private = qsettings_bytearray(conf.get("General", "key"))
+    certificate = qsettings_pem(conf.get("General", "certificate"),
+                                expected={"CERTIFICATE"})
+    private = qsettings_pem(conf.get("General", "key"),
+                            expected={"PRIVATE KEY", "RSA PRIVATE KEY"})
     return certificate, private
 
 
@@ -67,7 +93,13 @@ def sign_for_request(config_path, challenge):
 
 
 def unique_moonlight_config():
-    """Find one local Moonlight Qt identity without inspecting its secrets."""
+    """Return one *identity*, not necessarily one QSettings file.
+
+    Multiple valid native/Flatpak files with an identical certificate AND a
+    corresponding usable signing key represent one cryptographic identity.
+    Differing identities, stale private keys, or unsafe files fail closed.
+    No Wolf/client number is guessed from the profile path.
+    """
     home = Path.home()
     xdg = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
     candidates = (
@@ -76,9 +108,22 @@ def unique_moonlight_config():
             "Moonlight Game Streaming Project" / "Moonlight.conf",
     )
     found = [p for p in candidates if p.is_file() and not p.is_symlink()]
-    if len(found) != 1:
-        raise ValueError("Expected exactly one existing Moonlight Qt identity; "
-                         "multiple profiles cannot be guessed")
+    if not found:
+        raise ValueError("No existing Moonlight Qt identity")
+    from cryptography.hazmat.primitives import hashes
+    identities = []
+    for path in found:
+        cert_pem, key_pem = identity_from_config(path)
+        cert = x509.load_pem_x509_certificate(cert_pem)
+        key = serialization.load_pem_private_key(key_pem, password=None)
+        if (not isinstance(key, rsa.RSAPrivateKey)
+                or key.public_key().public_numbers() !=
+                cert.public_key().public_numbers()):
+            raise ValueError("Moonlight Qt profile has mismatched keys")
+        identities.append(cert.public_bytes(serialization.Encoding.DER))
+    if any(data != identities[0] for data in identities[1:]):
+        raise ValueError("Different Moonlight Qt identities require explicit profile selection")
+    # Native first when both profiles prove the same identity.
     return found[0]
 
 

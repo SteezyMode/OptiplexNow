@@ -132,6 +132,44 @@ class CertificateBindingTests(unittest.TestCase):
         with self.assertRaises(PolicyError):
             self.verify(proof={"certificate_pem": self.cert, "signature_b64": "AA=="})
 
+    def test_qt_raw_and_quoted_pem_format_signs(self):
+        for wrapper in ("raw", "quoted", "bytearray"):
+            with self.subTest(wrapper=wrapper):
+                cert = self.cert.replace("\n", r"\n")
+                key = self.key.replace("\n", r"\n")
+                if wrapper == "quoted":
+                    cert, key = '"' + cert + '"', '"' + key + '"'
+                elif wrapper == "bytearray":
+                    cert, key = "@ByteArray(" + cert + ")", "@ByteArray(" + key + ")"
+                self.clientconf.write_text(
+                    "[General]\ncertificate=" + cert + "\nkey=" + key + "\n")
+                proof = self.sign()
+                self.assertEqual(self.verify(proof), self.client_id)
+
+    def test_multiple_matching_profiles_resolve_without_guess(self):
+        from unittest.mock import patch
+        home = self.clientconf.parent
+        native = home / ".config/Moonlight Game Streaming Project/Moonlight.conf"
+        flatpak = (home / ".var/app/com.moonlight_stream.Moonlight/config"
+                   / "Moonlight Game Streaming Project/Moonlight.conf")
+        for dest in (native, flatpak):
+            dest.parent.mkdir(parents=True)
+            dest.write_bytes(self.clientconf.read_bytes())
+            dest.chmod(0o600)
+        with patch("pathlib.Path.home", return_value=home):
+            self.assertEqual(client.unique_moonlight_config(), native)
+            other_cert, other_key = credentials()
+            flatpak.write_text(
+                "[General]\ncertificate=" + other_cert.replace("\n", r"\n") +
+                "\nkey=" + other_key.replace("\n", r"\n") + "\n")
+            with self.assertRaisesRegex(ValueError, "Different Moonlight"):
+                client.unique_moonlight_config()
+
+    def test_world_readable_private_identity_denied(self):
+        self.clientconf.chmod(0o644)
+        with self.assertRaisesRegex(ValueError, "accessible to other users"):
+            self.sign()
+
     def test_bad_signature_or_format_rejected(self):
         proof = self.sign()
         proof["signature_b64"] = base64.b64encode(b"forged").decode()

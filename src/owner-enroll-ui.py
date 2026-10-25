@@ -151,7 +151,8 @@ class EnrollmentWindow:
             f"REQUEST CODE: {answer['code']}\n"
             f"KEY FINGERPRINT: {answer['fingerprint']}\n"
             "Do not transfer your private key. Click Verify Access after approval.")
-        if answer.get("transport") == "tailnet":
+        if (answer.get("transport") == "tailnet" and
+                answer.get("phone_approval_available") is True):
             try:
                 qr = load("now_owner_qr", "owner-qr.py")
                 url = qr.approval_url(self.host, answer["request_id"], answer["code"])
@@ -172,7 +173,7 @@ class EnrollmentWindow:
                     "Check the qrencode package. Host-local approval remains available.")
         else:
             self.status.set_text(
-                "Request staged via existing owner SSH; the optional Tailnet "
+                "Request staged; the optional Tailnet "
                 "phone approval service is not running. Approve on the host "
                 "or enable its reviewed owner-only Tailnet listener.")
 

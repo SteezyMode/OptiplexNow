@@ -99,14 +99,17 @@ def request_tailnet(host, *, key_module=None, connection=http.client.HTTPConnect
         if response.status != 202 or len(raw) > 1024:
             raise ValueError("Tailnet owner enrollment is unavailable or not authorized")
         data = json.loads(raw)
-        if (not isinstance(data, dict) or set(data) != REQUIRED
+        if (not isinstance(data, dict) or
+                set(data) not in (REQUIRED, REQUIRED | {"phone_approval_available"})
                 or data.get("success") is not True or data.get("status") != "pending"
                 or not isinstance(data.get("request_id"), str)
                 or not HEX32.fullmatch(data["request_id"])
                 or not isinstance(data.get("code"), str)
                 or not CODE.fullmatch(data["code"])
                 or not isinstance(data.get("fingerprint"), str)
-                or not HEX20.fullmatch(data["fingerprint"])):
+                or not HEX20.fullmatch(data["fingerprint"])
+                or ("phone_approval_available" in data and
+                    type(data["phone_approval_available"]) is not bool)):
             raise ValueError("Invalid tailnet owner enrollment response")
         return data
     finally:

@@ -2,7 +2,8 @@
 
 The client's Games Settings → Request Owner Approval stages a separate
 restricted public key. On the currently opt-in owner Tailscale listener it
-now displays a locally generated QR code. The owner opens the QR link with
+now displays a locally generated QR code only when the host explicitly reports
+that phone approval is enabled. The owner opens the QR link with
 their Tailscale-connected phone, checks the six-digit code and key fingerprint
 shown on the requesting computer, and taps Approve.
 

@@ -100,7 +100,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('"REQUEST OWNER DEVICE APPROVAL"', wizard)
         self.assertIn("Wolf pairing lets this device open the host's published game streams.", wizard)
         self.assertIn("no-SSH client enrollment is not yet implemented.", wizard)
-        self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)
+        self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
@@ -112,7 +112,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         guarded = SHELL.split("static void managed_games_begin(", 1)[1].split(
             "static void on_managed_games_stop(", 1)[0]
         self.assertIn('MANAGED GAMES REQUIRES RESTRICTED OWNER ACCESS', guarded)
-        self.assertIn("if(!stop && !status_only)open_games_settings(NULL,NULL);", guarded)
+        self.assertIn("if(!stop && !status_only)on_owner_enrollment(NULL,NULL);", guarded)
         self.assertLess(guarded.index("if(!has_key){"),
                         guarded.index("managed_games.running=TRUE"))
         self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)

@@ -18,7 +18,7 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
         self.assertIn('GtkWidget*games_page=now_games_page_new(G_CALLBACK(on_play_steam),', SOURCE)
         self.assertIn('G_CALLBACK(open_games_settings),&games_page_status);', SOURCE)
-        self.assertIn('if(!stop && !status_only)open_games_settings(NULL,NULL);', SOURCE)
+        self.assertIn('if(!stop && !status_only)on_owner_enrollment(NULL,NULL);', SOURCE)
         self.assertIn('src/ui_games.c', MAKE)
         self.assertIn('static void launch_steam(void){managed_games_begin(FALSE,FALSE);}', SOURCE)
         self.assertNotIn('static void launch_steam(void){launch_wolf_app("Steam");}', SOURCE)

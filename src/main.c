@@ -107,6 +107,7 @@ static gboolean tray_rebuild_after_settings(gpointer unused){(void)unused;tray_b
 static void say(const char *s);
 static int flatpak_has(const char *id);
 static void on_games_setup(void*w,void*p);
+static void on_owner_enrollment(GtkWidget*w,gpointer data);
 static void on_wizard(void*w,void*p);
 static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
@@ -1206,7 +1207,7 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
   /* Only a real Games launch opens the guided path. Status checks and
    * guarded Stop must remain non-interactive and fail without side effects.
    * This does not grant access or fall back to unrestricted Wolf Steam. */
-  if(!stop && !status_only)open_games_settings(NULL,NULL);
+  if(!stop && !status_only)on_owner_enrollment(NULL,NULL);
   return;
  }
  if(!stop && !status_only && !has_moonlight()){
@@ -1713,23 +1714,27 @@ static void pair_wolf(GtkWidget *origin){
  /* Leave Moonlight alive long enough to finish the certificate exchange after Wolf approves. */
  g_object_unref(process);
 }
+static void on_owner_enrollment(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  say("SET AN APPROVED OWNER SERVER IN SETTINGS FIRST");
+  open_games_settings(NULL,NULL);
+  return;
+ }
+ gchar *argv[]={"/usr/bin/python3",
+  "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
+ GError *error=NULL;
+ if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+  say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
+  g_clear_error(&error);
+ }
+}
 static void on_games_action(void*w,void*arg){
  int resp=(int)(long)arg;
  if(resp==101){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(resp==102)open_moonlight();
  else if(resp==105)choose_appimage();
- else if(resp==106){
-   if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
-     say("SET AN APPROVED OWNER SERVER IN SETTINGS FIRST");return;
-   }
-   gchar *argv[]={"/usr/bin/python3",
-     "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
-   GError *error=NULL;
-   if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
-     say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
-     g_clear_error(&error);
-   }
- }
+ else if(resp==106)on_owner_enrollment(NULL,NULL);
  else if(resp==103)pair_wolf(w);
  else if(resp==104){
    if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
@@ -1788,7 +1793,7 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(choose,"clicked",(GCallback)on_games_action,(void*)(long)105,NULL,0);add(col,choose,0);
  GtkWidget*pairbutton=button("CONNECT TO GAME HOST","setupaction");
  g_signal_connect_data(pairbutton,"clicked",(GCallback)on_games_action,(void*)(long)103,NULL,0);add(row,pairbutton,1);
- GtkWidget*request_owner=button("ADVANCED: REQUEST RESTRICTED OWNER ACCESS","setupaction");
+ GtkWidget*request_owner=button("APPROVE THIS DEVICE (OWNER QR)","setupaction");
  g_signal_connect_data(request_owner,"clicked",(GCallback)on_games_action,
    (void*)(long)106,NULL,0);add(col,request_owner,0);
  GtkWidget*pin=button("OPEN WOLF PIN","setupaction");

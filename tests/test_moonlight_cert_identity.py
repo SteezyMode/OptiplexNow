@@ -166,10 +166,20 @@ class CertificateBindingTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Different Moonlight"):
                 client.unique_moonlight_config()
 
-    def test_world_readable_private_identity_denied(self):
+    def test_moonlight_default_world_readable_mode_is_safely_tightened(self):
+        before = self.clientconf.read_bytes()
         self.clientconf.chmod(0o644)
-        with self.assertRaisesRegex(ValueError, "accessible to other users"):
+        self.assertEqual(self.verify(self.sign()), self.client_id)
+        self.assertEqual(self.clientconf.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.clientconf.read_bytes(), before)
+
+    def test_world_writable_private_identity_is_refused_without_changes(self):
+        before = self.clientconf.read_bytes()
+        self.clientconf.chmod(0o666)
+        with self.assertRaisesRegex(ValueError, "Unsafe or writable"):
             self.sign()
+        self.assertEqual(self.clientconf.stat().st_mode & 0o777, 0o666)
+        self.assertEqual(self.clientconf.read_bytes(), before)
 
     def test_bad_signature_or_format_rejected(self):
         proof = self.sign()

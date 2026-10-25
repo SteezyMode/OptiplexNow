@@ -57,17 +57,21 @@ def identity_from_config(path):
     file = Path(path)
     if not file.is_absolute() or file.is_symlink():
         raise ValueError("Unsafe Moonlight configuration path")
-    meta = file.stat()
-    if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
-            or meta.st_nlink != 1 or not 0 < meta.st_size <= MAX_QSETTINGS):
-        raise ValueError("Unsafe Moonlight identity configuration")
-    # QSettings often creates mode 0644 by default. This is not safe once
-    # NOW deliberately reads the private key for certificate signing.
-    if stat.S_IMODE(meta.st_mode) & 0o077:
-        raise ValueError("Moonlight Qt identity file is accessible to other users")
-    conf = configparser.ConfigParser(interpolation=None, strict=True)
-    conf.optionxform = str
-    with file.open("r", encoding="utf-8") as source:
+    # Moonlight Qt itself commonly creates a mode-0644 QSettings file.
+    # Tighten an OWNED, read-only-to-others, regular file to 0600 locally.
+    # Never overwrite its content, follow a symlink, take elevated privilege
+    # or silently "repair" a group/world-writable untrusted identity.
+    fd = os.open(file, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    with os.fdopen(fd, "r", encoding="utf-8") as source:
+        meta = os.fstat(source.fileno())
+        if (not stat.S_ISREG(meta.st_mode) or meta.st_uid != os.geteuid()
+                or meta.st_nlink != 1 or not 0 < meta.st_size <= MAX_QSETTINGS
+                or meta.st_mode & 0o022):
+            raise ValueError("Unsafe or writable Moonlight Qt identity configuration")
+        if stat.S_IMODE(meta.st_mode) != 0o600:
+            os.fchmod(source.fileno(), 0o600)
+        conf = configparser.ConfigParser(interpolation=None, strict=True)
+        conf.optionxform = str
         conf.read_file(source)
     if not conf.has_section("General"):
         raise ValueError("Moonlight General settings are missing")

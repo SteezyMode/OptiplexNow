@@ -124,7 +124,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: OptiPlex Now <local@localhost>
-Depends: python3, python3-gi, qrencode, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
+Depends: python3, python3-gi, qrencode, python3-cryptography, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
 Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, owner-managed Steam streaming, live hardware info and encrypted backup.

@@ -153,29 +153,45 @@ class EnrollmentWindow:
             "Do not transfer your private key. Click Verify Access after approval.")
         if (answer.get("transport") == "tailnet" and
                 answer.get("phone_approval_available") is True):
-            try:
-                qr = load("now_owner_qr", "owner-qr.py")
-                url = qr.approval_url(self.host, answer["request_id"], answer["code"])
-                png = qr.qr_png(url)
-                loader = GdkPixbuf.PixbufLoader.new_with_type("png")
-                loader.write(png)
-                loader.close()
-                self.qr_image.set_from_pixbuf(loader.get_pixbuf())
-                self.qr_box.show_all()
-                self.status.set_text(
-                    "SCAN THE QR WITH YOUR OWNER PHONE. Open the Moonlight "
-                    "Wolf UI session first, then approve the observed device "
-                    "from your phone. The host must explicitly enable remote "
-                    "owner approval; no permissions are granted by scanning.")
-            except (OSError, ValueError):
-                self.status.set_text(
-                    "Request staged, but the QR image could not be made. "
-                    "Check the qrencode package. Host-local approval remains available.")
+            self.status.set_text(
+                "Verifying this computer's existing Moonlight identity. "
+                "Your private key stays here; phone approval follows.")
+            self.job(lambda: load(
+                "now_owner_client_prove", "owner-enroll-client.py"
+            ).submit_moonlight_proof(self.host, answer), self.proof_done)
         else:
             self.status.set_text(
-                "Request staged; the optional Tailnet "
-                "phone approval service is not running. Approve on the host "
-                "or enable its reviewed owner-only Tailnet listener.")
+                "Request staged; phone approval is unavailable on this host. "
+                "Host-local owner review remains available.")
+
+    def proof_done(self, result, error):
+        if error or result is not True:
+            self.qr_box.hide()
+            self.status.set_text(
+                "Moonlight identity could not be proven automatically. "
+                "No QR approval has been offered and no access was granted. "
+                "Verify the installed Moonlight profile or host proof service.")
+            return
+        try:
+            answer = self.pending_request
+            if not answer:
+                return
+            qr = load("now_owner_qr", "owner-qr.py")
+            url = qr.approval_url(self.host, answer["request_id"], answer["code"])
+            png = qr.qr_png(url)
+            loader = GdkPixbuf.PixbufLoader.new_with_type("png")
+            loader.write(png)
+            loader.close()
+            self.qr_image.set_from_pixbuf(loader.get_pixbuf())
+            self.qr_box.show_all()
+            self.status.set_text(
+                "DEVICE VERIFIED BY HOST. Scan the QR using your Tailscale-"
+                "connected owner phone, compare the code, and tap Approve. "
+                "Your Moonlight private key remains on this computer.")
+        except (OSError, ValueError):
+            self.status.set_text(
+                "Device proof recorded, but QR image generation failed. "
+                "Check the installed qrencode package.")
 
     def review(self, *_):
         if self.pending_request is None:

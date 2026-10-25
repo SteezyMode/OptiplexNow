@@ -11,6 +11,7 @@ import ipaddress
 import importlib.machinery
 import importlib.util
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -115,6 +116,58 @@ def request_tailnet(host, *, key_module=None, connection=http.client.HTTPConnect
     finally:
         client.close()
 
+
+
+
+def submit_moonlight_proof(host, request, *, config_path=None,
+                          connection=http.client.HTTPConnection):
+    """Send signed Moonlight *public* proof. Phone approval is still separate.
+
+    The matching Moonlight profile must be uniquely identifiable. The
+    client's existing private key is only read in its process; it is never
+    serialized into the request payload or placed in NOW settings.
+    """
+    host = _tailnet_target(host)
+    if (not isinstance(request, dict) or
+            not all(isinstance(request.get(k), str) for k in (
+                "request_id", "code", "fingerprint"))
+            or not HEX32.fullmatch(request["request_id"])
+            or not CODE.fullmatch(request["code"])
+            or not HEX20.fullmatch(request["fingerprint"])):
+        raise ValueError("Invalid owner enrollment request")
+    path = Path(__file__).with_name("moonlight-identity-proof.py")
+    loader = importlib.machinery.SourceFileLoader("now_moonlight_cert_proof", str(path))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    loader.exec_module(module)
+    candidate = config_path or module.unique_moonlight_config()
+    proof = module.sign_for_request(
+        candidate, module.enrollment_challenge(
+            request["request_id"], request["code"], request["fingerprint"]))
+    data = json.dumps({
+        "request_id": request["request_id"],
+        "certificate_pem": proof["certificate_pem"],
+        "signature_b64": proof["signature_b64"]
+    }, separators=(",", ":")).encode("ascii")
+    if len(data) > 11000:
+        raise ValueError("Oversized Moonlight certificate proof")
+    client = connection(host, 18793, timeout=12)
+    try:
+        client.request("POST", "/v1/owner/enrollment/certificate-proof",
+                       body=data, headers={"Content-Type": "application/json",
+                                           "Accept": "application/json"})
+        result = client.getresponse()
+        body = result.read(513)
+        if result.status != 200 or len(body) > 512:
+            raise ValueError("Host did not accept Moonlight certificate proof")
+        reply = json.loads(body)
+        if (not isinstance(reply, dict) or set(reply) != {"success", "status"}
+                or reply.get("success") is not True
+                or reply.get("status") != "proof_recorded"):
+            raise ValueError("Host did not record Moonlight certificate proof")
+        return True
+    finally:
+        client.close()
 
 
 WOLF_ID = re.compile(r"[0-9]{1,20}\Z")

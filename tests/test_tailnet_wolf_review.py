@@ -97,11 +97,12 @@ class WolfReviewTests(unittest.TestCase):
 class ApprovalHttpTests(unittest.TestCase):
     def setUp(self):
         self.authorized = True
+        self.owner_node = "node123"
         self.wolf = FakeWolf()
         self.approvals = []
         self.staged = []
         def verify(ip, owner):
-            return ("1042", "node123") if self.authorized and owner == "1042" else None
+            return ("1042", self.owner_node) if self.authorized and owner == "1042" else None
         def stage(path, key, *, source_ip):
             self.staged.append(key)
             return {"success": True, "status": "pending",
@@ -114,6 +115,7 @@ class ApprovalHttpTests(unittest.TestCase):
                                     stage=stage, wolf_factory=lambda: self.wolf,
                                     approve=approve,
                                     remote_approve_enabled=True,
+                                    approver_node_id="node123",
                                     pending=lambda state: [{
                                         "request_id": "a"*32,
                                         "source_ip": "127.0.0.1"}])
@@ -156,6 +158,19 @@ class ApprovalHttpTests(unittest.TestCase):
         self.assertEqual(body, {"success": True, "status": "approved"})
         self.assertEqual(self.approvals,
                          [("/private/state", "a"*32, "123456", "1200", True)])
+
+    def test_same_account_on_new_client_cannot_approve_without_owner_phone(self):
+        self.owner_node = "unapproved-client-node"
+        status, body = self.call("POST", APPROVE_ROUTE, self.approval())
+        self.assertEqual(status, 403)
+        self.assertEqual(self.approvals, [])
+        # Same account may legitimately stage and view its pending status.
+        self.assertEqual(
+            self.call("GET", REVIEW_ROUTE + "/" + "a"*32)[0], 200)
+        self.owner_node = "node123"
+        self.assertEqual(
+            self.call("POST", APPROVE_ROUTE, self.approval())[0], 200)
+        self.assertEqual(len(self.approvals), 1)
 
     def test_denies_guest_false_confirmation_browser_and_other_routes(self):
         self.authorized = False

@@ -16,7 +16,7 @@ from cryptography.x509.oid import NameOID
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path[:0] = [str(ROOT / "src"), str(ROOT / "server")]
-from moonlight_cert_identity import message, verify_binding
+from moonlight_cert_identity import message, verify_binding, wolf_certificate_client_id
 from owner_access import PolicyError
 
 spec = importlib.util.spec_from_file_location(
@@ -50,7 +50,7 @@ class CertificateBindingTests(unittest.TestCase):
         self.request = "a"*32
         self.code = "123456"
         self.fingerprint = "b"*20
-        self.client_id = "11701600982361132536"
+        self.client_id = wolf_certificate_client_id(self.cert.encode("utf-8"))
         self.wolf = lambda method, path: {"success": True, "clients": [
             {"client_id": self.client_id, "app_state_folder": self.client_id}]}
         self.clientconf.write_text(
@@ -79,6 +79,17 @@ class CertificateBindingTests(unittest.TestCase):
         v.update(kwargs)
         return verify_binding(**v)
 
+    def test_wolf_libstdcpp_hash_matches_real_gcc_test_vectors(self):
+        vectors = {
+            b"hello": "2762169579135187400",
+            b"": "6142509188972423790",
+            b"-----BEGIN CERTIFICATE-----\\nabc\\n-----END CERTIFICATE-----\\n":
+                "2397079258150423612",
+        }
+        for raw, expected in vectors.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(wolf_certificate_client_id(raw), expected)
+
     def test_valid_proof_never_returns_or_writes_private_key(self):
         proof = self.sign()
         self.assertNotIn("PRIVATE KEY", str(proof))
@@ -91,14 +102,15 @@ class CertificateBindingTests(unittest.TestCase):
             with self.subTest(data=data), self.assertRaises(PolicyError):
                 self.verify(**data)
 
-    def test_other_paired_certificate_or_custom_folder_denied(self):
+    def test_other_paired_certificate_cannot_impersonate_a_client(self):
         other_cert, _ = credentials()
         self.set_wolf_config(self.client_id, other_cert)
         with self.assertRaisesRegex(PolicyError, "does not match"):
             self.verify()
+        # app_state_folder is not the identity: a custom storage
+        # folder cannot change the cert-derived Wolf ID.
         self.set_wolf_config("123456789", self.cert)
-        with self.assertRaises(PolicyError):
-            self.verify()
+        self.assertEqual(self.verify(), self.client_id)
         self.set_wolf_config(self.client_id, self.cert)
         self.wolf = lambda *_: {"success": True, "clients": []}
         with self.assertRaises(PolicyError):

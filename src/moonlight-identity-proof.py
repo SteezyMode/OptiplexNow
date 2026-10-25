@@ -64,3 +64,28 @@ def sign_for_request(config_path, challenge):
     signature = key.sign(challenge, padding.PKCS1v15(), hashes.SHA256())
     return {"certificate_pem": certificate_pem.decode("ascii"),
             "signature_b64": base64.b64encode(signature).decode("ascii")}
+
+
+def unique_moonlight_config():
+    """Find one local Moonlight Qt identity without inspecting its secrets."""
+    home = Path.home()
+    xdg = Path(os.environ.get("XDG_CONFIG_HOME", str(home / ".config")))
+    candidates = (
+        xdg / "Moonlight Game Streaming Project" / "Moonlight.conf",
+        home / ".var/app/com.moonlight_stream.Moonlight/config" /
+            "Moonlight Game Streaming Project" / "Moonlight.conf",
+    )
+    found = [p for p in candidates if p.is_file() and not p.is_symlink()]
+    if len(found) != 1:
+        raise ValueError("Expected exactly one existing Moonlight Qt identity; "
+                         "multiple profiles cannot be guessed")
+    return found[0]
+
+
+def enrollment_challenge(request_id, code, fingerprint):
+    if (not re.fullmatch("[0-9a-f]{32}", request_id or "")
+            or not re.fullmatch("[0-9]{6}", code or "")
+            or not re.fullmatch("[0-9a-f]{20}", fingerprint or "")):
+        raise ValueError("Invalid owner enrollment challenge")
+    return ("OptiPlex NOW owner-device proof v1\n" + request_id +
+            "\n" + code + "\n" + fingerprint + "\n").encode("ascii")

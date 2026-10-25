@@ -16,7 +16,7 @@ def _inventory(result, field, limit):
     return result[field]
 
 
-def single_active_wolf_ui(wolf_api):
+def single_active_wolf_ui(wolf_api, *, expected_source=None):
     """Return one server-observed paired Wolf UI client ID, or refuse.
 
     Do not guess a Wolf identity from Tailscale address, nickname or client
@@ -40,6 +40,8 @@ def single_active_wolf_ui(wolf_api):
         raise PolicyError("The active session is not one paired Wolf UI")
     if _inventory(wolf_api("GET", "/api/v1/lobbies"), "lobbies", 256):
         raise PolicyError("Active Wolf lobby makes device review ambiguous")
+    if expected_source is not None and session.get("client_ip") != expected_source:
+        raise PolicyError("Wolf stream origin differs from the staged owner device")
     return client
 
 

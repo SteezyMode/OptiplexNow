@@ -101,7 +101,7 @@ class ApprovalHttpTests(unittest.TestCase):
         self.staged = []
         def verify(ip, owner):
             return ("1042", "node123") if self.authorized and owner == "1042" else None
-        def stage(path, key):
+        def stage(path, key, *, source_ip):
             self.staged.append(key)
             return {"success": True, "status": "pending",
                     "request_id": "a"*32, "code": "123456",

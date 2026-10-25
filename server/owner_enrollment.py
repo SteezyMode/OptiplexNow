@@ -9,6 +9,7 @@ an authority. This is NOT a multi-user or untrusted-member SSH service.
 """
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -23,6 +24,7 @@ sys.path.insert(0, str(ROOT / "src"))
 from owner_access import OwnerStore, PolicyError, approve_device, paired_client_ids
 from owner_games_enroll import authorized_line, validated_ed25519_public
 from wolf_docker_adapter import WolfDockerAPI
+from tailnet_wolf_review import single_active_wolf_ui
 
 MAX_REQUEST = 2048
 MAX_AUTH = 1024 * 1024
@@ -88,6 +90,19 @@ def _stage_dir(state_dir):
     return directory
 
 
+def _valid_source_ip(source):
+    """Use only the OS-observed source address, never a client JSON field."""
+    if not isinstance(source, str):
+        return False
+    try:
+        addr = ipaddress.IPv4Address(source)
+    except (ValueError, ipaddress.AddressValueError):
+        return False
+    return (str(addr) == source and not addr.is_loopback
+            and not addr.is_multicast and not addr.is_unspecified
+            and not addr.is_link_local)
+
+
 def _read_request_file(path):
     if path.is_symlink() or not path.is_file():
         raise PolicyError("Unsafe enrollment request")
@@ -98,12 +113,20 @@ def _read_request_file(path):
         raise PolicyError("Unsafe enrollment request permissions")
     obj = json.loads(path.read_text("ascii"))
     if not isinstance(obj, dict) or set(obj) != {
-            "request_id", "code", "created", "public_key"}:
+            "request_id", "code", "created", "public_key", "source_ip"}:
+        # A request written by an old host pilot may be read for expiry
+        # diagnostics, but has no provenance and can never be approved.
+        if not (isinstance(obj, dict) and set(obj) ==
+                {"request_id", "code", "created", "public_key"}):
+            raise PolicyError("Invalid enrollment request")
+        obj["source_ip"] = None
         raise PolicyError("Invalid enrollment request")
     if (not REQUEST_ID.fullmatch(obj["request_id"])
             or not CODE.fullmatch(obj["code"])
             or type(obj["created"]) is not int):
         raise PolicyError("Invalid enrollment request identity")
+    if obj["source_ip"] is not None and not _valid_source_ip(obj["source_ip"]):
+        raise PolicyError("Invalid staged network provenance")
     obj["public_key"] = validated_ed25519_public(obj["public_key"])
     return obj
 
@@ -132,7 +155,9 @@ def _replace_authorized_keys(path, payload, mode, unique):
             pass
 
 
-def stage_request(state_dir, public_key, *, now=None):
+def stage_request(state_dir, public_key, *, source_ip=None, now=None):
+    if source_ip is not None and not _valid_source_ip(source_ip):
+        raise PolicyError("Untrusted enrollment source")
     public = validated_ed25519_public(public_key)
     current = int(time.time() if now is None else now)
     with OwnerStore(str(state_dir)).locked():
@@ -148,6 +173,8 @@ def stage_request(state_dir, public_key, *, now=None):
             if entry["created"] + TTL > current:
                 active.append(entry)
                 if entry["public_key"] == public:
+                    if entry["source_ip"] != source_ip:
+                        raise PolicyError("Same key requested from different network origin")
                     return { "success": True, "status": "pending",
                              "request_id": entry["request_id"],
                              "code": entry["code"],
@@ -157,7 +184,8 @@ def stage_request(state_dir, public_key, *, now=None):
         request_id = secrets.token_hex(16)
         code = f"{secrets.randbelow(1000000):06d}"
         obj = {"request_id": request_id, "code": code,
-               "created": current, "public_key": public}
+               "created": current, "public_key": public,
+               "source_ip": source_ip}
         path = directory / request_id
         flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | getattr(os, "O_NOFOLLOW", 0)
         fd = os.open(path, flags, 0o600)
@@ -183,13 +211,14 @@ def pending_requests(state_dir, *, now=None):
                 entries.append({
                     "request_id": entry["request_id"], "code": entry["code"],
                     "fingerprint": _fingerprint(entry["public_key"]),
+                    "source_ip": entry["source_ip"],
                     "seconds_remaining": entry["created"] + TTL - current})
         return sorted(entries, key=lambda x: x["request_id"])
 
 
 def approve_request(state_dir, request_id, code, client_id, *,
                     confirmed=False, auth_path=None, broker_path=None,
-                    wolf_api=None, now=None):
+                    wolf_api=None, now=None, require_live_binding=True):
     if not confirmed:
         raise PolicyError("Local owner approval is required")
     if not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id):
@@ -206,8 +235,18 @@ def approve_request(state_dir, request_id, code, client_id, *,
         if (entry["request_id"] != request_id or entry["code"] != code
                 or entry["created"] + TTL <= current):
             raise PolicyError("Request expired or verification code mismatch")
-        # Only the local owner selects and verifies this ID. A key/code,
-        # Tailscale address, and request filename cannot provide Wolf rights.
+        # A phone, local GUI or stale manual Wolf ID must never authorize
+        # a *different* paired client. The requester source comes only from
+        # the trusted host transport, and the Wolf session is re-read here,
+        # directly before authorization. A mismatched LAN/Tailscale route
+        # fails closed instead of guessing that two addresses are one node.
+        if require_live_binding:
+            source = entry["source_ip"]
+            if not _valid_source_ip(source):
+                raise PolicyError("Legacy request has no verified network binding")
+            observed = single_active_wolf_ui(api, expected_source=source)
+            if observed != client_id:
+                raise PolicyError("Wolf session identity differs from requester")
         clients = api("GET", "/api/v1/clients")
         if client_id not in paired_client_ids(clients):
             raise PolicyError("Selected Wolf device is not paired")
@@ -292,7 +331,12 @@ def main(argv=None):
             data = json.loads(raw)
             if not isinstance(data, dict) or set(data) != {"version", "public_key"} or type(data["version"]) is not int or data["version"] != 1:
                 raise PolicyError("Invalid enrollment request protocol")
-            reply = stage_request(state, data["public_key"])
+            # SSH_CONNECTION is populated by sshd, never by the client JSON.
+            # Host-local invocations without a peer can stage, but cannot
+            # later pass the mandatory live-source approval gate.
+            parts = os.environ.get("SSH_CONNECTION", "").split()
+            source = parts[0] if len(parts) == 4 else None
+            reply = stage_request(state, data["public_key"], source_ip=source)
         elif args.action == "pending":
             reply = {"success": True, "requests": pending_requests(state)}
         else:

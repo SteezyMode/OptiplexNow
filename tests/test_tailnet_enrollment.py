@@ -90,7 +90,7 @@ class ServerStagingTests(unittest.TestCase):
         self.staged = []
         def verify(source, pinned):
             return (OWNER, "n123456") if self.is_owner and pinned == OWNER else None
-        def stage(state_dir, key):
+        def stage(state_dir, key, *, source_ip):
             self.staged.append((state_dir, key))
             return {"success": True, "status": "pending",
                     "request_id": "a" * 32, "code": "123456",

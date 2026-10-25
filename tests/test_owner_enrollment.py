@@ -53,7 +53,8 @@ class OwnerEnrollmentTests(unittest.TestCase):
         return approve_request(
             self.state, request["request_id"], code or request["code"], client,
             confirmed=confirmed, auth_path=self.auth, broker_path=self.broker,
-            wolf_api=self.wolf, now=self.now if now is None else now)
+            wolf_api=self.wolf, now=self.now if now is None else now,
+            require_live_binding=False)
 
     def load(self):
         with self.store.locked() as fd:
@@ -104,7 +105,7 @@ class OwnerEnrollmentTests(unittest.TestCase):
         result = approve_request(
             self.state, request["request_id"], request["code"], "1002",
             confirmed=True, auth_path=self.auth, wolf_api=self.wolf,
-            now=self.now)
+            now=self.now, require_live_binding=False)
         self.assertEqual(result["status"], "approved")
         text = self.auth.read_text()
         self.assertEqual(text.count(str(self.broker)), 2)
@@ -116,7 +117,8 @@ class OwnerEnrollmentTests(unittest.TestCase):
         with self.assertRaisesRegex(PolicyError, "existing owner-restricted broker"):
             approve_request(self.state, request["request_id"], request["code"],
                             "1002", confirmed=True, auth_path=self.auth,
-                            wolf_api=self.wolf, now=self.now)
+                            wolf_api=self.wolf, now=self.now,
+                            require_live_binding=False)
         self.assertEqual(self.auth.read_text(), self.original)
         self.assertEqual([d["client_id"] for d in self.load()["devices"]], ["1001"])
 

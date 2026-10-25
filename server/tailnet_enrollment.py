@@ -166,7 +166,8 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                             or type(obj["version"]) is not int
                             or obj["version"] != 1):
                         raise ValueError("Invalid public-key request")
-                    result = stage(state_dir, obj["public_key"])
+                    result = stage(state_dir, obj["public_key"],
+                                   source_ip=self.client_address[0])
                     if remote_approve_enabled and owner_pair_enabled:
                         witness.staged(identity, self.client_address[0],
                                        result["request_id"])

@@ -46,7 +46,7 @@ def single_active_wolf_ui(wolf_api, *, expected_source=None):
 
 
 def approve_reviewed_owner_request(state_dir, request_id, code, selected_client,
-                                   *, wolf_api, approval):
+                                   *, wolf_api, approval, wolf_config=None):
     """Apply an *already verified owner-confirmed* request, never self-approve.
 
     The caller MUST verify the actual remote peer against the installer-pinned
@@ -55,9 +55,15 @@ def approve_reviewed_owner_request(state_dir, request_id, code, selected_client,
     """
     if approval is not True:
         raise PolicyError("Authenticated owner confirmation required")
-    observed = single_active_wolf_ui(wolf_api)
+    if wolf_config is None:
+        observed = single_active_wolf_ui(wolf_api)
+    else:
+        from owner_certificate_attestation import witnessed_candidate
+        observed = witnessed_candidate(
+            state_dir, request_id, wolf_config=wolf_config, wolf_api=wolf_api)
     if not _valid_client_id(selected_client) or selected_client != observed:
-        raise PolicyError("Owner selection does not match active Wolf UI")
+        raise PolicyError("Owner selection does not match verified Wolf identity")
     from owner_enrollment import approve_request
     return approve_request(state_dir, request_id, code, observed,
-                           confirmed=True, wolf_api=wolf_api)
+                           confirmed=True, wolf_api=wolf_api,
+                           wolf_config=wolf_config)

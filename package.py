@@ -43,7 +43,7 @@ shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
 # Owner-only alpha enrollment: client stage request, local host approval.
 # Never install a new host authorized_keys line or grant access on package setup.
-for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui.py', 'owner-qr.py'):
+for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui.py', 'owner-qr.py', 'moonlight-identity-proof.py'):
  shutil.copy2(root/'src'/name, pkg/'usr/lib/optiplex-now'/name)
  (pkg/'usr/lib/optiplex-now'/name).chmod(0o755)
 bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
@@ -59,6 +59,7 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 for name in ('owner_enrollment.py','owner_games_enroll.py',
              'tailnet_owner_identity.py','tailnet_enrollment.py',
              'owner_qr_approval.py',
+             'moonlight_cert_identity.py', 'owner_certificate_attestation.py',
              'tailnet_wolf_review.py','tailnet_wolf_pair.py',
              'tailnet_pair_witness.py','tailnet_wolf_fresh.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)

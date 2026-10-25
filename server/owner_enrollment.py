@@ -217,7 +217,8 @@ def pending_requests(state_dir, *, now=None):
 
 def approve_request(state_dir, request_id, code, client_id, *,
                     confirmed=False, auth_path=None, broker_path=None,
-                    wolf_api=None, now=None, require_live_binding=True):
+                    wolf_api=None, now=None, require_live_binding=True,
+                    wolf_config=None):
     if not confirmed:
         raise PolicyError("Local owner approval is required")
     if not isinstance(request_id, str) or not REQUEST_ID.fullmatch(request_id):
@@ -240,12 +241,21 @@ def approve_request(state_dir, request_id, code, client_id, *,
         # directly before authorization. A mismatched LAN/Tailscale route
         # fails closed instead of guessing that two addresses are one node.
         if require_live_binding:
-            source = entry["source_ip"]
-            if not _valid_source_ip(source):
-                raise PolicyError("Legacy request has no verified network binding")
-            observed = single_active_wolf_ui(api, expected_source=source)
+            if wolf_config is not None:
+                # Certificate proof, cryptographically bound to this exact
+                # staged request, is reverified under the same owner lock as
+                # authorized_keys and policy commits. Network paths may differ.
+                from owner_certificate_attestation import resolve_attested_client
+                observed = resolve_attested_client(
+                    state_dir, request_id, entry,
+                    wolf_config=wolf_config, wolf_api=api)
+            else:
+                source = entry["source_ip"]
+                if not _valid_source_ip(source):
+                    raise PolicyError("Legacy request has no verified network binding")
+                observed = single_active_wolf_ui(api, expected_source=source)
             if observed != client_id:
-                raise PolicyError("Wolf session identity differs from requester")
+                raise PolicyError("Wolf identity differs from verified requester")
         clients = api("GET", "/api/v1/clients")
         if client_id not in paired_client_ids(clients):
             raise PolicyError("Selected Wolf device is not paired")
@@ -308,6 +318,9 @@ def approve_request(state_dir, request_id, code, client_id, *,
                 raise PolicyError("Incomplete enrollment; manual host recovery required") from exc
             raise
         path.unlink()
+        if wolf_config is not None and require_live_binding:
+            from owner_certificate_attestation import consumed
+            consumed(state_dir, request_id)
     return {"success": True, "status": "approved",
             "client_id": client_id, "fingerprint": _fingerprint(entry["public_key"])}
 

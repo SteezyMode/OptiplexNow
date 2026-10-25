@@ -24,6 +24,7 @@ from tailnet_wolf_pair import (pending_owner_wolf, pair_owner_wolf,
 from tailnet_pair_witness import PairingWitness
 from tailnet_wolf_fresh import FreshPairWindow
 from owner_access import paired_client_ids
+from owner_certificate_attestation import record_proof, witnessed_candidate
 
 PORT = 18793
 ROUTE = "/v1/owner/enrollment/request"
@@ -33,7 +34,9 @@ PAIRED_CANDIDATE_ROUTE = "/v1/owner/enrollment/paired-candidate"
 PAIR_PENDING_ROUTE = "/v1/owner/wolf-pair/pending"
 PAIR_APPROVE_ROUTE = "/v1/owner/wolf-pair/approve"
 PAIR_PREPARE_ROUTE = "/v1/owner/wolf-pair/prepare"
+PROOF_ROUTE = "/v1/owner/enrollment/certificate-proof"
 MAX_BODY = 1024
+MAX_PROOF_BODY = 11000
 MAX_RESPONSE = 512
 
 
@@ -43,7 +46,7 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                  remote_approve_enabled=False, owner_pair_enabled=False,
                  pair_api=host_wolf_pair_api, commit=approve_request,
                  witness=None, require_fresh_pairing=False, fresh_window=None,
-                 pending=pending_requests):
+                 pending=pending_requests, wolf_config=None):
     witness = witness if witness is not None else PairingWitness()
     fresh_window = fresh_window if fresh_window is not None else FreshPairWindow()
 
@@ -118,7 +121,8 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
 
         def do_POST(self):
             if self.path not in (ROUTE, APPROVE_ROUTE, PAIR_APPROVE_ROUTE,
-                                  PAIR_PREPARE_ROUTE, PAIRED_CANDIDATE_ROUTE):
+                                  PAIR_PREPARE_ROUTE, PAIRED_CANDIDATE_ROUTE,
+                                  PROOF_ROUTE):
                 self._send(404, {"success": False, "status": "not_found"})
                 return
             identity = self._verified_owner()
@@ -134,7 +138,25 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                 self._send(403, {"success": False, "status": "disabled"})
                 return
             try:
-                obj = self._read_json(MAX_BODY)
+                obj = self._read_json(
+                    MAX_PROOF_BODY if self.path == PROOF_ROUTE else MAX_BODY)
+                if self.path == PROOF_ROUTE:
+                    if not remote_approve_enabled or wolf_config is None:
+                        raise PolicyError("Certificate binding is not enabled")
+                    if (not isinstance(obj, dict) or set(obj) != {
+                            "request_id", "certificate_pem", "signature_b64"}
+                            or not all(isinstance(value, str)
+                                       for value in obj.values())):
+                        raise ValueError("Invalid Moonlight proof payload")
+                    client_id = record_proof(
+                        state_dir, obj["request_id"],
+                        observed_source=self.client_address[0],
+                        certificate_pem=obj["certificate_pem"],
+                        signature_b64=obj["signature_b64"],
+                        wolf_config=wolf_config, wolf_api=wolf_factory())
+                    # A successfully staged key is still NOT approved.
+                    self._send(200, {"success": True, "status": "proof_recorded"})
+                    return
                 if self.path == PAIR_PREPARE_ROUTE:
                     if obj != {}:
                         raise ValueError("Pair preparation accepts only empty payload")
@@ -203,6 +225,8 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                     raise ValueError("Explicit reviewed approval required")
                 if "source" in obj and obj["source"] != "recent_pair":
                     raise PolicyError("Unsupported enrollment review source")
+                if wolf_config is not None and "source" in obj:
+                    raise PolicyError("Legacy pairing witness cannot bypass certificate proof")
                 if "source" in obj:
                     if not owner_pair_enabled:
                         raise PolicyError("Pairing witness feature disabled")
@@ -218,10 +242,13 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                                     observed, confirmed=True,
                                     wolf_api=wolf_factory())
                 else:
+                    approval_kwargs = (
+                        {"wolf_config": wolf_config}
+                        if wolf_config is not None else {})
                     result = approve(
                         state_dir, obj["request_id"], obj["code"],
                         obj["wolf_client_id"], wolf_api=wolf_factory(),
-                        approval=True)
+                        approval=True, **approval_kwargs)
                 if (not isinstance(result, dict)
                         or result.get("success") is not True
                         or result.get("status") != "approved"):
@@ -290,8 +317,13 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                      if item["request_id"] == review_request_id), None)
                 if not request or not request.get("source_ip"):
                     raise PolicyError("No source-bound pending request")
-                candidate = single_active_wolf_ui(
-                    wolf_factory(), expected_source=request["source_ip"])
+                if wolf_config is not None:
+                    candidate = witnessed_candidate(
+                        state_dir, review_request_id,
+                        wolf_config=wolf_config, wolf_api=wolf_factory())
+                else:
+                    candidate = single_active_wolf_ui(
+                        wolf_factory(), expected_source=request["source_ip"])
             except (OSError, PolicyError, ValueError, TypeError,
                     KeyError, RuntimeError):
                 self._send(409, {"success": False, "status": "no_unique_wolf_ui"})
@@ -308,6 +340,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", action="store_true")
+    parser.add_argument("--wolf-config", help=(
+        "Opt-in trusted local host Wolf TOML path for certificate-based QR "
+        "proof; e.g. /etc/wolf/cfg/config.toml. Never a client-supplied path."))
     parser.add_argument("--owner-id-file", required=True,
                         help="Existing installer-pinned private numeric owner ID file")
     parser.add_argument("--enable-remote-approval", action="store_true",
@@ -323,6 +358,11 @@ def main(argv=None):
         owner_id = pinned_owner_id(args.owner_id_file)
         host_ip = own_tailnet_ipv4()
         config = _read_private_config()
+        if args.wolf_config:
+            if not args.enable_remote_approval:
+                raise PolicyError("Certificate proof needs explicit remote owner approval")
+            from moonlight_cert_identity import _paired_host_certs
+            _paired_host_certs(args.wolf_config)
         if not args.serve:
             print("Tailnet owner enrollment staging preflight passed; nothing started.")
             return 0
@@ -331,7 +371,8 @@ def main(argv=None):
                 owner_id, config["state_dir"],
                 remote_approve_enabled=args.enable_remote_approval,
                 owner_pair_enabled=args.enable_owner_wolf_pairing,
-                require_fresh_pairing=args.require_fresh_wolf_pairing)) as server:
+                require_fresh_pairing=args.require_fresh_wolf_pairing,
+                wolf_config=args.wolf_config)) as server:
             server.timeout = 3
             print("Owner staging enabled on the host's Tailscale address only.")
             server.serve_forever(poll_interval=0.2)

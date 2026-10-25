@@ -14,7 +14,7 @@ import sys
 
 from tailnet_owner_identity import own_tailnet_ipv4, pinned_owner_id, verify_owner_peer
 from owner_enrollment import (_read_private_config, stage_request,
-                              pending_requests, approve_request)
+                              pending_requests, approve_request, REQUEST_ID)
 from owner_qr_approval import PAGE_PREFIX, parse_page_request, render_page
 from owner_access import PolicyError
 from tailnet_wolf_review import single_active_wolf_ui, approve_reviewed_owner_request
@@ -256,12 +256,18 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                     return
                 self._send_html(200, markup, nonce)
                 return
-            if self.path not in (REVIEW_ROUTE, PAIR_PENDING_ROUTE):
+            review_request_id = None
+            if self.path.startswith(REVIEW_ROUTE + "/"):
+                review_request_id = self.path[len(REVIEW_ROUTE) + 1:]
+                if not REQUEST_ID.fullmatch(review_request_id):
+                    self._send(404, {"success": False, "status": "not_found"})
+                    return
+            if review_request_id is None and self.path != PAIR_PENDING_ROUTE:
                 self._send(404, {"success": False, "status": "not_found"})
                 return
             owner = self._verified_owner()
             if not owner or (
-                    self.path == REVIEW_ROUTE and not remote_approve_enabled) or (
+                    review_request_id is not None and not remote_approve_enabled) or (
                     self.path == PAIR_PENDING_ROUTE and not owner_pair_enabled):
                 self._send(403, {"success": False, "status": "forbidden"})
                 return
@@ -279,8 +285,15 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                     self._send(409, {"success": False, "status": "unavailable"})
                 return
             try:
-                candidate = single_active_wolf_ui(wolf_factory())
-            except (OSError, PolicyError, ValueError, TypeError, RuntimeError):
+                request = next(
+                    (item for item in pending(state_dir)
+                     if item["request_id"] == review_request_id), None)
+                if not request or not request.get("source_ip"):
+                    raise PolicyError("No source-bound pending request")
+                candidate = single_active_wolf_ui(
+                    wolf_factory(), expected_source=request["source_ip"])
+            except (OSError, PolicyError, ValueError, TypeError,
+                    KeyError, RuntimeError):
                 self._send(409, {"success": False, "status": "no_unique_wolf_ui"})
                 return
             self._send(200, {"success": True, "wolf_client_id": candidate})

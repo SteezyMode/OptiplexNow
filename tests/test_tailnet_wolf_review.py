@@ -227,8 +227,8 @@ class RemoteOwnerClientContract(unittest.TestCase):
                 pass
 
         self.assertEqual(self.client.review_active_wolf(
-            "100.83.3.4", connection=Connection), "1200")
-        self.assertEqual(calls[-1], ("GET", REVIEW_ROUTE, None))
+            "100.83.3.4", "a"*32, connection=Connection), "1200")
+        self.assertEqual(calls[-1], ("GET", REVIEW_ROUTE + "/" + "a"*32, None))
         self.assertTrue(self.client.approve_reviewed_tailnet(
             "100.83.3.4", "a"*32, "123456", "1200",
             connection=Connection))

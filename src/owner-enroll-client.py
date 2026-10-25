@@ -131,12 +131,14 @@ def _tailnet_target(host):
     return str(ip)
 
 
-def review_active_wolf(host, *, connection=http.client.HTTPConnection):
+def review_active_wolf(host, request_id, *, connection=http.client.HTTPConnection):
     """Read one host-observed Wolf UI client ID; no privilege granted."""
     host = _tailnet_target(host)
+    if not isinstance(request_id, str) or not HEX32.fullmatch(request_id):
+        raise ValueError("Invalid owner request ID")
     client = connection(host, 18793, timeout=6)
     try:
-        client.request("GET", "/v1/owner/enrollment/wolf-candidate",
+        client.request("GET", "/v1/owner/enrollment/wolf-candidate/" + request_id,
                        headers={"Accept": "application/json"})
         reply = client.getresponse()
         raw = reply.read(513)
@@ -195,7 +197,7 @@ def review_for_owner(host, request_id):
         return {"wolf_client_id": review_recent_pairing(host, request_id),
                 "source": "recent_pair"}
     except NoRecentPairing:
-        return {"wolf_client_id": review_active_wolf(host),
+        return {"wolf_client_id": review_active_wolf(host, request_id),
                 "source": "active_wolf_ui"}
 
 

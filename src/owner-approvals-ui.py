@@ -17,7 +17,8 @@ BRIDGE = Path(__file__).resolve().parent / "owner-bridge"
 sys.path[:0] = [str(BRIDGE / "src"), str(BRIDGE / "server")]
 from owner_enrollment import (_read_private_config, pending_requests,
                               approve_request)
-from owner_access import paired_client_ids
+from owner_access import PolicyError
+from tailnet_wolf_review import single_active_wolf_ui
 from wolf_docker_adapter import WolfDockerAPI
 
 
@@ -26,7 +27,7 @@ class OwnerApprovals:
         self.closed = False
         self.running = False
         self.requests = []
-        self.clients = []
+        self.candidates = {}
         self.window = Gtk.Window(title="NOW | Owner Device Approvals")
         self.window.set_default_size(540, 440)
         self.window.connect("destroy", self.destroy)
@@ -37,21 +38,23 @@ class OwnerApprovals:
         title.set_xalign(0)
         box.pack_start(title, False, False, 0)
         explanation = Gtk.Label(
-            label="Approve only your own trusted device. Confirm the six-digit "
-                  "request code on that client's screen, then independently "
-                  "identify its Wolf/Moonlight paired client ID. Never infer "
-                  "device identity from IP address or machine name.")
+            label="Match the six-digit code shown on the requesting computer. "
+                  "The host automatically checks a unique live paired Wolf UI "
+                  "session against that request's observed connection source. "
+                  "No selectable numeric Wolf identities.")
         explanation.set_xalign(0)
         explanation.set_line_wrap(True)
         box.pack_start(explanation, False, False, 0)
         self.request_combo = Gtk.ComboBoxText()
-        self.client_combo = Gtk.ComboBoxText()
-        for title, widget in (("PENDING DEVICE REQUEST", self.request_combo),
-                              ("VERIFIED WOLF CLIENT ID", self.client_combo)):
-            text = Gtk.Label(label=title)
-            text.set_xalign(0)
-            box.pack_start(text, False, False, 0)
-            box.pack_start(widget, False, False, 0)
+        text = Gtk.Label(label="PENDING DEVICE REQUEST")
+        text.set_xalign(0)
+        box.pack_start(text, False, False, 0)
+        box.pack_start(self.request_combo, False, False, 0)
+        self.request_combo.connect("changed", self.selection_changed)
+        self.identity = Gtk.Label(label="Verified Wolf session: none")
+        self.identity.set_xalign(0)
+        self.identity.set_line_wrap(True)
+        box.pack_start(self.identity, False, False, 0)
         code_label = Gtk.Label(label="CODE SHOWN ON THE REQUESTING DEVICE")
         code_label.set_xalign(0)
         box.pack_start(code_label, False, False, 0)
@@ -60,7 +63,7 @@ class OwnerApprovals:
         self.code.set_placeholder_text("Six digits from requesting device")
         box.pack_start(self.code, False, False, 0)
         self.verified = Gtk.CheckButton(
-            label="I compared the code AND independently verified this Wolf device ID")
+            label="I verified this request/code and the correct device is streaming Wolf UI")
         box.pack_start(self.verified, False, False, 0)
         self.status = Gtk.Label(label="No host data loaded.")
         self.status.set_xalign(0)
@@ -111,13 +114,16 @@ class OwnerApprovals:
         state = _read_private_config()["state_dir"]
         requests = pending_requests(state)
         wolf = WolfDockerAPI()
-        clients = paired_client_ids(wolf("GET", "/api/v1/clients"))
-        sessions = wolf("GET", "/api/v1/sessions")
-        if not isinstance(sessions, dict) or sessions.get("success") is not True:
-            raise ValueError("Session inventory unavailable")
-        active = {x.get("client_id") for x in sessions.get("sessions", [])
-                  if isinstance(x, dict)}
-        return requests, sorted(clients), active
+        candidates = {}
+        for request in requests:
+            source = request.get("source_ip")
+            if source:
+                try:
+                    candidates[request["request_id"]] = single_active_wolf_ui(
+                        wolf, expected_source=source)
+                except (PolicyError, OSError, KeyError, ValueError):
+                    pass
+        return requests, candidates
 
     def refresh(self, *_):
         self.status.set_text("Reading host-local pending requests and paired Wolf devices...")
@@ -125,41 +131,50 @@ class OwnerApprovals:
 
     def refreshed(self, reply, error):
         self.request_combo.remove_all()
-        self.client_combo.remove_all()
-        self.requests, self.clients = [], []
+        self.requests, self.candidates = [], {}
         self.verified.set_active(False)
         if error:
             self.status.set_text(
                 "Host owner enrollment unavailable. Verify the local owner "
                 "broker config and Wolf permissions. No changes made.")
             return
-        self.requests, self.clients, active = reply
+        self.requests, self.candidates = reply
         for index, r in enumerate(self.requests):
             self.request_combo.append_text(
                 f"{r['code']}  |  fingerprint {r['fingerprint']}  "
                 f"|  expires in {r['seconds_remaining']}s")
-        for client in self.clients:
-            self.client_combo.append_text(
-                client + ("  (active stream)" if client in active else ""))
         self.status.set_text(
-            f"{len(self.requests)} pending request(s); {len(self.clients)} paired "
-            "Wolf device(s). Compare the client screen before approving.")
+            f"{len(self.requests)} pending request(s), "
+            f"{len(self.candidates)} with matching live Wolf sessions. "
+            "Select the request. There is no manual Wolf identity selection.")
+        self.selection_changed()
+
+    def selection_changed(self, *_):
+        ix = self.request_combo.get_active()
+        self.verified.set_active(False)
+        request = self.requests[ix] if 0 <= ix < len(self.requests) else None
+        client = (self.candidates.get(request["request_id"])
+                  if request else None)
+        self.identity.set_text(
+            "Verified Wolf session: " + client if client else
+            "NO MATCH. Reconnect Wolf UI from the requesting device using "
+            "the same network address/path as enrollment, then Refresh.")
 
     def approve(self, *_):
         request_index = self.request_combo.get_active()
-        client_index = self.client_combo.get_active()
         typed = self.code.get_text()
-        if (request_index < 0 or client_index < 0 or
-                request_index >= len(self.requests) or
-                client_index >= len(self.clients) or
+        request = (self.requests[request_index]
+                   if 0 <= request_index < len(self.requests) else None)
+        client = (self.candidates.get(request["request_id"])
+                  if request else None)
+        if (not request or not client or
                 not self.verified.get_active() or
-                typed != self.requests[request_index]["code"]):
+                typed != request["code"]):
             self.status.set_text(
-                "Select the request, select the VERIFIED Wolf device, "
-                "type the exact matching code and check the confirmation.")
+                "Approval blocked. Select the staged request, verify its "
+                "code and keep its matching Wolf UI stream active. "
+                "No other Wolf ID can be selected.")
             return
-        request = self.requests[request_index]
-        client = self.clients[client_index]
         dialog = Gtk.MessageDialog(
             transient_for=self.window, modal=True,
             message_type=Gtk.MessageType.WARNING,
@@ -168,8 +183,9 @@ class OwnerApprovals:
         dialog.format_secondary_text(
             f"Restrict key fingerprint {request['fingerprint']} to Wolf "
             f"device {client}. This modifies the local owner policy and "
-            "authorized_keys, preserving existing access. Do not approve "
-            "unless you physically verified this same device.")
+            "authorized_keys, preserving existing access. The host "
+            "will recheck its network origin and live Wolf identity "
+            "before changing either file.")
         dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
         dialog.add_button("Approve Device", Gtk.ResponseType.OK)
         dialog.set_default_response(Gtk.ResponseType.CANCEL)

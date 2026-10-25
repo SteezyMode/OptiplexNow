@@ -70,11 +70,11 @@ button:disabled{background:#6d6f69;color:#ddd}.warn{color:#e8c28f}#status{min-he
     if(!/^[0-9]{6}$/.test(code)){message("QR code is incomplete. Rescan it on the requesting device.");return;}
     message("Checking for one paired Wolf UI session…");
     try {
-      var resp=await fetch("/v1/owner/enrollment/wolf-candidate",{cache:"no-store",credentials:"omit"});
+      var resp=await fetch("/v1/owner/enrollment/wolf-candidate/"+requestId,{cache:"no-store",credentials:"omit"});
       var data=await resp.json();
       if(!resp.ok||data.success!==true||!/^[0-9]{1,20}$/.test(data.wolf_client_id)){
         wolf.textContent="No unique eligible session";
-        message("Open Wolf UI from this computer. Close other Wolf sessions, then check again.");
+        message("No matching device. Stream Wolf UI using the same network path as this computer's enrollment, then check again.");
         return;
       }
       candidate=data.wolf_client_id;

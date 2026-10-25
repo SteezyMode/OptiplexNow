@@ -33,6 +33,7 @@ class EnrollmentWindow:
         self.busy = False
         self.pending_request = None
         self.review_source = None
+        self.phone_approval_mode = False
         self.window = Gtk.Window(title="NOW | Request Owner Access")
         self.window.set_default_size(460, 550)
         self.window.connect("destroy", self.destroy)
@@ -83,9 +84,10 @@ class EnrollmentWindow:
         self.qr_image = Gtk.Image()
         self.qr_box.pack_start(self.qr_image, False, False, 0)
         self.qr_hint = Gtk.Label(
-            label="Keep this device's Wolf UI stream open. On your phone, "
-                  "check the code and fingerprint, then tap Approve. "
-                  "No public website or third-party QR generator is used.")
+            label="The host already verified this computer's Moonlight "
+                  "certificate. On your trusted Tailscale phone, compare "
+                  "the code and fingerprint, then tap Approve. "
+                  "No Wolf UI session or public website is required.")
         self.qr_hint.set_xalign(0)
         self.qr_hint.set_line_wrap(True)
         self.qr_box.pack_start(self.qr_hint, False, False, 0)
@@ -121,13 +123,16 @@ class EnrollmentWindow:
         self.busy = False
         self.request_button.set_sensitive(True)
         self.check_button.set_sensitive(True)
-        self.review_button.set_sensitive(self.pending_request is not None)
+        self.review_button.set_sensitive(
+            self.pending_request is not None and not self.phone_approval_mode)
         callback(answer, error)
         return False
 
     def request(self, *_):
         self.pending_request = None
         self.review_source = None
+        self.phone_approval_mode = False
+        self.review_button.set_visible(True)
         self.review_button.set_sensitive(False)
         self.qr_box.hide()
         self.status.set_text("Contacting owner server through Tailscale...")
@@ -142,17 +147,23 @@ class EnrollmentWindow:
                 "owner enrollment components. No access was granted.")
             return
         self.pending_request = answer
-        self.review_button.set_sensitive(True)
+        self.phone_approval_mode = (
+            answer.get("transport") == "tailnet" and
+            answer.get("phone_approval_available") is True)
+        # A normal QR client must NOT be offered a button to self-approve:
+        # only the independently pinned owner phone can grant access.
+        self.review_button.set_visible(not self.phone_approval_mode)
+        self.review_button.set_sensitive(not self.phone_approval_mode)
         self.status.set_text(
-            "PENDING OWNER APPROVAL. If this Moonlight identity was just paired "
-            "through the same owner Tailscale service, choose Review below; "
-            "otherwise keep Wolf UI active or use trusted host review.")
+            "PENDING OWNER APPROVAL. " +
+            ("Verifying this device's Moonlight identity before phone QR."
+             if self.phone_approval_mode else
+             "The host-local owner approval pilot is available."))
         self.code.set_text(
             f"REQUEST CODE: {answer['code']}\n"
             f"KEY FINGERPRINT: {answer['fingerprint']}\n"
             "Do not transfer your private key. Click Verify Access after approval.")
-        if (answer.get("transport") == "tailnet" and
-                answer.get("phone_approval_available") is True):
+        if self.phone_approval_mode:
             self.status.set_text(
                 "Verifying this computer's existing Moonlight identity. "
                 "Your private key stays here; phone approval follows.")
@@ -194,7 +205,7 @@ class EnrollmentWindow:
                 "Check the installed qrencode package.")
 
     def review(self, *_):
-        if self.pending_request is None:
+        if self.pending_request is None or self.phone_approval_mode:
             return
         self.status.set_text(
             "Checking this node's fresh Wolf pairing; otherwise the active Wolf UI...")

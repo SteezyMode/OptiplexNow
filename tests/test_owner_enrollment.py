@@ -81,7 +81,8 @@ class OwnerEnrollmentTests(unittest.TestCase):
                                 source_ip=source, now=self.now)
         data = {
             "/api/v1/clients": {"success": True, "clients": [
-                {"client_id": "1001"}, {"client_id": "1002"}]},
+                {"client_id": "1001", "app_state_folder": "1001"},
+                {"client_id": "1002", "app_state_folder": "1002"}]},
             "/api/v1/apps": {"success": True, "apps": [
                 {"id": "wolf-ui-app", "title": "Wolf UI"}]},
             "/api/v1/lobbies": {"success": True, "lobbies": []},

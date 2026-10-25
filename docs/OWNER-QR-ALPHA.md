@@ -17,6 +17,23 @@ Host verifies each connection via Tailscale WhoIs. The requesting computer is pe
 5. The already pinned owner iPhone opens the page via Tailscale, compares the code/fingerprint, and taps Approve. The host validates its phone StableID, revalidates the signed proof under the owner policy lock, then atomically adds a *restricted forced-command* Games/Downloads key and updates the matching Wolf grant. Any mismatch fails closed.
 6. Approval consumes the request and is not replayable. It does not expose generic host SSH, unpair another client, restart Wolf or modify Steam.
 
+## Reversible reference-host deployment gate
+
+The source-only opt-in helper `tools/qr_host_pilot.py` stages a fixed allowlist of QR enrollment modules separately from the working NOW Games broker. It **does not** install a service, bind a port, touch authorized_keys or Wolf, start Docker, or enable remote approval automatically. Use a reviewed, exact 40-hex Git commit checkout or its corresponding GitHub tarball; **never use an obsolete revision from a prior chat command**.
+
+As the existing unprivileged host owner, from the source checkout/archive:
+
+```sh
+REV="$(git rev-parse HEAD)"  # or exact SHA used to download a GitHub commit tarball
+python3 tools/qr_host_pilot.py --check --revision "$REV"
+python3 tools/qr_host_pilot.py --install --revision "$REV"
+"$HOME/.local/lib/optiplex-now-qr-pilot/$REV/run-qr-pilot"
+```
+
+The final line runs **preflight only**, verifying the locally pinned owner user and phone device IDs, Wolf's read-only certificate registry, Tailscale availability and existing owner configuration. With preflight passing, explicitly run `"$HOME/.local/lib/optiplex-now-qr-pilot/$REV/run-qr-pilot" --serve` from a foreground terminal for the phone test. Ctrl+C stops the experimental listener; no system service is created. After ensuring the listener is stopped, `python3 tools/qr_host_pilot.py --remove --revision "$REV"` removes only this version's pilot files. No live host has received this deployment yet.
+
+The **acceptance test** must use a genuinely unapproved NOW restricted key on an owner-operated client already paired to Wolf, then confirm the phone GET/POST and owner policy/forced-command SSH binding. Verify denied access from another same-owner-account computer and a wrong phone, expired/replayed requests, and uninterrupted existing Mac mini managed Steam. A previously approved device does not exercise fresh enrollment. The launcher service being installed or returning a preflight success is **not** proof of QR working.
+
 ## Evidence and remaining gates
 
 **Verified on actual reference machines:** Native and Flatpak Mac mini private keys both matched the same certificate; its DER fingerprint was found in the Wolf registry; the independently computed Wolf ID exactly matched the actual paired Mac mini ID. Both existing local config files are now mode 0600. The actual iPhone was identified and confirmed via Tailscale WhoIs, then its StableID was registered in an owner-local mode-0600 file. Host preflight found the existing owner-ID and phone pin files, readable Wolf TOML, cryptography and Python TOML support, port 18793 unused, **and no enrollment listener yet installed.** Do not publish phone StableID or host token paths beyond their generic filenames.

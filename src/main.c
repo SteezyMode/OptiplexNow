@@ -29,6 +29,7 @@
 #include "media_flow.h"
 #include "downloads_flow.h"
 #include "ui_navigation.h"
+#include "ui_games.h"
 #include "ui_state.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
@@ -80,6 +81,7 @@ static int status_notifier_watcher_present(void){
 static GtkWidget *tray_menu = NULL;
 /* One main GTK window: the dashboard, Software, Settings, and Info pages. */
 static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
+static GtkWidget *games_page_status = NULL;
 static volatile sig_atomic_t reopen_requested = 0;
 static int instance_fd = -1;
 static int tray_restoring = 0;
@@ -108,6 +110,8 @@ static void on_games_setup(void*w,void*p);
 static void on_wizard(void*w,void*p);
 static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
+static void open_games_settings(GtkWidget*w,gpointer data);
+static void on_videos_tab(GtkWidget*w,gpointer data);
 static void on_system_info(void*w,void*p);
 static void settings_discard(GtkWidget*w,gpointer unused);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
@@ -918,6 +922,7 @@ static gboolean managed_games_open_wolf_ui(void){
 static void managed_games_message(const char *message){
  say(message);
  if(games_notice)gtk_label_set_text(GTK_LABEL(games_notice),message);
+ if(games_page_status)gtk_label_set_text(GTK_LABEL(games_page_status),message);
 }
 /* Do not strand an owner in selectable Wolf UI when NOW refused the
  * managed launch. Close only the subprocess opened by THIS click. A Steam
@@ -1201,7 +1206,7 @@ static void managed_games_begin(gboolean stop,gboolean status_only){
   /* Only a real Games launch opens the guided path. Status checks and
    * guarded Stop must remain non-interactive and fail without side effects.
    * This does not grant access or fall back to unrestricted Wolf Steam. */
-  if(!stop && !status_only)on_games_setup(NULL,NULL);
+  if(!stop && !status_only)open_games_settings(NULL,NULL);
   return;
  }
  if(!stop && !status_only && !has_moonlight()){
@@ -1251,6 +1256,17 @@ static void on_managed_games_check(void *widget,void *data){
  managed_games_begin(FALSE,TRUE);
 }
 static void launch_steam(void){managed_games_begin(FALSE,FALSE);}
+static void on_play_steam(GtkWidget*w,gpointer data){(void)w;(void)data;launch_steam();}
+static void open_games_settings(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ on_settings(NULL,NULL);
+ if(settings_view){
+  GtkWidget*stack=g_object_get_data(G_OBJECT(settings_view),"now-settings-stack");
+  if(stack)gtk_stack_set_visible_child_name(GTK_STACK(stack),"gaming");
+ }
+}
+static void on_videos_tab(GtkWidget*w,gpointer data){(void)w;(void)data;now_media_open_videos();}
+
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){open_downloads_page();}
 typedef struct {
@@ -1749,14 +1765,22 @@ static void on_restart_streaming(void *w, void *parent) {
 
 static void on_games_setup(void*w,void*p){(void)w;
  GtkWidget*d=gtk_dialog_new_with_buttons("Games",GTK_WINDOW(p?p:win),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
- gtk_window_set_default_size(GTK_WINDOW(d),440,290);
+ gtk_window_set_default_size(GTK_WINDOW(d),440,420);
+ gtk_window_set_resizable(GTK_WINDOW(d),TRUE);
  GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));
  GtkWidget*col=gtk_box_new(GTK_ORIENTATION_VERTICAL,11);
- gtk_container_set_border_width(GTK_CONTAINER(col),20);add(area,col,0);
+ GtkWidget*scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_size_request(scroll,-1,290);
+ gtk_container_add(GTK_CONTAINER(area),scroll);
+ gtk_container_set_border_width(GTK_CONTAINER(col),14);gtk_container_add(GTK_CONTAINER(scroll),col);
  add(col,label("MOONLIGHT + WOLF","modalheading"),0);
  games_state=label(moonlight_mode_name(),"gameshint");add(col,games_state,0);
  GtkWidget*address=label("","helper");char text[600];snprintf(text,sizeof text,"WOLF HOST   %s",*cfg[0]?cfg[0]:"SET SERVER IP IN SETTINGS");gtk_label_set_text(GTK_LABEL(address),text);add(col,address,0);
- add(col,label("Moonlight/Wolf pairing and managed owner Games access are different. A paired client may open published Wolf apps, but NOW's managed Steam launch and private Downloads require separately approved restricted access. Remote Tailscale owner pairing requires an explicitly enabled host service; the legacy alpha fallback still needs preapproved owner SSH.","helper"),0);
+ GtkWidget*explanation=label("Moonlight pairing and managed owner Games access are separate. This device needs explicit restricted owner approval to launch Steam or use private Downloads. Remote owner pairing requires the opt-in Tailscale host service; the legacy path needs preapproved owner SSH.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(explanation),TRUE);
+ gtk_label_set_max_width_chars(GTK_LABEL(explanation),46);
+ add(col,explanation,0);
  GtkWidget*row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(col,row,0);
  games_install=button(has_moonlight()?"OPEN MOONLIGHT":"INSTALL MOONLIGHT","setupaction");
  g_signal_connect_data(games_install,"clicked",(GCallback)on_games_action,(void*)(long)101,NULL,0);add(row,games_install,1);
@@ -1870,7 +1894,7 @@ static void on_downloads_tab(GtkWidget *widget,gpointer unused){
 }
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
-   if(has_moonlight())launch_steam();else on_games_setup(NULL,NULL);
+   if(has_moonlight())launch_steam();else open_games_settings(NULL,NULL);
  }else if(n==1)now_media_open_videos();
  else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
  else if(n==4)launch_torrents();
@@ -1889,12 +1913,14 @@ static void reflow(int width) {
    last_columns=cols;
    /* Move each action to exactly one section without destroying its widget. */
    for(int i=0;i<8;i++){
+     if(i==0 || i==1 || i==4)continue; /* direct tabs */
      g_object_ref(tiles[i]);
      void*parent=gtk_widget_get_parent(tiles[i]);
      if(parent)gtk_container_remove(GTK_CONTAINER(parent),tiles[i]);
    }
    unsigned featured=featured_mask();int primary=0,other=0;
    for(int i=0;i<8;i++){
+     if(i==0 || i==1 || i==4)continue;
      int chosen=(featured&(1u<<i))!=0;
      int pos=chosen?primary++:other++;
      gtk_grid_attach(GTK_GRID(chosen?grid:extras_grid),tiles[i],pos%cols,pos/cols,1,1);
@@ -2408,12 +2434,19 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_container_add(GTK_CONTAINER(settings_view),area);
  gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");
  GtkWidget*stack=gtk_stack_new();
+ g_object_set_data(G_OBJECT(settings_view),"now-settings-stack",stack);
  gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(stack,TRUE);
  add(area,stack,1);
  GtkWidget*home=settings_page(stack,"home");
  settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
  settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
+ GtkWidget*other_apps=button("OTHER APPS  ›","setupaction");
+ now_nav_bind_link(other_apps,main_pages,"software");
+ add(home,other_apps,0);
+ GtkWidget*system_info=button("SYSTEM INFO  ›","setupaction");
+ g_signal_connect(system_info,"clicked",G_CALLBACK(on_system_info),NULL);
+ add(home,system_info,0);
  
  add(home,label("SETUP & MAINTENANCE","modalheading"),0);
  settings_link(home,stack,"CONNECTIONS & SERVER  ›","connection");
@@ -2486,10 +2519,10 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
  col=preferences;
  add(col,label("OPEN ON STARTUP","modalheading"),0);
- add(col,label("Beta: open on Dashboard or Software. Downloads remains available in the app and tray. Window size is remembered automatically.","helper"),0);
+ add(col,label("Open on Dashboard or Games. Downloads remains a normal tab; tray shortcuts are independent. Window size is remembered.","helper"),0);
  GtkWidget*startup_choice=gtk_combo_box_text_new();
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"dashboard","Dashboard");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"software","Software");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"games","Games");
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(startup_choice),now_ui_state_start_page());
  form->startup_choice=startup_choice;
  add(col,startup_choice,0);
@@ -3183,16 +3216,16 @@ int main(int argc,char**argv) {
  GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
  g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
  add(nav,downloads_tab,0);
- GtkWidget*software_tab=button("SOFTWARE","navtab");
- now_nav_bind_link(software_tab,main_pages,"software");
- add(nav,software_tab,0);
+ GtkWidget*games_tab=button("GAMES","navtab");
+ now_nav_bind_link(games_tab,main_pages,"games");
+ add(nav,games_tab,0);
+ GtkWidget*videos_tab=button("VIDEOS","navtab");
+ g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);
+ add(nav,videos_tab,0);
  GtkWidget*settings_tab=button("SETTINGS","navtab");
  g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
  add(nav,settings_tab,0);
- GtkWidget*info_tab=button("INFO","navtab");
- g_signal_connect(info_tab,"clicked",G_CALLBACK(on_system_info),NULL);
- add(nav,info_tab,0);
- GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
+  GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),
   GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
  gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(dash_scroll),320);
@@ -3200,6 +3233,10 @@ int main(int argc,char**argv) {
  GtkWidget*shell=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_name(shell,"shell");
  gtk_container_add(GTK_CONTAINER(dash_scroll),shell);
  gtk_stack_add_named(GTK_STACK(main_pages),dash_scroll,"dashboard");
+ GtkWidget*games_page=now_games_page_new(G_CALLBACK(on_play_steam),
+  G_CALLBACK(open_games_settings),&games_page_status);
+ gtk_stack_add_named(GTK_STACK(main_pages),games_page,"games");
+ gtk_widget_show_all(games_page);
  GtkWidget*downloads_page=now_downloads_page();
  gtk_stack_add_named(GTK_STACK(main_pages),downloads_page,"downloads");
  gtk_widget_show_all(downloads_page);
@@ -3239,7 +3276,7 @@ int main(int argc,char**argv) {
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(software_scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_container_add(GTK_CONTAINER(software_scroll),software);
  gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");
- add(software,label("SOFTWARE","section"),0);
+ add(software,label("OTHER APPS","section"),0);
  grid=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(grid),1);gtk_grid_set_row_spacing(GTK_GRID(grid),7);gtk_grid_set_column_spacing(GTK_GRID(grid),7);
  gtk_widget_set_hexpand(grid,1);add(software,grid,0);
  GtkWidget*extras=gtk_expander_new("ADDITIONAL SERVICES");add(software,extras,0);

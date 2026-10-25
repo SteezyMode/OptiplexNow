@@ -46,6 +46,11 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertNotIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard")', SOURCE)
         self.assertIn('add(software,grid,0);', SOURCE)
         self.assertIn('add(software,extras,0);', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),games_page,"games");', SOURCE)
+        self.assertIn('now_nav_bind_link(other_apps,main_pages,"software");', SOURCE)
+        self.assertIn('now_nav_bind_link(games_tab,main_pages,"games");', SOURCE)
+        self.assertIn('g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);', SOURCE)
+        self.assertNotIn('button("SOFTWARE","navtab")', SOURCE)
 
     def test_settings_save_cancel_and_pair_callbacks_have_valid_lifetimes(self):
         self.assertIn('PairContext server_context, relay_context;', SOURCE)

@@ -51,7 +51,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         # advertise an unsupported Downloads startup option.
         STATE = (ROOT / "src/ui_state.c").read_text(encoding="utf-8")
         self.assertIn('start_page="dashboard"', STATE)
-        self.assertIn('!strcmp(page,"software")', STATE)
+        self.assertIn('!strcmp(page,"games")', STATE)
         self.assertNotIn('!strcmp(page,"downloads")', STATE)
         self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SHELL)
         self.assertNotIn("startup_downloads_mapped", SHELL)
@@ -112,7 +112,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         guarded = SHELL.split("static void managed_games_begin(", 1)[1].split(
             "static void on_managed_games_stop(", 1)[0]
         self.assertIn('MANAGED GAMES REQUIRES RESTRICTED OWNER ACCESS', guarded)
-        self.assertIn("if(!stop && !status_only)on_games_setup(NULL,NULL);", guarded)
+        self.assertIn("if(!stop && !status_only)open_games_settings(NULL,NULL);", guarded)
         self.assertLess(guarded.index("if(!has_key){"),
                         guarded.index("managed_games.running=TRUE"))
         self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)

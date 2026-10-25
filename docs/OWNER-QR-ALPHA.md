@@ -35,3 +35,12 @@ The original prototype assumed the certificate value was exactly an @ByteArray(.
 
 Next physical gate: chmod 0600 on the two local Moonlight config files (preserve bytes and normal Moonlight pairing), locally sign a challenge with both and verify their matching public keys; cross-check the certificate-derived Wolf ID against Mac mini's actual stream (last observed 11701600982361132536); then owner phone Tailscale StableID pinning and end-to-end QR approval without changing existing working SSH authorization.
 
+
+## October 25 — Physical Mac mini certificate and owner iPhone discovery
+
+Read-only physical checks now confirm the native and Flatpak Mac mini Moonlight configs have the same X.509 public certificate AND each local private key matches it; both files are now mode 0600. Reading the running OptiPlex's Wolf TOML, hashing the stored matching certificate with the Wolf-compatible algorithm and checking the real Wolf paired-client API returned **IDENTITY VERIFIED: True**, including the previously observed Mac mini Wolf client ID. No running Wolf or Steam service changed.
+
+A separate Tailscale status + WhoIs read on the OptiPlex located one online iOS device belonging to the expected owner user, and exposed its stable node identity. Before writing the owner-only phone pin, the owner must visually confirm the Tailscale IP in the actual iPhone app. **Never place the owner phone StableID, phone IP, or private pin file into the public repository or release package.** The pin belongs in a 0600 owner-host-local file, independently revalidated against live WhoIs before creation. This discovery does not mean the phone approval service has been enabled or that a QR browser flow has physically passed.
+
+Next: create/validate the owner phone node pin without touching any SSH authorized_keys, Wolf pairing or Steam state; confirm host owner-ID pin and listener's source install path, test opt-in listener preflight; then test a **new disposable restricted enrollment request**, not the already-approved Mac mini's production key.
+

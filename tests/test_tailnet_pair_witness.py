@@ -110,7 +110,7 @@ class HttpPairEvidenceTests(unittest.TestCase):
         self.pair_calls = []
         self.witness = PairingWitness()
 
-        def stage(state, key):
+        def stage(state, key, *, source_ip):
             return {"success": True, "status": "pending",
                     "request_id": REQ, "code": "123456",
                     "fingerprint": "f"*20}

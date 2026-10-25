@@ -25,6 +25,7 @@ class FakeWolf:
             {"id": "steam-app", "title": "Steam"}]}
         self.sessions = {"success": True, "sessions": [
             {"client_id": "1200", "app_id": "ui-app",
+             "client_ip": "127.0.0.1",
              "aes_key": "NEVER-IN-RESPONSE", "aes_iv": "secret"}]}
         self.lobbies = {"success": True, "lobbies": []}
         self.calls = []
@@ -112,7 +113,10 @@ class ApprovalHttpTests(unittest.TestCase):
         self.handler = make_handler("1042", "/private/state", verify=verify,
                                     stage=stage, wolf_factory=lambda: self.wolf,
                                     approve=approve,
-                                    remote_approve_enabled=True)
+                                    remote_approve_enabled=True,
+                                    pending=lambda state: [{
+                                        "request_id": "a"*32,
+                                        "source_ip": "127.0.0.1"}])
         self.server = HTTPServer(("127.0.0.1", 0), self.handler)
         self.worker = threading.Thread(target=self.server.serve_forever,
                                        kwargs={"poll_interval": 0.01}, daemon=True)
@@ -142,7 +146,7 @@ class ApprovalHttpTests(unittest.TestCase):
                 "wolf_client_id": "1200", "confirmed": True, **kwargs}
 
     def test_owner_can_review_then_explicitly_approve_without_host_screen(self):
-        status, body = self.call("GET", REVIEW_ROUTE)
+        status, body = self.call("GET", REVIEW_ROUTE + "/" + "a"*32)
         self.assertEqual(status, 200)
         self.assertEqual(body, {"success": True, "wolf_client_id": "1200"})
         self.assertNotIn("NEVER-IN-RESPONSE", str(body))
@@ -155,7 +159,7 @@ class ApprovalHttpTests(unittest.TestCase):
 
     def test_denies_guest_false_confirmation_browser_and_other_routes(self):
         self.authorized = False
-        self.assertEqual(self.call("GET", REVIEW_ROUTE)[0], 403)
+        self.assertEqual(self.call("GET", REVIEW_ROUTE + "/" + "a"*32)[0], 403)
         self.assertEqual(self.call("POST", APPROVE_ROUTE, self.approval())[0], 403)
         self.authorized = True
         for bad in [
@@ -174,7 +178,7 @@ class ApprovalHttpTests(unittest.TestCase):
 
     def test_missing_unique_wolf_ui_prevents_confirmation(self):
         self.wolf.sessions["sessions"] = []
-        status, body = self.call("GET", REVIEW_ROUTE)
+        status, body = self.call("GET", REVIEW_ROUTE + "/" + "a"*32)
         self.assertEqual(status, 409)
         self.assertNotIn("wolf_client_id", body)
         self.assertEqual(self.approvals, [])
@@ -192,7 +196,7 @@ class ApprovalHttpTests(unittest.TestCase):
                                        kwargs={"poll_interval": 0.01},
                                        daemon=True)
         self.worker.start()
-        self.assertEqual(self.call("GET", REVIEW_ROUTE)[0], 403)
+        self.assertEqual(self.call("GET", REVIEW_ROUTE + "/" + "a"*32)[0], 403)
         self.assertEqual(self.call("POST", APPROVE_ROUTE, self.approval())[0], 403)
 
 

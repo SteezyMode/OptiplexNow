@@ -1,5 +1,6 @@
 """Offline certificate proof checks: no host network, private key transfer, Wolf edits."""
 import base64
+import configparser
 from datetime import datetime, timedelta, timezone
 import importlib.util
 from pathlib import Path
@@ -112,7 +113,7 @@ class CertificateBindingTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.sign()
         self.clientconf.write_text("malformed settings\n")
-        with self.assertRaises((ValueError, Exception)):
+        with self.assertRaises(configparser.Error):
             self.sign()
         self.set_wolf_config(self.client_id, self.cert)
         self.wolfconf.chmod(0o666)

@@ -5,10 +5,9 @@ signature against the actual paired client certificate stored in the host's
 trusted Wolf TOML configuration. It never requests or transfers a client
 private key. Intended for the next opt-in certificate-binding endpoint.
 
-Wolf defaults app_state_folder to a hash of client_cert, which is also its
-client_id on supported 64-bit builds. We *only* accept a default-looking
-folder that matches the independently observed Wolf ID. Custom app_state
-folders fail closed rather than risk a false certificate-to-ID association.
+Wolf client IDs are derived from the exact stored certificate byte string by
+its 64-bit libstdc++ build; custom app_state_folder values do not affect IDs.
+Unsupported Wolf hash algorithms must fail closed rather than guess.
 """
 import base64
 import hashlib
@@ -49,8 +48,38 @@ def _cert(cert_bytes):
         raise PolicyError("Invalid paired Moonlight certificate") from exc
 
 
+def wolf_certificate_client_id(raw_cert):
+    """Wolf's x86-64 libstdc++ std::hash<std::string> for paired cert PEM.
+
+    This uses GCC's MurmurHash64A _Hash_bytes(seed=0xc70f6907).
+    Do NOT substitute app_state_folder: Wolf lets users customize it.
+    Fail closed if the host's Wolf build does not use this hash scheme.
+    """
+    if not isinstance(raw_cert, bytes):
+        raise PolicyError("Invalid Wolf certificate representation")
+    mask = (1 << 64) - 1
+    m, r = 0xc6a4a7935bd1e995, 47
+    h = (0xc70f6907 ^ (len(raw_cert) * m)) & mask
+    end = len(raw_cert) & ~7
+    for offset in range(0, end, 8):
+        key = int.from_bytes(raw_cert[offset:offset + 8], "little")
+        key = key * m & mask
+        key ^= key >> r
+        key = key * m & mask
+        h ^= key
+        h = h * m & mask
+    rest = raw_cert[end:]
+    if rest:
+        for i, byte in enumerate(rest):
+            h ^= byte << (8 * i)
+        h = h * m & mask
+    h ^= h >> r
+    h = h * m & mask
+    return str(h ^ (h >> r))
+
+
 def _paired_host_certs(config_file):
-    """Only read a trusted host-owned Wolf configuration; never write to it."""
+    """Read only trusted Wolf TOML; independently derive Wolf client IDs."""
     config = Path(config_file)
     if not config.is_absolute() or config.is_symlink() or config.parent.is_symlink():
         raise PolicyError("Untrusted Wolf config path")
@@ -74,17 +103,15 @@ def _paired_host_certs(config_file):
     for entry in entries:
         if not isinstance(entry, dict):
             raise PolicyError("Malformed paired Wolf client")
-        pem, folder = entry.get("client_cert"), entry.get("app_state_folder")
-        if (not isinstance(pem, str) or len(pem.encode("utf-8")) > MAX_CERT
-                or not isinstance(folder, str) or
-                not IDENT.fullmatch(folder)):
-            # Custom folder mappings need authoritative upstream certificate
-            # ID attribution; do not assume a folder is an identity.
-            continue
-        der, _ = _cert(pem.encode("utf-8"))
-        if folder in matches and matches[folder] != der:
-            raise PolicyError("Conflicting certificate registry")
-        matches[folder] = der
+        pem = entry.get("client_cert")
+        if not isinstance(pem, str) or len(pem.encode("utf-8")) > MAX_CERT:
+            raise PolicyError("Invalid paired certificate")
+        raw_cert = pem.encode("utf-8")
+        client_id = wolf_certificate_client_id(raw_cert)
+        der, _ = _cert(raw_cert)
+        if client_id in matches and matches[client_id] != der:
+            raise PolicyError("Conflicting Wolf certificate registry")
+        matches[client_id] = der
     return matches
 
 

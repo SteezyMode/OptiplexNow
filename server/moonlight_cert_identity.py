@@ -115,14 +115,15 @@ def _paired_host_certs(config_file):
     return matches
 
 
-def verify_binding(*, wolf_config, wolf_api, client_id, certificate_pem,
+def verify_binding(*, wolf_config, wolf_api, client_id=None, certificate_pem,
                    signature_b64, request_id, code, fingerprint):
     """Prove local private-key possession and Wolf certificate membership.
 
     No authorization side effects. The requesting connection and pending
     key must be checked separately by the enrollment service.
     """
-    if (not isinstance(client_id, str) or not IDENT.fullmatch(client_id)
+    if ((client_id is not None and
+            (not isinstance(client_id, str) or not IDENT.fullmatch(client_id)))
             or not isinstance(certificate_pem, str)
             or not 1 <= len(certificate_pem.encode("utf-8")) <= MAX_CERT
             or not isinstance(signature_b64, str)
@@ -137,8 +138,10 @@ def verify_binding(*, wolf_config, wolf_api, client_id, certificate_pem,
         raise PolicyError("Invalid Moonlight signature size")
     claimed_der, certificate = _cert(certificate_pem.encode("ascii"))
     known = _paired_host_certs(wolf_config)
-    if client_id not in known or known[client_id] != claimed_der:
+    matching = [ident for ident, der in known.items() if der == claimed_der]
+    if len(matching) != 1 or (client_id is not None and client_id != matching[0]):
         raise PolicyError("Moonlight certificate does not match Wolf paired client ID")
+    client_id = matching[0]
     if client_id not in paired_client_ids(wolf_api("GET", "/api/v1/clients")):
         raise PolicyError("Wolf client no longer paired")
     try:

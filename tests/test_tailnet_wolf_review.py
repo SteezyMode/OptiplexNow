@@ -243,7 +243,7 @@ class RemoteOwnerClientContract(unittest.TestCase):
         for host in ("1.2.3.4", "192.168.1.1", "100.100.100.100",
                      "wolf.example.com"):
             with self.subTest(host=host), self.assertRaises(ValueError):
-                self.client.review_active_wolf(host, connection=Connection)
+                self.client.review_active_wolf(host, "a"*32, connection=Connection)
 
     def test_owner_ui_always_requires_approval_dialog(self):
         ui = (ROOT / "src/owner-enroll-ui.py").read_text()

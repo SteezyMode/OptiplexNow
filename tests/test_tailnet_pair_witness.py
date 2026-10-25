@@ -271,7 +271,7 @@ class ClientPairWitnessTests(unittest.TestCase):
                               return_value=OLD) as fallback:
                 self.assertEqual(self.client.review_for_owner(SOURCE, REQ), {
                     "wolf_client_id": OLD, "source": "active_wolf_ui"})
-                fallback.assert_called_once_with(SOURCE)
+                fallback.assert_called_once_with(SOURCE, REQ)
         with patch.object(self.client, "review_recent_pairing",
                           side_effect=ValueError("403 identity denied")):
             with patch.object(self.client, "review_active_wolf") as fallback:

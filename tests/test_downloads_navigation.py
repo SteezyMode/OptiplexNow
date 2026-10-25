@@ -115,7 +115,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("if(!stop && !status_only)on_owner_enrollment(NULL,NULL);", guarded)
         self.assertLess(guarded.index("if(!has_key){"),
                         guarded.index("managed_games.running=TRUE"))
-        self.assertIn("ADVANCED: REQUEST RESTRICTED OWNER ACCESS", SHELL)
+        self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
 
     def test_normal_wizard_never_offers_unrestricted_admin_ssh(self):
         wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(

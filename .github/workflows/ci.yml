@@ -53,6 +53,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          make check-instance-lock
           make check-process
           make check-presets
           make check-config

@@ -129,6 +129,10 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                 return
             identity = self._verified_owner()
             if not identity or (self.path == APPROVE_ROUTE
+                                and (approver_node_id is None
+                                     or identity[1] != approver_node_id)
+                                and wolf_config is not None) or (
+                                self.path == APPROVE_ROUTE
                                 and approver_node_id is not None
                                 and identity[1] != approver_node_id):
                 self._send(403, {"success": False, "status": "forbidden"})
@@ -270,8 +274,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
             if self.path.startswith(PAGE_PREFIX):
                 page_peer = self._verified_owner()
                 if (not remote_approve_enabled or not page_peer or
-                        (approver_node_id is not None and
-                         page_peer[1] != approver_node_id)):
+                        (wolf_config is not None and approver_node_id is None)
+                        or (approver_node_id is not None and
+                            page_peer[1] != approver_node_id)):
                     self._send(403, {"success": False, "status": "forbidden"})
                     return
                 try:
@@ -302,6 +307,9 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
             owner = self._verified_owner()
             if not owner or (
                     review_request_id is not None and not remote_approve_enabled) or (
+                    review_request_id is not None and wolf_config is not None
+                    and (approver_node_id is None or
+                         owner[1] != approver_node_id)) or (
                     self.path == PAIR_PENDING_ROUTE and not owner_pair_enabled):
                 self._send(403, {"success": False, "status": "forbidden"})
                 return

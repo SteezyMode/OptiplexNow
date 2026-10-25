@@ -1,3 +1,10 @@
+## October 25 — Signed phone QR prototype now wired (development only)
+
+PR #184 now connects request-bound Moonlight RSA certificate signing to a host-authorized proof endpoint, independently verifies Wolf's certificate-derived client ID, and revalidates the proof inside the atomic restricted-key + owner policy commit. The Qt client private key stays local; wrong proof/key/identity cannot grant access. The owner QR is displayed only after successful proof staging.
+
+Host production listener requires an installer-pinned owner user ID AND a trusted phone StableID (not just shared Tailscale-account membership) for phone page access/approval. The phone camera opens private Tailscale HTTP; no public website or domain is used. Client source IP need not equal LAN streaming source when strong certificate mode is enabled. Listener remains opt-in and undeployed.
+
+Source and offline integration tests are not physical acceptance. The actual reference Wolf TOML, Moonlight Qt identity profile, host setup and phone WhoIs denial/happy path still require real-device verification. No reference-host streaming, keys, services or current Games functionality have been touched.
 ## October 25 — Moonlight certificate proof prototype (source-only)
 
 The next secure cross-network binding uses an existing owner-device identity, NOT a public website or new NOW account. Upstream Wolf retains the Moonlight client public certificate in its private host config.toml; Moonlight Qt stores the corresponding private key in the client's own QSettings. Wolf derives its numeric client ID from the certificate. Relevant upstream docs: https://games-on-whales.github.io/wolf/stable/user/configuration.html and https://github.com/moonlight-stream/moonlight-qt/blob/master/app/backend/identitymanager.cpp .

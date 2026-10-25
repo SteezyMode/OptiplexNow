@@ -62,7 +62,7 @@ class SignedOwnerApprovalTests(unittest.TestCase):
         key = serialization.load_pem_private_key(
             self.key.encode("ascii"), password=None)
         data = message(self.request["request_id"], self.request["code"],
-                       _fingerprint(self.pub))
+                       self.request["fingerprint"])
         return base64.b64encode(
             key.sign(data, padding.PKCS1v15(), hashes.SHA256())).decode("ascii")
 

@@ -1,39 +1,13 @@
-# Owner phone QR approval — experimental Private Alpha 1 pilot
+# Owner QR approval — experimental, source-bound development pilot
 
-The client's Games Settings → Request Owner Approval stages a separate
-restricted public key. On the currently opt-in owner Tailscale listener it
-now displays a locally generated QR code only when the host explicitly reports
-that phone approval is enabled. The owner opens the QR link with
-their Tailscale-connected phone, checks the six-digit code and key fingerprint
-shown on the requesting computer, and taps Approve.
+**Not physically accepted end-to-end.** The live Mac mini Games workflow succeeded only AFTER the user manually corrected a wrong Wolf identity authorization. PR #184 protects future owner enrollment; it is not deployed on the running reference host.
 
-The host checks the **phone's pinned-owner Tailscale WhoIs identity** and
-independently inspects the **sole paired active Wolf UI client** before any
-restricted owner key is installed. Existing owner policies and the reviewed
-forced-command Games/Downloads broker remain mandatory. Ambiguous Wolf
-sessions or existing active lobbies prevent approval.
+During staging, the host saves the actual IPv4 source observed by sshd (SSH_CONNECTION) or the verified Tailnet HTTP request. A client cannot submit its own source address. Legacy source-less requests cannot be approved. Requests expire after 600 seconds; staging the same public key from a different source is denied.
 
-**Limitations:** This does NOT pair Moonlight/Wolf automatically, register
-additional users, bypass access checks, enable a new daemon, or deploy a
-public website. The owner must pair the new Moonlight device first and
-leave its Wolf UI stream active for review. Requests expire after 600
-seconds. Phone scanning alone grants nothing. There is no cryptographic
-binding between the Wolf certificate and the staged key, so verify the
-requesting computer's code/fingerprint and observed Wolf session.
+The host-local approval UI no longer exposes a list of arbitrary Wolf IDs. A client is eligible only when the host sees ONE paired active Wolf UI stream whose client_ip exactly matches the staged request source. A QR phone review targets one pending request and applies the same test. The final approval independently RECHECKS the same network source and Wolf client ID before committing both restricted authorized_keys and the owner policy. Multiple sessions, unrelated Wolf apps or lobbies, missing provenance, mismatching IDs and other-source streams fail closed. No automatic permission fallback, Steam stop, unpair or Wolf restart.
 
-The client .deb depends on the local qrencode binary, generates the QR on
-the client using stdin (not a web generator), and packages the host
-component without starting it. The opt-in host listener binds only to
-the host's Tailscale IP on TCP 18793 and requires the separate
---enable-remote-approval flag and private --owner-id-file, together with
-the host's provisioned owner state and restricted broker. Missing
-listener means a host-local approval fallback, not a fake QR button.
-Browser content uses a strict CSP, no external scripts, no-store
-responses, exact Origin/Host checks, and never exposes private keys.
-The six-digit code is passed as a URL fragment, not in HTTP GET.
+**P0 remaining:** This prevents the actual accidental numeric-ID mismatch but DOES NOT cryptographically bind the staged SSH private key to a Moonlight certificate or automatically connect a Tailscale node's 100.x address to the same machine's 192.168.x streaming address. Those mixed-network requests correctly FAIL rather than guess. Implement and validate certificate possession or equivalent independently authenticated source association before claiming QR onboarding is safe across LAN/Tailnet and completely effortless. No unverified owner device should ever receive a Games/Downloads key.
 
-Before enabling on the live reference host, physically verify the
-owner phone and client Tailscale access, the negative non-owner case,
-Wolf pairing and sole Wolf UI proof, approval followed by restricted
-Games verification, and full Steam lifecycle. CI passing is not a
-substitute for these tests.
+The phone page requires explicit verified Tailscale owner identity, exact Host/Origin constraints, six-digit code comparison and Approve action; scanning alone grants nothing. The QR is generated locally with qrencode, the code is in a URL fragment, and the owner listener is separately opt-in over the host Tailnet IPv4 at TCP 18793. Installing a client .deb does NOT run this host service, create accounts or modify keys.
+
+**Remaining acceptance:** green CI negatives; clean client QR and direct source match on real hardware; wrong source/identity/owner/replay; mixed LAN/Tailnet certificate-level proof; clean-host recovery/rollback. Keep the repaired Mac mini authorization intact.

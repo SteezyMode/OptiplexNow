@@ -2,7 +2,9 @@
 
 **Status: NOT ACCEPTED.** This is the immediate, supported small-tester release target. It is not an announcement that the existing code, current beta, or reference server satisfies these requirements.
 
-**Product:** One personally owned compatible Linux PC becomes a private games, video and download server. An approved client uses graphical onboarding to play a game from an independent Wolf session, watch the owner's Jellyfin library, or, with owner/admin authorization, manage VPN-isolated downloads and files. The host remains usable as a normal computer.
+**Scope lock: one owner plus owner-operated devices only.** Independent member accounts, viewer/guest access, and their separate Steam profiles are later milestones. A member-facing release must independently pass server-side authorization tests.
+
+**Product:** One personally owned compatible Linux PC becomes a private games, video and download server. An approved client uses graphical onboarding to play a game from an independent Wolf session, watch the owner's Jellyfin library, or manage their own VPN-isolated downloads and files. The host remains usable as a normal computer.
 
 **Priorities:** complete the three real user journeys before broadening feature support. Deliver one maintainable host/client experience, not a thin page of launch buttons or a custom rewrite of third-party services.
 
@@ -45,7 +47,7 @@ Critical issues: [#171](https://github.com/SteezyMode/OptiplexNow/issues/171), [
 
 ## Pillar 3: private downloads and protected files
 
-**User story:** The owner uses NOW to queue an authorized download, see where it landed on the real host, open that folder, organize media within their ordinary Linux account permissions, and then play it through Jellyfin. The downloader alone is VPN-isolated; gaming and video work independently. Invited viewers receive no torrent or host-file privileges by default.
+**User story:** The owner uses NOW to queue an authorized download, see where it landed on the real host, open that folder, organize media within their ordinary Linux account permissions, and then play it through Jellyfin. The downloader alone is VPN-isolated; gaming and video work independently. Invited viewers are not enrolled in Private Alpha 1.
 
 Acceptance:
 - [ ] GUI installs or safely adopts supported qBittorrent/VueTorrent + Gluetun + bring-your-own VPN configuration on the supported host without taking over the host network.
@@ -63,11 +65,19 @@ Tracking: [#137](https://github.com/SteezyMode/OptiplexNow/issues/137), [#98](ht
 
 - [ ] Host/Client role choice and first-run path are understandable. Normal installation, enrollment and service setup are graphical, with clear authentication and approvals.
 - [ ] Privileged actions occur only through trusted host-side authorization, not arbitrary SSH/Docker/sockets exposed to every paired client.
-- [ ] One owner/admin and at least one restricted viewer/member account are physically tested; restricted member may view/play only explicitly permitted content.
+- [ ] One owner/admin is physically tested across at least two owner-operated devices. Non-owner member roles are deferred; a later member-facing release requires independently tested server-enforced privilege isolation.
 - [ ] Reboot, reconnection, expected service outages, partial provisioning, upgrades and rollback leave unrelated owner data intact.
 - [ ] Fresh client and independent disposable fresh-host setup are observed, hardware/software versions recorded, and at least one tester follows instructions without a developer shell.
 - [ ] Installer/release artifacts are immutable, reproducible enough to verify by SHA256, and correspond to exact accepted source. There is a documented way to stop/remove NOW-managed components without wiping user media or game data.
 - [ ] CI, mock integration, real upstream protocol, physical host, physical client and tester acceptance evidence are differentiated. **No release is called accepted until the physical checks pass.**
+
+## Current blocker order (October 25)
+
+1. **P0: owner device identity / enrollment.** No selectable Wolf numeric ID. Source-matched live Wolf UI proof is in draft PR #184, but certificate-level identity proof across LAN and Tailscale remains open. A wrong-ID grant must be impossible from any approval path. Issue #191.
+2. **P0: Games authorization truth.** Wolf pairing can still permit access to Wolf-published Steam independently of restricted NOW owner credentials. Decide and enforce truthful owner-only service boundaries before onboarding external testers; issue #192.
+3. **P0: complete Games, Video and Private Downloads.** The repaired Mac mini reference client physically passed managed Big Picture launch and natural exit. Fresh-host acceptance, zero-URL Jellyfin, and VPN egress/kill-switch plus owner download management remain incomplete.
+4. **P1: guided safe host install/adopt and reliable recovery.** Independent clean disposable host and client, rollback, understandable errors, tray preservation, incremental main.c modularization.
+5. **P2: UX polish and broader client support.** Wolf UI exit flash and aliases, Windows client, extended preferences. Multi-user Steam, Windows independent-session hosting, new services and subscription monetization remain post-alpha.
 
 ## The active order of work
 

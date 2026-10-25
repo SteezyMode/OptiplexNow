@@ -14,7 +14,8 @@ import sys
 
 from tailnet_owner_identity import own_tailnet_ipv4, pinned_owner_id, verify_owner_peer
 from owner_enrollment import (_read_private_config, stage_request,
-                              approve_request)
+                              pending_requests, approve_request)
+from owner_qr_approval import PAGE_PREFIX, parse_page_request, render_page
 from owner_access import PolicyError
 from tailnet_wolf_review import single_active_wolf_ui, approve_reviewed_owner_request
 from wolf_docker_adapter import WolfDockerAPI
@@ -41,7 +42,8 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                  approve=approve_reviewed_owner_request,
                  remote_approve_enabled=False, owner_pair_enabled=False,
                  pair_api=host_wolf_pair_api, commit=approve_request,
-                 witness=None, require_fresh_pairing=False, fresh_window=None):
+                 witness=None, require_fresh_pairing=False, fresh_window=None,
+                 pending=pending_requests):
     witness = witness if witness is not None else PairingWitness()
     fresh_window = fresh_window if fresh_window is not None else FreshPairWindow()
 
@@ -67,12 +69,39 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
             self.end_headers()
             self.wfile.write(body)
 
+        def _send_html(self, status, markup, nonce):
+            payload = markup.encode("utf-8")
+            self.send_response(status)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Frame-Options", "DENY")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.send_header("Content-Security-Policy",
+                "default-src 'none'; script-src 'nonce-" + nonce +
+                "'; style-src 'nonce-" + nonce +
+                "'; connect-src 'self'; form-action 'none'; "
+                "frame-ancestors 'none'; base-uri 'none'")
+            self.end_headers()
+            self.wfile.write(payload)
+
         def _verified_owner(self):
             if (len(self.headers.get_all("Host") or []) != 1
                     or self.headers["Host"] !=
                        f"{self.server.server_address[0]}:{self.server.server_address[1]}"
-                    or self.headers.get("Origin") is not None
                     or self.headers.get("Transfer-Encoding") is not None):
+                return False
+            # Only the browser page's approval POST may carry an Origin;
+            # it must match the exact local Tailnet host. Other routes keep
+            # rejecting Origin, and all routes verify the real Tailscale peer.
+            origin = self.headers.get("Origin")
+            expected = ("http://" + self.server.server_address[0] + ":" +
+                        str(self.server.server_address[1]))
+            if (origin is not None and not (
+                    self.path == APPROVE_ROUTE and origin == expected)):
+                return False
+            if self.headers.get("Sec-Fetch-Site") == "cross-site":
                 return False
             return verify(self.client_address[0], owner_user_id)
 
@@ -205,6 +234,26 @@ def make_handler(owner_user_id, state_dir, *, verify=verify_owner_peer,
                 self._send(400, {"success": False, "status": "denied"})
 
         def do_GET(self):
+            if self.path.startswith(PAGE_PREFIX):
+                if not remote_approve_enabled or not self._verified_owner():
+                    self._send(403, {"success": False, "status": "forbidden"})
+                    return
+                try:
+                    request_id = parse_page_request(self.path)
+                    request = next(
+                        (entry for entry in pending(state_dir)
+                         if entry["request_id"] == request_id), None)
+                    if request is None:
+                        raise ValueError("Unknown or expired enrollment request")
+                    markup, nonce = render_page(
+                        request_id, request["fingerprint"],
+                        request["seconds_remaining"])
+                except (OSError, PolicyError, ValueError, TypeError,
+                        KeyError, RuntimeError):
+                    self._send(404, {"success": False, "status": "not_found"})
+                    return
+                self._send_html(200, markup, nonce)
+                return
             if self.path not in (REVIEW_ROUTE, PAIR_PENDING_ROUTE):
                 self._send(404, {"success": False, "status": "not_found"})
                 return

@@ -1,3 +1,11 @@
+## October 26 — Clean-host input isolation development increment (unreleased)
+
+Audited the v1.20.0 Host Setup path: guarded Wolf container installation exists, but prerequisite installation, curated image/driver inputs, clean owner workspace/broker/enrollment integration, physical stream checks and recovery remain incomplete. The active target remains the one-owner Private Alpha 1 contract; the older broad host/public-alpha wording is not a scope expansion.
+
+Development source now bundles upstream Wolf input rules at revision `9f29d9c4ceb5b0fb83875d98dad67af8237f5495` and verifies their SHA256. Explicitly approved clean-host installation checks for conflicting policy, creates only a missing fixed rule file, reloads udev without globally retriggering devices, and stops before Docker work if reload fails. Existing identical trusted rules are preserved. Package upgrades alone activate nothing. Focused host tests: 137 run, 136 passed, one existing socket-dependent test skipped in the local restricted runtime. Full local suite: 494 run, 10 socket-permission errors, two missing-`pkg-config` errors, four skips; no claim of a full local pass. PR CI and physical acceptance are separate gates.
+
+**No physical change or proof:** reference OptiPlex untouched; clean-host installation, actual controller/desktop separation and fresh enrollment remain untested. See [Host installer audit](HOST-INSTALLER.md#october-26-clean-host-games-audit-and-first-increment). Next: narrow graphical prerequisite preparation, then owner workspace/enrollment integration on disposable hardware. This is not an official release or accepted alpha.
+
 ## October 26 — Private QR iPhone physical test and v1.20.0 closed-beta promotion
 
 **Physical reference-host progress:** Owner OptiPlex installed the version-pinned isolated host QR pilot at revision `1116d2a0376597c08a2e4c278521a8ab70a51ffd`. Exact checkout verified, private module inventory installed, non-listening preflight passed, and the owner manually started a foreground listener bound only to host Tailscale IPv4 port 18793. This was not a systemd service or a main client package modification. It may still be running; **check its terminal and stop with Ctrl+C before changing/removing pilot files**. No observed host service restart, Wolf configuration edit or Steam interruption.

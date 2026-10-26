@@ -1,3 +1,7 @@
+## 2026-10-26 — Clean-host Wolf input policy before startup
+
+The actual installer validated `/dev/uinput` and `/dev/uhid` but did not provision Wolf's host input-isolation policy. Added checksum-pinned upstream rules as inert package resources and explicit clean-host activation before Docker work; preserve existing matching policy, refuse conflicts, journal failures, reload without global device triggering. This is source/mock evidence, not physical desktop-independence acceptance. Auditing current Wolf also ruled out an initial legacy-mount suspicion: current upstream resolves container mounts automatically. No Compose rewrite or reference-host mutation. Details and remaining clean-host blockers: `HOST-INSTALLER.md`.
+
 # Engineering trail: decisions, incidents and handoffs
 
 This is the **append-only engineering trail**, not another roadmap or current-status page.

@@ -2,7 +2,7 @@
 
 **State: experimental, unaccepted installation candidate.** The [published v1.18.0 closed-beta](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0) includes an opt-in guarded advanced Wolf host installer, but it has not passed clean physical host installation, encoder or gameplay acceptance. On current source, an opt-in, privileged installation path exists for *clean* Ubuntu 24.04 and Pop!_OS 24.04 amd64 hosts with AMD, Intel or NVIDIA graphics. A complete installation and working game stream have **not** been validated on independent physical hardware. Track completion in [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
 
-This document is the authoritative **Wolf-only host technical-alpha** contract for new NOW-managed hosts, not a general server installer. The **public entertainment-server alpha** additionally requires guided Jellyfin and VPN-isolated qBittorrent with strict owner/member roles; see [Public-alpha contract](PUBLIC-ALPHA.md). [Product direction](PRODUCT.md), [current verification](CURRENT-STATUS.md) and [private client beta](BETA-ACCEPTANCE.md) cover separate stages.
+This document describes the **Wolf-only host installer**. The active release gate is [Private Alpha 1](PRIVATE-ALPHA.md), covering one owner and owner-operated devices, independent Games, Jellyfin and VPN-isolated Downloads. The broader public-alpha/member contract is deferred. [Product direction](PRODUCT.md), [current verification](CURRENT-STATUS.md) and [private client beta](BETA-ACCEPTANCE.md) cover separate stages.
 
 ## Implemented path
 
@@ -12,10 +12,35 @@ The separate GTK window `src/host_setup.c` opens from **Settings > Connections &
 2. **Advanced pilot:** choose AMD, Intel or NVIDIA, provide the correct `/dev/dri/renderD###` and a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
 3. **Check:** `host_install.py --check` inspects real hardware, runtime prerequisites, occupied Wolf ports, driver/DRM state and existing managed paths. Non-root users need not join the Docker group; inaccessible daemon state requires a privileged recheck.
 4. **Authorize:** explicit GTK confirmation and OS `pkexec` authentication precede `host_install.py --install`. The root helper rechecks eligibility and refuses existing NOW-managed workspace/project state. There is no network-facing installation API.
-5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
+5. **Provision:** before starting Wolf, the helper installs the pinned upstream `85-wolf.rules` only if absent (or preserves an identical trusted file), refuses conflicting Wolf-specific rules, and reloads udev without globally triggering devices. Then the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
 6. **Report:** `running_stream_unverified` means only that the inspected container is running. It does **not** mean Moonlight pairing, encoding, video, audio, input or reconnection succeeded.
 
 Docker and Docker Compose must already be installed. This pilot does **not** configure the user's package repositories, kernel drivers, boot settings, firewall, Tailscale account, Jellyfin or unrelated services. It is not yet the promised 15-minute, terminal-free consumer host installation.
+
+## October 26 clean-host Games audit and first increment
+
+The live path is `src/host_setup.c` → `host_install.py`; preflight, service census and adoption planning are reusable read-only components. `host_stage.py` supplies the Compose template. Transaction/runtime/owner-ticket prototypes remain disconnected. The published v1.20.0 installer is an advanced container-start path, not a completed consumer setup.
+
+| First-game requirement | Current evidence / missing work |
+| --- | --- |
+| OS/GPU/dependency/conflict detection | Implemented and mock tested; Ubuntu/Pop!_OS 24.04 amd64 candidates only; render device and GPU selected manually. |
+| Prerequisite provisioning | Docker/Compose, kernel modules/device nodes, drivers and remote networking must already work. No integrated dependency installation. |
+| Reproducible Wolf installation | Dedicated project, immutable user-supplied digest, root recheck, persistent state and NVIDIA userspace-volume recipe exist. No curated tested image selection; NVIDIA checksum remains manual. |
+| Physical desktop independence | Input nodes alone do not establish isolation. This development increment provisions pinned upstream input rules; real controller/desktop separation remains untested. |
+| Owner Steam and authorized client | Clean installer does not bootstrap the existing restricted broker, durable named owner workspace, enrollment service or complete graphical pairing/discovery. Direct Wolf app authority differs from NOW managed-operation authority (#192). |
+| First game and recovery | Container identity/running checks exist; no integrated encoder, video/audio/controller or session test. Interrupted installs stop; automated repair/removal and NVIDIA driver-update recovery remain unfinished. |
+
+**First increment (development branch, not released):** provision upstream Wolf input rules before any Wolf startup. Exact upstream source: [85-wolf.rules at 9f29d9c](https://github.com/games-on-whales/wolf/blob/9f29d9c4ceb5b0fb83875d98dad67af8237f5495/85-wolf.rules), SHA256 `52567af7cce1feb6a6625938b804e0def2c1fee6f70db69f36c366f7cdf8151c`. The package carries the unmodified file and MIT notice as inert resources; installing/upgrading the Debian package alone does not activate rules. Local confirmation explicitly discloses this host change.
+
+The installer checks the standard `/etc`, `/run` and `/usr/lib` udev rules directories for Wolf-specific conflicts. It preserves identical trusted `/etc/udev/rules.d/85-wolf.rules`, rejects different content, named masks/symlinks and unsafe directory/file ownership or write modes. It never rewrites other rules, changes group membership or globally triggers devices. This conservative review is **not** an evaluation of all effective udev/logind policy; custom rules and host users already in `input` can still affect isolation. Physical verification is mandatory.
+
+Reload failure leaves the exact rule and a `preparing_input_rules` journal, and stops before image pulls/startup. No silent retry or automatic deletion follows. For recovery on the disposable test host, inspect the journal and exact rule bytes; remove only a rule known to have been created by this attempt after stopping its managed sessions, then reload udev. Never remove a preexisting matching file or unrelated policy. An older client package does not undo host-side setup.
+
+**Verification:** disposable-filesystem and mocked-command tests cover conflict refusal, unchanged existing policy, exclusive creation, integrity failure, reload/timeout retention and no Docker calls after reload failure. Full package/native checks belong to PR CI. No physical host installation or input-isolation result is claimed.
+
+**Next concrete increment:** guided prerequisite preparation for the same narrow clean-host matrix (Docker/Compose and required input modules), retaining administrator approval and existing-service refusal. Then complete owner workspace/enrollment wiring and run the separate GPU-host acceptance journey; do not install this candidate on the working OptiPlex.
+
+**Upstream audit correction:** the old `stable` Git branch has historical explicit runtime/state mount requirements. Current Wolf source performs container mount introspection and its image supplies runtime storage; missing explicit legacy environment variables are not sufficient evidence of a defect in NOW's generated Compose. No speculative mount rewrite is included.
 
 ## Supported candidates and hard stops
 

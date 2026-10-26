@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 import platform
 import re
-import stat
 import subprocess
 import sys
 
@@ -31,7 +30,7 @@ LOCK = Path("/run/optiplex-now-docker-dependencies.lock")
 APT = "/usr/bin/apt-get"
 DPKG_QUERY = "/usr/bin/dpkg-query"
 DOCKER = "/usr/bin/docker"
-MAX_OUTPUT = 16384
+MAX_OUTPUT = 262144
 
 
 class DependencyError(RuntimeError):
@@ -114,10 +113,7 @@ def simulate() -> None:
     for line in lines:
         if line.startswith("Inst "):
             name = line.split(maxsplit=2)[1]
-            if "(" in line.split(maxsplit=2)[2].split("[", 1)[0]:
-                # APT renders upgrades as 'Inst name [installed-version] ...'.
-                # Test the actual prefix, not a free-form dependency description.
-                pass
+            # APT renders upgrades as 'Inst package [old-version] (...)'.
             if re.match(r"^Inst \S+ \[[^]]+\]", line):
                 raise DependencyError("APT wants to upgrade existing packages")
 

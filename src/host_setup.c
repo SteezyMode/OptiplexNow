@@ -114,7 +114,7 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
             append_result(ui, output);
             append_result(ui, "\n\n");
             if (ui->step == 4)
-                ui->dependencies_candidate = strstr(output, "\\"installable\\": true") != NULL;
+                ui->dependencies_candidate = strstr(output, "\"installable\": true") != NULL;
             if (ui->step < 4) {
                 ui->step++;
                 run_read_only_step(ui);
@@ -395,7 +395,7 @@ static void dependencies_done(GObject *source, GAsyncResult *result, gpointer da
         }
         gtk_label_set_text(GTK_LABEL(ui->status),
             ok && g_subprocess_get_successful(G_SUBPROCESS(source)) &&
-            out && strstr(out, "\\"result\\": \\"docker_compose_ready\\"") ?
+            out && strstr(out, "\"result\": \"docker_compose_ready\"") ?
             "DOCKER READY. RUN CHECK THIS PC AGAIN BEFORE WOLF." :
             "DEPENDENCY INSTALL INCOMPLETE. REVIEW APT STATUS BEFORE RETRYING.");
     }

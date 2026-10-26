@@ -15,7 +15,9 @@ The separate GTK window `src/host_setup.c` opens from **Settings > Connections &
 5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
 6. **Report:** `running_stream_unverified` means only that the inspected container is running. It does **not** mean Moonlight pairing, encoding, video, audio, input or reconnection succeeded.
 
-Docker and Docker Compose must already be installed. This pilot does **not** configure the user's package repositories, kernel drivers, boot settings, firewall, Tailscale account, Jellyfin or unrelated services. It is not yet the promised 15-minute, terminal-free consumer host installation.
+On the development branch, NOW offers an opt-in **Install Docker + Compose** action in GTK after the read-only dependency check. On clean Ubuntu/Pop!_OS 24.04 amd64 systems, it uses Ubuntu's normal `docker.io` and `docker-compose-v2` packages via APT. The installer neither adds repositories nor performs an unattended package upgrade, replacement, removal or Docker group permission change. It refuses any existing Docker command, socket, container data or conflicting packages and requires explicit GUI confirmation followed by local `pkexec` authorization. Root rechecks eligibility and APT's simulated additive plan before installation; interrupted/ambiguous transactions require human inspection, never a blind retry. APT may automatically start Docker and affect firewall/NAT behavior, as disclosed in the confirmation dialog. The user must run **Check This PC** again before Wolf eligibility. This branch is not yet physically accepted.
+
+This dependency action does **not** configure kernel drivers, firewall policy, Tailscale, Wolf profiles, Jellyfin or other services. It is not yet the promised 15-minute, terminal-free consumer host installation.
 
 ## Supported candidates and hard stops
 

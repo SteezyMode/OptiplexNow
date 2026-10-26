@@ -630,3 +630,9 @@ against the working reference server by interpreting this code's existence as ap
   helper and physical SSH status success do not imply zero-terminal
   consumer Games functionality. This is the next software milestone
   under issue #154.
+
+## October 26, 2026 — clean-host Docker/Compose guided dependency install (draft)
+
+Issue #98: `host_install.py` previously required Docker and Compose already present, blocking a nontechnical clean-host journey. Development now adds a separate read-only package feasibility check and explicit local GTK → pkexec → APT action for *empty* Ubuntu/Pop!_OS 24.04 amd64 hosts, using Ubuntu `docker.io` and `docker-compose-v2`. Root independently rechecks that Docker commands, sockets, existing data and conflicting runtime packages are absent, and that an additive APT simulation works without removals/upgrades. No Docker group membership, Docker repository setup, unrelated service action or package-install postinst side effect from the NOW .deb. Installation of Docker can itself start the daemon and affect NAT/firewall behavior; the owner is warned before approval.
+
+Deliberately rejected `curl | sh`, automatically purging Docker packages, taking over existing containerd/runc, adding root-equivalent group access and claiming a running daemon means Wolf is usable. Only code and mock/CI tests at this stage; no APT installation or physical host acceptance. Failure/ambiguous state requires manual package review, not automatic retry/rollback. Revert the opt-in GUI/helper code to roll back NOW behavior; never silently uninstall host runtime packages. Next: pass exact-head CI, then conduct a separate disposable clean-host Docker installation and native Wolf/Steam gameplay validation.

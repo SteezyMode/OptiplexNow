@@ -30,15 +30,26 @@ assert r["may_apply"] is False
 assert r["changes_performed"] is False
 '
 
-# First-time dependency diagnosis is inspection-only. NEVER invoke --install
-# as part of package smoke, since CI must not change the host Docker stack.
+# Inspect an intentionally absent/disposable Wolf config only; no real owner data.
+scratch="$(mktemp -d -t now-wolf-readiness.XXXXXX)"
+python3 /usr/lib/optiplex-now/host_games_readiness.py --wolf-root "$scratch" |
+ python3 -c '
+import json,sys
+r=json.load(sys.stdin)
+assert r["state"] == "wolf_config_pending"
+assert r["first_game_verified"] is False
+assert r["steam_login_verified"] is False
+'
+rm -rf "$scratch"
+
+# Read-only dependency review. NEVER install Docker on a CI runner.
 test -x /usr/lib/optiplex-now/host_dependencies.py
 python3 /usr/lib/optiplex-now/host_dependencies.py --check | python3 -c '
-import json, sys
+import json,sys
 r=json.load(sys.stdin)
 assert r["changes_performed"] is False
-assert r["installable"] in (True, False)
-assert r["packages"] == ["docker.io", "docker-compose-v2"]
+assert r["installable"] in (True,False)
+assert r["packages"] == ["docker.io","docker-compose-v2"]
 '
 
 # Docker service inventory is read-only. It may report Docker unavailable on CI.

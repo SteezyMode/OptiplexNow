@@ -4,20 +4,65 @@
 
 This document is the authoritative **Wolf-only host technical-alpha** contract for new NOW-managed hosts, not a general server installer. The **public entertainment-server alpha** additionally requires guided Jellyfin and VPN-isolated qBittorrent with strict owner/member roles; see [Public-alpha contract](PUBLIC-ALPHA.md). [Product direction](PRODUCT.md), [current verification](CURRENT-STATUS.md) and [private client beta](BETA-ACCEPTANCE.md) cover separate stages.
 
+## Read-only GPU target suggestion (development branch)
+
+The ordinary **Check This PC** review now asks the packaged installer to
+suggest a GPU and DRM render node. A suggestion is made **only when exactly
+one** supported AMD, Intel or NVIDIA render device has a matching kernel
+`/sys/class/drm/renderD*/device/vendor` mapping and the device is a
+character device. Multi-GPU, missing, mismatched or unknown devices are **not
+guessed**: choose GPU and render node explicitly and use the existing
+eligibility check. The old blanket AMD + renderD128 defaults are removed.
+Manual choices edited while a scan runs are preserved.
+
+Detection is read-only, requires neither root nor Docker permissions, and
+never enables installation. The administrator check still verifies the
+selected GPU/render node and all other prerequisites before changing host
+state. This is a developer-branch improvement, not a clean-host/gameplay
+acceptance claim. Docker, immutable Wolf image choice, NVIDIA driver hash,
+stream verification, client pairing and safe recovery remain separate gates.
+
 ## Implemented path
 
 The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.
 
 1. **Review:** unprivileged read-only `host_preflight.py` and `host_plan.py` display detected prerequisites, conflicts and unknown capabilities. They make no system changes.
-2. **Advanced pilot:** choose AMD, Intel or NVIDIA, provide the correct `/dev/dri/renderD###` and a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
+2. **Advanced pilot:** use the detected GPU/render node if unambiguous, or choose them manually; provide a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
 3. **Check:** `host_install.py --check` inspects real hardware, runtime prerequisites, occupied Wolf ports, driver/DRM state and existing managed paths. Non-root users need not join the Docker group; inaccessible daemon state requires a privileged recheck.
 4. **Authorize:** explicit GTK confirmation and OS `pkexec` authentication precede `host_install.py --install`. The root helper rechecks eligibility and refuses existing NOW-managed workspace/project state. There is no network-facing installation API.
 5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
 6. **Report:** `running_stream_unverified` means only that the inspected container is running. It does **not** mean Moonlight pairing, encoding, video, audio, input or reconnection succeeded.
 
-On the development branch, NOW offers an opt-in **Install Docker + Compose** action in GTK after the read-only dependency check. On clean Ubuntu/Pop!_OS 24.04 amd64 systems, it uses Ubuntu's normal `docker.io` and `docker-compose-v2` packages via APT. The installer neither adds repositories nor performs an unattended package upgrade, replacement, removal or Docker group permission change. It refuses any existing Docker command, socket, container data or conflicting packages and requires explicit GUI confirmation followed by local `pkexec` authorization. Root rechecks eligibility and APT's simulated additive plan before installation; interrupted/ambiguous transactions require human inspection, never a blind retry. APT may automatically start Docker and affect firewall/NAT behavior, as disclosed in the confirmation dialog. The user must run **Check This PC** again before Wolf eligibility. This branch is not yet physically accepted.
+On clean Ubuntu/Pop!_OS 24.04 amd64 hosts, NOW offers an **optional administrator-approved Install Docker + Compose** action after a read-only APT simulation. It installs `docker.io` and `docker-compose-v2` only when no Docker binary, socket, runtime state or conflicting package already exists. No external APT repository, Docker group membership, removals or automatic upgrades. APT can start the Docker daemon and affect NAT/firewall rules; owners are warned. Interrupted transactions require inspection, never blind automatic retries. Run **Check This PC** again before Wolf setup. Source/CI only until physically accepted.
 
-This dependency action does **not** configure kernel drivers, firewall policy, Tailscale, Wolf profiles, Jellyfin or other services. It is not yet the promised 15-minute, terminal-free consumer host installation.
+This step does not configure kernel drivers, boot settings, firewall policy, Tailscale, Steam profiles, Jellyfin or unrelated services. It is not yet a verified 15-minute consumer host setup.
+
+## First-Games readiness from actual Wolf config (development branch)
+
+On an initial managed Wolf start, the installer now reports a strictly read-only
+`games_readiness` object. The installed `host_games_readiness.py` helper can
+inspect `/var/lib/optiplex-now/host/wolf/cfg/config.toml` later as Wolf
+finishes generating default state. It does not read out or log Wolf's paired
+client certificates, replace the config, adopt Steam homes or run Docker.
+
+**Compatibility checkpoint:** Wolf configurations using `config_version = 2`
+with an explicit `[[profiles]] id = "user"` and nested Steam Docker
+application may be classified `named_steam_candidate`. That is only an app
+and profile definition, **not** proof of Steam login, video, audio, gamepad
+or an accepted game stream. More recent upstream Wolf stable source uses
+`config_version = 3`, global `[[apps]]`, and a per-paired-client
+`app_state_folder`. NOW classifies that as
+`v3_per_device_state_requires_owner_mapping`. Never claim the user gets
+one durable Steam home across devices just because Steam is listed. Wolf's
+documented local client-settings API can update this mapping, but a secure
+owner grant and single-writer lease must be verified before NOW automates it.
+No server or profile migration is performed here.
+
+The source inspected is an **image-sensitive upstream contract**. Before
+ship, record the actual pinned Wolf digest used on the clean test host and
+validate its generated schema, Steam app start and client authorization
+against that digest. A missing first-boot config is `wolf_config_pending`,
+not a failed installation or a healthy stream.
 
 ## Supported candidates and hard stops
 

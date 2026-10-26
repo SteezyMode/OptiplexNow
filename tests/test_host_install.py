@@ -166,6 +166,85 @@ class CleanHostInstallerTests(unittest.TestCase):
             self.assertEqual([a[0] for a in records][-2:], ["create", "rm"])
             self.assertFalse(any(a[:2] == ["volume", "rm"] for a in records))
 
+    def test_read_only_target_detection_matches_actual_drm_vendor(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory(prefix="now-gpu-detect-") as temp:
+            root = Path(temp)
+            dev = root / "dev/dri"
+            sysfs = root / "sys/class/drm"
+            dev.mkdir(parents=True)
+            (dev / "renderD129").touch()
+            vendor = sysfs / "renderD129/device/vendor"
+            vendor.parent.mkdir(parents=True)
+            vendor.write_text("0x10de\n")
+            # Fixture files are regular; real hosts must have char devices.
+            with mock.patch.object(installer.stat, "S_ISCHR", return_value=True):
+                self.assertEqual(installer.detect_target(dev, sysfs),
+                                 ("nvidia", "/dev/dri/renderD129"))
+                (dev / "renderD128").touch()
+                other = sysfs / "renderD128/device/vendor"
+                other.parent.mkdir(parents=True)
+                other.write_text("0x8086\n")
+                with self.assertRaisesRegex(installer.InstallationError, "exactly one"):
+                    installer.detect_target(dev, sysfs)
+                other.write_text("0x1234\n")
+                self.assertEqual(installer.detect_target(dev, sysfs),
+                                 ("nvidia", "/dev/dri/renderD129"))
+                vendor.unlink()
+                with self.assertRaisesRegex(installer.InstallationError, "exactly one"):
+                    installer.detect_target(dev, sysfs)
+
+    def test_target_detection_rejects_regular_files_and_symlinks(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory(prefix="now-gpu-detect-") as temp:
+            root = Path(temp)
+            dev = root / "dev/dri"
+            sysfs = root / "sys/class/drm"
+            dev.mkdir(parents=True)
+            (dev / "renderD128").touch()
+            vendor = sysfs / "renderD128/device/vendor"
+            vendor.parent.mkdir(parents=True)
+            vendor.write_text("0x8086\n")
+            # Existing regular files are not GPU character devices.
+            with self.assertRaises(installer.InstallationError):
+                installer.detect_target(dev, sysfs)
+            (dev / "renderD129").symlink_to("renderD128")
+            linked_vendor = sysfs / "renderD129/device/vendor"
+            linked_vendor.parent.mkdir(parents=True)
+            linked_vendor.write_text("0x8086\n")
+            with mock.patch.object(installer.stat, "S_ISCHR", return_value=True):
+                self.assertEqual(installer.detect_target(dev, sysfs),
+                                 ("intel", "/dev/dri/renderD128"))
+
+    def test_detection_cannot_invoke_installer_or_accept_manual_placeholders(self):
+        from tempfile import TemporaryDirectory
+        with TemporaryDirectory(prefix="now-gpu-detect-") as temp:
+            root = Path(temp)
+            dev = root / "dev/dri"
+            sysfs = root / "sys/class/drm"
+            dev.mkdir(parents=True)
+            (dev / "renderD128").touch()
+            vendor = sysfs / "renderD128/device/vendor"
+            vendor.parent.mkdir(parents=True)
+            vendor.write_text("0x1002\n")
+            with mock.patch.object(installer.stat, "S_ISCHR", return_value=True), \
+                 mock.patch.object(installer, "_docker", side_effect=AssertionError("Docker touched")), \
+                 mock.patch.object(installer, "_host_checks", side_effect=AssertionError("Install checked")):
+                self.assertEqual(installer.detect_target(dev, sysfs),
+                                 ("amd", "/dev/dri/renderD128"))
+
+    def test_detect_target_cli_needs_no_install_parameters(self):
+        import contextlib
+        import io
+        output = io.StringIO()
+        with mock.patch.object(installer.sys, "argv",
+                               ["host_install.py", "--detect-target"]), \
+             mock.patch.object(installer, "detect_target",
+                               return_value=("nvidia", "/dev/dri/renderD129")), \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(installer.main(), 0)
+        self.assertEqual(output.getvalue().strip(), "nvidia /dev/dri/renderD129")
+
     def test_docker_argv_uses_fixed_local_unix_socket_and_pinned_env(self):
         completed = mock.Mock(returncode=0, stdout=b"ok", stderr=b"")
         with mock.patch.object(installer.subprocess, "run", return_value=completed) as run:

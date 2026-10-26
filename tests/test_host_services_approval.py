@@ -13,11 +13,11 @@ class HostServiceApprovalContract(unittest.TestCase):
         body = GUI.split("static void run_read_only_step(HostSetupUI *ui)\n{",1)[1].split(
             "static void on_check_clicked(", 1)[0]
         self.assertIn('"/usr/bin/python3", script,', body)
-        self.assertIn('ui->step == 4 ? "--check" : NULL', body)
-        self.assertIn('ui->step == 3 ? ADOPTION : DEPENDENCIES', body)
+        self.assertIn('ui->step == 4 ? "--detect-target" :', body)
+        self.assertIn('ui->step == 5 ? "--check" : NULL', body)
+        self.assertIn('ui->step == 4 ? INSTALLER : DEPENDENCIES', body)
         self.assertNotIn("pkexec", body)
         self.assertNotIn('"--install"', body)
-        self.assertNotIn("INSTALLER", body)
 
     def test_privileged_service_inventory_requires_separate_click(self):
         fn = GUI.split("static void on_verify_services(",1)[1].split(

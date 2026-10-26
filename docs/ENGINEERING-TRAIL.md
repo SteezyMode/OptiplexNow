@@ -631,6 +631,12 @@ against the working reference server by interpreting this code's existence as ap
   consumer Games functionality. This is the next software milestone
   under issue #154.
 
+## October 26, 2026 — Wolf fresh-host Steam profile compatibility checkpoint
+
+A clean NOW Wolf host cannot be declared ready just because Docker reports the Wolf container running. Wolf's stable source `src/moonlight-server/state/default/config.v2.toml` currently uses `config_version=3` with global `[[apps]]`, including Steam, and reads `paired_clients[].app_state_folder`; the repository's earlier named-profile documentation describes version 2. The actual pinned image digest still determines which runtime contract a new host uses. One owner Steam home across paired devices is therefore **not safely implied** by merely installing Wolf.
+
+Added a read-only, bounded, fail-closed config readiness inspector and exposed its result in the existing clean-host installer output, plus fixtures for both upstream layouts. Does not alter or enroll Wolf, move Steam state, grant admin access, or change any running server. Source-only and mock tested until CI and physical disposable-host verification. Rollback: revert this independent helper and the installer JSON addition. Next: identify/verify the exact Wolf digest and implement a narrow authenticated owner-to-`app_state_folder` mapping with a single-writer guard on that supported schema, followed by first game stream.
+
 ## October 26, 2026 — clean-host Docker/Compose guided dependency install (draft)
 
 Issue #98: `host_install.py` previously required Docker and Compose already present, blocking a nontechnical clean-host journey. Development now adds a separate read-only package feasibility check and explicit local GTK → pkexec → APT action for *empty* Ubuntu/Pop!_OS 24.04 amd64 hosts, using Ubuntu `docker.io` and `docker-compose-v2`. Root independently rechecks that Docker commands, sockets, existing data and conflicting runtime packages are absent, and that an additive APT simulation works without removals/upgrades. No Docker group membership, Docker repository setup, unrelated service action or package-install postinst side effect from the NOW .deb. Installation of Docker can itself start the daemon and affect NAT/firewall behavior; the owner is warned before approval.

@@ -26,6 +26,7 @@ import host_preflight
 import host_stage
 import host_nvidia
 import host_services
+import host_games_readiness
 
 ROOT = Path("/var/lib/optiplex-now")
 WORKSPACE = ROOT / "host"
@@ -84,6 +85,37 @@ def _existing_wolf_check(report: dict) -> str | None:
     if wolf.get("status") != "not_detected_in_docker" or wolf.get("docker_count") != 0:
         return "existing Wolf container detected; use adoption instead of new install"
     return None
+
+
+def detect_target(dev_root: Path = Path("/dev/dri"),
+                  sys_root: Path = Path("/sys/class/drm")) -> tuple[str, str]:
+    """Suggest one unambiguous, kernel-mapped DRM device without side effects.
+
+    This is *not* GPU or encoder acceptance. Mixed-GPU and unknown device
+    layouts require deliberate manual selection plus privileged revalidation.
+    """
+    candidates = []
+    if dev_root.is_dir():
+        for node in sorted(dev_root.iterdir())[:64]:
+            if not re.fullmatch(r"renderD[0-9]{3,5}", node.name) or node.is_symlink():
+                continue
+            try:
+                if not stat.S_ISCHR(node.stat().st_mode):
+                    continue
+            except OSError:
+                continue
+            vendor = host_preflight.read_small(sys_root / node.name / "device/vendor")
+            if vendor is None:
+                continue
+            gpu = next((name for name, pci_id in host_stage.GPU_VENDORS.items()
+                        if vendor.strip().lower() == pci_id), None)
+            if gpu is not None:
+                candidates.append((gpu, "/dev/dri/" + node.name))
+    if len(candidates) != 1:
+        raise InstallationError(
+            "Could not identify exactly one supported GPU render device; "
+            "choose GPU and render device manually, then check eligibility")
+    return candidates[0]
 
 
 def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
@@ -328,8 +360,12 @@ def install(gpu: str, render: str, digest: str, confirmation: str,
                 labels.get("com.docker.compose.service") != "wolf"):
             raise InstallationError("Wolf container ownership/state not verified")
         _status(WORKSPACE, "running_stream_unverified", image, cid=cid)
+        # Wolf may still be writing first-boot defaults here. This check is
+        # advisory and never retries or edits state. Recheck after startup.
+        games = host_games_readiness.inspect_config(WORKSPACE / "wolf")
         return {"result": "running_stream_unverified", "container_id": cid,
-                "workspace": str(WORKSPACE), "stream_verified": False}
+                "workspace": str(WORKSPACE), "stream_verified": False,
+                "games_readiness": games}
     finally:
         os.close(fd)
 
@@ -339,14 +375,21 @@ def main() -> int:
     group = p.add_mutually_exclusive_group(required=True)
     group.add_argument("--check", action="store_true")
     group.add_argument("--install", action="store_true")
-    p.add_argument("--gpu", choices=host_stage.GPU_CHOICES, required=True)
-    p.add_argument("--render-node", required=True)
+    group.add_argument("--detect-target", action="store_true",
+                       help="Read-only unique GPU/render suggestion; never authorizes installation")
+    p.add_argument("--gpu", choices=host_stage.GPU_CHOICES)
+    p.add_argument("--render-node")
     p.add_argument("--image-digest", help="Verified Wolf OCI sha256 digest, required for --install")
     p.add_argument("--nvidia-installer-sha256",
                    help="SHA256 from a trusted source for official NVIDIA .run of this host's exact driver version")
     p.add_argument("--confirm", default="", help="Requires literal INSTALL-WOLF for --install")
     a = p.parse_args()
+    if not a.detect_target and (not a.gpu or not a.render_node):
+        p.error("--gpu and --render-node are required for --check and --install")
     try:
+        if a.detect_target:
+            print(" ".join(detect_target()))
+            return 0
         if a.check:
             output = _host_checks(a.gpu, a.render_node)
         else:

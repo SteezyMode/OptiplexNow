@@ -13,8 +13,9 @@ class HostServiceApprovalContract(unittest.TestCase):
         body = GUI.split("static void run_read_only_step(HostSetupUI *ui)\n{",1)[1].split(
             "static void on_check_clicked(", 1)[0]
         self.assertIn('"/usr/bin/python3", script,', body)
-        self.assertIn('ui->step == 4 ? "--detect-target" : NULL', body)
-        self.assertIn('ui->step == 3 ? ADOPTION : INSTALLER', body)
+        self.assertIn('ui->step == 4 ? "--detect-target" :', body)
+        self.assertIn('ui->step == 5 ? "--check" : NULL', body)
+        self.assertIn('ui->step == 4 ? INSTALLER : DEPENDENCIES', body)
         self.assertNotIn("pkexec", body)
         self.assertNotIn('"--install"', body)
 

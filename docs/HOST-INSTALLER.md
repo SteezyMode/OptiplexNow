@@ -33,7 +33,9 @@ The separate GTK window `src/host_setup.c` opens from **Settings > Connections &
 5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.
 6. **Report:** `running_stream_unverified` means only that the inspected container is running. It does **not** mean Moonlight pairing, encoding, video, audio, input or reconnection succeeded.
 
-Docker and Docker Compose must already be installed. This pilot does **not** configure the user's package repositories, kernel drivers, boot settings, firewall, Tailscale account, Jellyfin or unrelated services. It is not yet the promised 15-minute, terminal-free consumer host installation.
+On clean Ubuntu/Pop!_OS 24.04 amd64 hosts, NOW offers an **optional administrator-approved Install Docker + Compose** action after a read-only APT simulation. It installs `docker.io` and `docker-compose-v2` only when no Docker binary, socket, runtime state or conflicting package already exists. No external APT repository, Docker group membership, removals or automatic upgrades. APT can start the Docker daemon and affect NAT/firewall rules; owners are warned. Interrupted transactions require inspection, never blind automatic retries. Run **Check This PC** again before Wolf setup. Source/CI only until physically accepted.
+
+This step does not configure kernel drivers, boot settings, firewall policy, Tailscale, Steam profiles, Jellyfin or unrelated services. It is not yet a verified 15-minute consumer host setup.
 
 ## First-Games readiness from actual Wolf config (development branch)
 

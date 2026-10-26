@@ -42,6 +42,16 @@ assert r["steam_login_verified"] is False
 '
 rm -rf "$scratch"
 
+# Read-only dependency review. NEVER install Docker on a CI runner.
+test -x /usr/lib/optiplex-now/host_dependencies.py
+python3 /usr/lib/optiplex-now/host_dependencies.py --check | python3 -c '
+import json,sys
+r=json.load(sys.stdin)
+assert r["changes_performed"] is False
+assert r["installable"] in (True,False)
+assert r["packages"] == ["docker.io","docker-compose-v2"]
+'
+
 # Docker service inventory is read-only. It may report Docker unavailable on CI.
 python3 "$services" --json | python3 -c '
 import json, sys

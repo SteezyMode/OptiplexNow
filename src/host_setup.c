@@ -15,6 +15,7 @@
 #define SERVICES "/usr/lib/optiplex-now/host_services.py"
 #define ADOPTION "/usr/lib/optiplex-now/host_adoption.py"
 #define INSTALLER "/usr/lib/optiplex-now/host_install.py"
+#define DEPENDENCIES "/usr/lib/optiplex-now/host_dependencies.py"
 #define MAX_RESULT 24576
 
 typedef struct {
@@ -28,6 +29,8 @@ typedef struct {
     GtkWidget *nvidia_sha_entry;
     GtkWidget *eligible_button;
     GtkWidget *install_button;
+    GtkWidget *dependencies_button;
+    gboolean dependencies_candidate;
     gboolean eligible;
     gboolean installing;
     GtkTextBuffer *output;
@@ -86,6 +89,7 @@ static void report_complete(HostSetupUI *ui, const char *message)
         "OptiPlex NOW | Server Review Incomplete");
     gtk_widget_set_sensitive(ui->run_button, TRUE);
     gtk_widget_set_sensitive(ui->verify_services_button, TRUE);
+    gtk_widget_set_sensitive(ui->dependencies_button, ui->dependencies_candidate);
 }
 
 static void run_read_only_step(HostSetupUI *ui);
@@ -100,7 +104,19 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         G_SUBPROCESS(source), result, &output, NULL, &error);
 
     if (!ui->closing) {
-        if (ui->step == 4) {
+        if (ui->step == 5) {
+            if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source)) ||
+                !output || strlen(output) > MAX_RESULT ||
+                !g_utf8_validate(output, -1, NULL)) {
+                append_result(ui, "Docker dependency check unavailable. No changes made.\n");
+                report_complete(ui, "CHECK INCOMPLETE. NO CHANGES MADE.");
+            } else {
+                append_result(ui, output);
+                append_result(ui, "\n");
+                ui->dependencies_candidate = strstr(output, "\"installable\": true") != NULL;
+                report_complete(ui, "REVIEW COMPLETE. NO CHANGES MADE.");
+            }
+        } else if (ui->step == 4) {
             /* Advisory suggestion only: no guessing mixed/unknown GPUs.
              * Never overwrite settings edited while the scan ran. */
             gboolean detected = FALSE;
@@ -130,7 +146,8 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
                 append_result(ui, "No unambiguous GPU/render device. "
                                   "Choose GPU and render node manually before "
                                   "checking installation eligibility.\n");
-            report_complete(ui, "REVIEW COMPLETE. NO CHANGES MADE.");
+            ui->step++;
+            run_read_only_step(ui);
         } else if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source))) {
             append_result(ui, "\nUnable to complete the read-only check.\n");
             report_complete(ui, "CHECK INCOMPLETE. NO CHANGES MADE.");
@@ -161,9 +178,11 @@ static void run_read_only_step(HostSetupUI *ui)
     const gchar *script = ui->step == 0 ? PREFLIGHT :
                           ui->step == 1 ? PLAN :
                           ui->step == 2 ? SERVICES :
-                          ui->step == 3 ? ADOPTION : INSTALLER;
+                          ui->step == 3 ? ADOPTION :
+                          ui->step == 4 ? INSTALLER : DEPENDENCIES;
     const gchar *args[] = {"/usr/bin/python3", script,
-                           ui->step == 4 ? "--detect-target" : NULL, NULL};
+                           ui->step == 4 ? "--detect-target" :
+                           ui->step == 5 ? "--check" : NULL, NULL};
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
         args, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
@@ -186,9 +205,12 @@ static void run_read_only_step(HostSetupUI *ui)
     } else if (ui->step == 3) {
         append_result(ui, "ADOPT EXISTING / SET UP NEW | SAFETY PLAN\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "PLANNING SAFE SERVICE ADOPTION...");
-    } else {
+    } else if (ui->step == 4) {
         append_result(ui, "GPU AND RENDER DETECTION\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "DETECTING GPU RENDER DEVICE...");
+    } else {
+        append_result(ui, "DOCKER AND COMPOSE DEPENDENCIES\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING DOCKER DEPENDENCIES...");
     }
     g_subprocess_communicate_utf8_async(
         process, NULL, ui->cancel, read_only_done,
@@ -203,6 +225,8 @@ static void on_check_clicked(GtkButton *button, gpointer data)
     if (ui->running || ui->closing)
         return;
     ui->running = TRUE;
+    ui->dependencies_candidate = FALSE;
+    gtk_widget_set_sensitive(ui->dependencies_button, FALSE);
     ui->step = 0;
     ui->scan_revision = ui->settings_revision;
     g_clear_object(&ui->cancel);
@@ -404,6 +428,87 @@ static void on_eligibility(GtkButton *button, gpointer data)
     g_object_unref(process);
 }
 
+/* Separate root-approved APT action. Never runs during package install or review. */
+static void dependencies_done(GObject *source, GAsyncResult *result, gpointer data)
+{
+    GtkWidget *window = GTK_WIDGET(data);
+    HostSetupUI *ui = g_object_get_data(G_OBJECT(window), "now-host-ui");
+    gchar *out = NULL;
+    GError *error = NULL;
+    gboolean ok = g_subprocess_communicate_utf8_finish(
+        G_SUBPROCESS(source), result, &out, NULL, &error);
+    if (!ui->closing) {
+        ui->installing = FALSE;
+        ui->dependencies_candidate = FALSE;
+        gtk_widget_set_sensitive(ui->dependencies_button, FALSE);
+        gtk_widget_set_sensitive(ui->run_button, TRUE);
+        gtk_widget_set_sensitive(ui->eligible_button, TRUE);
+        gtk_widget_set_sensitive(ui->verify_services_button, TRUE);
+        if (out && strlen(out) <= MAX_RESULT && g_utf8_validate(out, -1, NULL)) {
+            append_result(ui, "\nDOCKER DEPENDENCY RESULT\n");
+            append_result(ui, out);
+            append_result(ui, "\n");
+        }
+        gtk_label_set_text(GTK_LABEL(ui->status),
+            ok && g_subprocess_get_successful(G_SUBPROCESS(source)) &&
+            out && strstr(out, "\"result\": \"docker_compose_ready\"") ?
+            "DOCKER READY. RUN CHECK THIS PC AGAIN BEFORE WOLF." :
+            "DEPENDENCY INSTALL INCOMPLETE. REVIEW APT STATUS BEFORE RETRYING.");
+    }
+    g_clear_error(&error);
+    g_free(out);
+    g_object_unref(window);
+}
+
+static void on_install_dependencies(GtkButton *button, gpointer data)
+{
+    (void)button;
+    HostSetupUI *ui = data;
+    if (!ui->dependencies_candidate || ui->running || ui->installing || ui->closing)
+        return;
+    GtkWidget *confirm = gtk_message_dialog_new(
+        GTK_WINDOW(ui->window), GTK_DIALOG_MODAL, GTK_MESSAGE_WARNING,
+        GTK_BUTTONS_NONE, "Install Docker Engine and Compose on this clean PC?");
+    gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(confirm),
+        "NOW will install Ubuntu/Pop!_OS APT packages docker.io and "
+        "docker-compose-v2 after administrator approval.\n"
+        "APT may start Docker and change host firewall/NAT behavior.\n"
+        "Existing Docker installations, package conflicts and container data "
+        "are not replaced or removed.\n"
+        "A failed or interrupted package transaction requires inspection "
+        "before retrying. Wolf and Steam are NOT installed by this step.");
+    gtk_dialog_add_buttons(GTK_DIALOG(confirm), "CANCEL", GTK_RESPONSE_CANCEL,
+                           "INSTALL DEPENDENCIES", GTK_RESPONSE_ACCEPT, NULL);
+    gboolean approved = gtk_dialog_run(GTK_DIALOG(confirm)) == GTK_RESPONSE_ACCEPT;
+    gtk_widget_destroy(confirm);
+    if (!approved)
+        return;
+    const gchar *argv[] = {"/usr/bin/pkexec", DEPENDENCIES,
+                           "--install", "--confirm", "INSTALL-DOCKER", NULL};
+    GError *error = NULL;
+    GSubprocess *process = g_subprocess_newv(
+        argv, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
+              G_SUBPROCESS_FLAGS_STDERR_MERGE, &error);
+    if (!process) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+                           "COULD NOT START ADMINISTRATOR AUTHORIZATION.");
+        g_clear_error(&error);
+        return;
+    }
+    ui->installing = TRUE;
+    ui->eligible = FALSE;
+    gtk_widget_set_sensitive(ui->install_button, FALSE);
+    gtk_widget_set_sensitive(ui->dependencies_button, FALSE);
+    gtk_widget_set_sensitive(ui->run_button, FALSE);
+    gtk_widget_set_sensitive(ui->eligible_button, FALSE);
+    gtk_widget_set_sensitive(ui->verify_services_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(ui->status),
+                       "INSTALLING DEPENDENCIES. DO NOT REPEAT THIS ACTION.");
+    g_subprocess_communicate_utf8_async(
+        process, NULL, NULL, dependencies_done, g_object_ref(ui->window));
+    g_object_unref(process);
+}
+
 static void installation_done(GObject *source, GAsyncResult *result, gpointer data)
 {
     GtkWidget *window = GTK_WIDGET(data);
@@ -570,6 +675,16 @@ int main(int argc, char **argv)
         "existing Wolf/Jellyfin/downloader candidates and requirements.\n"
         "You can safely run this on a PC already hosting these services.",
         -1);
+
+    GtkWidget *dependency_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(column), dependency_row, FALSE, FALSE, 0);
+    ui->dependencies_button = gtk_button_new_with_label(
+        "INSTALL MISSING DOCKER + COMPOSE (ADMIN APPROVAL)");
+    gtk_widget_set_sensitive(ui->dependencies_button, FALSE);
+    gtk_box_pack_start(GTK_BOX(dependency_row), ui->dependencies_button,
+                       FALSE, FALSE, 0);
+    g_signal_connect(ui->dependencies_button, "clicked",
+                     G_CALLBACK(on_install_dependencies), ui);
 
     GtkWidget *advanced = gtk_expander_new(
         "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL / NVIDIA PILOT");

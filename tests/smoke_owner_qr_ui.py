@@ -46,6 +46,9 @@ try:
         Gtk.main_iteration_do(False)
     assert window.qr_box.get_visible(), "QR container stayed hidden despite verified proof"
     assert window.qr_box.get_mapped(), "QR container did not map into real GTK window"
+    assert window.qr_image.get_mapped(), "QR image is not visible inside its container"
+    assert window.qr_label.get_mapped(), "QR heading is not visible"
+    assert window.qr_hint.get_mapped(), "QR instructions are not visible"
     assert window.qr_image.get_pixbuf() is not None, "PNG missing from QR image"
     assert window.status.get_text().startswith("DEVICE VERIFIED BY HOST.")
     print("Owner QR GTK smoke passed: hidden initially, visible after proof.")

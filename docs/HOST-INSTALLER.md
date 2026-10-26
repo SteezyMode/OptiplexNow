@@ -4,12 +4,30 @@
 
 This document is the authoritative **Wolf-only host technical-alpha** contract for new NOW-managed hosts, not a general server installer. The **public entertainment-server alpha** additionally requires guided Jellyfin and VPN-isolated qBittorrent with strict owner/member roles; see [Public-alpha contract](PUBLIC-ALPHA.md). [Product direction](PRODUCT.md), [current verification](CURRENT-STATUS.md) and [private client beta](BETA-ACCEPTANCE.md) cover separate stages.
 
+## Read-only GPU target suggestion (development branch)
+
+The ordinary **Check This PC** review now asks the packaged installer to
+suggest a GPU and DRM render node. A suggestion is made **only when exactly
+one** supported AMD, Intel or NVIDIA render device has a matching kernel
+`/sys/class/drm/renderD*/device/vendor` mapping and the device is a
+character device. Multi-GPU, missing, mismatched or unknown devices are **not
+guessed**: choose GPU and render node explicitly and use the existing
+eligibility check. The old blanket AMD + renderD128 defaults are removed.
+Manual choices edited while a scan runs are preserved.
+
+Detection is read-only, requires neither root nor Docker permissions, and
+never enables installation. The administrator check still verifies the
+selected GPU/render node and all other prerequisites before changing host
+state. This is a developer-branch improvement, not a clean-host/gameplay
+acceptance claim. Docker, immutable Wolf image choice, NVIDIA driver hash,
+stream verification, client pairing and safe recovery remain separate gates.
+
 ## Implemented path
 
 The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.
 
 1. **Review:** unprivileged read-only `host_preflight.py` and `host_plan.py` display detected prerequisites, conflicts and unknown capabilities. They make no system changes.
-2. **Advanced pilot:** choose AMD, Intel or NVIDIA, provide the correct `/dev/dri/renderD###` and a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
+2. **Advanced pilot:** use the detected GPU/render node if unambiguous, or choose them manually; provide a *verified* immutable Wolf OCI `sha256:` digest. NVIDIA additionally requires a SHA256 for the official NVIDIA `.run` installer matching the **loaded** kernel driver version.
 3. **Check:** `host_install.py --check` inspects real hardware, runtime prerequisites, occupied Wolf ports, driver/DRM state and existing managed paths. Non-root users need not join the Docker group; inaccessible daemon state requires a privileged recheck.
 4. **Authorize:** explicit GTK confirmation and OS `pkexec` authentication precede `host_install.py --install`. The root helper rechecks eligibility and refuses existing NOW-managed workspace/project state. There is no network-facing installation API.
 5. **Provision:** the helper uses only its dedicated `optiplex-now-host-pilot` Compose project, a pinned Wolf image and private `/var/lib/optiplex-now/host` state. It writes owner and phase records before starting Wolf and verifies its full container ID, image reference, Compose labels and running status.

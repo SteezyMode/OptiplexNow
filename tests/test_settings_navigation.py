@@ -23,9 +23,12 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIn('gtk_widget_show_all(settings_view);', section)
 
     def test_compact_initial_width_and_independent_scrolling(self):
-        self.assertIn('int initial_width = 760;', SOURCE)
-        self.assertIn('initial_width = MIN(820, MAX(400, workarea.width - 96));', SOURCE)
-        self.assertIn('initial_width = MIN(760, MAX(400, workarea.width - 96));', SOURCE)
+        self.assertIn('int initial_width=640;', SOURCE)
+        self.assertIn('int initial_height=500;', SOURCE)
+        self.assertIn('now_ui_state_window_size(&initial_width,&initial_height);', SOURCE)
+        self.assertIn('initial_width=MIN(initial_width,MAX(400,workarea.width-64));', SOURCE)
+        self.assertIn('initial_height=MIN(initial_height,MAX(340,workarea.height-100));', SOURCE)
+        self.assertIn('g_signal_connect(win,"configure-event",G_CALLBACK(on_window_configure),NULL);', SOURCE)
         self.assertIn('gtk_window_set_resizable(GTK_WINDOW(win),TRUE);', SOURCE)
         self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC)', SOURCE)
         self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(settings_view),', SOURCE)
@@ -43,6 +46,11 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertNotIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard")', SOURCE)
         self.assertIn('add(software,grid,0);', SOURCE)
         self.assertIn('add(software,extras,0);', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),games_page,"games");', SOURCE)
+        self.assertIn('now_nav_bind_link(other_apps,main_pages,"software");', SOURCE)
+        self.assertIn('now_nav_bind_link(games_tab,main_pages,"games");', SOURCE)
+        self.assertIn('g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);', SOURCE)
+        self.assertNotIn('button("SOFTWARE","navtab")', SOURCE)
 
     def test_settings_save_cancel_and_pair_callbacks_have_valid_lifetimes(self):
         self.assertIn('PairContext server_context, relay_context;', SOURCE)

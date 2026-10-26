@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
+.PHONY: all clean package check-instance-lock check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass build/now-host-setup
 
 build:
@@ -33,8 +33,8 @@ build/inter.o: build/inter.ttf
 build/limelight.o: build/limelight.ttf
 	cd build && ld -r -b binary -o limelight.o limelight.ttf
 
-build/optiplex-desk: src/main.c src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/games_flow.c src/games_flow.h src/media_flow.c src/media_flow.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/host_job_target.c src/host_job_target.h src/backup_async.c src/backup_async.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h src/wizard_network.c src/wizard_network.h src/service_probe.c src/service_probe.h src/wizard_services.c src/wizard_services.h build/inter.o build/limelight.o
-	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/games_flow.c src/media_flow.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/host_job_target.c src/backup_async.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c src/wizard_network.c src/service_probe.c src/wizard_services.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
+build/optiplex-desk: src/main.c src/instance_lock.c src/instance_lock.h src/process.c src/process.h src/presets.c src/presets.h src/config.c src/config.h src/wolf_pairing.c src/wolf_pairing.h src/wolf_transport.c src/wolf_transport.h src/games_flow.c src/games_flow.h src/media_flow.c src/media_flow.h src/downloads_flow.c src/downloads_flow.h src/downloads_webview.c src/downloads_webview.h src/ui_navigation.c src/ui_navigation.h src/ui_games.c src/ui_games.h src/ui_state.c src/ui_state.h src/tailscale_async.c src/tailscale_async.h src/tailscale_install.c src/tailscale_install.h src/ssh_authorize.c src/ssh_authorize.h src/host_metrics.c src/host_metrics.h src/host_job_target.c src/host_job_target.h src/backup_async.c src/backup_async.h src/tray_prefs.c src/tray_prefs.h src/tray_actions.c src/tray_actions.h src/moonlight_install.c src/moonlight_install.h src/wizard_network.c src/wizard_network.h src/service_probe.c src/service_probe.h src/wizard_services.c src/wizard_services.h build/inter.o build/limelight.o
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) src/main.c src/instance_lock.c src/process.c src/presets.c src/config.c src/wolf_pairing.c src/wolf_transport.c src/games_flow.c src/media_flow.c src/downloads_flow.c src/downloads_webview.c src/ui_navigation.c src/ui_games.c src/ui_state.c src/tailscale_async.c src/tailscale_install.c src/ssh_authorize.c src/host_metrics.c src/host_job_target.c src/backup_async.c src/tray_prefs.c src/tray_actions.c src/moonlight_install.c src/wizard_network.c src/service_probe.c src/wizard_services.c build/inter.o build/limelight.o -o $@ -Wl,-z,noexecstack $(LIBS)
 
 # Separate native server readiness window. No privileged operations.
 build/now-host-setup: src/host_setup.c | build
@@ -48,6 +48,11 @@ package: all
 
 clean:
 	rm -rf build dist
+
+# Single-instance process behavior without GTK, host services or network.
+check-instance-lock: | build
+	$(CC) $(CFLAGS) -Werror=misleading-indentation -Isrc tests/test_instance_lock.c src/instance_lock.c -o build/test-instance-lock
+	./build/test-instance-lock
 
 # Fast standalone regression check; does not require a running GTK desktop.
 check-process: | build
@@ -145,6 +150,8 @@ SAN_ENV = ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stackt
 # server, network, live credentials, or graphical session are needed.
 check-sanitizers: | build
 	mkdir -p build/sanitized
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_instance_lock.c src/instance_lock.c -o build/sanitized/test-instance-lock $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-instance-lock
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_process.c src/process.c -o build/sanitized/test-process $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-process
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_presets.c src/presets.c -o build/sanitized/test-presets $(SAN_LIBS)

@@ -14,9 +14,11 @@ from owner_launch import (read_lease, launch_owner_steam, stop_owner_steam,
 from owner_lobby import _inventory
 from owner_host_pilot import inspect_candidate
 from media_endpoint import inspect_local_jellyfin
+from download_inventory import inspect_download_topology, InventoryError
+from download_queue import inspect_queue
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue"))
 
 
 def _validated_request(request):
@@ -58,6 +60,18 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         profile_id = binding["wolf_profile_id"]
         if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
             raise PolicyError("Owner Steam lease/workspace mismatch")
+
+    if action == "downloads_queue":
+        try:
+            return {"success": True, **inspect_queue()}
+        except InventoryError:
+            return {"success": False, "status": "queue_unavailable"}
+
+    if action == "downloads_status":
+        try:
+            return {"success": True, **inspect_download_topology()}
+        except InventoryError:
+            return {"success": False, "status": "inventory_unavailable"}
 
     if action == "media":
         return {"success": True, **inspect_local_jellyfin()}

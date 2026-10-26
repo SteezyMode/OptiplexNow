@@ -35,16 +35,30 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("/var/run/docker.sock", data)
         self.assertIn("@sha256:", data)
 
-    def test_release_never_runs_on_main_or_manual_dispatch(self):
+    def test_release_requires_tag_or_exact_one_time_v120_merge(self):
         data = (WORKFLOWS / "release.yml").read_text()
+        # Routine releases still require an explicit immutable version tag.
         self.assertRegex(data, r"(?m)^\s+tags:\s*$")
         self.assertIn("- 'v*'", data)
-        self.assertNotRegex(data, r"(?m)^\s+branches:\s*")
         self.assertNotIn("workflow_dispatch:", data)
         self.assertNotIn("--clobber", data)
         self.assertIn("GITHUB_REF_NAME", data)
         self.assertIn('dpkg-deb -f "$package" Version', data)
-        self.assertIn('gh release view "$GITHUB_REF_NAME"', data)
+        self.assertIn('gh release view "$tag"', data)
+        self.assertIn("--verify-tag", data)
+
+        # Explicit owner-requested one-time v1.20.0 publication: changing
+        # any ordinary main file or pushing a PR cannot publish. Only the
+        # curated notes path plus exact squash-merge instruction can do so.
+        self.assertIn("    branches:\n      - main", data)
+        self.assertIn("    paths:\n      - 'docs/releases/v1.20.0.md'", data)
+        self.assertIn("github.ref == 'refs/heads/main'", data)
+        self.assertIn("contains(github.event.head_commit.message, '[publish-v1.20.0]')", data)
+        self.assertIn('version="1.20.0"', data)
+        self.assertIn('test "$(sed -nE', data)
+        self.assertIn('package.py)" = "$version"', data)
+        self.assertIn('gh api -X POST "repos/$GH_REPO/git/refs"', data)
+        self.assertIn('-f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"', data)
 
     def test_binary_release_assets_not_stored_in_source(self):
         self.assertFalse((ROOT / "downloads").exists(),

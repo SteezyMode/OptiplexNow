@@ -6,9 +6,13 @@ cd "$(dirname "$0")/.."
 helper="/usr/lib/optiplex-now/now-host-setup"
 preflight="/usr/lib/optiplex-now/host_preflight.py"
 plan="/usr/lib/optiplex-now/host_plan.py"
+services="/usr/lib/optiplex-now/host_services.py"
+adoption="/usr/lib/optiplex-now/host_adoption.py"
 test -x "$helper"
 test -r "$preflight"
 test -r "$plan"
+test -r "$services"
+test -r "$adoption"
 
 python3 "$preflight" --json | python3 -c '
 import json, sys
@@ -24,6 +28,33 @@ assert r["tool"] == "now-host-plan"
 assert r["decision"] == "blocked"
 assert r["may_apply"] is False
 assert r["changes_performed"] is False
+'
+
+# Docker service inventory is read-only. It may report Docker unavailable on CI.
+python3 "$services" --json | python3 -c '
+import json, sys
+r=json.load(sys.stdin)
+assert r["tool"] == "now-host-services"
+assert r["read_only"] is True
+assert r["changes_performed"] is False
+assert r["may_adopt"] is False
+assert set(r["services"]) == {"wolf","jellyfin","qbittorrent","gluetun"}
+assert r["downloads"]["vpn_egress_verified"] is False
+assert r["downloads"]["killswitch_verified"] is False
+'
+
+# This recommendation cannot approve adoption or installation, even when
+# the Docker inventory sees the whole service stack.
+python3 "$adoption" --json | python3 -c '
+import json, sys
+r=json.load(sys.stdin)
+assert r["tool"] == "now-host-adoption-plan"
+assert r["read_only"] is True
+assert r["changes_performed"] is False
+assert r["may_adopt"] is False
+assert r["may_install"] is False
+assert set(r["services"]) == {
+    "wolf", "jellyfin", "qbittorrent", "gluetun", "downloader_network"}
 '
 
 # Run the installed NVIDIA preflight against actual CI host resources.

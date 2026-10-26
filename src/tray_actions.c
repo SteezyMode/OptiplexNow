@@ -21,6 +21,14 @@ int now_tray_dispatch_action(int action, const NowTrayActions *handlers,
             if (!handlers->moonlight_available(context)) {
                 handlers->show_window(context);
             }
+        } else if (action == 4) {
+            /* Downloads is an embedded GTK stack page, unlike external
+             * services. Restore the window before switching the stack.
+             * Keep this rule in the tray dispatcher, not the UI monolith. */
+            if (!handlers->show_window) {
+                return 0;
+            }
+            handlers->show_window(context);
         }
         handlers->launch_service(context, action);
         return 1;

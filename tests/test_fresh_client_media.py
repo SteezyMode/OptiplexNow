@@ -29,18 +29,26 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('now_media_bind(say,browser_open);', SOURCE)
         self.assertIn('now_media_browser_open(now_media_fallback());', (ROOT / 'src' / 'media_flow.c').read_text())
         self.assertIn('browser_open(cfg[6]);', SOURCE)
-        self.assertIn('browser_open(cfg[7]);', SOURCE)
+        # Downloads now opens the authenticated in-window queue, not the legacy URL.
+        self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SOURCE)
+        self.assertIn('now_nav_show_page(main_pages,"downloads");', SOURCE)
+        self.assertNotIn('browser_open(cfg[7]);', SOURCE)
         self.assertNotIn('"Legacy Downloads URL (unused)"', SOURCE)
         self.assertNotIn('snprintf(cfg[7],512,"http://%s:8085"', SOURCE)
 
 
-    def test_services_are_committed_before_final_wizard_page(self):
-        # A user may navigate away after Next without pressing Finish.
+    def test_wizard_preserves_advanced_service_overrides(self):
+        # Normal onboarding does not require manual URLs and must not clear
+        # established owner settings. Importing a validated preset is explicit.
         self.assertIn("if(page==c->finish_page)wizard_save(c);", SOURCE)
         self.assertIn("c->finish_page=six;", SOURCE)
-        # Implementation details live in a GTK-free helper, whose actual
-        # persistence behavior is tested by make check-wizard-services.
-        self.assertIn("now_wizard_store_services(cfg,urls)", SOURCE)
+        self.assertIn("if(c->preset_loaded && server_valid)", SOURCE)
+        self.assertIn("now_safe_preset_url(urls[i])", SOURCE)
+        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SOURCE)
+        self.assertNotIn("now_wizard_store_services(cfg,urls)", SOURCE)
+        self.assertNotIn("c->services_page", SOURCE)
+        # Low-level URL validation/persistence helper remains independently
+        # covered by make check-wizard-services.
         self.assertIn("now_safe_preset_url(urls[i])", SERVICE_SAVER)
 
     def test_wolf_pairing_search_is_bounded_and_owner_approved(self):

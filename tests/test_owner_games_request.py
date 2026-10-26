@@ -34,6 +34,42 @@ class TrustedGamesGateTests(unittest.TestCase):
             wolf_api=self.api, host_video_caps=caps, host_approved=approved,
             host_writer_check=writer_check)
 
+    def test_downloads_queue_owner_only_and_no_private_fields(self):
+        from unittest.mock import patch
+        queue = {"service": "qbittorrent", "queue": [
+            {"name": "Example", "state": "downloading", "progress_percent": 22.0}
+        ], "truncated": False}
+        with patch("owner_games_request.inspect_queue", return_value=queue):
+            self.assertEqual(self.call("downloads_queue"), {"success": True, **queue})
+            with self.assertRaises(PolicyError):
+                self.call("downloads_queue", client="99999999")
+            self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
+        from download_inventory import InventoryError
+        with patch("owner_games_request.inspect_queue",
+                   side_effect=InventoryError("private info")):
+            self.assertEqual(self.call("downloads_queue"),
+                             {"success": False, "status": "queue_unavailable"})
+
+    def test_downloads_status_owner_only_and_read_only(self):
+        from unittest.mock import patch
+        inventory = {"version": 1, "downloaders": [
+            {"service": "qbittorrent", "gateway_bound": True,
+             "gateway_healthy": True, "vpn_egress_verified": False,
+             "killswitch_verified": False}]}
+        with patch("owner_games_request.inspect_download_topology",
+                   return_value=inventory) as probe:
+            result = self.call("downloads_status")
+            self.assertEqual(result, {"success": True, **inventory})
+            probe.assert_called_once()
+            self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
+            with self.assertRaises(PolicyError):
+                self.call("downloads_status", client="99999999")
+        from download_inventory import InventoryError
+        with patch("owner_games_request.inspect_download_topology",
+                   side_effect=InventoryError("private Docker issue")):
+            self.assertEqual(self.call("downloads_status"),
+                             {"success": False, "status": "inventory_unavailable"})
+
     def test_media_requires_authorized_device_and_never_changes_wolf(self):
         from unittest.mock import patch
         with patch("owner_games_request.inspect_local_jellyfin",

@@ -72,6 +72,43 @@ class EnrollmentClientTests(unittest.TestCase):
                         mod.request("100.121.156.34", "optiplex",
                                     key_module=FakeKeys(public), owner_key=public, runner=runner)
 
+    def test_existing_restricted_credential_skips_qr_and_staging(self):
+        from unittest.mock import patch
+
+        class Authorized:
+            def invoke(self, host, user, action):
+                self_call = (host, user, action)
+                self.assertEqual(self_call, ("100.121.156.34", "optiplex", "status"))
+                return {"success": True, "status": "idle"}
+
+        with patch.object(mod, "_client_module", return_value=Authorized()), \
+             patch.object(mod, "request_tailnet", side_effect=AssertionError("staged a duplicate key")), \
+             patch.object(mod, "request", side_effect=AssertionError("used admin SSH")):
+            result = mod.request_using_available_transport(
+                "100.121.156.34", "optiplex", include_transport=True)
+        self.assertEqual(result, {
+            "success": True, "status": "already_authorized",
+            "transport": "restricted_ssh"})
+
+    def test_inconclusive_restricted_access_check_allows_normal_staging(self):
+        from unittest.mock import patch
+
+        class NotVerified:
+            def invoke(self, host, user, action):
+                raise RuntimeError("host inaccessible or unapproved")
+
+        pending = {"success": True, "status": "pending",
+                   "request_id": "2"*32, "code": "654321",
+                   "fingerprint": "b"*20,
+                   "phone_approval_available": True}
+        with patch.object(mod, "_client_module", return_value=NotVerified()), \
+             patch.object(mod, "request_tailnet", return_value=pending) as staging:
+            result = mod.request_using_available_transport(
+                "100.121.156.34", "optiplex", include_transport=True)
+        staging.assert_called_once_with("100.121.156.34")
+        self.assertEqual(result["status"], "pending")
+        self.assertEqual(result["transport"], "tailnet")
+
     def test_gui_and_host_bridge_scripts_compile_without_gtk_session(self):
         import py_compile
         for source in (
@@ -99,6 +136,9 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertIn("self.review_button.set_visible(not self.phone_approval_mode)", client_ui)
         self.assertIn("or self.phone_approval_mode", client_ui)
         self.assertIn("submit_moonlight_proof(self.host, answer)", client_ui)
+        self.assertIn('answer.get("status") == "already_authorized"', client_ui)
+        self.assertIn("ALREADY AUTHORIZED.", client_ui)
+        self.assertIn("self.qr_box.hide()", client_ui)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", main)
         self.assertNotIn('wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL"', main)
         self.assertIn("owner-enroll-ui.py", main)

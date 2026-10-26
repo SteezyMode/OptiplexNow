@@ -146,6 +146,17 @@ class EnrollmentWindow:
                 "The server owner must install and enable the supported "
                 "owner enrollment components. No access was granted.")
             return
+        if answer.get("status") == "already_authorized":
+            self.pending_request = None
+            self.phone_approval_mode = False
+            self.review_button.set_visible(False)
+            self.review_button.set_sensitive(False)
+            self.qr_box.hide()
+            self.code.set_text("")
+            self.status.set_text(
+                "ALREADY AUTHORIZED. The existing restricted Games credential "
+                "was verified with the host. No new approval or QR is needed.")
+            return
         self.pending_request = answer
         self.phone_approval_mode = (
             answer.get("transport") == "tailnet" and

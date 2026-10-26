@@ -290,12 +290,31 @@ def approve_reviewed_tailnet(host, request_id, code, wolf_client_id, *,
         client.close()
 
 
-def request_using_available_transport(host, user, *, include_transport=False):
-    """Prefer narrow authenticated Tailnet staging; retain explicit owner pilot.
+def already_authorized(host, user, *, games=None):
+    """Prove current restricted Games access before offering a new QR request.
 
-    Existing already-authorized owner SSH is a development fallback only.
-    Neither route approves a key or weakens owner policy.
+    This uses the existing read-only forced-command 'status' action, not
+    host-side public-key matching or a local assumption about stored files.
+    Failure is inconclusive: it may mean unapproved, offline, or bad routing.
     """
+    module = games or _client_module()
+    try:
+        module.invoke(host, user, "status")
+        return True
+    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
+            subprocess.CalledProcessError):
+        return False
+
+
+def request_using_available_transport(host, user, *, include_transport=False):
+    """Verify current restricted access before staging a fresh owner request.
+
+    A working authorized key needs no QR approval. A failed check is not
+    treated as proof of non-enrollment; the trusted host still controls staging.
+    """
+    if already_authorized(host, user):
+        result = {"success": True, "status": "already_authorized"}
+        return dict(result, transport="restricted_ssh") if include_transport else result
     try:
         result = request_tailnet(host)
         return dict(result, transport="tailnet") if include_transport else result

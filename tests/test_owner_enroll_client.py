@@ -75,10 +75,10 @@ class EnrollmentClientTests(unittest.TestCase):
     def test_existing_restricted_credential_skips_qr_and_staging(self):
         from unittest.mock import patch
 
+        calls = []
         class Authorized:
             def invoke(self, host, user, action):
-                self_call = (host, user, action)
-                self.assertEqual(self_call, ("100.121.156.34", "optiplex", "status"))
+                calls.append((host, user, action))
                 return {"success": True, "status": "idle"}
 
         with patch.object(mod, "_client_module", return_value=Authorized()), \
@@ -89,6 +89,7 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertEqual(result, {
             "success": True, "status": "already_authorized",
             "transport": "restricted_ssh"})
+        self.assertEqual(calls, [("100.121.156.34", "optiplex", "status")])
 
     def test_inconclusive_restricted_access_check_allows_normal_staging(self):
         from unittest.mock import patch

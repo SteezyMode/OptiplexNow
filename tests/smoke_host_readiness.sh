@@ -30,6 +30,18 @@ assert r["may_apply"] is False
 assert r["changes_performed"] is False
 '
 
+# Inspect an intentionally absent/disposable Wolf config only; no real owner data.
+scratch="$(mktemp -d -t now-wolf-readiness.XXXXXX)"
+python3 /usr/lib/optiplex-now/host_games_readiness.py --wolf-root "$scratch" |
+ python3 -c '
+import json,sys
+r=json.load(sys.stdin)
+assert r["state"] == "wolf_config_pending"
+assert r["first_game_verified"] is False
+assert r["steam_login_verified"] is False
+'
+rm -rf "$scratch"
+
 # Docker service inventory is read-only. It may report Docker unavailable on CI.
 python3 "$services" --json | python3 -c '
 import json, sys

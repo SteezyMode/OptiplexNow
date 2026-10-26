@@ -26,6 +26,7 @@ import host_preflight
 import host_stage
 import host_nvidia
 import host_services
+import host_games_readiness
 
 ROOT = Path("/var/lib/optiplex-now")
 WORKSPACE = ROOT / "host"
@@ -328,8 +329,12 @@ def install(gpu: str, render: str, digest: str, confirmation: str,
                 labels.get("com.docker.compose.service") != "wolf"):
             raise InstallationError("Wolf container ownership/state not verified")
         _status(WORKSPACE, "running_stream_unverified", image, cid=cid)
+        # Wolf may still be writing first-boot defaults here. This check is
+        # advisory and never retries or edits state. Recheck after startup.
+        games = host_games_readiness.inspect_config(WORKSPACE / "wolf")
         return {"result": "running_stream_unverified", "container_id": cid,
-                "workspace": str(WORKSPACE), "stream_verified": False}
+                "workspace": str(WORKSPACE), "stream_verified": False,
+                "games_readiness": games}
     finally:
         os.close(fd)
 

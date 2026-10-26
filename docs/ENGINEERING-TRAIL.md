@@ -630,3 +630,9 @@ against the working reference server by interpreting this code's existence as ap
   helper and physical SSH status success do not imply zero-terminal
   consumer Games functionality. This is the next software milestone
   under issue #154.
+
+## October 26, 2026 — Wolf fresh-host Steam profile compatibility checkpoint
+
+A clean NOW Wolf host cannot be declared ready just because Docker reports the Wolf container running. Wolf's stable source `src/moonlight-server/state/default/config.v2.toml` currently uses `config_version=3` with global `[[apps]]`, including Steam, and reads `paired_clients[].app_state_folder`; the repository's earlier named-profile documentation describes version 2. The actual pinned image digest still determines which runtime contract a new host uses. One owner Steam home across paired devices is therefore **not safely implied** by merely installing Wolf.
+
+Added a read-only, bounded, fail-closed config readiness inspector and exposed its result in the existing clean-host installer output, plus fixtures for both upstream layouts. Does not alter or enroll Wolf, move Steam state, grant admin access, or change any running server. Source-only and mock tested until CI and physical disposable-host verification. Rollback: revert this independent helper and the installer JSON addition. Next: identify/verify the exact Wolf digest and implement a narrow authenticated owner-to-`app_state_folder` mapping with a single-writer guard on that supported schema, followed by first game stream.

@@ -17,6 +17,33 @@ The separate GTK window `src/host_setup.c` opens from **Settings > Connections &
 
 Docker and Docker Compose must already be installed. This pilot does **not** configure the user's package repositories, kernel drivers, boot settings, firewall, Tailscale account, Jellyfin or unrelated services. It is not yet the promised 15-minute, terminal-free consumer host installation.
 
+## First-Games readiness from actual Wolf config (development branch)
+
+On an initial managed Wolf start, the installer now reports a strictly read-only
+`games_readiness` object. The installed `host_games_readiness.py` helper can
+inspect `/var/lib/optiplex-now/host/wolf/cfg/config.toml` later as Wolf
+finishes generating default state. It does not read out or log Wolf's paired
+client certificates, replace the config, adopt Steam homes or run Docker.
+
+**Compatibility checkpoint:** Wolf configurations using `config_version = 2`
+with an explicit `[[profiles]] id = "user"` and nested Steam Docker
+application may be classified `named_steam_candidate`. That is only an app
+and profile definition, **not** proof of Steam login, video, audio, gamepad
+or an accepted game stream. More recent upstream Wolf stable source uses
+`config_version = 3`, global `[[apps]]`, and a per-paired-client
+`app_state_folder`. NOW classifies that as
+`v3_per_device_state_requires_owner_mapping`. Never claim the user gets
+one durable Steam home across devices just because Steam is listed. Wolf's
+documented local client-settings API can update this mapping, but a secure
+owner grant and single-writer lease must be verified before NOW automates it.
+No server or profile migration is performed here.
+
+The source inspected is an **image-sensitive upstream contract**. Before
+ship, record the actual pinned Wolf digest used on the clean test host and
+validate its generated schema, Steam app start and client authorization
+against that digest. A missing first-boot config is `wolf_config_pending`,
+not a failed installation or a healthy stream.
+
 ## Supported candidates and hard stops
 
 | GPU | Clean-host pilot | Known gate |

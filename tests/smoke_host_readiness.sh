@@ -30,6 +30,17 @@ assert r["may_apply"] is False
 assert r["changes_performed"] is False
 '
 
+# First-time dependency diagnosis is inspection-only. NEVER invoke --install
+# as part of package smoke, since CI must not change the host Docker stack.
+test -x /usr/lib/optiplex-now/host_dependencies.py
+python3 /usr/lib/optiplex-now/host_dependencies.py --check | python3 -c '
+import json, sys
+r=json.load(sys.stdin)
+assert r["changes_performed"] is False
+assert r["installable"] in (True, False)
+assert r["packages"] == ["docker.io", "docker-compose-v2"]
+'
+
 # Docker service inventory is read-only. It may report Docker unavailable on CI.
 python3 "$services" --json | python3 -c '
 import json, sys

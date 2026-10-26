@@ -194,7 +194,10 @@ class EnrollmentWindow:
             loader.write(png)
             loader.close()
             self.qr_image.set_from_pixbuf(loader.get_pixbuf())
+            # no-show-all protects the empty QR during initial window setup.
+            # Gtk.show_all() respects that flag, so reveal its parent explicitly.
             self.qr_box.show_all()
+            self.qr_box.show()
             self.status.set_text(
                 "DEVICE VERIFIED BY HOST. Scan the QR using your Tailscale-"
                 "connected owner phone, compare the code, and tap Approve. "

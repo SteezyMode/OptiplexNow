@@ -72,6 +72,7 @@ jobs:
           make check-service-probe
           make package
           bash tests/smoke_gtk.sh
+          xvfb-run -a /usr/bin/python3 tests/smoke_owner_qr_ui.py
           bash tests/smoke_instance.sh
           python3 -m unittest discover -s tests -v
           test -x build/optiplex-desk

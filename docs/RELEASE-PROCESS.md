@@ -2,7 +2,7 @@
 
 **Default rule: only explicit new version tags publish installers.** Ordinary changes merged into `main` trigger validation but do not publish a release.
 
-**Narrow one-time exception for v1.20.0:** The GitHub Actions publisher also recognizes the PR #184 main-branch squash merge *only* if it changes `docs/releases/v1.20.0.md` and the merge commit contains the exact marker `[publish-v1.20.0]`. The job checks that `package.py` says 1.20.0, builds/validates that source and explicitly creates tag `v1.20.0` at that exact commit before publishing. No other main push or version can use this exception. Its purpose is to publish the specifically requested closed beta without interactive tag access; the regular future release path remains explicit tags.
+**Completed one-time exception for v1.20.0:** The GitHub Actions publisher recognized the PR #184 main-branch squash merge *only* if it changes `docs/releases/v1.20.0.md` and the merge commit contains the exact marker `[publish-v1.20.0]`. The job checks that `package.py` says 1.20.0, builds/validates that source and explicitly creates tag `v1.20.0` at that exact commit before publishing. No other main push or version can use this exception. Its purpose is to publish the specifically requested closed beta without interactive tag access; the regular future release path remains explicit tags.
 
 ## Validation and publication
 

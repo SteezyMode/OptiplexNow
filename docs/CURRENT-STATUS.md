@@ -6,7 +6,7 @@
 
 **Source change (CI, not installed on client yet):** PR #184 now checks restricted Games `status` before staging a QR request. Confirmed existing owner access yields `ALREADY AUTHORIZED` and skips a redundant QR; unresponsive or denied checks remain inconclusive and do not self-approve. CI #792 for this change passed 484 Python tests plus native/GTK build and packaging. Device-side v1.20.0 install/upgrade smoke and a genuinely new credential's successful phone GET→POST→SSH grant are still open.
 
-**Release decision:** Promote tested development PR #184 into **v1.20.0 Closed Beta**, with public front-page Linux `.deb` download and immutable checksums. This is distribution for additional testing, **not Private Alpha 1 acceptance**. New code must not silently enable a phone listener or host-wide admin privileges. Next work belongs to the three release pillars and security gap, not generalized modularization.
+**Release completed:** PR #184 was squash-merged to `main` (`0668a6a`), and **v1.20.0 Closed Beta** published with a [direct Linux `.deb`](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.20.0/OptiPlex-Now_1.20.0_amd64.deb), SHA256SUMS and curated notes. The versioned publisher run #15 and final `main` CI #796 both passed. This establishes an installable prerelease, **not Private Alpha 1 acceptance**. Source-only `ALREADY AUTHORIZED` needs physical client verification, and the phone QR success path remains untested with a fresh key. Focus next on the three pillars and the Wolf authorization boundary, not generalized modularization.
 
 ## October 25 — GitHub-only QR hardening while reference host remains untouched
 

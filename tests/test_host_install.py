@@ -233,6 +233,18 @@ class CleanHostInstallerTests(unittest.TestCase):
                 self.assertEqual(installer.detect_target(dev, sysfs),
                                  ("amd", "/dev/dri/renderD128"))
 
+    def test_detect_target_cli_needs_no_install_parameters(self):
+        import contextlib
+        import io
+        output = io.StringIO()
+        with mock.patch.object(installer.sys, "argv",
+                               ["host_install.py", "--detect-target"]), \
+             mock.patch.object(installer, "detect_target",
+                               return_value=("nvidia", "/dev/dri/renderD129")), \
+             contextlib.redirect_stdout(output):
+            self.assertEqual(installer.main(), 0)
+        self.assertEqual(output.getvalue().strip(), "nvidia /dev/dri/renderD129")
+
     def test_docker_argv_uses_fixed_local_unix_socket_and_pinned_env(self):
         completed = mock.Mock(returncode=0, stdout=b"ok", stderr=b"")
         with mock.patch.object(installer.subprocess, "run", return_value=completed) as run:

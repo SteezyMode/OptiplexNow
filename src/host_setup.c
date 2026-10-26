@@ -36,6 +36,7 @@ typedef struct {
     gboolean running;
     guint settings_revision;
     guint eligibility_revision;
+    guint scan_revision;
     unsigned step;
 } HostSetupUI;
 
@@ -99,7 +100,38 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         G_SUBPROCESS(source), result, &output, NULL, &error);
 
     if (!ui->closing) {
-        if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source))) {
+        if (ui->step == 4) {
+            /* Advisory suggestion only: no guessing mixed/unknown GPUs.
+             * Never overwrite settings edited while the scan ran. */
+            gboolean detected = FALSE;
+            if (ok && g_subprocess_get_successful(G_SUBPROCESS(source)) &&
+                output && strlen(output) < 128 && g_utf8_validate(output, -1, NULL)) {
+                gchar **parts = g_strsplit(g_strstrip(output), " ", 3);
+                int index = g_strcmp0(parts[0], "amd") == 0 ? 0 :
+                            g_strcmp0(parts[0], "intel") == 0 ? 1 :
+                            g_strcmp0(parts[0], "nvidia") == 0 ? 2 : -1;
+                if (index >= 0 && parts[1] && !parts[2] &&
+                    g_regex_match_simple("^/dev/dri/renderD[0-9]{3,5}$",
+                                         parts[1], 0, 0)) {
+                    detected = TRUE;
+                    if (ui->scan_revision == ui->settings_revision) {
+                        gtk_combo_box_set_active(GTK_COMBO_BOX(ui->gpu_choice), index);
+                        gtk_entry_set_text(GTK_ENTRY(ui->render_entry), parts[1]);
+                        append_result(ui, "Unique GPU render device selected. "
+                                          "Encoding and eligibility are NOT verified.\n");
+                    } else {
+                        append_result(ui, "GPU identified, but you edited settings "
+                                          "during the scan. Selection preserved.\n");
+                    }
+                }
+                g_strfreev(parts);
+            }
+            if (!detected)
+                append_result(ui, "No unambiguous GPU/render device. "
+                                  "Choose GPU and render node manually before "
+                                  "checking installation eligibility.\n");
+            report_complete(ui, "REVIEW COMPLETE. NO CHANGES MADE.");
+        } else if (!ok || !g_subprocess_get_successful(G_SUBPROCESS(source))) {
             append_result(ui, "\nUnable to complete the read-only check.\n");
             report_complete(ui, "CHECK INCOMPLETE. NO CHANGES MADE.");
         } else if (!output || strlen(output) > MAX_RESULT ||
@@ -109,7 +141,7 @@ static void read_only_done(GObject *source, GAsyncResult *result, gpointer data)
         } else {
             append_result(ui, output);
             append_result(ui, "\n\n");
-            if (ui->step < 3) {
+            if (ui->step < 4) {
                 ui->step++;
                 run_read_only_step(ui);
             } else {
@@ -128,8 +160,10 @@ static void run_read_only_step(HostSetupUI *ui)
         return;
     const gchar *script = ui->step == 0 ? PREFLIGHT :
                           ui->step == 1 ? PLAN :
-                          ui->step == 2 ? SERVICES : ADOPTION;
-    const gchar *args[] = {"/usr/bin/python3", script, NULL};
+                          ui->step == 2 ? SERVICES :
+                          ui->step == 3 ? ADOPTION : INSTALLER;
+    const gchar *args[] = {"/usr/bin/python3", script,
+                           ui->step == 4 ? "--detect-target" : NULL, NULL};
     GError *error = NULL;
     GSubprocess *process = g_subprocess_newv(
         args, G_SUBPROCESS_FLAGS_STDOUT_PIPE |
@@ -149,9 +183,12 @@ static void run_read_only_step(HostSetupUI *ui)
     } else if (ui->step == 2) {
         append_result(ui, "EXISTING SERVICES | ADOPTION CANDIDATES\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "CHECKING EXISTING SERVICES...");
-    } else {
+    } else if (ui->step == 3) {
         append_result(ui, "ADOPT EXISTING / SET UP NEW | SAFETY PLAN\n==============================\n\n");
         gtk_label_set_text(GTK_LABEL(ui->status), "PLANNING SAFE SERVICE ADOPTION...");
+    } else {
+        append_result(ui, "GPU AND RENDER DETECTION\n==============================\n\n");
+        gtk_label_set_text(GTK_LABEL(ui->status), "DETECTING GPU RENDER DEVICE...");
     }
     g_subprocess_communicate_utf8_async(
         process, NULL, ui->cancel, read_only_done,
@@ -167,6 +204,7 @@ static void on_check_clicked(GtkButton *button, gpointer data)
         return;
     ui->running = TRUE;
     ui->step = 0;
+    ui->scan_revision = ui->settings_revision;
     g_clear_object(&ui->cancel);
     ui->cancel = g_cancellable_new();
     gtk_text_buffer_set_text(ui->output, "", -1);
@@ -258,7 +296,8 @@ static void on_window_destroy(GtkWidget *window, gpointer data)
 static const char *selected_gpu(HostSetupUI *ui)
 {
     int active = gtk_combo_box_get_active(GTK_COMBO_BOX(ui->gpu_choice));
-    return active == 0 ? "amd" : active == 1 ? "intel" : "nvidia";
+    return active == 0 ? "amd" : active == 1 ? "intel" :
+           active == 2 ? "nvidia" : NULL;
 }
 
 static gboolean valid_pinned_digest(const char *digest)
@@ -332,6 +371,12 @@ static void on_eligibility(GtkButton *button, gpointer data)
         return;
     ui->eligible = FALSE;
     gtk_widget_set_sensitive(ui->install_button, FALSE);
+    if (!selected_gpu(ui) ||
+        !gtk_entry_get_text(GTK_ENTRY(ui->render_entry))[0]) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+                           "CHECK THIS PC OR SELECT GPU AND RENDER DEVICE.");
+        return;
+    }
     ui->eligibility_revision = ui->settings_revision;
     ui->running = TRUE;
     gtk_widget_set_sensitive(ui->eligible_button, FALSE);
@@ -404,6 +449,11 @@ static void on_install(GtkButton *button, gpointer data)
         return;
     }
     const char *gpu = selected_gpu(ui);
+    if (!gpu) {
+        gtk_label_set_text(GTK_LABEL(ui->status),
+                           "SELECT A VERIFIED GPU TARGET BEFORE INSTALLING.");
+        return;
+    }
     const char *nvidia_sha = gtk_entry_get_text(GTK_ENTRY(ui->nvidia_sha_entry));
     if (g_strcmp0(gpu, "nvidia") == 0 &&
         (!nvidia_sha || strlen(nvidia_sha) != 64 ||
@@ -542,12 +592,13 @@ int main(int argc, char **argv)
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "AMD");
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "Intel");
     gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(ui->gpu_choice), "NVIDIA");
-    gtk_combo_box_set_active(GTK_COMBO_BOX(ui->gpu_choice), 0);
+    gtk_combo_box_set_active(GTK_COMBO_BOX(ui->gpu_choice), -1);
     gtk_grid_attach(GTK_GRID(settings), ui->gpu_choice, 1, 1, 1, 1);
 
     gtk_grid_attach(GTK_GRID(settings), gtk_label_new("Render device"), 0, 2, 1, 1);
     ui->render_entry = gtk_entry_new();
-    gtk_entry_set_text(GTK_ENTRY(ui->render_entry), "/dev/dri/renderD128");
+    gtk_entry_set_placeholder_text(GTK_ENTRY(ui->render_entry),
+                                   "Detected by CHECK THIS PC (or enter manually)");
     gtk_grid_attach(GTK_GRID(settings), ui->render_entry, 1, 2, 1, 1);
 
     gtk_grid_attach(GTK_GRID(settings), gtk_label_new("Wolf SHA256"), 0, 3, 1, 1);

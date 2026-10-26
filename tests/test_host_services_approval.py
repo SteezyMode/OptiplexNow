@@ -12,10 +12,11 @@ class HostServiceApprovalContract(unittest.TestCase):
     def test_ordinary_host_review_never_invokes_os_elevation(self):
         body = GUI.split("static void run_read_only_step(HostSetupUI *ui)\n{",1)[1].split(
             "static void on_check_clicked(", 1)[0]
-        self.assertIn('"/usr/bin/python3", script, NULL',body)
-        self.assertNotIn("pkexec",body)
-        self.assertNotIn("INSTALLER",body)
-        self.assertIn("ui->step == 2 ? SERVICES : ADOPTION;",body)
+        self.assertIn('"/usr/bin/python3", script,', body)
+        self.assertIn('ui->step == 4 ? "--detect-target" : NULL', body)
+        self.assertIn('ui->step == 3 ? ADOPTION : INSTALLER', body)
+        self.assertNotIn("pkexec", body)
+        self.assertNotIn('"--install"', body)
 
     def test_privileged_service_inventory_requires_separate_click(self):
         fn = GUI.split("static void on_verify_services(",1)[1].split(

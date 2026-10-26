@@ -1,10 +1,16 @@
 name: Publish OptiPlex NOW
 
-# Publishing is an explicit release operation, never a side effect of merging to main.
+# Tags remain the normal explicit release trigger. For v1.20.0 ONLY,
+# the specifically named squash-merge of its curated notes to main is a
+# one-time explicit publish instruction; ordinary main pushes cannot release.
 on:
   push:
     tags:
       - 'v*'
+    branches:
+      - main
+    paths:
+      - 'docs/releases/v1.20.0.md'
 
 permissions:
   contents: write
@@ -15,6 +21,7 @@ concurrency:
 
 jobs:
   release:
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.20.0]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -29,10 +36,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          test -n "$version"
-          test "$version" != "$GITHUB_REF_NAME"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            # This path runs ONLY on the deliberately marked v1.20.0 merge.
+            version="1.20.0"
+          fi
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\1/p' package.py)" = "$version"
+          echo "NOW_RELEASE_VERSION=$version" >> "$GITHUB_ENV"
           make check-process
           make check-presets
           make check-config
@@ -70,20 +82,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version="${GITHUB_REF_NAME#v}"
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "Release $GITHUB_REF_NAME already exists; refusing to overwrite published assets" >&2
+          version="$NOW_RELEASE_VERSION"
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; refusing to overwrite published assets" >&2
             exit 1
           fi
-          notes="docs/releases/${GITHUB_REF_NAME}.md"
+          notes="docs/releases/${tag}.md"
           test -f "$notes" || { echo "Missing curated release notes: $notes" >&2; exit 1; }
-          gh release create "$GITHUB_REF_NAME" \
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            # GITHUB_TOKEN-created tags do not trigger a second workflow.
+            # Create immutable tag at this exact CI-tested source commit.
+            gh api -X POST "repos/$GH_REPO/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"
+          fi
+          gh release create "$tag" \
             "dist/OptiPlex-Now_${version}_amd64.deb" \
             dist/OptiPlex-Now_amd64.deb \
             dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
             --verify-tag \
-            --title "OptiPlex NOW ${GITHUB_REF_NAME} Closed Beta" \
+            --title "OptiPlex NOW ${tag} Closed Beta" \
             --notes-file "$notes" \
             --prerelease \
             --latest=false

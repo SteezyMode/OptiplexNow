@@ -24,27 +24,25 @@
 
 [Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
-**Release channel:** [v1.19.0](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.19.0) is the latest published **closed-beta prerelease**. It adds the owner-managed Steam Games path on an existing, preconfigured Wolf host. The current development work in [draft PR #184](https://github.com/SteezyMode/OptiplexNow/pull/184) adds embedded VueTorrent, authenticated Downloads endpoint discovery, Host Setup inspection and related modularization. This PR's test installer is **not yet a tagged release**.
-
-**What ships today:** v1.19.0 is a GTK3 **existing-host Linux client**, with guarded owner-managed Games, Tailscale/SSH onboarding, manual media/download integration and diagnostics. A separate experimental Wolf-only clean-host installer is included, but not physically accepted. The full three-pillar Private Alpha 1 installer, server-enforced owner/member separation and VPN fail-closed test have **not** been completed. Refer to [Current status](docs/CURRENT-STATUS.md) for subsequent reference-device test results.
+**Release channel:** **v1.20.0 Closed Beta** packages the current Games, Videos, owner Downloads UI, host inspection and opt-in QR enrollment work. It is a developer/tester prerelease, **not accepted Private Alpha 1**. A separately approved and prepared host is still required; QR host approval is disabled unless deliberately started on the host.
 
 ## Download
 
-- [Versioned releases and closed-beta installers](https://github.com/SteezyMode/OptiplexNow/releases)
-- [v1.19.0 closed-beta release page](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.19.0)
-- [Previous v1.18.0 installer](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.18.0)
-- [Real-device MacBook acceptance report](docs/QA-MACBOOK-2026-10-21.md)
-- [Current code, release and test status](docs/CURRENT-STATUS.md)
+**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download OptiPlex NOW v1.20.0 (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.20.0/OptiPlex-Now_1.20.0_amd64.deb)
 
-**Available package:** compatible x86-64 Debian/Ubuntu-derived Linux systems. No Windows or macOS package yet; Windows client and host support are planned at different milestones.
+[Release notes and SHA256 checksums](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.20.0) · [All releases / rollback versions](https://github.com/SteezyMode/OptiplexNow/releases) · [Private Alpha 1 acceptance checklist](docs/PRIVATE-ALPHA.md)
 
-Download the **versioned** `OptiPlex-Now_1.18.0_amd64.deb` from the tagged closed-beta prerelease. Verify `SHA256SUMS`, then install through the desktop software installer or from its download directory:
+Download the package and open it using the desktop package installer. Terminal alternative:
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.18.0_amd64.deb
+sudo apt install ./OptiPlex-Now_1.20.0_amd64.deb
 ```
 
-Existing NOW preferences are intended to survive updates. Back up important client identity before changing pairing, configuration, or devices.
+**Before upgrading:** retain existing NOW settings, Moonlight identity and restricted Games keys. A client package update does not install, restart or migrate Wolf, Steam, Jellyfin or the optional QR host service. Windows and macOS packages do not exist.
+
+**v1.20.0 contents:** Linux GTK3 launcher with authenticated owner-managed Steam Games, existing-server status and setup, Jellyfin discovery integration under development, owner-only Downloads/VueTorrent integration, and experimental host installation/adoption helpers. Existing services and credentials are prerequisites for many features. The source includes the tested opt-in owner iPhone QR approval pilot; a valid phone page and candidate proof were physically demonstrated but a **fresh-key approval has not yet succeeded**.
+
+**Not yet turnkey:** clean host installation, no-URL Videos setup, VPN kill-switch/egress assurance, safe end-to-end media/download file management, and a fresh-client-to-game walkthrough. The standalone QR pilot is **not auto-enabled** by a `.deb`; there is no member/viewer isolation in this one-owner release. See [Current status](docs/CURRENT-STATUS.md) and [October 26 developer handoff](docs/HANDOFF-2026-10-26.md).
 
 ## Current media and download integration
 
@@ -54,7 +52,7 @@ On the existing reference server, NOW opens a configured Jellyfin library and qB
 
 The current source includes a separate **Server Setup** GUI with real read-only hardware checks and a deliberately restricted advanced installer for a **new** Ubuntu/Pop!_OS 24.04 AMD, Intel or NVIDIA host. The pilot needs Docker/Compose, owner confirmation, OS administrator authentication and verified immutable image inputs. NVIDIA requires an exact driver-installer SHA256 and builds a new versioned userspace volume without changing host drivers.
 
-**It is included as a guarded experimental tool in published v1.18.0, but is not a one-click consumer installer and has not been accepted on clean physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
+**It is included as a guarded experimental tool in the closed-beta package, but is not a one-click consumer installer and has not been accepted on clean physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
 
 See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTALLER.md) and [Current verification](docs/CURRENT-STATUS.md).
 
@@ -65,9 +63,9 @@ See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTAL
 3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
 4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
 
-**Release compatibility:** v1.18.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
+**Release compatibility:** v1.20.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
 
-**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. A real v1.18.0 Mint client paired Moonlight and played Jellyfin video successfully, but Steam streaming, pairing focus, and wizard URL persistence failed. See the [physical test report](docs/QA-MACBOOK-2026-10-21.md). On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
+**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. An earlier v1.18.0 Mint client paired Moonlight and played Jellyfin video successfully, but Steam streaming, pairing focus, and wizard URL persistence failed. See the [physical test report](docs/QA-MACBOOK-2026-10-21.md). On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
 
 ## Available functions
 
@@ -89,7 +87,7 @@ python3 -m unittest discover -s tests -v
 make package
 ```
 
-A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRIBUTING.md) for dependencies, source map, CI rules, and host safety. Only version-tagged workflows publish installers. Generated `.deb` files are not committed to source control.
+A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRIBUTING.md) for dependencies, source map, CI rules, and host safety. Installers publish only through an explicit versioned release; see the release process. Generated `.deb` files are not committed to source control.
 
 ## Documentation
 

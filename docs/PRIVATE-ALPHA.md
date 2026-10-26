@@ -71,23 +71,19 @@ Tracking: [#137](https://github.com/SteezyMode/OptiplexNow/issues/137), [#98](ht
 - [ ] Installer/release artifacts are immutable, reproducible enough to verify by SHA256, and correspond to exact accepted source. There is a documented way to stop/remove NOW-managed components without wiping user media or game data.
 - [ ] CI, mock integration, real upstream protocol, physical host, physical client and tester acceptance evidence are differentiated. **No release is called accepted until the physical checks pass.**
 
-## Current blocker order (October 25)
+## Current blockers and next acceptance order (October 26)
 
-1. **P0: owner device identity / enrollment.** No selectable Wolf numeric ID. Draft PR #184 now implements a certificate-signed, request-bound QR approval checked against the real Wolf registry, with a separately pinned Tailscale owner phone. Offline HTTP/transaction tests pass and the Mac mini certificate→Wolf ID was verified physically; **the listener is not yet deployed and iPhone QR/clean-client approval is untested**. Mixed LAN/Tailscale transport selection, new-client Wolf pairing, safe deployment/recovery and wrong-phone physical negatives remain blockers. Issue #191.
-2. **P0: Games authorization truth.** Wolf pairing can still permit access to Wolf-published Steam independently of restricted NOW owner credentials. Decide and enforce truthful owner-only service boundaries before onboarding external testers; issue #192.
-3. **P0: complete Games, Video and Private Downloads.** The repaired Mac mini reference client physically passed managed Big Picture launch and natural exit. Fresh-host acceptance, zero-URL Jellyfin, and VPN egress/kill-switch plus owner download management remain incomplete.
-4. **P1: guided safe host install/adopt and reliable recovery.** Independent clean disposable host and client, rollback, understandable errors, tray preservation, incremental main.c modularization.
-5. **P2: UX polish and broader client support.** Wolf UI exit flash and aliases, Windows client, extended preferences. Multi-user Steam, Windows independent-session hosting, new services and subscription monetization remain post-alpha.
+**v1.20.0 Closed Beta publication is not Private Alpha 1 acceptance.** The work remaining is completion and validation of the original three product journeys, not broad architectural refactoring.
 
-## The active order of work
+1. **P0—First-time owner enrollment and honest Games authority (#191, #192):** The private iPhone owner page and signed Wolf identity candidate were physically verified. Both real approval attempts used an already-authorized restricted key and were correctly denied; a genuine unapproved restricted credential must still be approved and verified via host restricted SSH, with wrong-phone/replay/expiry tests. An authorized device should show `ALREADY AUTHORIZED` (CI-tested, not physically installed). Direct Wolf-published Steam currently bypasses NOW's separate restricted credential; explicitly document/decide the one-owner access boundary before allowing independent testers.
+2. **P0—Games fresh client (#154, #152, #76):** Re-run managed Steam/gamepad/audio/video on the v1.20.0 packaged client, confirm host desktop independence, reconnect/lease cleanup and session single-writer safety. Prove no manual terminal/PIN loop after initial approval and that existing owner data persists across reboot. Existing-host gameplay is positive supporting evidence, not a clean install pass.
+3. **P0—Videos zero-URL discovery (#171, #148):** From an authorized *clean* client, click Videos and open the actual host Jellyfin login/library without typing an address; verify playback, Jellyfin native auth, wrong-host denial and restart/offline recovery. Preserve existing Caddy/Jellyfin configuration.
+4. **P0—Private Downloads VPN/files (#137, #186, #187, #188, #190):** Establish owner-only VueTorrent/search/queue behavior; verify true VPN egress, stop-on-tunnel-loss/no leak while Games/Videos continue; browsing and file operations constrained to owner-approved roots; safely adopt or provision approved downloader + search plugins on clean host without moving existing content.
+5. **P0—Turnkey integrated clean-host/client install and recovery (#98, #76):** On separate disposable compatible GPU hardware, prove install/adopt → approved client → real streamed game, Jellyfin and downloads; preserve owner Steam/Jellyfin; test reboot, failure recovery, uninstall/rollback and package checksums. Record a non-developer walkthrough and elapsed time (15-min target for first game stream only).
 
-1. **Games:** finish the named owner Steam session, solve actual Wolf lobby pipeline failure, connect host launch logic to the real Games action, and prove real game/input/audio and independent host desktop. Do not add new host abstractions absent a demonstrated blocker.
-2. **Video:** trusted no-URL Jellyfin discovery and actual playback from clean client; then managed setup/adoption on clean disposable host.
-3. **Private Downloads / Files:** working adopted stack first, including actual VPN egress, kill-switch and permission denials; then guided managed setup.
-4. **Integrated Host + Client:** one coherent graphical setup, safe adoption, upgrades and recovery.
-5. **Physical release acceptance:** supported clean host/client, outsider test and verified release artifacts.
+**Deferred beyond Private Alpha 1:** member accounts and separate Steam libraries, Windows binaries/hosting, email/hosted auth, subscription VPN reselling, broader GPU/OS support, design polish and further main.c refactoring unless required by a concrete blocker.
 
-Use existing GitHub issues as work records and `docs/CURRENT-STATUS.md` as the factual progress ledger. The older two-device client beta is supporting evidence, **not this release's acceptance gate**. The later public-alpha contract may impose broader reach; do not silently import its speculative future features here.
+[Developer handoff, next commands and physical status](HANDOFF-2026-10-26.md) · [exact QR safety notes](OWNER-QR-ALPHA.md) · [issue tracker](https://github.com/SteezyMode/OptiplexNow/issues/137)
 
 ## Excluded from this release
 

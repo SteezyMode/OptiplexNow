@@ -88,7 +88,9 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("owner_device_key_exists()", first)
         self.assertLess(first.index("owner_device_key_exists()"),
                         first.index("g_subprocess_newv("))
-        self.assertIn("ordinary SSH authorization and Moonlight pairing do not enroll it", first)
+        self.assertIn("NOW-managed Games and protected Downloads require host approval", first)
+        self.assertIn("Wolf pairing separately permits access to Wolf-published apps", first)
+        self.assertIn("it does not grant NOW host-service access", first)
         self.assertIn("OWNER DEVICE NOT ENROLLED", first)
         self.assertIn("DOWNLOADS NOT AVAILABLE", FLOW)
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)

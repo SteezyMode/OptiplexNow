@@ -47,10 +47,10 @@ class EnrollmentWindow:
         heading.set_xalign(0)
         column.pack_start(heading, False, False, 0)
         info = Gtk.Label(
-            label="Request a separate Games/Downloads device credential.\n"
-                  "An owner with verified Tailscale access can review the active "
-                  "Wolf UI stream remotely when the host has enabled it. "
-                  "Otherwise use the existing host-only owner pilot.")
+            label="Authorize this device for NOW-managed Games commands and "
+                  "protected Downloads. Wolf pairing separately permits access "
+                  "to apps published by Wolf, including direct Steam when offered. "
+                  "NOW approval does not revoke or gate that direct streaming.")
         info.set_xalign(0)
         info.set_line_wrap(True)
         column.pack_start(info, False, False, 0)
@@ -154,8 +154,9 @@ class EnrollmentWindow:
             self.qr_box.hide()
             self.code.set_text("")
             self.status.set_text(
-                "ALREADY AUTHORIZED. The existing restricted Games credential "
-                "was verified with the host. No new approval or QR is needed.")
+                "ALREADY AUTHORIZED for NOW-managed host services. "
+                "The restricted device key was verified. No new QR is needed; "
+                "direct Wolf pairing is a separate permission.")
             return
         self.pending_request = answer
         self.phone_approval_mode = (
@@ -299,7 +300,9 @@ class EnrollmentWindow:
                 "Request a device review or ask the owner to approve access.")
         else:
             self.status.set_text(
-                "OWNER ACCESS VERIFIED. Games and authorized Downloads can now connect.")
+                "NOW OWNER-SERVICE ACCESS VERIFIED. Managed Games commands "
+                "and authorized Downloads may connect. Wolf-published apps "
+                "use separate Wolf pairing authorization.")
 
 
 def main():

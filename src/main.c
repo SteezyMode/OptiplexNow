@@ -376,7 +376,7 @@ static void ssh_authorization_done(GObject *source, GAsyncResult *result, gpoint
 
     if (state->dialog) {
         gtk_label_set_text(GTK_LABEL(state->message), success
-            ? "ORDINARY SSH AUTHORIZED. OWNER GAMES/DOWNLOADS STILL REQUIRE SEPARATE DEVICE APPROVAL."
+            ? "ORDINARY SSH AUTHORIZED. NOW-MANAGED GAMES/DOWNLOADS REQUIRE A SEPARATE DEVICE GRANT. WOLF PAIRING IS INDEPENDENT."
             : g_error_matches(error, G_IO_ERROR, G_IO_ERROR_CANCELLED)
                 ? "SSH AUTHORIZATION CANCELLED."
                 : "COULD NOT AUTHORIZE SSH ACCESS. CHECK YOUR SERVER PASSWORD "
@@ -844,10 +844,10 @@ static void launch_wolf_app(const char *app){
  say("MOONLIGHT LAUNCHED — STREAM STATUS NOT VERIFIED");
 }
 /*
- * Games P0: the MacBook physically verified owner-only Steam lifecycle.
- * GTK must now use the separate restricted device key, not the old direct
- * moonlight-profile-id Steam app or the administrative SSH credentials.
- * This is a source-only alpha handoff; the reference host still denies Start.
+ * Games P0: the managed NOW path uses the restricted owner-device key,
+ * not direct Wolf Steam or ordinary administrator SSH as a fallback.
+ * This protects NOW's host-managed Games operations; it cannot veto direct
+ * apps offered to a client independently paired to Wolf (issue #192).
  */
 /* Rootless .deb extraction is supported for MacBook beta testing when
  * the current Linux user cannot apt-install packages. The helper must

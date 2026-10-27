@@ -159,7 +159,7 @@ void now_downloads_refresh(const char *host,const char *user){
  }
  if(!owner_device_key_exists()){
    gtk_label_set_text(GTK_LABEL(queue_label),
-     "This Linux profile has no restricted owner-device key. Games and Downloads require separate server-owner enrollment; ordinary SSH authorization and Moonlight pairing do not enroll it.");
+     "This Linux profile lacks a restricted NOW owner-service key. NOW-managed Games and protected Downloads require host approval. Wolf pairing separately permits access to Wolf-published apps; it does not grant NOW host-service access.");
    if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
      "OWNER DEVICE NOT ENROLLED — SEE DETAILS BELOW");
    return;

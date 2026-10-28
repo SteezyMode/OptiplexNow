@@ -120,6 +120,7 @@ class StorageReviewTests(unittest.TestCase):
             return records
         output = io.StringIO()
         with patch.object(host_services, "docker_records", side_effect=census), \
+             patch.object(sys, "argv", ["host_adoption.py"]), \
              contextlib.redirect_stdout(output):
             self.assertEqual(host_adoption.main(), 0)
         self.assertEqual(len(invoked), 1)
@@ -135,6 +136,7 @@ class StorageReviewTests(unittest.TestCase):
         output = io.StringIO()
         with patch.object(host_services, "docker_records",
                           side_effect=host_services.InventoryUnavailable("denied")), \
+             patch.object(sys, "argv", ["host_adoption.py"]), \
              contextlib.redirect_stdout(output):
             self.assertEqual(host_adoption.main(), 0)
         self.assertIn(storage.UNKNOWN, output.getvalue())

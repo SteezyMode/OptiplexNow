@@ -17,7 +17,7 @@ from urllib.request import (
 LOOPBACK_INFO = "http://127.0.0.1:8096/System/Info/Public"
 MAX_REPLY = 8192
 MAX_OWNER_ENDPOINT = 2048
-ENDPOINT_RELATIVE = re.compile(r"/(?:[A-Za-z0-9_-]{1,48})?\\Z")
+ENDPOINT_RELATIVE = re.compile(r"/(?:[A-Za-z0-9_-]{1,48})?\Z")
 
 
 def _no_duplicate_keys(pairs):

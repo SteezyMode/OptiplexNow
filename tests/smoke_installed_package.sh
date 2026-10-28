@@ -21,6 +21,9 @@ test -r /usr/lib/optiplex-now/host_plan.py
 test -x /usr/lib/optiplex-now/host_install.py
 test -x /usr/lib/optiplex-now/host_dependencies.py
 test -r /usr/lib/optiplex-now/host_games_readiness.py
+test -r /usr/lib/optiplex-now/media_endpoint.py
+test -x /usr/lib/optiplex-now/host_media_adoption.py
+test -x /usr/lib/optiplex-now/host-media-setup.py
 test -r /usr/lib/optiplex-now/host_stage.py
 test -r /usr/lib/optiplex-now/host_nvidia.py
 test -r /usr/lib/optiplex-now/nvidia-driver.Dockerfile
@@ -35,4 +38,5 @@ NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_fresh_layout.sh
 NOW_BINARY=/usr/bin/optiplex-now bash tests/smoke_instance.sh
 NOW_ASKPASS=/usr/lib/optiplex-now/now-ssh-askpass bash tests/smoke_ssh_askpass.sh
 bash tests/smoke_host_readiness.sh
+bash tests/smoke_host_media_ui.sh
 echo "NOW installed-package acceptance passed: Debian install, desktop files, GUI and lock."

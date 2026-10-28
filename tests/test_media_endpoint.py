@@ -41,6 +41,47 @@ class MediaInventoryTests(unittest.TestCase):
         self.assertNotIn("Token", result)
         self.assertEqual(result, {"service":"jellyfin","available":True,"server_id":"server"})
 
+    def test_only_owner_approved_same_host_endpoint_is_published(self):
+        import json
+        import tempfile
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as base:
+            config = Path(base) / "media-public-endpoint.json"
+            probe = lambda *a, **k: Reply(b'{"Id":"our-jellyfin","ApiKey":"PRIVATE"}')
+            entry = {"version":1,"scheme":"https","port":443,"base_path":"/jellyfin"}
+            config.write_text(json.dumps(entry))
+            config.chmod(0o600)
+            with patch("media_endpoint.os.geteuid", return_value=config.stat().st_uid):
+                actual = inspect_local_jellyfin(opener=probe, endpoint_path=config)
+                self.assertEqual(actual, {
+                    "service":"jellyfin", "available":True,
+                    "server_id":"our-jellyfin",
+                    "endpoint":{"scheme":"https","port":443,"base_path":"/jellyfin"}})
+                for bad in (
+                    {**entry,"base_path":"//evil"},
+                    {**entry,"base_path":"/evil/path"},
+                    {**entry,"scheme":"ftp"},
+                    {**entry,"port":65536},
+                    {**entry,"port":True},
+                    {**entry,"hostname":"evil.invalid"},
+                ):
+                    config.write_text(json.dumps(bad))
+                    config.chmod(0o600)
+                    self.assertEqual(inspect_local_jellyfin(
+                        opener=probe, endpoint_path=config),
+                        {"service":"jellyfin", "available":False})
+                config.write_text(json.dumps(entry))
+                config.chmod(0o644)
+                self.assertFalse(inspect_local_jellyfin(
+                    opener=probe, endpoint_path=config)["available"])
+                config.unlink()
+                other = Path(base) / "outside"
+                other.write_text(json.dumps(entry))
+                other.chmod(0o600)
+                config.symlink_to(other)
+                self.assertFalse(inspect_local_jellyfin(
+                    opener=probe, endpoint_path=config)["available"])
+
     def test_real_local_probe_never_follows_http_redirects(self):
         visited = []
         class Handler(BaseHTTPRequestHandler):

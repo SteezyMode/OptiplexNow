@@ -706,6 +706,16 @@ int main(int argc, char **argv)
     g_signal_connect(ui->dependencies_button, "clicked",
                      G_CALLBACK(on_install_dependencies), ui);
 
+    /* Keep Videos adoption separate from the compact primary action row:
+     * all buttons remain usable at 720px and on older narrow displays. */
+    GtkWidget *videos_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(column), videos_row, FALSE, FALSE, 0);
+    GtkWidget *videos_setup = gtk_button_new_with_label(
+        "VIDEOS | USE EXISTING JELLYFIN...");
+    gtk_box_pack_start(GTK_BOX(videos_row), videos_setup, FALSE, FALSE, 0);
+    g_signal_connect(videos_setup, "clicked",
+                     G_CALLBACK(open_host_videos_setup), NULL);
+
     GtkWidget *advanced = gtk_expander_new(
         "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL / NVIDIA PILOT");
     GtkWidget *settings = gtk_grid_new();
@@ -773,11 +783,6 @@ int main(int argc, char **argv)
     gtk_container_add(GTK_CONTAINER(actions), ui->run_button);
     g_signal_connect(ui->run_button, "clicked",
                      G_CALLBACK(on_check_clicked), ui);
-    GtkWidget *videos_setup = gtk_button_new_with_label(
-        "VIDEOS | USE EXISTING JELLYFIN...");
-    gtk_container_add(GTK_CONTAINER(actions), videos_setup);
-    g_signal_connect(videos_setup, "clicked",
-                     G_CALLBACK(open_host_videos_setup), NULL);
     GtkWidget *approve_owner = gtk_button_new_with_label(
         "OWNER DEVICE APPROVALS (HOST ONLY)");
     gtk_container_add(GTK_CONTAINER(actions), approve_owner);

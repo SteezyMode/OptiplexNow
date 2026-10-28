@@ -126,7 +126,7 @@ class StorageReviewTests(unittest.TestCase):
         self.assertIn(storage.SHARED, text)
         self.assertIn("FILE ACCESS / STORAGE MOUNT APPROVAL: NOT GRANTED", text)
         self.assertNotIn("/private/home/media", text)
-        self.assertNotIn("vpn", text.lower().split("MEDIA / DOWNLOADS SHARED STORAGE:")[1])
+        self.assertNotIn("/mnt/media", text)
 
     def test_unavailable_privileged_census_is_unknown_without_paths(self):
         from unittest.mock import patch

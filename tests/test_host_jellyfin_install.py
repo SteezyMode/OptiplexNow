@@ -213,6 +213,39 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         mutated["Config"]["Labels"]["com.docker.compose.project"] = "someone-else"
         self.assertFalse(verify(mutated))
 
+    def test_unsafe_runtime_stop_is_exact_owner_only_not_a_broad_cleanup(self):
+        cid, image = "b" * 64, installer.IMAGE_BASE + self.digest
+        owned = {"Id":cid, "Config":{
+            "Image":image, "Labels":{
+                "com.docker.compose.project":installer.PROJECT,
+                "io.optiplex-now.managed":"jellyfin-host-pilot"}}}
+        calls = []
+        def runner(args, timeout):
+            calls.append((args, timeout))
+            return ""
+        self.assertTrue(installer._stop_verified_unsafe_runtime(
+            owned, cid=cid, image=image, runner=runner))
+        self.assertEqual(calls, [
+            (["/usr/bin/docker", "stop", "--time", "10", cid], 30)])
+        import copy
+        for change in ("wrong_id", "foreign_project", "wrong_image",
+                       "no_labels", "not_record"):
+            outsider = copy.deepcopy(owned)
+            if change == "wrong_id":
+                outsider["Id"] = "c" * 64
+            elif change == "foreign_project":
+                outsider["Config"]["Labels"]["com.docker.compose.project"] = "foreign"
+            elif change == "wrong_image":
+                outsider["Config"]["Image"] = "foreign/jellyfin:latest"
+            elif change == "no_labels":
+                outsider["Config"]["Labels"] = None
+            elif change == "not_record":
+                outsider = None
+            with self.subTest(change=change):
+                self.assertFalse(installer._stop_verified_unsafe_runtime(
+                    outsider, cid=cid, image=image, runner=runner))
+                self.assertEqual(len(calls), 1)
+
     def test_gui_source_and_packaging_are_not_implicit_host_install(self):
         gui = (ROOT / "src/host-jellyfin-new-ui.py").read_text()
         installer_source=(ROOT / "server/host_jellyfin_install.py").read_text()

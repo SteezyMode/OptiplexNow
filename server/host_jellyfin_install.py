@@ -142,9 +142,20 @@ def _ports_free(tail_ip):
     return True
 
 
+def _project_is_clear():
+    """Never attach to an existing Compose project of the same name."""
+    try:
+        ids = _invoke(["/usr/bin/docker", "ps", "-aq",
+                       "--filter", f"label=com.docker.compose.project={PROJECT}"])
+    except JellyfinInstallError:
+        return False
+    return not bool(ids)
+
+
 def assess(media_path, digest, uid, *, privileged=False,
            docker_report=None, tail_ip=None, compose_ready=None,
-           ports_ready=None, system_ok=None, disk_ok=None):
+           ports_ready=None, system_ok=None, disk_ok=None,
+           project_clear=None):
     """Pure-ish preflight; inject runtime evidence for isolated CI tests."""
     blockers = []
     if system_ok is None:
@@ -180,6 +191,10 @@ def assess(media_path, digest, uid, *, privileged=False,
             compose_ready = False
     if not compose_ready:
         blockers.append("Docker Compose unavailable")
+    if project_clear is None:
+        project_clear = _project_is_clear()
+    if not project_clear:
+        blockers.append("NOW Jellyfin Compose project already exists or could not be inspected")
     if tail_ip is None:
         try:
             tail_ip = _tailnet_ipv4()

@@ -34,6 +34,15 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertTrue((ROOT / "src/owner-games-client.py").exists())
         self.assertTrue((ROOT / "server/owner_games_ssh.py").exists())
 
+    def test_login_tray_toggle_is_only_a_user_setting(self):
+        self.assertIn('START MINIMIZED IN SYSTEM TRAY AT LOGIN', SOURCE)
+        self.assertIn('now_desktop_autostart_set(', SOURCE)
+        self.assertIn('now_desktop_autostart_get(', SOURCE)
+        self.assertIn('if(!start_in_tray || first_run)gtk_widget_show_all(win);', SOURCE)
+        self.assertIn('g_timeout_add(1800,initial_tray_check,NULL);', SOURCE)
+        self.assertIn('src/desktop_autostart.c', MAKE)
+        self.assertIn('check-desktop-autostart:', MAKE)
+
     def test_no_extra_settings_dialog_on_navigation(self):
         section = SOURCE.split("static void on_settings(void*w,void*p){",1)[1].split(
             "/* Setup assistant.",1)[0]

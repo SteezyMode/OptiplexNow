@@ -31,6 +31,7 @@
 #include "ui_navigation.h"
 #include "ui_games.h"
 #include "ui_state.h"
+#include "desktop_autostart.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
 #include "tailscale_install.h"
@@ -2277,7 +2278,7 @@ static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
 }
 typedef struct {
  GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];
- GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *startup_choice, *root;
+ GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *startup_choice, *login_tray_toggle, *root;
  PairContext server_context, relay_context;
  PresetExportContext export_context;
 } NowSettingsForm;
@@ -2301,6 +2302,18 @@ static void settings_save(GtkWidget*w,gpointer data){
   *desktop_caption_entry=form->desktop_caption_entry;
  GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
 
+   gboolean login_tray_enabled=FALSE;
+   if (!now_desktop_autostart_get(&login_tray_enabled) ||
+       login_tray_enabled != gtk_toggle_button_get_active(
+           GTK_TOGGLE_BUTTON(form->login_tray_toggle)) &&
+       !now_desktop_autostart_set(gtk_toggle_button_get_active(
+           GTK_TOGGLE_BUTTON(form->login_tray_toggle)))) {
+     preset_alert(win,"Login startup not changed",
+       "Could not safely update the per-user autostart entry. "
+       "Check ~/.config/autostart/optiplex-now.desktop for a conflicting "
+       "or unwritable file. Other settings were not saved.");
+     return;
+   }
    for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
    const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
    const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
@@ -2445,6 +2458,18 @@ static void on_settings(void*w,void*p){(void)w;(void)p;
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(startup_choice),now_ui_state_start_page());
  form->startup_choice=startup_choice;
  add(col,startup_choice,0);
+ gboolean login_enabled=FALSE;
+ gboolean login_supported=now_desktop_autostart_get(&login_enabled);
+ GtkWidget*login_tray_toggle=gtk_check_button_new_with_label(
+   "START MINIMIZED IN SYSTEM TRAY AT LOGIN");
+ gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(login_tray_toggle),login_enabled);
+ gtk_widget_set_sensitive(login_tray_toggle,login_supported);
+ form->login_tray_toggle=login_tray_toggle;
+ add(col,login_tray_toggle,0);
+ add(col,label(login_supported?
+   "Runs once at desktop login. First-time setup or a missing system tray opens the window instead.":
+   "An existing autostart entry is not recognized. Preserve or review it manually.",
+   "helper"),0);
  add(col,label("DESKTOP SHORTCUT NAME","modalheading"),0);
  add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
  char desktop_label[128];now_tray_desktop_caption(desktop_label,sizeof desktop_label);

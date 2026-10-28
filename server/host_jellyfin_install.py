@@ -103,7 +103,7 @@ def _expected_ports(tail_ip):
 
 
 def _verified_container(item, *, cid, image, tail_ip, media_path, owner_uid,
-                        owner_gid, workspace=WORKSPACE):
+                        owner_gid, workspace=None):
     """Post-start check of the *actual* Docker published ports and media mount.
 
     A running container is not equivalent to a private or functioning Jellyfin
@@ -148,6 +148,8 @@ def _verified_container(item, *, cid, image, tail_ip, media_path, owner_uid,
     mounts = item.get("Mounts")
     if not isinstance(mounts, list) or len(mounts) != 3:
         return False
+    if workspace is None:
+        workspace = WORKSPACE
     expected = {
         "/config": (str(workspace / "config"), True),
         "/cache": (str(workspace / "cache"), True),

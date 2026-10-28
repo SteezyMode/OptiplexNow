@@ -72,7 +72,7 @@ def discover(host, user, *, runner=subprocess.run, connector=http.client.HTTPCon
                 type(endpoint["port"]) is not int or
                 not 1 <= endpoint["port"] <= 65535 or
                 not isinstance(endpoint["base_path"], str) or
-                not re.fullmatch(r"/(?:[A-Za-z0-9_-]{1,48})?\\Z",
+                not re.fullmatch(r"/(?:[A-Za-z0-9_-]{1,48})?\Z",
                                  endpoint["base_path"]) or
                 expected_id is None):
             raise ValueError("Invalid host-approved Jellyfin endpoint")

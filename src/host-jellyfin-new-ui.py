@@ -116,7 +116,7 @@ class NewJellyfinSetup:
                 p = subprocess.run(
                     ["/usr/bin/pkexec", "/usr/bin/python3", HELPER, *argv],
                     stdin=subprocess.DEVNULL, capture_output=True, text=True,
-                    timeout=750 if "--install" in argv else 35, check=False)
+                    timeout=1200 if "--install" in argv else 35, check=False)
                 if p.returncode in (0, 2) and len(p.stdout) < 4096:
                     candidate = json.loads(p.stdout)
                     if (isinstance(candidate, dict) and

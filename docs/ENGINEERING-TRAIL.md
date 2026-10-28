@@ -663,6 +663,14 @@ Deliberately rejected `curl | sh`, automatically purging Docker packages, taking
 
 **Tests/scope:** offline host/client ID matches, wrong/malformed/oversized identity, redirect and existing restricted grant controls, package/native CI pending. No host, service, firewall, Steam or user media state touched; no hardware Jellyfin playback proven. Rollback: revert this PR. **Next:** test Videos with an authorized clean client against the real host and log whether the host reports `server_id`; then add an owner-approved endpoint descriptor for installations where Jellyfin is not exposed directly on 8096, without teaching clients to follow an arbitrary remote URL. Do not start Windows work.
 
+## October 28, 2026 — user login tray setting
+
+**Request:** "Start minimized in tray at login" must be a normal Settings toggle; NOW already supports the command-line `--start-in-tray`, but lacked the XDG per-user desktop autostart control.
+
+**Implementation:** Add a standalone GTK-free XDG login entry helper and a Settings checkbox. Explicit Save creates/removes only `~/.config/autostart/optiplex-now.desktop`; no system service, package post-install action, root requirement or change to the globally installed desktop launcher. Recognize the prior manual cp/sed entry as NOW's own and preserve unrelated/unrecognized entries; reject symlinks. Existing first-run and missing-tray safeguards still display NOW rather than leaving an invisible process. Cancellation causes no disk write.
+
+**Tests:** disposable XDG home behavioral test for on/off, round-trip and refusal to clobber foreign/symlink entries, plus GUI source contract and CI build. Physical COSMIC/XFCE tray-manager acceptance remains pending. Rollback: disable in Settings or remove the exact per-user autostart file; no server, credential or media changes.
+
 ## October 28, 2026 — Videos host-approved same-host endpoint descriptor (development)
 
 **Issue #171 / acceptance gap:** a client-only Jellyfin check hardcoded `HOST:8096`. The host has no approved way to announce that its same host publishes Jellyfin on another HTTP(S) port or short base path. A generic URL supplied by the client or arbitrary host discovery would be unsafe.

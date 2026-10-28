@@ -146,7 +146,8 @@ def main() -> int:
     except host_services.InventoryUnavailable:
         records = None
     result = plan(host_services.assess(records))
-    storage = host_storage_review.review(records)
+    storage = host_storage_review.review(
+        records, native_jellyfin=host_storage_review.native_jellyfin_active())
     if args.json:
         print(json.dumps({**result, "storage_review": storage}, indent=2))
     else:

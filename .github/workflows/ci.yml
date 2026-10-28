@@ -66,6 +66,7 @@ jobs:
           make check-backup-async
           make check-tray-prefs
           make check-tray-actions
+          make check-desktop-autostart
           make check-moonlight-install
           make check-wizard-network
           make check-wizard-services

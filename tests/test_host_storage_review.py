@@ -74,6 +74,34 @@ class StorageReviewTests(unittest.TestCase):
             storage.NO_MOUNTS)
         self.check_no_leak(pair() + [None], storage.UNKNOWN)
 
+    def test_native_systemd_jellyfin_is_distinct_unverified_candidate(self):
+        qbit = record("lscr.io/linuxserver/qbittorrent:5",
+                      ["/mnt/2TB/Torrent-Downloads"])
+        self.check_no_leak([qbit], storage.UNKNOWN)
+        native = storage.review([qbit], native_jellyfin=True)
+        self.assertEqual(native["status"], storage.NATIVE)
+        self.assertFalse(native["may_manage_files"])
+        self.assertNotIn("/mnt/2TB", json.dumps(native))
+        self.assertEqual(storage.review([], native_jellyfin=True)["status"],
+                         storage.UNKNOWN)
+        self.assertEqual(storage.review(pair(), native_jellyfin=True)["status"],
+                         storage.UNKNOWN)
+
+    def test_native_unit_probe_only_uses_systemctl_is_active(self):
+        import subprocess
+        for returncode, expected in [(0, True), (3, False), (4, False)]:
+            with self.subTest(returncode=returncode):
+                with patch.object(storage.subprocess, "run", return_value=
+                       subprocess.CompletedProcess([], returncode)) as run:
+                    self.assertIs(storage.native_jellyfin_active(), expected)
+                    cmd = run.call_args.args[0]
+                    self.assertEqual(cmd, ["/usr/bin/systemctl", "--system",
+                                           "is-active", "--quiet",
+                                           "jellyfin.service"])
+                    self.assertEqual(run.call_args.kwargs["timeout"], 4)
+        with patch.object(storage.subprocess, "run", side_effect=OSError):
+            self.assertFalse(storage.native_jellyfin_active())
+
     def test_invalid_mount_metadata_fails_closed(self):
         for bad in (
             "/", "/mnt/../media", "/mnt//media", "/mnt/media/",
@@ -120,6 +148,7 @@ class StorageReviewTests(unittest.TestCase):
             return records
         output = io.StringIO()
         with patch.object(host_services, "docker_records", side_effect=census), \
+             patch.object(storage, "native_jellyfin_active", return_value=False), \
              patch.object(sys, "argv", ["host_adoption.py"]), \
              contextlib.redirect_stdout(output):
             self.assertEqual(host_adoption.main(), 0)
@@ -136,6 +165,7 @@ class StorageReviewTests(unittest.TestCase):
         output = io.StringIO()
         with patch.object(host_services, "docker_records",
                           side_effect=host_services.InventoryUnavailable("denied")), \
+             patch.object(storage, "native_jellyfin_active", return_value=True), \
              patch.object(sys, "argv", ["host_adoption.py"]), \
              contextlib.redirect_stdout(output):
             self.assertEqual(host_adoption.main(), 0)

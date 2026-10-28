@@ -7,13 +7,28 @@ reachability/authentication must be implemented separately.
 import json
 import re
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import (
+    HTTPRedirectHandler, ProxyHandler, Request, build_opener,
+)
 
 LOOPBACK_INFO = "http://127.0.0.1:8096/System/Info/Public"
 MAX_REPLY = 8192
 
 
-def inspect_local_jellyfin(*, opener=urlopen):
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # The trusted host probes one fixed local URL, never a redirect
+        # to another container, LAN peer or Internet service.
+        return None
+
+
+def _local_urlopen(request, timeout):
+    # Do not let proxy environment variables redirect this local inventory.
+    return build_opener(ProxyHandler({}), _NoRedirect()).open(
+        request, timeout=timeout)
+
+
+def inspect_local_jellyfin(*, opener=_local_urlopen):
     """Return a minimal allowlisted descriptor; never return API keys."""
     req = Request(LOOPBACK_INFO, headers={"Accept": "application/json"})
     try:

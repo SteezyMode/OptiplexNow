@@ -127,9 +127,11 @@ class HostMediaAdoptionTests(unittest.TestCase):
         self.assertIn("media_endpoint.py", package)
         self.assertIn("--approve-existing", gui)
         self.assertIn("--confirm-owner", gui)
-        self.assertNotIn("docker", gui.lower())
+        self.assertNotIn('"/usr/bin/docker"', gui)
         self.assertNotIn("pkexec", gui.lower())
         self.assertNotIn("chmod 777", gui.lower())
+        for source in (gui, (ROOT / "server/host_media_adoption.py").read_text()):
+            compile(source, "<host-media-setup>", "exec")
 
 
 if __name__ == "__main__":

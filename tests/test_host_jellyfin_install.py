@@ -43,7 +43,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
             "docker_report":self.report, "tail_ip":self.tail,
             "compose_ready":True, "ports_ready":True,
             "system_ok":True, "disk_ok":True,
-            "project_clear":True,
+            "project_clear":True, "docker_network_ok":True,
         }
         params.update(overrides)
         return installer.assess(**params)
@@ -61,6 +61,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         self.assertEqual(self.candidate(system_ok=False)["status"], "blocked")
         self.assertEqual(self.candidate(disk_ok=False)["status"], "blocked")
         self.assertEqual(self.candidate(project_clear=False)["status"], "blocked")
+        self.assertEqual(self.candidate(docker_network_ok=False)["status"], "blocked")
         self.assertEqual(self.candidate(ports_ready=False)["status"], "blocked")
         self.assertEqual(self.candidate(digest="latest")["status"], "blocked")
         self.assertEqual(self.candidate(tail_ip="192.168.1.2")["status"], "blocked")
@@ -136,6 +137,81 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         with self.assertRaises(installer.JellyfinInstallError):
             installer.install(str(self.media),self.digest,self.uid,"INSTALL-JELLYFIN")
         self.assertFalse(installer.WORKSPACE.exists())
+
+    def test_docker_network_gate_rejects_legacy_or_ambiguous_daemons(self):
+        for version, allowed in (("24.0.7", False), ("27.5.1", False),
+                                 ("28.0.0", True), ("28.4.1", True),
+                                 ("29.0.0+patch.1", True),
+                                 ("Docker 28.0.0", False),
+                                 ("28.0", False), ("28.0.0\\n29.0.0", False)):
+            with self.subTest(version=version):
+                with patch.object(installer, "_invoke", return_value=version) as runner:
+                    self.assertEqual(installer._docker_network_gate(), allowed)
+                    runner.assert_called_once_with(
+                        ["/usr/bin/docker", "version", "--format",
+                         "{{.Server.Version}}"])
+        with patch.object(installer, "_invoke",
+                          side_effect=installer.JellyfinInstallError("no Docker")):
+            self.assertFalse(installer._docker_network_gate())
+
+    def test_runtime_inspect_must_verify_actual_network_and_readonly_mount(self):
+        cid = "b" * 64
+        image = installer.IMAGE_BASE + self.digest
+        expected = {
+            "Id":cid, "State":{"Running":True},
+            "Config":{"Image":image, "User":f"{self.uid}:{os.getegid()}",
+                      "Labels":{"com.docker.compose.project":installer.PROJECT,
+                                "io.optiplex-now.managed":"jellyfin-host-pilot"}},
+            "HostConfig":{"NetworkMode":"optiplex-now-jellyfin-pilot_default"},
+            "NetworkSettings":{"Ports":{
+                "8096/tcp":[{"HostIp":"127.0.0.1","HostPort":"8096"},
+                            {"HostIp":self.tail,"HostPort":"8096"}],
+                "8920/tcp":None, "7359/udp":None}},
+            "Mounts":[{"Type":"bind","Source":str(installer.WORKSPACE/"config"),
+                       "Destination":"/config","RW":True},
+                      {"Type":"bind","Source":str(installer.WORKSPACE/"cache"),
+                       "Destination":"/cache","RW":True},
+                      {"Type":"bind","Source":str(self.media),
+                       "Destination":"/media/library","RW":False}]
+        }
+        import copy
+        def verify(item):
+            return installer._verified_container(
+                item, cid=cid, image=image, tail_ip=self.tail,
+                media_path=str(self.media), owner_uid=self.uid,
+                owner_gid=os.getegid())
+        self.assertTrue(verify(expected))
+        mutated = copy.deepcopy(expected)
+        mutated["NetworkSettings"]["Ports"]["8096/tcp"][1]["HostIp"] = "0.0.0.0"
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["NetworkSettings"]["Ports"]["8096/tcp"][1]["HostPort"] = "9090"
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["NetworkSettings"]["Ports"]["8920/tcp"] = [
+            {"HostIp":"0.0.0.0", "HostPort":"8920"}]
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["Mounts"][2]["RW"] = True
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["Mounts"][2]["Source"] = "/unrelated/data"
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["Mounts"].pop()
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["Config"]["User"] = "0:0"
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["HostConfig"]["NetworkMode"] = "host"
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["State"] = None
+        self.assertFalse(verify(mutated))
+        mutated = copy.deepcopy(expected)
+        mutated["Config"]["Labels"]["com.docker.compose.project"] = "someone-else"
+        self.assertFalse(verify(mutated))
 
     def test_gui_source_and_packaging_are_not_implicit_host_install(self):
         gui = (ROOT / "src/host-jellyfin-new-ui.py").read_text()

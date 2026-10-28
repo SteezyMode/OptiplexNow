@@ -53,10 +53,16 @@ def owner_approved_endpoint(path=None):
         record = json.loads(raw, object_pairs_hook=_no_duplicate_keys)
     except (UnicodeError, ValueError) as exc:
         raise ValueError("Invalid media endpoint configuration") from exc
+    return validate_owner_endpoint_record(record)
+
+
+def validate_owner_endpoint_record(record):
+    """One shared wire/file validator for owner GUI and the restricted broker."""
     if not isinstance(record, dict) or set(record) != {
             "version", "scheme", "port", "base_path"}:
         raise ValueError("Invalid media endpoint keys")
     if (type(record["version"]) is not int or record["version"] != 1 or
+            type(record["scheme"]) is not str or
             record["scheme"] not in ("http", "https") or
             type(record["port"]) is not int or
             not 1 <= record["port"] <= 65535 or

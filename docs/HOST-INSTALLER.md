@@ -28,6 +28,19 @@ The separate Server Setup window includes **VIDEOS | USE EXISTING JELLYFIN...**.
 
 After a successful local Jellyfin check, the host owner may explicitly approve a *same-host* scheme, port and single short base path through a confirmation dialog. A separate unprivileged helper validates the fields with the same allowlist as the restricted host media reply and creates only `~/.config/optiplex-now/media-public-endpoint.json` at mode `0600`, refusing pre-existing files, symlinks, root execution or unsafe directories. It does **not** configure Jellyfin, Caddy, TLS, firewalls, external hostnames, libraries or accounts; client reachability and verified playback remain separate acceptance gates. This is not a managed Jellyfin installation or complete guided adoption for every host topology. To change an already approved route, manual owner review is still required; do not casually remove it to retry.
 
+
+## Clean-host Jellyfin pilot (development, NOT physically accepted)
+
+The separate **Videos | Use Existing Jellyfin** window now offers **Set Up New Jellyfin on a Clean Host**. This is deliberately not the existing-server adoption operation. It collects an existing host-owner media folder through a GTK directory picker and a **verified immutable** official `jellyfin/jellyfin@sha256:<digest>` image. The selected library is mounted read-only; Jellyfin's persistent `/config` and `/cache` are created separately with the invoking owner's UID/GID.
+
+The flow is **check → OS authorization → recheck → explicit installation confirmation → OS authorization → one-time create**. The installer allows only Ubuntu 24.04 / Pop!_OS 24.04 amd64 with at least 5 GiB free in the NOW state filesystem, an available local Docker/Compose daemon, a valid Tailscale IPv4, available TCP 8096 on both loopback and the Tailnet address, no existing Jellyfin Docker candidate and no prior NOW Jellyfin pilot state. The actual install must run with an authenticated `PKEXEC_UID` matching the GUI user and the explicit `INSTALL-JELLYFIN` confirmation.
+
+New state is isolated at root-owned `/var/lib/optiplex-now/jellyfin-host-pilot`, with exclusive create-only journals and the unique `optiplex-now-jellyfin-pilot` Compose project. The container uses the approved UID:GID, a verified digest, no added capabilities, and read-only media bind. Host ports are published **only** at `127.0.0.1:8096` and the host's Tailscale IPv4:8096. No wildcard/LAN/public bind, Caddy update, firewall/ACL rewrite, UDP discovery or host network mode. Existing other NOW, Docker, Wolf, Jellyfin and download services are not targeted for removal or restart. Docker itself and port publishing still require explicit administrator approval.
+
+**Important limits:** An installed container marked `running_media_unverified` is not a configured Jellyfin account, playable library, verified client connection or alpha acceptance. Complete Jellyfin's own first-run authentication/library setup and test playback. This pilot does not enable hardware transcoding by default, acquire a verified image digest for the owner, select multiple media roots, establish fine-grained Tailscale ACLs, migrate or overwrite existing Jellyfin, or automatically repair/rollback an interrupted deployment. A stale or partial state blocks retry until inspected. Do not run on the working reference OptiPlex; test only separate disposable compatible host hardware.
+
+Source: Jellyfin's official container instructions require persistent config/cache and support read-only media bind mounts. Docker's Compose documentation warns that omitting the host IP exposes published ports on all interfaces. Both guide this deliberately scoped pilot; actual host behavior needs physical acceptance and any Docker network/firewall effects must be reviewed first.
+
 ## Implemented path
 
 The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.

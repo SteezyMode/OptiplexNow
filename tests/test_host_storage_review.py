@@ -93,14 +93,14 @@ class StorageReviewTests(unittest.TestCase):
             with self.subTest(returncode=returncode):
                 with patch.object(storage.subprocess, "run", return_value=
                        subprocess.CompletedProcess([], returncode)) as run:
-                    self.assertIs(storage.native_jellyfin_active(), expected)
+                    self.assertIs(storage.native_jellyfin_active(runner=run), expected)
                     cmd = run.call_args.args[0]
                     self.assertEqual(cmd, ["/usr/bin/systemctl", "--system",
                                            "is-active", "--quiet",
                                            "jellyfin.service"])
                     self.assertEqual(run.call_args.kwargs["timeout"], 4)
-        with patch.object(storage.subprocess, "run", side_effect=OSError):
-            self.assertFalse(storage.native_jellyfin_active())
+        with patch.object(storage.subprocess, "run", side_effect=OSError) as run:
+            self.assertFalse(storage.native_jellyfin_active(runner=run))
 
     def test_invalid_mount_metadata_fails_closed(self):
         for bad in (

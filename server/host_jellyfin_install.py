@@ -33,6 +33,7 @@ IMAGE_BASE = "jellyfin/jellyfin@sha256:"
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 PORT = 8096
 MAX_OUTPUT = 32768
+DOCKER_VERSION = re.compile(r"(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+][A-Za-z0-9_.-]+)?\\Z")
 STOP_PREFIXES = (Path("/etc"), Path("/root"), Path("/proc"), Path("/sys"),
                  Path("/dev"), Path("/run"), Path("/usr"), Path("/var"),
                  Path("/tmp"), Path("/boot"))
@@ -79,6 +80,86 @@ def _enough_disk():
     except OSError:
         return False
     return available >= 5 * 1024**3
+
+
+
+def _docker_network_gate():
+    """Require an engine without Docker's documented pre-28 localhost leak.
+
+    This is a necessary condition, not proof of end-to-end Tailnet isolation:
+    Docker's forwarding/NAT and the local network still require live checks.
+    """
+    try:
+        server_version = _invoke(
+            ["/usr/bin/docker", "version", "--format", "{{.Server.Version}}"])
+    except JellyfinInstallError:
+        return False
+    version = DOCKER_VERSION.fullmatch(server_version)
+    return bool(version and tuple(map(int, version.groups()[:3])) >= (28, 0, 0))
+
+
+def _expected_ports(tail_ip):
+    return {("127.0.0.1", str(PORT)), (tail_ip, str(PORT))}
+
+
+def _verified_container(item, *, cid, image, tail_ip, media_path, owner_uid,
+                        owner_gid, workspace=WORKSPACE):
+    """Post-start check of the *actual* Docker published ports and media mount.
+
+    A running container is not equivalent to a private or functioning Jellyfin
+    server. No raw inspect metadata is returned to the user.
+    """
+    if not isinstance(item, dict) or item.get("Id") != cid:
+        return False
+    config, host_cfg, net = (item.get(k) for k in
+                             ("Config", "HostConfig", "NetworkSettings"))
+    if not all(isinstance(x, dict) for x in (config, host_cfg, net)):
+        return False
+    labels = config.get("Labels")
+    if not isinstance(labels, dict) or (
+            not item.get("State", {}).get("Running") or
+            config.get("Image") != image or
+            config.get("User") != f"{owner_uid}:{owner_gid}" or
+            labels.get("com.docker.compose.project") != PROJECT or
+            labels.get("io.optiplex-now.managed") != "jellyfin-host-pilot" or
+            host_cfg.get("NetworkMode") in ("host", "none")):
+        return False
+    mappings = net.get("Ports")
+    if not isinstance(mappings, dict) or set(mappings) != {"8096/tcp"}:
+        return False
+    addresses = mappings["8096/tcp"]
+    if not isinstance(addresses, list) or len(addresses) != 2:
+        return False
+    observed = set()
+    for address in addresses:
+        if (not isinstance(address, dict) or
+                set(address) != {"HostIp", "HostPort"} or
+                not isinstance(address["HostIp"], str) or
+                not isinstance(address["HostPort"], str)):
+            return False
+        observed.add((address["HostIp"], address["HostPort"]))
+    if len(observed) != 2 or observed != _expected_ports(tail_ip):
+        return False
+    mounts = item.get("Mounts")
+    if not isinstance(mounts, list) or len(mounts) != 3:
+        return False
+    expected = {
+        "/config": (str(workspace / "config"), True),
+        "/cache": (str(workspace / "cache"), True),
+        "/media/library": (media_path, False),
+    }
+    seen = set()
+    for mount in mounts:
+        if (not isinstance(mount, dict) or
+                mount.get("Type") != "bind" or
+                mount.get("Destination") not in expected or
+                not isinstance(mount.get("RW"), bool)):
+            return False
+        dest = mount["Destination"]
+        if dest in seen or (mount.get("Source"), mount["RW"]) != expected[dest]:
+            return False
+        seen.add(dest)
+    return seen == set(expected)
 
 
 def _trusted_directory(path):
@@ -155,7 +236,7 @@ def _project_is_clear():
 def assess(media_path, digest, uid, *, privileged=False,
            docker_report=None, tail_ip=None, compose_ready=None,
            ports_ready=None, system_ok=None, disk_ok=None,
-           project_clear=None):
+           project_clear=None, docker_network_ok=None):
     """Pure-ish preflight; inject runtime evidence for isolated CI tests."""
     blockers = []
     if system_ok is None:
@@ -191,6 +272,10 @@ def assess(media_path, digest, uid, *, privileged=False,
             compose_ready = False
     if not compose_ready:
         blockers.append("Docker Compose unavailable")
+    if docker_network_ok is None:
+        docker_network_ok = _docker_network_gate()
+    if not docker_network_ok:
+        blockers.append("Docker Engine 28.0.0+ required for safe localhost publishing")
     if project_clear is None:
         project_clear = _project_is_clear()
     if not project_clear:
@@ -323,12 +408,12 @@ def install(media_path, digest, owner_uid, confirmation):
         if not isinstance(details, list) or len(details) != 1:
             raise JellyfinInstallError("Unexpected Jellyfin container metadata")
         item = details[0]
-        labels = item.get("Config", {}).get("Labels", {})
-        if (item.get("Id") != cid or not item.get("State", {}).get("Running")
-            or item.get("Config", {}).get("Image") != image
-            or labels.get("com.docker.compose.project") != PROJECT
-            or labels.get("io.optiplex-now.managed") != "jellyfin-host-pilot"):
-            raise JellyfinInstallError("Jellyfin runtime identity not verified")
+        if not _verified_container(
+                item, cid=cid, image=image, tail_ip=tail_ip,
+                media_path=media_path, owner_uid=user.pw_uid,
+                owner_gid=user.pw_gid):
+            raise JellyfinInstallError(
+                "Jellyfin runtime ports, media mounts or identity not verified")
         _journal("running_media_unverified", image)
         return {"tool":"now-jellyfin-clean-host", "schema_version":1,
                 "status":"running_media_unverified", "changes_performed":True,

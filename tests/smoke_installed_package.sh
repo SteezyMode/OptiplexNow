@@ -20,6 +20,7 @@ test -r /usr/lib/optiplex-now/host_preflight.py
 test -r /usr/lib/optiplex-now/host_plan.py
 test -x /usr/lib/optiplex-now/host_install.py
 test -x /usr/lib/optiplex-now/host_dependencies.py
+test -r /usr/lib/optiplex-now/host_storage_review.py
 test -r /usr/lib/optiplex-now/host_games_readiness.py
 test -r /usr/lib/optiplex-now/media_endpoint.py
 test -x /usr/lib/optiplex-now/host_media_adoption.py

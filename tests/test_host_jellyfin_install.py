@@ -43,6 +43,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
             "docker_report":self.report, "tail_ip":self.tail,
             "compose_ready":True, "ports_ready":True,
             "system_ok":True, "disk_ok":True,
+            "project_clear":True,
         }
         params.update(overrides)
         return installer.assess(**params)
@@ -59,6 +60,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         self.assertEqual(self.candidate(compose_ready=False)["status"], "blocked")
         self.assertEqual(self.candidate(system_ok=False)["status"], "blocked")
         self.assertEqual(self.candidate(disk_ok=False)["status"], "blocked")
+        self.assertEqual(self.candidate(project_clear=False)["status"], "blocked")
         self.assertEqual(self.candidate(ports_ready=False)["status"], "blocked")
         self.assertEqual(self.candidate(digest="latest")["status"], "blocked")
         self.assertEqual(self.candidate(tail_ip="192.168.1.2")["status"], "blocked")
@@ -148,6 +150,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         self.assertIn("refused_or_interrupted", installer_source)
         self.assertIn('VERSION_ID") == "24.04"', installer_source)
         self.assertIn("--no-recreate", installer_source)
+        self.assertIn("label=com.docker.compose.project=", installer_source)
         self.assertIn("host_jellyfin_install.py", package)
         self.assertNotIn("docker compose down", installer_source.lower())
         self.assertNotIn("docker system prune", installer_source.lower())

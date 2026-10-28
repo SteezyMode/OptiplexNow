@@ -63,6 +63,26 @@ static void open_owner_approvals(GtkButton *button, gpointer data)
     g_clear_error(&error);
 }
 
+/* Separate owner-only existing-Jellyfin review. No Docker, pkexec, daemon,
+ * service adoption or config write happens by merely opening this window. */
+static void open_host_videos_setup(GtkButton *button, gpointer data)
+{
+    (void)button;
+    (void)data;
+    gchar *argv[] = {"/usr/bin/python3",
+                     "/usr/lib/optiplex-now/host-media-setup.py", NULL};
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT,
+                       NULL, NULL, NULL, &error)) {
+        GtkWidget *alert = gtk_message_dialog_new(
+            NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+            "Videos host setup is not installed on this computer.");
+        gtk_dialog_run(GTK_DIALOG(alert));
+        gtk_widget_destroy(alert);
+    }
+    g_clear_error(&error);
+}
+
 static void host_ui_free(gpointer data)
 {
     HostSetupUI *ui = data;
@@ -753,6 +773,11 @@ int main(int argc, char **argv)
     gtk_container_add(GTK_CONTAINER(actions), ui->run_button);
     g_signal_connect(ui->run_button, "clicked",
                      G_CALLBACK(on_check_clicked), ui);
+    GtkWidget *videos_setup = gtk_button_new_with_label(
+        "VIDEOS | USE EXISTING JELLYFIN...");
+    gtk_container_add(GTK_CONTAINER(actions), videos_setup);
+    g_signal_connect(videos_setup, "clicked",
+                     G_CALLBACK(open_host_videos_setup), NULL);
     GtkWidget *approve_owner = gtk_button_new_with_label(
         "OWNER DEVICE APPROVALS (HOST ONLY)");
     gtk_container_add(GTK_CONTAINER(actions), approve_owner);

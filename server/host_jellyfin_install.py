@@ -111,13 +111,13 @@ def _verified_container(item, *, cid, image, tail_ip, media_path, owner_uid,
     """
     if not isinstance(item, dict) or item.get("Id") != cid:
         return False
-    config, host_cfg, net = (item.get(k) for k in
-                             ("Config", "HostConfig", "NetworkSettings"))
-    if not all(isinstance(x, dict) for x in (config, host_cfg, net)):
+    config, host_cfg, net, state = (item.get(k) for k in
+        ("Config", "HostConfig", "NetworkSettings", "State"))
+    if not all(isinstance(x, dict) for x in (config, host_cfg, net, state)):
         return False
     labels = config.get("Labels")
     if not isinstance(labels, dict) or (
-            not item.get("State", {}).get("Running") or
+            state.get("Running") is not True or
             config.get("Image") != image or
             config.get("User") != f"{owner_uid}:{owner_gid}" or
             labels.get("com.docker.compose.project") != PROJECT or
@@ -125,7 +125,12 @@ def _verified_container(item, *, cid, image, tail_ip, media_path, owner_uid,
             host_cfg.get("NetworkMode") in ("host", "none")):
         return False
     mappings = net.get("Ports")
-    if not isinstance(mappings, dict) or set(mappings) != {"8096/tcp"}:
+    if not isinstance(mappings, dict) or "8096/tcp" not in mappings:
+        return False
+    # Unpublished ports EXPOSEd by the upstream image may appear as null,
+    # but any additional published binding is an unexpected exposure.
+    if any(key != "8096/tcp" and published is not None
+           for key, published in mappings.items()):
         return False
     addresses = mappings["8096/tcp"]
     if not isinstance(addresses, list) or len(addresses) != 2:

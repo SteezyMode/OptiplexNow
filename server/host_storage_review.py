@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from pathlib import PurePosixPath
+import subprocess
 
 import host_services
 
@@ -21,6 +22,7 @@ NO_MOUNTS = "no_comparable_bind_mounts"
 NO_OVERLAP = "no_bind_overlap_observed"
 SHARED = "shared_bind_source_candidate"
 NESTED = "nested_bind_source_candidate"
+NATIVE = "native_jellyfin_library_mapping_unverified"
 
 
 def _sources(record):
@@ -46,7 +48,24 @@ def _sources(record):
     return sources
 
 
-def review(records):
+def native_jellyfin_active(*, runner=subprocess.run):
+    """Only check whether the known systemd unit is active, no config access.
+
+    This is a candidate hint, not proof of Jellyfin ownership, libraries,
+    served paths, or an authorized media administration API.
+    """
+    try:
+        proc = runner(
+            ["/usr/bin/systemctl", "--system", "is-active", "--quiet",
+             "jellyfin.service"],
+            stdin=subprocess.DEVNULL, capture_output=True, check=False,
+            timeout=4, env={"PATH": "/usr/bin:/bin", "SYSTEMD_PAGER": "cat"})
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return proc.returncode == 0
+
+
+def review(records, *, native_jellyfin=False):
     """Summarize only fixed-status hints, never host paths or container IDs."""
     status = UNKNOWN
     if isinstance(records, list) and len(records) <= host_services.MAX_ITEMS:
@@ -60,7 +79,15 @@ def review(records):
             if service in candidates:
                 candidates[service].append(record)
         else:
-            if len(candidates["jellyfin"]) == len(candidates["qbittorrent"]) == 1:
+            if (native_jellyfin is True and not candidates["jellyfin"] and
+                    len(candidates["qbittorrent"]) == 1):
+                # A native Jellyfin service cannot be tied to a Docker
+                # bind source without reading its actual approved libraries.
+                # A qBittorrent container alone cannot establish that link.
+                status = NATIVE
+            elif (native_jellyfin is not True and
+                  len(candidates["jellyfin"]) ==
+                  len(candidates["qbittorrent"]) == 1):
                 jelly = _sources(candidates["jellyfin"][0])
                 qbit = _sources(candidates["qbittorrent"][0])
                 if jelly is not None and qbit is not None:
@@ -85,7 +112,7 @@ def review(records):
         "owner_confirmation_required": True,
         "note": (
             "Docker bind metadata is not a library root or file authorization. "
-            "Native Jellyfin, symlinks, downloads save paths and actual media "
-            "visibility are not verified. No existing state was changed."
+            "Native Jellyfin library roots, symlinks, download save paths and "
+            "actual media visibility are not verified. No existing state changed."
         ),
     }

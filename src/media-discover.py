@@ -54,8 +54,15 @@ def discover(host, user, *, runner=subprocess.run, connector=http.client.HTTPCon
             or data.get("service") != "jellyfin"
             or data.get("available") is not True):
         raise ValueError("No authorized Jellyfin available")
-    # An authenticated host declaration is not itself proof that the
-    # selected host's endpoint is reachable from this client.
+    # New hosts publish the public Jellyfin instance ID obtained from the
+    # host's own local probe. Never trust a returned hostname, URL or token.
+    # Older deployed beta hosts omit server_id; retain legacy 8096 access until
+    # they can be upgraded, but do not claim identity binding for that path.
+    expected_id = data.get("server_id")
+    if expected_id is not None and (not isinstance(expected_id, str)
+                                    or not re.fullmatch(
+                                        r"[A-Za-z0-9_-]{1,128}", expected_id)):
+        raise ValueError("Invalid authenticated Jellyfin identity")
     conn = connector(host, 8096, timeout=4)
     try:
         conn.request("GET", "/System/Info/Public", headers={"Accept":"application/json"})
@@ -67,8 +74,10 @@ def discover(host, user, *, runner=subprocess.run, connector=http.client.HTTPCon
             raise ValueError("Oversized Jellyfin response")
         info = json.loads(body)
         if (not isinstance(info, dict) or not isinstance(info.get("Id"), str)
-                or not 1 <= len(info["Id"]) <= 128):
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", info["Id"])):
             raise ValueError("Invalid Jellyfin response")
+        if expected_id is not None and info["Id"] != expected_id:
+            raise ValueError("Jellyfin server differs from authorized host")
     finally:
         conn.close()
     return True

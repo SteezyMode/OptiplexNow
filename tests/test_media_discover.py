@@ -55,6 +55,37 @@ class MediaDiscoveryTests(unittest.TestCase):
         self.assertTrue(mod.discover("100.121.156.34","optiplex",
                          runner=self.runner,connector=FakeConn))
 
+    def test_verified_server_id_must_match_client_reachable_instance(self):
+        def trusted(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0,
+                b'{"success":true,"service":"jellyfin","available":true,'
+                b'"server_id":"one"}')
+        self.assertTrue(mod.discover("100.121.156.34", "optiplex",
+                     runner=trusted, connector=FakeConn))
+
+        def wrong(args, **kwargs):
+            return subprocess.CompletedProcess(args, 0,
+                b'{"success":true,"service":"jellyfin","available":true,'
+                b'"server_id":"different-jellyfin"}')
+        with self.assertRaisesRegex(ValueError, "differs from authorized"):
+            mod.discover("100.121.156.34", "optiplex",
+                         runner=wrong, connector=FakeConn)
+
+    def test_reject_malformed_host_id_before_client_network_request(self):
+        for bad_id in ("../wrong", "http://evil.invalid/", "", "x" * 129, 42):
+            with self.subTest(bad_id=bad_id):
+                import json
+                response = {"success": True, "service": "jellyfin",
+                            "available": True, "server_id": bad_id}
+                def response_from_host(args, **kwargs):
+                    return subprocess.CompletedProcess(
+                        args, 0, json.dumps(response).encode())
+                with self.assertRaises(ValueError):
+                    mod.discover("100.121.156.34", "optiplex",
+                        runner=response_from_host,
+                        connector=lambda *a, **k: self.fail(
+                            "Client attempted network request for invalid ID"))
+
     def test_denied_or_unavailable_media_never_opens_url(self):
         for stdout in (b'{"success":false}',b'{"success":true,"service":"plex","available":true}',
                        b'{"success":true,"service":"jellyfin","available":false}'):

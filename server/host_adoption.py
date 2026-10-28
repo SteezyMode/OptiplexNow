@@ -11,6 +11,7 @@ import argparse
 import json
 
 import host_services
+import host_storage_review
 
 SCHEMA = 1
 SERVICE_KEYS = ("wolf", "jellyfin", "qbittorrent", "gluetun")
@@ -138,14 +139,25 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
-    result = plan(host_services.collect())
+    # Reuse one bounded, read-only Docker census. No separate path or
+    # filesystem operations; missing Docker permission means UNKNOWN.
+    try:
+        records = host_services.docker_records()
+    except host_services.InventoryUnavailable:
+        records = None
+    result = plan(host_services.assess(records))
+    storage = host_storage_review.review(
+        records, native_jellyfin=host_storage_review.native_jellyfin_active())
     if args.json:
-        print(json.dumps(result, indent=2))
+        print(json.dumps({**result, "storage_review": storage}, indent=2))
     else:
         print("ADOPT EXISTING / SET UP NEW | READ-ONLY PLAN")
         print("DECISION:", result["decision"])
         for service, suggestion in result["services"].items():
             print(f"{service.upper():20} {suggestion}")
+        print("MEDIA / DOWNLOADS SHARED STORAGE:", storage["status"])
+        print("FILE ACCESS / STORAGE MOUNT APPROVAL: NOT GRANTED")
+        print("Storage hints never supply host paths or authorize changes.")
         print("INSTALL OR ADOPT PERMISSION: NOT GRANTED")
         print(result["note"])
     return 0

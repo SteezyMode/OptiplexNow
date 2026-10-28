@@ -184,7 +184,7 @@ class NewJellyfinSetup:
             "is mounted READ ONLY. Only loopback and Tailscale mappings "
             "are requested; their actual values are checked after startup. "
             "Network isolation still requires a real-world test. "
-            "Do not use on an existing Jellyfin server. If interrupted, DO NOT 
+            "Do not use on an existing Jellyfin server. If interrupted, DO NOT "
             "retry without inspecting the installation journal and Docker state.")
         dialog.add_button("CANCEL", Gtk.ResponseType.CANCEL)
         dialog.add_button("INSTALL ON THIS HOST", Gtk.ResponseType.OK)

@@ -14,7 +14,9 @@ import ipaddress
 import json
 import os
 from pathlib import Path
+import platform
 import pwd
+import shutil
 import re
 import socket
 import stat
@@ -52,6 +54,31 @@ def _invoke(args, *, timeout=12):
     if p.returncode or len(p.stdout) > MAX_OUTPUT:
         raise JellyfinInstallError("Local dependency failed; inspect its state")
     return p.stdout.strip()
+
+
+def _supported_os():
+    """Keep the pilot host matrix aligned with the existing Wolf installer."""
+    if platform.machine() != "x86_64":
+        return False
+    try:
+        details = Path("/etc/os-release").read_text(encoding="utf-8")[:8192]
+    except OSError:
+        return False
+    fields = {}
+    for line in details.splitlines():
+        if "=" in line:
+            k, v = line.split("=", 1)
+            if k in ("ID", "VERSION_ID"):
+                fields[k] = v.strip('"')
+    return fields.get("ID") in ("ubuntu", "pop") and fields.get("VERSION_ID") == "24.04"
+
+
+def _enough_disk():
+    try:
+        available = shutil.disk_usage(BASE if BASE.exists() else BASE.parent).free
+    except OSError:
+        return False
+    return available >= 5 * 1024**3
 
 
 def _trusted_directory(path):
@@ -117,9 +144,17 @@ def _ports_free(tail_ip):
 
 def assess(media_path, digest, uid, *, privileged=False,
            docker_report=None, tail_ip=None, compose_ready=None,
-           ports_ready=None):
+           ports_ready=None, system_ok=None, disk_ok=None):
     """Pure-ish preflight; inject runtime evidence for isolated CI tests."""
     blockers = []
+    if system_ok is None:
+        system_ok = _supported_os()
+    if not system_ok:
+        blockers.append("Supported host requires Ubuntu/Pop!_OS 24.04 amd64")
+    if disk_ok is None:
+        disk_ok = _enough_disk()
+    if not disk_ok:
+        blockers.append("At least 5 GiB free on the managed state disk is required")
     if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
         blockers.append("A verified immutable Jellyfin SHA256 image digest is required")
     try:
@@ -306,7 +341,8 @@ def main(argv=None):
             report = install(a.media_path, a.image_digest, a.owner_uid, a.confirm)
     except (OSError, ValueError, JellyfinInstallError, subprocess.TimeoutExpired):
         print(json.dumps({"tool":"now-jellyfin-clean-host","schema_version":1,
-                          "status":"refused","changes_performed":False,
+                          "status":"refused_or_interrupted",
+                          "changes_performed":"unknown" if a.install else False,
                           "note":"Review host setup and existing state before retry."}))
         return 1
     print(json.dumps(report, sort_keys=True))

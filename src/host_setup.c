@@ -63,6 +63,26 @@ static void open_owner_approvals(GtkButton *button, gpointer data)
     g_clear_error(&error);
 }
 
+/* Separate owner-only existing-Jellyfin review. No Docker, pkexec, daemon,
+ * service adoption or config write happens by merely opening this window. */
+static void open_host_videos_setup(GtkButton *button, gpointer data)
+{
+    (void)button;
+    (void)data;
+    gchar *argv[] = {"/usr/bin/python3",
+                     "/usr/lib/optiplex-now/host-media-setup.py", NULL};
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT,
+                       NULL, NULL, NULL, &error)) {
+        GtkWidget *alert = gtk_message_dialog_new(
+            NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+            "Videos host setup is not installed on this computer.");
+        gtk_dialog_run(GTK_DIALOG(alert));
+        gtk_widget_destroy(alert);
+    }
+    g_clear_error(&error);
+}
+
 static void host_ui_free(gpointer data)
 {
     HostSetupUI *ui = data;
@@ -685,6 +705,16 @@ int main(int argc, char **argv)
                        FALSE, FALSE, 0);
     g_signal_connect(ui->dependencies_button, "clicked",
                      G_CALLBACK(on_install_dependencies), ui);
+
+    /* Keep Videos adoption separate from the compact primary action row:
+     * all buttons remain usable at 720px and on older narrow displays. */
+    GtkWidget *videos_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+    gtk_box_pack_start(GTK_BOX(column), videos_row, FALSE, FALSE, 0);
+    GtkWidget *videos_setup = gtk_button_new_with_label(
+        "VIDEOS | USE EXISTING JELLYFIN...");
+    gtk_box_pack_start(GTK_BOX(videos_row), videos_setup, FALSE, FALSE, 0);
+    g_signal_connect(videos_setup, "clicked",
+                     G_CALLBACK(open_host_videos_setup), NULL);
 
     GtkWidget *advanced = gtk_expander_new(
         "ADVANCED CLEAN-HOST INSTALL | AMD / INTEL / NVIDIA PILOT");

@@ -5,6 +5,7 @@ Only probes the fixed loopback endpoint; host-bound publication and client
 reachability/authentication must be implemented separately.
 """
 import json
+import re
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -32,9 +33,14 @@ def inspect_local_jellyfin(*, opener=urlopen):
         return {"service": "jellyfin", "available": False}
     identifier = obj.get("Id")
     name = obj.get("ServerName")
-    if not isinstance(identifier, str) or not 1 <= len(identifier) <= 128:
+    # The public Jellyfin server ID is not a credential, but it binds the
+    # authenticated host declaration to the endpoint the client can actually
+    # reach. Never relay arbitrary URLs, API keys, headers or session data.
+    if not isinstance(identifier, str) or not re.fullmatch(
+            r"[A-Za-z0-9_-]{1,128}", identifier):
         return {"service": "jellyfin", "available": False}
-    result = {"service": "jellyfin", "available": True}
+    result = {"service": "jellyfin", "available": True,
+              "server_id": identifier}
     if isinstance(name, str) and 0 < len(name) <= 128:
         result["name"] = name
     return result

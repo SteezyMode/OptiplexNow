@@ -98,6 +98,25 @@ def _docker_network_gate():
     return bool(version and tuple(map(int, version.groups()[:3])) >= (28, 0, 0))
 
 
+def _owned_container(item, *, cid, image):
+    """Stop is permitted only for our exact just-created Docker identity."""
+    if not isinstance(item, dict) or item.get("Id") != cid:
+        return False
+    cfg = item.get("Config")
+    labels = cfg.get("Labels") if isinstance(cfg, dict) else None
+    return bool(isinstance(labels, dict) and cfg.get("Image") == image and
+                labels.get("com.docker.compose.project") == PROJECT and
+                labels.get("io.optiplex-now.managed") == "jellyfin-host-pilot")
+
+
+def _stop_verified_unsafe_runtime(item, *, cid, image, runner=_invoke):
+    """Contain only an owned misconfigured pilot; never stop a foreign CID."""
+    if not _owned_container(item, cid=cid, image=image):
+        return False
+    runner(["/usr/bin/docker", "stop", "--time", "10", cid], timeout=30)
+    return True
+
+
 def _expected_ports(tail_ip):
     return {("127.0.0.1", str(PORT)), (tail_ip, str(PORT))}
 
@@ -419,6 +438,11 @@ def install(media_path, digest, owner_uid, confirmation):
                 item, cid=cid, image=image, tail_ip=tail_ip,
                 media_path=media_path, owner_uid=user.pw_uid,
                 owner_gid=user.pw_gid):
+            # Unsafe public exposure cannot be left running when the exact
+            # NOW-owned container identity is known. Stop but never remove
+            # it or its volumes; unknown/foreign identity is not touched.
+            # A stop failure remains an unknown, manual-review state.
+            _stop_verified_unsafe_runtime(item, cid=cid, image=image)
             raise JellyfinInstallError(
                 "Jellyfin runtime ports, media mounts or identity not verified")
         _journal("running_media_unverified", image)

@@ -72,6 +72,12 @@ class VideosSetup:
         hint.set_line_wrap(True)
         panel.pack_start(hint, False, False, 0)
 
+        pilot = Gtk.Box(spacing=8)
+        panel.pack_end(pilot, False, False, 0)
+        fresh = Gtk.Button(label="SET UP NEW JELLYFIN ON A CLEAN HOST...")
+        fresh.connect("clicked", self.open_clean_host_setup)
+        pilot.pack_start(fresh, False, False, 0)
+
         row = Gtk.Box(spacing=8)
         panel.pack_end(row, False, False, 0)
         self.check = Gtk.Button(label="CHECK LOCAL JELLYFIN")
@@ -86,6 +92,20 @@ class VideosSetup:
         row.pack_start(close, False, False, 0)
         self.window.show_all()
         GLib.idle_add(self.review)
+
+    def open_clean_host_setup(self, *_):
+        # A separate nonprivileged window. Never start the installer from a
+        # Videos client, from review, or before deliberate human approval.
+        try:
+            subprocess.Popen(
+                [sys.executable,
+                 "/usr/lib/optiplex-now/host-jellyfin-new-ui.py"],
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL)
+        except OSError:
+            self.status.set_text(
+                "CLEAN-HOST JELLYFIN PILOT UI NOT INSTALLED. NO CHANGES MADE.")
 
     def on_destroy(self, *_):
         Gtk.main_quit()

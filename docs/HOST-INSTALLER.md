@@ -22,6 +22,12 @@ state. This is a developer-branch improvement, not a clean-host/gameplay
 acceptance claim. Docker, immutable Wolf image choice, NVIDIA driver hash,
 stream verification, client pairing and safe recovery remain separate gates.
 
+## Existing Jellyfin host review (source-only, Private Alpha Videos)
+
+The separate Server Setup window includes **VIDEOS | USE EXISTING JELLYFIN...**. The opt-in GTK window calls `host_media_adoption.py --inspect` to check only the fixed host-local Jellyfin `127.0.0.1:8096/System/Info/Public` endpoint without Docker access, configuration changes or credentials. It reports when an owner-only approved route already exists. A missing or unsafe route file is not overwritten.
+
+After a successful local Jellyfin check, the host owner may explicitly approve a *same-host* scheme, port and single short base path through a confirmation dialog. A separate unprivileged helper validates the fields with the same allowlist as the restricted host media reply and creates only `~/.config/optiplex-now/media-public-endpoint.json` at mode `0600`, refusing pre-existing files, symlinks, root execution or unsafe directories. It does **not** configure Jellyfin, Caddy, TLS, firewalls, external hostnames, libraries or accounts; client reachability and verified playback remain separate acceptance gates. This is not a managed Jellyfin installation or complete guided adoption for every host topology. To change an already approved route, manual owner review is still required; do not casually remove it to retry.
+
 ## Implemented path
 
 The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.

@@ -16,9 +16,9 @@ SIMULATED = (
     "Reading package lists...\n"
     "The following NEW packages will be installed:\n"
     "Inst containerd (1.0 Ubuntu:24.04/noble [amd64])\n"
-    "Inst docker.io (29.0 Ubuntu:24.04/noble [amd64])\n"
+    "Inst docker.io (29.1.3-0ubuntu3~24.04.2 Ubuntu:24.04/noble-updates [amd64])\n"
     "Inst docker-compose-v2 (2.40 Ubuntu:24.04/noble [amd64])\n"
-    "Conf docker.io (29.0 Ubuntu:24.04/noble [amd64])\n"
+    "Conf docker.io (29.1.3-0ubuntu3~24.04.2 Ubuntu:24.04/noble-updates [amd64])\n"
 )
 
 
@@ -42,6 +42,60 @@ class HostDependenciesTests(unittest.TestCase):
                  mock.patch.object(deps, "command", return_value=plan), \
                  self.assertRaises(deps.DependencyError):
                 deps.simulate()
+
+    def test_installer_refuses_old_or_ambiguous_apt_candidates(self):
+        good = ("28.0.0-0ubuntu2", "28.2.2-0ubuntu1",
+                "29.1.3-0ubuntu3~24.04.2", "5:29.8.2-1~ubuntu.24.04~noble")
+        bad = ("24.0.7-0ubuntu4", "27.5.1", "28.0.0~rc1",
+               "28.0.0-rc.1", "29.0", "", "nonsense")
+        for version in good:
+            with self.subTest(version=version):
+                self.assertTrue(deps.supported_docker_version(version))
+                plan = SIMULATED.replace(
+                    "29.1.3-0ubuntu3~24.04.2", version)
+                with mock.patch.object(deps, "command", return_value=plan):
+                    deps.simulate()
+        for version in bad:
+            with self.subTest(version=version):
+                self.assertFalse(deps.supported_docker_version(version))
+                plan = SIMULATED.replace(
+                    "29.1.3-0ubuntu3~24.04.2", version or "bad")
+                with mock.patch.object(deps, "command", return_value=plan), \
+                     self.assertRaises(deps.DependencyError):
+                    deps.simulate()
+        for plan in (SIMULATED.replace("Inst docker.io ", "Inst other.io "),
+                     SIMULATED + "Inst docker.io (29.1.3 extra [amd64])\\n",
+                     SIMULATED.replace(
+                         "Inst docker.io (29.1.3-0ubuntu3~24.04.2 ",
+                         "Inst docker.io (unknown ")):
+            with mock.patch.object(deps, "command", return_value=plan), \
+                 self.assertRaises(deps.DependencyError):
+                deps.simulate()
+
+    def test_installed_daemon_version_checked_after_approved_apt_install(self):
+        with mock.patch.object(deps.os, "geteuid", return_value=0), \
+             mock.patch.object(deps.os, "open", return_value=3), \
+             mock.patch.object(deps.os, "close"), \
+             mock.patch.object(deps.fcntl, "flock"), \
+             mock.patch.object(deps, "inspect",
+                               return_value={"installable": True}), \
+             mock.patch.object(deps.Path, "is_file", return_value=True), \
+             mock.patch.object(deps, "command",
+                 side_effect=["", "Docker Compose version v2.40", "27.5.1"]):
+            with self.assertRaisesRegex(deps.DependencyError, "below 28"):
+                deps.install("INSTALL-DOCKER")
+        with mock.patch.object(deps.os, "geteuid", return_value=0), \
+             mock.patch.object(deps.os, "open", return_value=3), \
+             mock.patch.object(deps.os, "close"), \
+             mock.patch.object(deps.fcntl, "flock"), \
+             mock.patch.object(deps, "inspect",
+                               return_value={"installable": True}), \
+             mock.patch.object(deps.Path, "is_file", return_value=True), \
+             mock.patch.object(deps, "command",
+                 side_effect=["", "Docker Compose version v2.40", "29.1.3"]):
+            result = deps.install("INSTALL-DOCKER")
+        self.assertEqual(result["result"], "docker_compose_ready")
+        self.assertEqual(result["engine_version"], "29.1.3")
 
     def test_existing_or_unrecognized_hosts_are_not_installable(self):
         with mock.patch.object(deps, "clean_candidate",

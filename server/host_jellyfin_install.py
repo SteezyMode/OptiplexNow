@@ -33,7 +33,7 @@ IMAGE_BASE = "jellyfin/jellyfin@sha256:"
 DIGEST = re.compile(r"[a-f0-9]{64}\Z")
 PORT = 8096
 MAX_OUTPUT = 32768
-DOCKER_VERSION = re.compile(r"(\\d+)\\.(\\d+)\\.(\\d+)(?:[-+][A-Za-z0-9_.-]+)?\\Z")
+DOCKER_VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)(?:[-+][A-Za-z0-9_.-]+)?\Z")
 STOP_PREFIXES = (Path("/etc"), Path("/root"), Path("/proc"), Path("/sys"),
                  Path("/dev"), Path("/run"), Path("/usr"), Path("/var"),
                  Path("/tmp"), Path("/boot"))

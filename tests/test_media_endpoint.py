@@ -1,12 +1,15 @@
 """Unit tests for non-privileged, local-only Jellyfin inventory."""
 import io
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sys
+from threading import Thread
 import unittest
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
+from urllib.request import Request
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "server"))
-from media_endpoint import LOOPBACK_INFO, inspect_local_jellyfin
+from media_endpoint import LOOPBACK_INFO, _local_urlopen, inspect_local_jellyfin
 
 
 class Reply:
@@ -37,6 +40,37 @@ class MediaInventoryTests(unittest.TestCase):
         self.assertNotIn("Url", result)
         self.assertNotIn("Token", result)
         self.assertEqual(result, {"service":"jellyfin","available":True,"server_id":"server"})
+
+    def test_real_local_probe_never_follows_http_redirects(self):
+        visited = []
+        class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                visited.append(self.path)
+                if self.path == "/first":
+                    self.send_response(302)
+                    self.send_header("Location", "/not-local-inventory")
+                    self.end_headers()
+                else:
+                    self.send_response(200)
+                    self.end_headers()
+                    self.wfile.write(b'{"Id":"wrong"}')
+            def log_message(self, *args):
+                pass
+
+        server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        runner = Thread(target=server.serve_forever, daemon=True)
+        runner.start()
+        try:
+            url = "http://127.0.0.1:%d/first" % server.server_port
+            with self.assertRaises(HTTPError) as cm:
+                with _local_urlopen(Request(url), timeout=2):
+                    self.fail("Redirected local probe was accepted")
+            self.assertEqual(cm.exception.code, 302)
+            self.assertEqual(visited, ["/first"])
+        finally:
+            server.shutdown()
+            server.server_close()
+            runner.join(timeout=2)
 
     def test_unavailable_or_malformed_fails_closed(self):
         for response in (b'', b'[]', b'{"ServerName":"missing-id"}',

@@ -3,7 +3,8 @@
 
 Requests availability through the existing forced-command, per-device Games
 credential. Does not accept an arbitrary media URL from the remote host.
-The destination is the selected, trusted NOW host on fixed port 8096.
+The destination remains the selected, trusted NOW host. Only the host owner
+can optionally declare a bounded scheme, port and short URL base path.
 Jellyfin sign-in remains Jellyfin's own responsibility.
 """
 import argparse
@@ -63,9 +64,27 @@ def discover(host, user, *, runner=subprocess.run, connector=http.client.HTTPCon
                                     or not re.fullmatch(
                                         r"[A-Za-z0-9_-]{1,128}", expected_id)):
         raise ValueError("Invalid authenticated Jellyfin identity")
-    conn = connector(host, 8096, timeout=4)
+    endpoint = data.get("endpoint")
+    if endpoint is not None:
+        if (not isinstance(endpoint, dict) or
+                set(endpoint) != {"scheme", "port", "base_path"} or
+                endpoint["scheme"] not in ("http", "https") or
+                type(endpoint["port"]) is not int or
+                not 1 <= endpoint["port"] <= 65535 or
+                not isinstance(endpoint["base_path"], str) or
+                not re.fullmatch(r"/(?:[A-Za-z0-9_-]{1,48})?\\Z",
+                                 endpoint["base_path"]) or
+                expected_id is None):
+            raise ValueError("Invalid host-approved Jellyfin endpoint")
+    else:
+        endpoint = {"scheme": "http", "port": 8096, "base_path": "/"}
+    if endpoint["scheme"] == "https":
+        conn = http.client.HTTPSConnection(host, endpoint["port"], timeout=4)
+    else:
+        conn = connector(host, endpoint["port"], timeout=4)
+    path = endpoint["base_path"].rstrip("/") + "/System/Info/Public"
     try:
-        conn.request("GET", "/System/Info/Public", headers={"Accept":"application/json"})
+        conn.request("GET", path, headers={"Accept":"application/json"})
         result = conn.getresponse()
         if result.status != 200:
             raise ValueError("Jellyfin is not reachable")
@@ -80,7 +99,7 @@ def discover(host, user, *, runner=subprocess.run, connector=http.client.HTTPCon
             raise ValueError("Jellyfin server differs from authorized host")
     finally:
         conn.close()
-    return True
+    return endpoint if data.get("endpoint") is not None else {"legacy": True}
 
 
 def main():
@@ -89,12 +108,16 @@ def main():
     p.add_argument("user")
     args = p.parse_args()
     try:
-        discover(args.host, args.user)
+        selected = discover(args.host, args.user)
     except (OSError, ValueError, subprocess.TimeoutExpired, KeyError,
             TypeError, json.JSONDecodeError):
         print("unavailable")
         return 1
-    print("available")
+    if selected.get("legacy"):
+        print("available")
+    else:
+        # Finite validated output consumed by the native GTK launcher.
+        print("available|{scheme}|{port}|{base_path}".format(**selected))
     return 0
 
 

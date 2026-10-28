@@ -66,9 +66,11 @@ class NewJellyfinSetup:
         panel.pack_start(self.status, False, False, 0)
         self.info = Gtk.Label(label=(
             "This installs into a separate NOW Jellyfin pilot project. "
-            "Only 127.0.0.1:8096 and the host's Tailscale IPv4:8096 "
-            "will be published; it will not open public ports or configure "
-            "Caddy. Jellyfin account setup happens separately afterward. "
+            "Requires Docker Engine 28+ because older versions have known "
+            "localhost port exposure risks. NOW requests port mappings only "
+            "to loopback and this host's Tailscale IPv4, but Docker routing "
+            "and real LAN exposure still require physical verification. "
+            "No Caddy configuration is changed. "
             "A failed or interrupted install requires manual review."))
         self.info.set_xalign(0)
         self.info.set_line_wrap(True)
@@ -179,8 +181,10 @@ class NewJellyfinSetup:
         dialog.format_secondary_text(
             "This pulls the exact approved Jellyfin image and creates new "
             "persistent private NOW Jellyfin state. The chosen media directory "
-            "is mounted READ ONLY. Only loopback and Tailscale will be bound. "
-            "Do not use on an existing Jellyfin server. If interrupted, DO NOT "
+            "is mounted READ ONLY. Only loopback and Tailscale mappings "
+            "are requested; their actual values are checked after startup. "
+            "Network isolation still requires a real-world test. "
+            "Do not use on an existing Jellyfin server. If interrupted, DO NOT 
             "retry without inspecting the installation journal and Docker state.")
         dialog.add_button("CANCEL", Gtk.ResponseType.CANCEL)
         dialog.add_button("INSTALL ON THIS HOST", Gtk.ResponseType.OK)

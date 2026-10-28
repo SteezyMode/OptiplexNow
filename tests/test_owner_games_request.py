@@ -74,11 +74,13 @@ class TrustedGamesGateTests(unittest.TestCase):
         from unittest.mock import patch
         with patch("owner_games_request.inspect_local_jellyfin",
                    return_value={"service": "jellyfin",
-                                 "available": True, "name": "OptiPlex"}):
+                                 "available": True, "name": "OptiPlex",
+                                 "server_id": "approved-jellyfin"}):
             result = self.call("media")
             self.assertEqual(result,
                              {"success": True, "service": "jellyfin",
-                              "available": True, "name": "OptiPlex"})
+                              "available": True, "name": "OptiPlex",
+                              "server_id": "approved-jellyfin"})
             self.assertTrue(all(method == "GET" for method, _, _ in self.api.calls))
             with self.assertRaises(PolicyError):
                 self.call("media", client="99999999")

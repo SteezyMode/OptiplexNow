@@ -30,7 +30,7 @@ shutil.copy2(root/'src/ssh-authorize.py',pkg/'usr/lib/optiplex-now/ssh-authorize
 # Read-only host diagnostics and GTK review; no server installer or privileges.
 shutil.copy2(root/'build/now-host-setup',pkg/'usr/lib/optiplex-now/now-host-setup')
 (pkg/'usr/lib/optiplex-now/now-host-setup').chmod(0o755)
-for host_module in ('host_preflight.py', 'host_plan.py', 'host_services.py', 'host_adoption.py', 'host_stage.py', 'host_install.py', 'host_nvidia.py', 'host_games_readiness.py', 'host_dependencies.py', 'host_media_adoption.py', 'media_endpoint.py'):
+for host_module in ('host_preflight.py', 'host_plan.py', 'host_services.py', 'host_storage_review.py', 'host_adoption.py', 'host_stage.py', 'host_install.py', 'host_nvidia.py', 'host_games_readiness.py', 'host_dependencies.py', 'host_media_adoption.py', 'media_endpoint.py'):
  shutil.copy2(root/'server'/host_module,pkg/'usr/lib/optiplex-now'/host_module)
 shutil.copy2(root/'server/nvidia-driver.Dockerfile', pkg/'usr/lib/optiplex-now/nvidia-driver.Dockerfile')
 shutil.copy2(root/'server/LICENSE-nvidia-driver-upstream.txt', pkg/'usr/share/doc/optiplex-now/LICENSE-nvidia-driver-upstream.txt')

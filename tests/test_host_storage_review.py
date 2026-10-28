@@ -101,7 +101,7 @@ class StorageReviewTests(unittest.TestCase):
         self.check_no_leak(recs, storage.NO_MOUNTS)
 
     def test_host_review_uses_one_census_without_returning_paths(self):
-        from test_host_services import fake_docker, record as fixture
+        from test_host_services import record as fixture
         a, b, c, d = ("a" * 64, "b" * 64, "c" * 64, "d" * 64)
         records = [
             fixture(a, "ghcr.io/games-on-whales/wolf:stable"),
@@ -110,9 +110,11 @@ class StorageReviewTests(unittest.TestCase):
             fixture(d, "lscr.io/linuxserver/qbittorrent:5",
                     mode="container:vpnn", name="/qbit"),
         ]
-        # The old fixture already has a shared /private/home/media bind.
+        # The old fixture shares a host source but leaves Type unspecified.
+        # Real docker inspect marks host-path mounts explicitly as bind.
+        for item in records:
+            item["Mounts"][0]["Type"] = "bind"
         invoked = []
-        real_assess = host_services.assess
         def census():
             invoked.append(1)
             return records

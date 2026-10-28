@@ -42,6 +42,7 @@ class CleanJellyfinInstallTests(unittest.TestCase):
             "uid":self.uid, "privileged":True,
             "docker_report":self.report, "tail_ip":self.tail,
             "compose_ready":True, "ports_ready":True,
+            "system_ok":True, "disk_ok":True,
         }
         params.update(overrides)
         return installer.assess(**params)
@@ -56,6 +57,8 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         self.assertFalse(installer.WORKSPACE.exists())
         self.assertEqual(self.candidate(privileged=False)["status"], "blocked")
         self.assertEqual(self.candidate(compose_ready=False)["status"], "blocked")
+        self.assertEqual(self.candidate(system_ok=False)["status"], "blocked")
+        self.assertEqual(self.candidate(disk_ok=False)["status"], "blocked")
         self.assertEqual(self.candidate(ports_ready=False)["status"], "blocked")
         self.assertEqual(self.candidate(digest="latest")["status"], "blocked")
         self.assertEqual(self.candidate(tail_ip="192.168.1.2")["status"], "blocked")
@@ -142,6 +145,8 @@ class CleanJellyfinInstallTests(unittest.TestCase):
         self.assertIn("INSTALL ON THIS HOST", gui)
         self.assertIn("INSTALL-JELLYFIN", gui)
         self.assertIn("PKEXEC_UID", installer_source)
+        self.assertIn("refused_or_interrupted", installer_source)
+        self.assertIn('VERSION_ID") == "24.04"', installer_source)
         self.assertIn("--no-recreate", installer_source)
         self.assertIn("host_jellyfin_install.py", package)
         self.assertNotIn("docker compose down", installer_source.lower())

@@ -116,6 +116,23 @@ class SearchClientTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.payload(response=response)
 
+    def test_leechers_eighth_field_and_incremental_append(self):
+        response={"success":True,"service":"qbittorrent","status":"Running",
+                  "partial":True,"total":35,"append":True,
+                  "results":[{"name":"Film 1080p","bytes":4500000000,
+                              "seeders":20,"leechers":4,
+                              "published":1730000000,
+                              "can_add":True,"magnet":MAGNET}]}
+        output=self.payload(response=response)
+        self.assertTrue(output.startswith("APPEND\\t1\\t35\\n"))
+        self.assertTrue(output.endswith("\\t1730000000\\t4"))
+        response["results"][0]["leechers"]="4"
+        with self.assertRaises(ValueError):
+            self.payload(response=response)
+        response["results"][0]["leechers"]=-1
+        output=self.payload(response=response)
+        self.assertTrue(output.endswith("\\t-1"))
+
     def test_100_results_pass_as_one_bounded_payload_for_gtk_paging(self):
         entries=[{"name":f"Linux ISO {i}","bytes":1000+i,
                   "seeders":i,"can_add":True,"magnet":MAGNET}

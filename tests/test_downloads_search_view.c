@@ -93,15 +93,17 @@ static void test_sort_and_stream(void){
  GtkWidget *name=find_named(view,"nowsearchheader_name");
  GtkWidget *size=find_named(view,"nowsearchheader_size");
  GtkWidget *seeds=find_named(view,"nowsearchheader_seeds");
+ GtkWidget *leechers=find_named(view,"nowsearchheader_leechers");
  GtkWidget *published=find_named(view,"nowsearchheader_published");
  g_assert_nonnull(list);
  g_assert_nonnull(name);g_assert_nonnull(size);
- g_assert_nonnull(seeds);g_assert_nonnull(published);
+ g_assert_nonnull(seeds);g_assert_nonnull(leechers);
+ g_assert_nonnull(published);
  g_assert_true(now_downloads_search_view_update(view,
    "SEARCH\t1\t35\n"
-   "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\n"
-   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\t1727740800\n"
-   "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1"));
+   "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\t60\n"
+   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\t1727740800\t12\n"
+   "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1\t-1"));
  while(gtk_events_pending())gtk_main_iteration();
  /* Size ascending is the default; click the same heading to reverse. */
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
@@ -114,6 +116,10 @@ static void test_sort_and_stream(void){
  g_assert_cmpstr(first_result_title(list),==,"2160p huge");
  g_signal_emit_by_name(seeds,"clicked");
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ g_signal_emit_by_name(leechers,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ g_signal_emit_by_name(leechers,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
  /* Publish date defaults newest and flips oldest. Unknown is always last. */
  g_signal_emit_by_name(published,"clicked");
  g_assert_cmpstr(first_result_title(list),==,"2160p huge");
@@ -123,13 +129,14 @@ static void test_sort_and_stream(void){
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
  g_signal_emit_by_name(name,"clicked");
  g_assert_cmpstr(first_result_title(list),==,"Unknown size");
- /* Second search snapshot adds later results without another search click. */
+ /* The later APPEND frame delivers only new rows from the same job. */
  g_assert_true(now_downloads_search_view_update(view,
-   "SEARCH\t0\t4\n"
-   "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\n"
-   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\t1727740800\n"
-   "RESULT\t2000000000\t14\t0\t720p release\t-\t1710000000\n"
-   "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1"));
+   "APPEND\t0\t4\n"
+   "RESULT\t2000000000\t14\t0\t720p release\t-\t1710000000\t7"));
+ g_assert_cmpuint(visible_rows(list),==,4);
+ g_assert_cmpstr(first_result_title(list),==,"Unknown size");
+ /* An empty completion frame must retain all accumulated rows. */
+ g_assert_true(now_downloads_search_view_update(view,"APPEND\t0\t4"));
  g_assert_cmpuint(visible_rows(list),==,4);
  /* Old 6-field host responses remain valid. */
  g_assert_true(now_downloads_search_view_update(view,
@@ -154,6 +161,8 @@ static void test_reject(void){
    "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\n",
    "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\tbad",
    "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\t253402300800",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\t100\t-2",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\t100\tbad",
    NULL
  };
  for(guint i=0;bad[i];i++)

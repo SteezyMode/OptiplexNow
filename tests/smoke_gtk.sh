@@ -65,6 +65,10 @@ xvfb-run -a dbus-run-session -- bash -c '
     sleep .2
   done
   echo "First-run setup wizard did not appear within 10 seconds" >&2
+  echo "X11 window tree at timeout:" >&2
+  xwininfo -root -tree >&2 || true
+  echo "Fresh configuration files:" >&2
+  find "$XDG_CONFIG_HOME" -maxdepth 3 -type f -printf "%P\\n" >&2 || true
   tail -40 "$1/stderr.log" >&2 || true
   exit 1
 ' bash "$tmp"

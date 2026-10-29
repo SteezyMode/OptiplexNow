@@ -37,7 +37,8 @@ class InventoryTests(unittest.TestCase):
                           mode="container:" + VPN_ID)]
         result = mod.inspect_download_topology(runner=runner(records))
         self.assertEqual(result["downloaders"], [{
-            "service": "qbittorrent", "gateway_bound": True,
+            "service": "qbittorrent", "vpn_provider": "other",
+            "gateway_bound": True,
             "gateway_healthy": True, "vpn_egress_verified": False,
             "killswitch_verified": False}])
         self.assertNotIn("Id", str(result))

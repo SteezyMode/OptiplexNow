@@ -301,7 +301,7 @@ static void stream_line(GObject *source,GAsyncResult *res,gpointer data){
    g_subprocess_wait_async(job->proc,NULL,stream_finished,job);
    return;
  }
- if(size>0 && size<=245000 && g_str_has_prefix(line,"SNAPSHOT\\t")){
+ if(size>0 && size<=245000 && g_str_has_prefix(line,"SNAPSHOT\t")){
    gsize bytes=0;
    guchar *raw=g_base64_decode(line+9,&bytes);
    if(bytes>0 && bytes<=MAX_WIRE && !memchr(raw,0,bytes)){

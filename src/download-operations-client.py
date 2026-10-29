@@ -104,7 +104,7 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
                 not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",path)):
             raise ValueError("Invalid torrent operation")
         request.update(operation=root,torrent_hash=path.lower())
-    elif action!="roots":
+    elif action not in ("roots","vpn"):
         if not isinstance(root,str) or not ROOT.fullmatch(root):
             raise ValueError("Invalid library root")
         request.update(root=root,relative=relative(path))

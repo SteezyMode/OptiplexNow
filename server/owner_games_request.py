@@ -17,7 +17,7 @@ from media_endpoint import inspect_local_jellyfin
 from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
 from download_manage import manage_torrent, checked_hash, OPERATIONS
-from download_search import search_once, checked_query, checked_magnet
+from download_search import search_once, stream_search, checked_query, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
                                    add_magnet as enqueue_download, _relative, ROOT_ID)
 
@@ -35,6 +35,8 @@ def _validated_request(request):
         # Explicit opt-in only; older clients continue to send query alone.
         if "full" in request:
             fields.add("full")
+        if "stream" in request:
+            fields.add("stream")
     elif action == "downloads_manage":
         fields.update(("operation", "torrent_hash"))
     elif action == "downloads_browse":
@@ -50,6 +52,9 @@ def _validated_request(request):
             checked_query(request["query"])
             if "full" in request and type(request["full"]) is not bool:
                 raise PolicyError("Invalid search depth")
+            if "stream" in request and (request["stream"] is not True
+                    or "full" in request):
+                raise PolicyError("Invalid search stream")
         elif action == "downloads_manage":
             if (not isinstance(request["operation"], str) or
                     request["operation"] not in OPERATIONS):
@@ -69,7 +74,7 @@ def _validated_request(request):
 
 def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                                host_video_caps=None, host_approved=False,
-                               host_writer_check=None):
+                               host_writer_check=None, search_emitter=None):
     """Handle one narrow request from a *separately authenticated* host caller.
 
     verified_client_id MUST be bound to the requesting credential by trusted
@@ -122,8 +127,17 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
 
     if action == "downloads_search":
         try:
-            # Only enabled, pre-existing qBittorrent plugins. No add/delete,
-            # custom endpoint, file path or plugin install accepted.
+            # Same restricted owner binding and existing enabled plugins.
+            # Streaming is only available to a trusted forced-command
+            # transport with a host-provided callback.
+            if request.get("stream") is True:
+                if not callable(search_emitter):
+                    raise PolicyError("Search stream not supported")
+                def authorized_emit(snapshot):
+                    search_emitter({"success": True, "service": "qbittorrent",
+                                    **snapshot})
+                stream_search(request["query"], authorized_emit)
+                return None
             return {"success": True, "service": "qbittorrent",
                     **search_once(request["query"], full=request.get("full", False))}
         except InventoryError:

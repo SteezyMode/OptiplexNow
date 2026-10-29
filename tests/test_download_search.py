@@ -63,7 +63,7 @@ class FakeAPI:
             assert "--post-data=id=42" in command
             out = b""
         else:
-            assert command[-1].endswith("/results?id=42&limit=50&offset=0")
+            assert command[-1].endswith("/results?id=42&limit=20&offset=0")
             if self.fail_get:
                 return subprocess.CompletedProcess(command, 1, b"Internal Error", b"")
             out = json.dumps(self.result).encode()
@@ -114,7 +114,7 @@ class DownloadSearchTests(unittest.TestCase):
             {"status":"Stopped","total":0,"results":[{"fileName":"a",
              "fileSize":1,"nbSeeders":False,"fileUrl":MAGNET}]},
             {"status":"Stopped","total":0,"results":[{"fileName":"a",
-             "fileSize":1,"nbSeeders":2,"fileUrl":MAGNET}]*51},
+             "fileSize":1,"nbSeeders":2,"fileUrl":MAGNET}]*21},
         ]
         for result in invalid:
             fake=FakeAPI(result=result)

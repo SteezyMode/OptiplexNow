@@ -140,7 +140,7 @@ def stream_fetch(host, user, query, *, popen=subprocess.Popen):
         proc.stdin.write(request)
         proc.stdin.close()
         for line in proc.stdout:
-            if len(line)>MAX_RESPONSE or count>=14:
+            if len(line)>MAX_RESPONSE or count>=42:
                 raise ValueError("Oversized search stream")
             try:
                 frame=json.loads(line)

@@ -1,3 +1,11 @@
+## October 29 — Search scroll while progressive results arrive (PR #222; pending physical verification)
+
+**User-observed defect in v1.21.6:** Search is functional and the host now returns progressive plugin results, but only the first 20 results are visible. Previous/Next pagination controls at the bottom of the viewport do not provide the expected scrolling-through-results behavior. Videos embedded playback also reportedly fails; browser playback is the existing fallback and this secondary issue is not asserted fixed by this patch.
+
+**Focused client fix:** Remove explicit 20-row page hiding/pager; keep *all* validated accumulated results (up to 1,000) in the existing vertically expanding native GTK scroll window. Maintain sortable Name/Size/Seeders/Leechers/Published headers. Later APPEND frames keep the scroll position (except clamping to normal bounds); an explicit new sort returns to the top. Existing magnet-only action and destination authorization, qBittorrent plugins, VPN, host broker and refresh behavior are untouched.
+
+**Evidence needed:** updated Xvfb GTK regression covers 100 initially visible results, scrolling, 25 appended results, completed stream and sorting. Re-run package, source and sanitizers CI; then check MacBook physical search. No back-end update or host restart needed for this UI-only release.
+
 ## October 29 — Videos and Downloads native button styling consistency (PR #221)
 
 **Observed issue:** On a working v1.21.5 owner client, Videos OPEN and some native Downloads buttons rendered bright white stock GTK controls rather than NOW's existing charcoal-and-coral theme. **User physically confirmed Downloads Search works after the unified host package update**, so this issue is strictly visual and does not call for search protocol or server changes.

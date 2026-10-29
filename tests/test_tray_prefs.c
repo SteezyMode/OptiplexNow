@@ -76,6 +76,18 @@ int main(void)
     now_tray_order_load(order);
     EXPECT(same_order(order, reversed));
 
+    /* Videos tray routing is a local preference; legacy default is browser. */
+    EXPECT(now_tray_videos_open_in_app() == 0);
+    EXPECT(now_tray_videos_set_open_in_app(1) == 1);
+    EXPECT(now_tray_videos_open_in_app() == 1);
+    snprintf(path, sizeof path, "%s/videos-tray-target", config);
+    EXPECT(stat(path, &st) == 0);
+    EXPECT((st.st_mode & 077) == 0);
+    EXPECT(now_tray_videos_set_open_in_app(0) == 1);
+    EXPECT(now_tray_videos_open_in_app() == 0);
+    EXPECT(now_tray_videos_set_open_in_app(1) == 1);
+    EXPECT(now_tray_videos_open_in_app() == 1);
+
     char caption[128];
     now_tray_desktop_caption(caption, sizeof caption);
     EXPECT(strcmp(caption, "XFCE") == 0);
@@ -98,6 +110,8 @@ int main(void)
 
     passed = 1;
 cleanup:
+    snprintf(path, sizeof path, "%s/videos-tray-target", config);
+    unlink(path);
     snprintf(path, sizeof path, "%s/tray-order", config);
     unlink(path);
     snprintf(path, sizeof path, "%s/optiplex-desk/desktop-label", legacy);

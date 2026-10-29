@@ -32,7 +32,8 @@ static guint visible_rows(GtkWidget *list){
  return visible;
 }
 static void test_mapped_full_results(void){
- /* Live regression: 100 results; 20 per page in a mapped GTK window. */
+ /* 100 rows remain visible and scrollable; later APPEND rows join the same
+  * list without a page switch or resetting the reader to the top. */
  GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
  GtkWidget *view=now_downloads_search_view_new();
  gtk_window_set_default_size(GTK_WINDOW(window),860,650);
@@ -44,32 +45,42 @@ static void test_mapped_full_results(void){
       "\nRESULT\t%u\t%u\t0\tLinux release %02d\t-",
       (unsigned)(i+1000),(unsigned)(i+1),i);
  GtkWidget *list=find_named(view,"nowsearchlist");
+ GtkWidget *scroller=find_named(view,"nowsearchresults");
  g_assert_nonnull(list);
- for(int i=0;i<3;i++){
-   g_assert_true(now_downloads_search_view_update(view,wire->str));
-   while(gtk_events_pending())gtk_main_iteration();
-   g_assert_cmpuint(visible_rows(list),==,20);
-   GtkWidget *scroller=find_named(view,"nowsearchresults");
-   g_assert_nonnull(scroller);
-   g_assert_cmpint(gtk_widget_get_allocated_height(scroller),>,320);
-   GList *controls=gtk_container_get_children(GTK_CONTAINER(view));
-   GtkWidget *pager=g_list_last(controls)->data;
-   g_list_free(controls);
-   GList *buttons=gtk_container_get_children(GTK_CONTAINER(pager));
-   GtkWidget *next=g_list_last(buttons)->data;
-   GtkWidget *previous=buttons->data;
-   g_list_free(buttons);
-   g_assert_true(gtk_widget_get_sensitive(next));
-   for(int page=0;page<4;page++){
-     g_signal_emit_by_name(next,"clicked");
-     g_assert_cmpuint(visible_rows(list),==,20);
-   }
-   g_assert_false(gtk_widget_get_sensitive(next));
-   g_assert_true(gtk_widget_get_sensitive(previous));
-   g_signal_emit_by_name(previous,"clicked");
-   g_assert_true(gtk_widget_get_sensitive(next));
- }
+ g_assert_nonnull(scroller);
+ g_assert_true(now_downloads_search_view_update(view,wire->str));
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpuint(visible_rows(list),==,100);
+ g_assert_cmpint(gtk_widget_get_allocated_height(scroller),>,320);
+ GtkAdjustment *adjustment=gtk_scrolled_window_get_vadjustment(
+    GTK_SCROLLED_WINDOW(scroller));
+ g_assert_nonnull(adjustment);
+ g_assert_cmpfloat(gtk_adjustment_get_upper(adjustment),>,
+                   gtk_adjustment_get_page_size(adjustment));
+ gtk_adjustment_set_value(adjustment,500);
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpfloat(gtk_adjustment_get_value(adjustment),>,0);
+
+ GString *extra=g_string_new("APPEND\t1\t125");
+ for(int i=100;i<125;i++)
+   g_string_append_printf(extra,
+      "\nRESULT\t%u\t%u\t0\tLinux release %02d\t-",
+      (unsigned)(i+1000),(unsigned)(i+1),i);
+ g_assert_true(now_downloads_search_view_update(view,extra->str));
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpuint(visible_rows(list),==,125);
+ g_assert_cmpfloat(gtk_adjustment_get_value(adjustment),>,0);
+
+ /* Even after stream completion, no rows vanish or require pagination. */
+ g_assert_true(now_downloads_search_view_update(view,"APPEND\t0\t125"));
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpuint(visible_rows(list),==,125);
+ gtk_adjustment_set_value(adjustment,gtk_adjustment_get_upper(adjustment));
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpfloat(gtk_adjustment_get_value(adjustment),>,0);
+
  g_string_free(wire,TRUE);
+ g_string_free(extra,TRUE);
  gtk_widget_destroy(window);
 }
 /* Regression: sorting stays available while progressive snapshots arrive. */

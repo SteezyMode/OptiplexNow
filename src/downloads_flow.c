@@ -20,6 +20,8 @@ static gchar *approved_web_url;
 static GtkWidget *queue_stack;
 static GtkWidget *view_holder;
 static GtkWidget *status_label;
+static GtkWidget *vpn_button,*vpn_detail,*vpn_checked,*vpn_account;
+static gboolean vpn_inflight;
 static GtkWidget *webview;
 static gchar *loaded_url;
 static gboolean running;
@@ -72,6 +74,104 @@ static char *helper_path(void){
  }else path=g_strdup("/usr/lib/optiplex-now/download-queue-client.py");
  g_free(exe);g_free(bin);g_free(usr);g_free(name);
  return path;
+}
+/* A read-only, owner-authorized Gluetun health/status snapshot.
+ * Never label the connection "leak-proof": a healthcheck is not an outage test.
+ * No container identifiers, credentials or raw network topology reach GTK. */
+typedef struct {
+ GSubprocess *proc;
+ gchar *host,*user;
+} VpnJob;
+static void vpn_set_status(const char *label,const char *description,
+                           const char *last_checked,gboolean airvpn){
+ if(!vpn_button)return;
+ gtk_button_set_label(GTK_BUTTON(vpn_button),label);
+ gtk_label_set_text(GTK_LABEL(vpn_detail),description);
+ gtk_label_set_text(GTK_LABEL(vpn_checked),last_checked);
+ if(vpn_account){
+   if(airvpn)gtk_widget_show(vpn_account);
+   else gtk_widget_hide(vpn_account);
+ }
+}
+static void vpn_finished(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
+ VpnJob *job=data;
+ gchar *output=NULL;
+ GError *error=NULL;
+ gboolean communicated=g_subprocess_communicate_utf8_finish(
+   job->proc,res,&output,NULL,&error);
+ if(!g_strcmp0(last_host,job->host) &&
+    !g_strcmp0(last_user,job->user)){
+   gboolean valid=communicated && g_subprocess_get_successful(job->proc) &&
+                  output && strlen(output)<128;
+   gchar **fields=valid?g_strsplit(g_strchomp(output),"\\t",-1):NULL;
+   valid=fields && g_strv_length(fields)==3 &&
+         !strcmp(fields[0],"VPN") &&
+         (!strcmp(fields[1],"HEALTHY") || !strcmp(fields[1],"UNVERIFIED")) &&
+         (!strcmp(fields[2],"airvpn") || !strcmp(fields[2],"other"));
+   if(valid){
+     gboolean healthy=!strcmp(fields[1],"HEALTHY");
+     gboolean airvpn=!strcmp(fields[2],"airvpn");
+     GDateTime *now=g_date_time_new_now_local();
+     gchar *clock=g_date_time_format(now,"Last checked at %H:%M");
+     vpn_set_status(healthy?"VPN: HEALTHY":"VPN: UNVERIFIED",
+       healthy?"Gluetun is healthy and qBittorrent shares its network.\\n"
+               "This is not continuous egress or kill-switch verification.":
+               "The VPN-bound downloader could not be confirmed healthy.\\n"
+               "Do not assume downloads are protected.",
+       clock,airvpn);
+     g_free(clock);g_date_time_unref(now);
+   }else{
+     vpn_set_status("VPN: UNKNOWN","VPN status unavailable.\\n"
+                    "Do not assume downloads are protected.",
+                    "Last check failed",FALSE);
+   }
+   g_strfreev(fields);
+ }
+ vpn_inflight=FALSE;
+ g_clear_error(&error);
+ g_free(output);
+ g_object_unref(job->proc);
+ g_free(job->host);g_free(job->user);g_free(job);
+}
+static void vpn_refresh(void){
+ if(vpn_inflight || !vpn_button || !last_host || !last_user ||
+    !now_valid_host(last_host) || !now_valid_user(last_user) ||
+    !owner_device_key_exists())return;
+ gchar *queue_helper=helper_path();
+ gchar *parent=g_path_get_dirname(queue_helper);
+ gchar *operations_helper=g_build_filename(parent,"download-operations-client.py",NULL);
+ gboolean exists=g_file_test(operations_helper,G_FILE_TEST_IS_REGULAR);
+ if(exists){
+   const gchar *argv[]={"/usr/bin/python3",operations_helper,last_host,last_user,
+                        "vpn",NULL};
+   GError *error=NULL;
+   GSubprocess *proc=g_subprocess_newv(
+        argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+   if(proc){
+     VpnJob *job=g_new0(VpnJob,1);
+     job->proc=proc;job->host=g_strdup(last_host);job->user=g_strdup(last_user);
+     vpn_inflight=TRUE;
+     g_subprocess_communicate_utf8_async(proc,NULL,NULL,vpn_finished,job);
+   }
+   g_clear_error(&error);
+ }
+ g_free(operations_helper);g_free(parent);g_free(queue_helper);
+}
+static gboolean vpn_poll(gpointer unused){
+ (void)unused;
+ if(queue_stack && gtk_widget_get_mapped(queue_stack))vpn_refresh();
+ return G_SOURCE_CONTINUE;
+}
+static void on_vpn_clicked(GtkButton *button,gpointer data){
+ (void)data;
+ GtkWidget *popover=g_object_get_data(G_OBJECT(button),"now-vpn-popover");
+ if(popover)gtk_widget_show_all(popover);
+ if(vpn_account && !gtk_widget_get_visible(vpn_account)){
+   /* Keep the account link hidden unless the host identified AirVPN. */
+   gtk_widget_hide(vpn_account);
+ }
+ vpn_refresh();
 }
 static void complete(GObject *source,GAsyncResult *res,gpointer data){
  (void)source;
@@ -304,6 +404,7 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
    g_free(operations_helper);g_free(search_helper);
    g_free(parent);g_free(queue_helper);
  }
+ vpn_refresh();
  if(same && webview && loaded_url &&
     now_downloads_webview_url_allowed(loaded_url,host)){
    /* Keep the WebKit session alive but show the native queue on entry. */
@@ -370,6 +471,32 @@ GtkWidget *now_downloads_page(void){
  GtkWidget *title=gtk_label_new("DOWNLOADS");
  gtk_label_set_xalign(GTK_LABEL(title),0);
  gtk_box_pack_start(GTK_BOX(toolbar),title,TRUE,TRUE,0);
+ vpn_button=gtk_button_new_with_label("VPN: UNKNOWN");
+ gtk_widget_set_name(vpn_button,"vpnstatus");
+ gtk_widget_set_tooltip_text(vpn_button,
+     "Gluetun health on the approved download host; click for details");
+ gtk_box_pack_end(GTK_BOX(toolbar),vpn_button,FALSE,FALSE,0);
+ GtkWidget *popover=gtk_popover_new(vpn_button);
+ GtkWidget *panel=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ gtk_container_set_border_width(GTK_CONTAINER(panel),12);
+ vpn_detail=gtk_label_new("VPN status not checked.");
+ gtk_label_set_line_wrap(GTK_LABEL(vpn_detail),TRUE);
+ gtk_label_set_xalign(GTK_LABEL(vpn_detail),0);
+ gtk_box_pack_start(GTK_BOX(panel),vpn_detail,FALSE,FALSE,0);
+ vpn_checked=gtk_label_new("No verification yet.");
+ gtk_label_set_xalign(GTK_LABEL(vpn_checked),0);
+ gtk_box_pack_start(GTK_BOX(panel),vpn_checked,FALSE,FALSE,0);
+ vpn_account=gtk_link_button_new_with_label(
+     "https://airvpn.org/client/","AIRVPN ACCOUNT (EXTERNAL)");
+ gtk_widget_set_halign(vpn_account,GTK_ALIGN_START);
+ gtk_widget_set_no_show_all(vpn_account,TRUE);
+ gtk_widget_hide(vpn_account);
+ gtk_box_pack_start(GTK_BOX(panel),vpn_account,FALSE,FALSE,0);
+ gtk_container_add(GTK_CONTAINER(popover),panel);
+ g_object_set_data_full(G_OBJECT(vpn_button),"now-vpn-popover",
+                        g_object_ref_sink(popover),g_object_unref);
+ g_signal_connect(vpn_button,"clicked",G_CALLBACK(on_vpn_clicked),NULL);
+ g_timeout_add_seconds(60,vpn_poll,NULL);
  GtkWidget *refresh=gtk_button_new_with_label("REFRESH");
  gtk_box_pack_start(GTK_BOX(toolbar),refresh,FALSE,FALSE,0);
  /* Refresh uses only the already-paired host and SSH user. */

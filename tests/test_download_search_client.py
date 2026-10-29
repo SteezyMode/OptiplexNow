@@ -71,7 +71,7 @@ class SearchClientTests(unittest.TestCase):
             def __init__(self):
                 self.stdin=io.BytesIO()
                 self.stdout=io.BytesIO(
-                    (json.dumps(response)+"\\n"+json.dumps(second)+"\\n").encode())
+                    (json.dumps(response)+"\n"+json.dumps(second)+"\n").encode())
                 self.returncode=None
             def wait(self,timeout=0):
                 self.returncode=0
@@ -95,8 +95,8 @@ class SearchClientTests(unittest.TestCase):
         self.assertEqual(len(frames),3)
         self.assertEqual(frames[-1],"DONE")
         import base64
-        first=base64.b64decode(frames[0].split("\\t",1)[1]).decode()
-        final=base64.b64decode(frames[1].split("\\t",1)[1]).decode()
+        first=base64.b64decode(frames[0].split("\t",1)[1]).decode()
+        final=base64.b64decode(frames[1].split("\t",1)[1]).decode()
         self.assertIn("Big",first)
         self.assertNotIn("Small",first)
         self.assertIn("Small",final)

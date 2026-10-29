@@ -9,10 +9,10 @@
 #define PAGE_SIZE 20
 #define MAX_WIRE 180000
 typedef struct {
- GtkWidget *entry,*button,*more,*headers[4],*status,*list,*results,*pager,*previous,*next,*page_label;
+ GtkWidget *entry,*button,*headers[4],*status,*list,*results,*pager,*previous,*next,*page_label;
  guint result_count,page,sort_column;
  gboolean ascending;
- gchar *host,*user,*helper,*last_query;
+ gchar *host,*user,*helper;
  NowDownloadsMagnetSelected on_select;
  gpointer select_data;
  gboolean running,partial;
@@ -20,8 +20,9 @@ typedef struct {
 typedef struct {
  GtkWidget *view;
  GSubprocess *proc;
+ GDataInputStream *reader;
  gchar *host,*user;
- gboolean full;
+ gboolean done,invalid,got_frame;
 } SearchJob;
 
 static SearchView *state(GtkWidget *view){
@@ -29,7 +30,7 @@ static SearchView *state(GtkWidget *view){
 }
 static void free_state(gpointer data){
  SearchView *s=data;
- g_free(s->host);g_free(s->user);g_free(s->helper);g_free(s->last_query);g_free(s);
+ g_free(s->host);g_free(s->user);g_free(s->helper);g_free(s);
 }
 /* Sort the retrieved search batch, not just the visible page. Unknown
  * numeric values always go last in either direction. */
@@ -117,7 +118,6 @@ static void next_page(GtkButton *unused,gpointer data){
 static void clear_results(SearchView *s){
  if(!s)return;
  s->result_count=0;s->page=0;s->partial=FALSE;
- if(s->more)gtk_widget_hide(s->more);
  if(s->pager)gtk_widget_hide(s->pager);
  GList *items=gtk_container_get_children(GTK_CONTAINER(s->list));
  for(GList *item=items;item;item=item->next)
@@ -227,17 +227,13 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  s->result_count=count;
  s->page=0;s->partial=partial!=0;
  gtk_list_box_invalidate_sort(GTK_LIST_BOX(s->list));
- if(s->more){
-   if(s->partial && count && count<RESULT_LIMIT)gtk_widget_show(s->more);
-   else gtk_widget_hide(s->more);
- }
  if(count){
    gtk_widget_show_all(s->list);
    gtk_widget_show(s->results);
    show_page(s);
    gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
-       count,count==1?"":"s",partial ? (count<RESULT_LIMIT ?
-       " (partial — More Results available)" : " (partial; first 100 shown)") : "");
+       count,count==1?"":"s",partial ?
+       (count>=RESULT_LIMIT?" (first 100 shown)":" (searching...)") : "");
    gtk_label_set_text(GTK_LABEL(s->status),message);
    g_free(message);
  }else{
@@ -267,37 +263,69 @@ void now_downloads_search_view_on_select(GtkWidget *view,
  SearchView *s=state(view);
  if(s){s->on_select=callback;s->select_data=user_data;}
 }
-static void search_complete(GObject *unused,GAsyncResult *res,gpointer data){
- (void)unused;
+static void stream_finished(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
  SearchJob *job=data;
  SearchView *s=state(job->view);
- gchar *stdout_text=NULL;
  GError *err=NULL;
- gboolean completed=g_subprocess_communicate_utf8_finish(
-   job->proc,res,&stdout_text,NULL,&err);
- if(s && !g_strcmp0(s->host,job->host) && !g_strcmp0(s->user,job->user)){
-   gboolean ok=completed && g_subprocess_get_successful(job->proc) &&
-      stdout_text && strlen(stdout_text)<=MAX_WIRE &&
-      now_downloads_search_view_update(job->view,g_strchomp(stdout_text));
-   if(!ok){
-     if(!job->full)clear_results(s);
-     gtk_label_set_text(GTK_LABEL(s->status),job->full ?
-       "More results unavailable. Previous results retained." :
-       "Search unavailable. Check authorized host, VPN and installed plugins.");
+ gboolean ok=g_subprocess_wait_finish(job->proc,res,&err) &&
+             g_subprocess_get_successful(job->proc) &&
+             job->done && job->got_frame && !job->invalid;
+ if(s){
+   if(!g_strcmp0(s->host,job->host) && !g_strcmp0(s->user,job->user)){
+     if(!ok){
+       if(!job->got_frame)clear_results(s);
+       gtk_label_set_text(GTK_LABEL(s->status),
+         "Search stopped or unavailable; previously received results retained.");
+     }
    }
    s->running=FALSE;
    gtk_widget_set_sensitive(s->entry,TRUE);
    gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
-   if(s->more)gtk_widget_set_sensitive(s->more,TRUE);
- }else if(s){
-   s->running=FALSE;
-   gtk_widget_set_sensitive(s->entry,TRUE);
-   gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
-   if(s->more)gtk_widget_set_sensitive(s->more,TRUE);
  }
- g_clear_error(&err);g_free(stdout_text);
- g_object_unref(job->proc);g_object_unref(job->view);
+ g_clear_error(&err);
+ g_object_unref(job->reader);
+ g_object_unref(job->proc);
+ g_object_unref(job->view);
  g_free(job->host);g_free(job->user);g_free(job);
+}
+static void stream_line(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
+ SearchJob *job=data;
+ GError *err=NULL;
+ gsize size=0;
+ gchar *line=g_data_input_stream_read_line_finish(job->reader,res,&size,&err);
+ if(!line || err){
+   if(err)job->invalid=TRUE;
+   g_clear_error(&err);g_free(line);
+   g_subprocess_wait_async(job->proc,NULL,stream_finished,job);
+   return;
+ }
+ if(size>0 && size<=245000 && g_str_has_prefix(line,"SNAPSHOT\\t")){
+   gsize bytes=0;
+   guchar *raw=g_base64_decode(line+9,&bytes);
+   if(bytes>0 && bytes<=MAX_WIRE && !memchr(raw,0,bytes)){
+     gchar *wire=g_strndup((char *)raw,bytes);
+     SearchView *s=state(job->view);
+     if(s && !g_strcmp0(s->host,job->host) &&
+        !g_strcmp0(s->user,job->user) &&
+        now_downloads_search_view_update(job->view,wire))
+       job->got_frame=TRUE;
+     else job->invalid=TRUE;
+     g_free(wire);
+   }else job->invalid=TRUE;
+   g_free(raw);
+ }else if(!strcmp(line,"DONE")){
+   job->done=TRUE;
+ }else job->invalid=TRUE;
+ g_free(line);
+ if(job->invalid){
+   g_subprocess_force_exit(job->proc);
+   g_subprocess_wait_async(job->proc,NULL,stream_finished,job);
+   return;
+ }
+ g_data_input_stream_read_line_async(job->reader,G_PRIORITY_DEFAULT,
+                                     NULL,stream_line,job);
 }
 static void start_search(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -309,11 +337,8 @@ static void start_search(GtkWidget *unused,gpointer data){
    gtk_label_set_text(GTK_LABEL(s->status),"Enter a search of 2–96 characters.");
    return;
  }
- gboolean full=unused==s->more;
- if(full && (!s->partial || !s->result_count || !s->last_query ||
-             g_strcmp0(query,s->last_query)))return;
  const gchar *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,query,
-                      full?"--full":NULL,NULL};
+                      "--stream",NULL};
  GError *err=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|
                                      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
@@ -324,19 +349,15 @@ static void start_search(GtkWidget *unused,gpointer data){
  SearchJob *job=g_new0(SearchJob,1);
  job->view=g_object_ref(view);job->proc=proc;
  job->host=g_strdup(s->host);job->user=g_strdup(s->user);
- job->full=full;
+ job->reader=g_data_input_stream_new(g_subprocess_get_stdout_pipe(proc));
  s->running=TRUE;
- if(!full){
-   g_free(s->last_query);s->last_query=g_strdup(query);
-   clear_results(s);
- }
+ clear_results(s);
  gtk_widget_set_sensitive(s->entry,FALSE);
  gtk_widget_set_sensitive(s->button,FALSE);
- if(s->more)gtk_widget_set_sensitive(s->more,FALSE);
- gtk_label_set_text(GTK_LABEL(s->status),full?
-     "Searching enabled plugins for more results (up to 12 seconds)..." :
-     "Searching approved qBittorrent plugins...");
- g_subprocess_communicate_utf8_async(proc,NULL,NULL,search_complete,job);
+ gtk_label_set_text(GTK_LABEL(s->status),
+     "Searching enabled qBittorrent plugins; results update automatically...");
+ g_data_input_stream_read_line_async(job->reader,G_PRIORITY_DEFAULT,
+                                     NULL,stream_line,job);
 }
 GtkWidget *now_downloads_search_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
@@ -377,12 +398,6 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_box_pack_start(GTK_BOX(view),head,FALSE,FALSE,0);
  s->status=text("Connect an approved owner device to search.");
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
- s->more=gtk_button_new_with_label("MORE RESULTS");
- gtk_widget_set_name(s->more,"nowsearchmore");
- gtk_widget_set_no_show_all(s->more,TRUE);
- gtk_box_pack_start(GTK_BOX(view),s->more,FALSE,FALSE,0);
- gtk_widget_hide(s->more);
- g_signal_connect(s->more,"clicked",G_CALLBACK(start_search),view);
  s->results=gtk_scrolled_window_new(NULL,NULL);
  gtk_widget_set_name(s->results,"nowsearchresults");
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->results),

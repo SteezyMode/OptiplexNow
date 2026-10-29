@@ -22,6 +22,14 @@ test -x /usr/lib/optiplex-now/host_install.py
 test -x /usr/lib/optiplex-now/host_dependencies.py
 test -r /usr/lib/optiplex-now/host_storage_review.py
 test -r /usr/lib/optiplex-now/host_games_readiness.py
+test -x /usr/lib/optiplex-now/owner-host-upgrade.py
+for f in owner_games_ssh.py owner_games_request.py owner_games_enroll.py download_inventory.py download_queue.py download_search.py download_manage.py download_destinations.py media_endpoint.py; do
+  test -r "/usr/lib/optiplex-now/owner-bridge/server/$f"
+done
+for f in owner_access.py owner_launch.py owner_lobby.py owner_host_pilot.py wolf_docker_adapter.py wolf_socket_adapter.py; do
+  test -r "/usr/lib/optiplex-now/owner-bridge/src/$f"
+done
+PYTHONPATH="/usr/lib/optiplex-now/owner-bridge/server:/usr/lib/optiplex-now/owner-bridge/src" python3 -c 'import owner_games_ssh, owner_games_request, owner_games_enroll, download_search, download_manage'
 test -r /usr/lib/optiplex-now/media_endpoint.py
 test -x /usr/lib/optiplex-now/host_media_adoption.py
 test -x /usr/lib/optiplex-now/host_jellyfin_install.py

@@ -60,6 +60,18 @@ bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py',
              'wolf-pair-local.py'):
  shutil.copy2(root/'src'/name,bridge/'src'/name)
+# The same .deb carries the narrow, authenticated host service implementation.
+# It is inert until the owner explicitly adopts the packaged handler. After
+# adoption, normal package upgrades also upgrade Games/Media/Downloads host code.
+for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
+ shutil.copy2(root/'src'/name, bridge/'src'/name)
+for name in ('owner_games_ssh.py', 'owner_games_request.py',
+             'owner_games_enroll.py', 'download_inventory.py',
+             'download_queue.py', 'download_search.py', 'download_manage.py',
+             'download_destinations.py', 'media_endpoint.py'):
+ shutil.copy2(root/'server'/name, bridge/'server'/name)
+shutil.copy2(root/'src/owner-host-upgrade.py', pkg/'usr/lib/optiplex-now/owner-host-upgrade.py')
+(pkg/'usr/lib/optiplex-now/owner-host-upgrade.py').chmod(0o755)
 # Optional owner-only Tailscale staging pilot; packaged but NEVER enabled by .deb.
 # Disabled-by-default: remote owner confirmation requires an explicit host
 # --enable-remote-approval flag and the already-reviewed forced-command broker.
@@ -71,8 +83,9 @@ for name in ('owner_enrollment.py','owner_games_enroll.py',
              'tailnet_wolf_review.py','tailnet_wolf_pair.py',
              'tailnet_pair_witness.py','tailnet_wolf_fresh.py'):
  shutil.copy2(root/'server'/name,bridge/'server'/name)
-# The owner Games forced broker is NOT installed/enabled by this client .deb.
-# Approval on an existing owner host reuses its separately adopted, reviewed broker.
+# The package includes the forced-command broker, but installing it never
+# changes authorized_keys, grants devices or reconfigures the running host.
+# Existing hosts explicitly opt in from NOW Host Setup once.
 
 shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
 shutil.copy2(root/'src/download-queue-client.py',pkg/'usr/lib/optiplex-now/download-queue-client.py')

@@ -63,6 +63,26 @@ static void open_owner_approvals(GtkButton *button, gpointer data)
     g_clear_error(&error);
 }
 
+/* Explicit owner-controlled one-time switch from the old home-directory
+ * broker to the package-owned broker. The .deb itself never touches SSH keys. */
+static void open_host_package_upgrade(GtkButton *button, gpointer data)
+{
+    (void)button;
+    (void)data;
+    gchar *argv[] = {"/usr/bin/python3",
+                     "/usr/lib/optiplex-now/owner-host-upgrade.py", "--gui", NULL};
+    GError *error = NULL;
+    if (!g_spawn_async(NULL, argv, NULL, G_SPAWN_DEFAULT,
+                       NULL, NULL, NULL, &error)) {
+        GtkWidget *alert = gtk_message_dialog_new(
+            NULL, GTK_DIALOG_MODAL, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE,
+            "NOW host upgrade is not installed on this computer.");
+        gtk_dialog_run(GTK_DIALOG(alert));
+        gtk_widget_destroy(alert);
+    }
+    g_clear_error(&error);
+}
+
 /* Separate owner-only existing-Jellyfin review. No Docker, pkexec, daemon,
  * service adoption or config write happens by merely opening this window. */
 static void open_host_videos_setup(GtkButton *button, gpointer data)
@@ -705,6 +725,13 @@ int main(int argc, char **argv)
                        FALSE, FALSE, 0);
     g_signal_connect(ui->dependencies_button, "clicked",
                      G_CALLBACK(on_install_dependencies), ui);
+
+    GtkWidget *owner_host_upgrade = gtk_button_new_with_label(
+        "OWNER HOST | USE PACKAGED UPDATES...");
+    gtk_box_pack_start(GTK_BOX(dependency_row), owner_host_upgrade,
+                       FALSE, FALSE, 0);
+    g_signal_connect(owner_host_upgrade, "clicked",
+                     G_CALLBACK(open_host_package_upgrade), NULL);
 
     /* Keep Videos adoption separate from the compact primary action row:
      * all buttons remain usable at 720px and on older narrow displays. */

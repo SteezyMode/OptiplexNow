@@ -202,7 +202,8 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
    gint64 published=parts[6] ? g_ascii_strtoll(parts[6],NULL,10):-1;
-   gint64 leechers=parts[7] ? g_ascii_strtoll(parts[7],NULL,10):-1;
+   gint64 leechers=g_strv_length(parts)==8 ?
+                   g_ascii_strtoll(parts[7],NULL,10):-1;
    gint64 *size_data=g_new(gint64,1),*seed_data=g_new(gint64,1);
    gint64 *published_data=g_new(gint64,1),*leecher_data=g_new(gint64,1);
    *size_data=size;*seed_data=seeds;*published_data=published;*leecher_data=leechers;

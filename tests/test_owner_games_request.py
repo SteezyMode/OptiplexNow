@@ -45,9 +45,9 @@ class TrustedGamesGateTests(unittest.TestCase):
              "magnet":"magnet:?xt=urn:btih:"+"f"*40})
         root_result={"roots":[{"id":"bigdisk","label":"Bigdisk"}]}
         browse_result={"root":"bigdisk","relative":"Movies","folders":["Horror"]}
-        with patch("owner_games_request.inspect_download_roots",return_value=root_result) as root_call, \\
-             patch("owner_games_request.browse_downloads",return_value=browse_result) as browse_call, \\
-             patch("owner_games_request.enqueue_download",return_value={"status":"submitted"}) as add_call:
+        with (patch("owner_games_request.inspect_download_roots",return_value=root_result) as root_call,
+              patch("owner_games_request.browse_downloads",return_value=browse_result) as browse_call,
+              patch("owner_games_request.enqueue_download",return_value={"status":"submitted"}) as add_call):
             self.assertEqual(self.call("downloads_roots"),
                              {"success":True,"service":"qbittorrent",**root_result})
             self.assertEqual(self.call("downloads_browse"),

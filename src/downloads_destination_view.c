@@ -110,8 +110,8 @@ static gboolean read_response(Picker *s,char action,char *wire){
                                  fields[1],fields[2]);
        g_strfreev(fields);
      }
-     s->loading_roots=FALSE;
      gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),0);
+     s->loading_roots=FALSE;
    }
  }else if(action=='b'){
    gchar **fields=g_strsplit(lines[0],"\t",-1);
@@ -173,6 +173,16 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        "Folder operation failed. Check owner approval and library mounts.");
    }
    s->running=FALSE;
+   if(ok && job->action=='r'){
+     gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+     if(safe_root(id)){
+       g_free(s->root);s->root=id;
+       g_free(s->relative);s->relative=g_strdup("");
+       start(s,'b');
+     }else{g_free(id);ok=FALSE;}
+   }
+   if(!ok)gtk_label_set_text(GTK_LABEL(s->status),
+                           "No approved folders available.");
    button_states(s);
  }else if(s){s->running=FALSE;button_states(s);}
  g_clear_error(&err);g_free(out);
@@ -290,7 +300,9 @@ void now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
     strlen(magnet)>1024 || s->running)return;
  g_free(s->magnet);s->magnet=g_strdup(magnet);
  s->folder_valid=FALSE;
+ gtk_widget_set_no_show_all(view,FALSE);
  gtk_widget_show_all(view);
+ gtk_widget_set_no_show_all(view,TRUE);
  start(s,'r');
 }
 void now_downloads_destination_view_on_added(GtkWidget *view,

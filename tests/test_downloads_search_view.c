@@ -13,6 +13,25 @@ static void test_valid(void){
  g_assert_true(now_downloads_search_view_update(view,"SEARCH\t1\t0"));
  gtk_widget_destroy(view);
 }
+static void test_mapped_full_results(void){
+ /* The live client populates twenty rows into a mapped GTK window.
+  * Earlier tests only parsed two rows into an unparented view. */
+ GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+ GtkWidget *view=now_downloads_search_view_new();
+ gtk_container_add(GTK_CONTAINER(window),view);
+ gtk_widget_show_all(window);
+ GString *wire=g_string_new("SEARCH\\t1\\t90");
+ for(int i=0;i<20;i++)
+   g_string_append_printf(wire,
+      "\\nRESULT\\t%u\\t%u\\t0\\tLinux release %02d\\t-",
+      (unsigned)(i+1000),(unsigned)(i+1),i);
+ for(int i=0;i<8;i++){
+   g_assert_true(now_downloads_search_view_update(view,wire->str));
+   while(gtk_events_pending())gtk_main_iteration();
+ }
+ g_string_free(wire,TRUE);
+ gtk_widget_destroy(window);
+}
 static void test_reject(void){
  GtkWidget *view=now_downloads_search_view_new();
  const char *bad[]={
@@ -37,6 +56,7 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/search/valid",test_valid);
+ g_test_add_func("/search/mapped-full-results",test_mapped_full_results);
  g_test_add_func("/search/reject",test_reject);
  return g_test_run();
 }

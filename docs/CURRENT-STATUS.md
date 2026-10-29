@@ -1,3 +1,9 @@
+## October 29 — Videos and Downloads native button styling consistency (PR #221)
+
+**Observed issue:** On a working v1.21.5 owner client, Videos OPEN and some native Downloads buttons rendered bright white stock GTK controls rather than NOW's existing charcoal-and-coral theme. **User physically confirmed Downloads Search works after the unified host package update**, so this issue is strictly visual and does not call for search protocol or server changes.
+
+**Scoped implementation:** Explicit shared NOW action button classes with hover/focus/active/disabled states for Videos and Downloads toolbar/Search/results headers/pagination/queue actions/folder pickers. Keep primary coral action and muted dark secondary buttons, preserving all existing callbacks and host behavior. GTK/package smoke and regression tests must pass. Real GTK on Linux Mint/Pop should confirm visual appearance after install; no client/host service changes were made by this PR.
+
 ## October 29 — One-deb host/client ownership (development PR #220, NOT released)
 
 **Owner-observed packaging defect:** The official v1.21.4 desktop .deb upgrades all three devices' UI but leaves the working OptiPlex's restricted SSH forced-command broker pinned to an unmanaged home-directory Python copy. Thus new Search/Transfers can be incompatible even with an up-to-date host desktop.

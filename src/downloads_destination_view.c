@@ -131,6 +131,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
      for(guint i=1;lines[i];i++){
        gchar **part=g_strsplit(lines[i],"\t",-1);
        GtkWidget *button=gtk_button_new_with_label(part[1]);
+       gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
        gtk_widget_set_halign(button,GTK_ALIGN_FILL);
        g_signal_connect(button,"clicked",G_CALLBACK(on_folder_clicked),s->view);
        gtk_box_pack_start(GTK_BOX(s->folders),button,FALSE,FALSE,1);
@@ -254,6 +255,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_box_pack_start(GTK_BOX(bar),s->roots,TRUE,TRUE,0);
  g_signal_connect(s->roots,"changed",G_CALLBACK(on_root),view);
  s->up=gtk_button_new_with_label("UP");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->up),"now-action");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
 
@@ -275,6 +277,8 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
  gtk_widget_set_halign(s->add,GTK_ALIGN_END);
  gtk_widget_set_name(s->add,"downloadconfirm");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
  g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
  gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
  button_states(s);

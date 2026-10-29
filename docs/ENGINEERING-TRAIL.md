@@ -1,3 +1,7 @@
+## 2026-10-29 — Fail-closed owner access UI response, not another enrollment system
+
+Current QR HTTP/owner approval tests already cover pinned phone, signature, replay and simulated fresh grant. Draft #230 only tightens the *client* status boundary: no local key, pending QR, helper exit or false/malformed reply may advertise verified NOW owner-service access. It clears previously displayed QR code during retry/proof failure. All host-side authentication remains unchanged; physical fresh-device QR approval and game/reconnect still required.
+
 ## 2026-10-29 — PR-history audit: owner-only alpha vs stale guest and onboarding branches
 
 - **Evidence:** Audited all 180 PRs and the 41 open issues against `main`; old #51, #57 and #58 trail current client authorization/pairing/Moonlight implementation by ~180 commits, and their historical green CI cannot prove today's behavior. Closed each **without merge**, documenting replacements and preserved unfinished goals in its PR conversation. Keep #194 for carefully porting its pinned Wolf udev input-isolation rules onto current host installer; old branch ~85 commits behind and previous CI cancelled. Do not merge old design branches to "complete" fresh-client access.

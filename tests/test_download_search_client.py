@@ -54,6 +54,21 @@ class SearchClientTests(unittest.TestCase):
         self.assertIn(MAGNET,output)
         self.assertNotIn("https://",output)
 
+    def test_publication_date_seven_field_wire_and_legacy_six(self):
+        response={"success":True,"service":"qbittorrent",
+                  "status":"Running","partial":True,"total":1,
+                  "results":[{"name":"Old film","bytes":2000,
+                              "seeders":3,"can_add":True,"magnet":MAGNET,
+                              "published":1727740800}]}
+        full=self.payload(response=response)
+        self.assertTrue(full.endswith("\t1727740800"))
+        response["results"][0].pop("published")
+        legacy=self.payload(response=response)
+        self.assertTrue(legacy.endswith("\t"+MAGNET))
+        response["results"][0]["published"]="newest"
+        with self.assertRaises(ValueError):
+            self.payload(response=response)
+
     def test_100_results_pass_as_one_bounded_payload_for_gtk_paging(self):
         entries=[{"name":f"Linux ISO {i}","bytes":1000+i,
                   "seeders":i,"can_add":True,"magnet":MAGNET}

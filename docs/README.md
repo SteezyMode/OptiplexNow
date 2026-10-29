@@ -1,33 +1,12 @@
-# Documentation map
+# Documentation
 
-Read in this order when joining development or starting a new review. Coding agents must also follow [root AGENTS.md](../AGENTS.md).
+Use these four files for current development decisions:
 
-| File | Authority |
-| --- | --- |
-| [Private Alpha 1](PRIVATE-ALPHA.md) | **Active release gate:** three pillars, role boundaries, supported scope and physical acceptance |\n| [Product direction](PRODUCT.md) | Vision, modular product roadmap, immediate development order and exclusions |
-| [Public alpha](PUBLIC-ALPHA.md) | Later public release contract; not the active private-alpha acceptance gate |
-| [Current status](CURRENT-STATUS.md) | What code, CI and device observations support today |
-| [Beta acceptance](BETA-ACCEPTANCE.md) | Older, narrower existing-host client beta; supporting evidence only |
-| [MacBook physical beta report](QA-MACBOOK-2026-10-21.md) | October 21 v1.18.0 Linux Mint client observations, failures and regression requirements |
-| [Host installation and alpha acceptance](HOST-INSTALLER.md) | Current guarded installer, NVIDIA limits, safety gates and clean-host test |
-| [Architecture](application-design.md) | Code ownership, protocols, data compatibility and safe boundaries |
-| [Engineering trail](ENGINEERING-TRAIL.md) | Dated PR-by-PR evidence, rejected approaches, failures, next-team handoffs; **not** a release-status document |
-| [Contributing](../CONTRIBUTING.md) | Build, test, PR discipline and code map |
-| [Release process](RELEASE-PROCESS.md) | Immutable tags, artifact verification and rollback |
-| [Wolf pairing contract](WOLF-PAIRING-HOST-CONTRACT.md) | Actual host API, client bridge, privilege model and unverified checks |
-| [Real Wolf validation gate](REAL-WOLF-VALIDATION.md) | Disposable actual Wolf API probe, GPU-host requirements and evidence levels |
-| [Wolf integration and fork policy](UPSTREAM-FIRST-WOLF-INTEGRATION.md) | Future host manager design and evidence gate for a fork |
+1. [Product roadmap](PRODUCT.md) — product scope and the ordered development gates.
+2. [Current status](CURRENT-STATUS.md) — what is implemented, tested and actually running.
+3. [Private Alpha acceptance](PRIVATE-ALPHA.md) — required end-to-end behavior and verification.
+4. [AGENTS.md](../AGENTS.md) — rules for changes, safety and release evidence.
 
-## Specialized references
+The [repository front page](../README.md) has the **one official Current Alpha download**.
 
-- [Current test host, services and backups](server-setup.md): environment-specific observations. Not a universal setup recipe.
-- [Multi-user desktop feasibility](MULTI-USER-DESKTOPS-FEASIBILITY-2026-10-19.md): technical research, not a released feature.
-- [Wolf driver maintenance](wolf-maintenance.md): opt-in existing-host procedure.
-- [MoonlightWeb maintenance](moonlightweb-maintenance.md): opt-in update/rollback constraints for an existing deployment.
-- [Remote development via tmux](remote-development-tmux.md): maintainer workflow, not a runtime dependency.
-
-## Historical records
-
-`archive/` retains dated proposals and old session notes for traceability. [October 16 operations inventory](archive/2026-10-16-operations-handoff.md) is historical, not authoritative current deployment status. Do not use old version claims, IPs, container identifiers or release instructions without checking the live machine and current code. An [old next-session handoff](archive/2026-10-19-next-session.md) remains archived.
-
-**Rule:** Implementation is established by code and tests; release publication by GitHub Releases; working user flows by device tests. Plans belong in PRODUCT or tracked issues. Do not create another current-status or personal handoff document.
+Everything else under `docs/` is supporting engineering reference or historical work—not another roadmap, competing release channel or required reading for users. Older artifacts remain available through Git history; old install links should not be treated as the current recommended version.

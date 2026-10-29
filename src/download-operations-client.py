@@ -34,6 +34,11 @@ def relative(value):
 def present(action,data):
     if not isinstance(data,dict) or data.get("success") is not True:
         raise ValueError("Owner service denied the operation")
+    if action=="manage":
+        if (data.get("status")!="submitted" or
+                data.get("operation") not in ("pause","resume","reannounce","recheck","remove")):
+            raise ValueError("Torrent operation was not accepted")
+        return "MANAGED"
     if action=="add":
         if data.get("status")!="submitted":
             raise ValueError("Downloader did not accept the torrent")
@@ -72,10 +77,16 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
-        "add":"downloads_add"}.get(action)}
+        "add":"downloads_add","manage":"downloads_manage"}.get(action)}
     if request["action"] is None:
         raise ValueError("Invalid download action")
-    if action!="roots":
+    if action=="manage":
+        if (root not in ("pause","resume","reannounce","recheck","remove") or
+                not isinstance(path,str) or
+                not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",path)):
+            raise ValueError("Invalid torrent operation")
+        request.update(operation=root,torrent_hash=path.lower())
+    elif action!="roots":
         if not isinstance(root,str) or not ROOT.fullmatch(root):
             raise ValueError("Invalid library root")
         request.update(root=root,relative=relative(path))
@@ -105,10 +116,11 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
 if __name__=="__main__":
     try:
         args=sys.argv[1:]
-        if len(args)<3 or args[2] not in ("roots","browse","add") or (
+        if len(args)<3 or args[2] not in ("roots","browse","add","manage") or (
             (args[2]=="roots" and len(args)!=3) or
             (args[2]=="browse" and len(args)!=5) or
-            (args[2]=="add" and len(args)!=6)):
+            (args[2]=="add" and len(args)!=6) or
+            (args[2]=="manage" and len(args)!=5)):
             raise ValueError("Expected owner host, action and checked selection")
         print(fetch(args[0],args[1],args[2],
                     *(args[3:]+[None]*(3-len(args[3:])))))

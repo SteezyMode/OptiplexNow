@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -37,10 +38,82 @@ REQUIRED_IDS = ("architecture", "operating_system", "gpu_detection",
                 "virtual_controller_devices", "udev", "container_runtime",
                 "wolf_ports", "disk_space", "memory")
 MAX_OUTPUT = 32768
+INPUT_RULES = Path(__file__).with_name("85-wolf.rules")
+# Unmodified games-on-whales/wolf 9f29d9c4ceb5b0fb83875d98dad67af8237f5495.
+INPUT_RULES_SHA256 = "52567af7cce1feb6a6625938b804e0def2c1fee6f70db69f36c366f7cdf8151c"
+UDEV_RULES_DIRS = tuple(Path(p) for p in (
+    "/etc/udev/rules.d", "/run/udev/rules.d", "/usr/lib/udev/rules.d"))
+UDEVADM = Path("/usr/bin/udevadm")
 
 
 class InstallationError(RuntimeError):
     pass
+
+
+def _input_rules_plan(*, owner_uid: int = 0) -> tuple[Path, bytes, bool]:
+    """Read-only, conservative check; never replace an existing Wolf rule.
+
+    This checks known rule conflicts, not the effective host input policy.
+    Physical host-desktop independence remains an acceptance requirement.
+    """
+    content = INPUT_RULES.read_bytes()
+    if INPUT_RULES.is_symlink() or hashlib.sha256(content).hexdigest() != INPUT_RULES_SHA256:
+        raise InstallationError("Packaged Wolf input rules failed integrity check")
+    if not UDEVADM.is_file():
+        raise InstallationError("udevadm is required for Wolf input isolation")
+    target = UDEV_RULES_DIRS[0] / "85-wolf.rules"
+    exists = False
+    for directory in UDEV_RULES_DIRS:
+        if not directory.exists() and not directory.is_symlink():
+            if directory == target.parent:
+                raise InstallationError("Local udev rules directory is missing")
+            continue
+        for parent in (directory.parent, directory):
+            info = parent.lstat()
+            if (not stat.S_ISDIR(info.st_mode) or info.st_uid != owner_uid
+                    or info.st_mode & 0o022):
+                raise InstallationError("Untrusted udev rules directory")
+        for path in directory.glob("*.rules"):
+            # Refuse named Wolf rules including /dev/null masks. Read other
+            # regular rules to catch locally renamed Wolf-specific policy.
+            if path.is_symlink():
+                if "wolf" in path.name.lower():
+                    raise InstallationError("Existing Wolf input rules require owner review")
+                continue
+            info = path.lstat()
+            if not stat.S_ISREG(info.st_mode):
+                raise InstallationError("Unexpected udev rule file type")
+            if info.st_size > 1024 * 1024:
+                raise InstallationError("udev rule file is too large to review")
+            data = path.read_bytes()
+            if path == target:
+                if (data != content or info.st_uid != owner_uid or info.st_mode & 0o022):
+                    raise InstallationError("Existing Wolf input rules require owner review")
+                exists = True
+            elif "wolf" in path.name.lower() or b"wolf" in data.lower():
+                raise InstallationError("Existing Wolf input rules require owner review")
+    return target, content, exists
+
+
+def _prepare_input_rules() -> None:
+    """Install pinned rules before Wolf creates devices; reload, never trigger.
+
+    Retain the file on reload failure for explicit recovery. Never overwrite,
+    chmod, delete, or globally retrigger existing device policy.
+    """
+    target, content, exists = _input_rules_plan()
+    if not exists:
+        _write_new(target, content.decode("utf-8"), mode=0o644)
+    try:
+        cp = subprocess.run(
+            [str(UDEVADM), "control", "--reload-rules"],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL, timeout=15, check=False,
+            env={"PATH": "/usr/sbin:/usr/bin:/sbin:/bin"})
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise InstallationError("Wolf input rules retained; udev reload failed; review install state") from exc
+    if cp.returncode:
+        raise InstallationError("Wolf input rules retained; udev reload failed; review install state")
 
 
 def _docker(args: list[str], timeout: int = 30) -> str:
@@ -127,6 +200,10 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
     public_checks = tuple(key for key in REQUIRED_IDS if key != "container_runtime")
     blockers = [key for key in public_checks if statuses.get(key) != "pass"]
     needs_admin_verification = statuses.get("container_runtime") != "pass"
+    try:
+        _input_rules_plan()
+    except (InstallationError, OSError) as exc:
+        blockers.append("Wolf input isolation: " + str(exc))
     if privileged and needs_admin_verification:
         blockers.append("container_runtime")
     if snapshot.get("os_id") not in ("ubuntu", "pop") or snapshot.get("os_version") != "24.04":
@@ -218,11 +295,12 @@ def _host_checks(gpu: str, render: str, *, privileged: bool = False) -> dict:
                 "No Linux packages, GPU drivers or existing services will be modified.",
                 "Docker permission is verified by the privileged installer, not granted to the user.",
                 "Host Docker socket access is administrative and Wolf needs it to launch apps.",
+                "Pinned Wolf input rules will be installed and udev reloaded before startup; no global device trigger.",
             ]}
 
 
-def _write_new(path: Path, value: str) -> None:
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+def _write_new(path: Path, value: str, *, mode: int = 0o600) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
     with os.fdopen(fd, "w", encoding="utf-8") as stream:
         stream.write(value)
         stream.flush()
@@ -313,6 +391,9 @@ def install(gpu: str, render: str, digest: str, confirmation: str,
         image = IMAGE_PREFIX + digest
         driver = None
         _status(WORKSPACE, "preparing", image)
+        _status(WORKSPACE, "preparing_input_rules", image)
+        _prepare_input_rules()
+        _status(WORKSPACE, "input_rules_ready", image)
         if gpu == "nvidia":
             version = host_nvidia.current_driver_version()
             build_context = WORKSPACE / "nvidia-build"

@@ -37,6 +37,8 @@ for host_module in ('host_preflight.py', 'host_plan.py', 'host_services.py', 'ho
  shutil.copy2(root/'server'/host_module,pkg/'usr/lib/optiplex-now'/host_module)
 shutil.copy2(root/'server/nvidia-driver.Dockerfile', pkg/'usr/lib/optiplex-now/nvidia-driver.Dockerfile')
 shutil.copy2(root/'server/LICENSE-nvidia-driver-upstream.txt', pkg/'usr/share/doc/optiplex-now/LICENSE-nvidia-driver-upstream.txt')
+shutil.copy2(root/'server/85-wolf.rules', pkg/'usr/lib/optiplex-now/85-wolf.rules')
+shutil.copy2(root/'server/LICENSE-wolf-input-upstream.txt', pkg/'usr/share/doc/optiplex-now/LICENSE-wolf-input-upstream.txt')
 shutil.copy2(root/'src/host-media-setup.py', pkg/'usr/lib/optiplex-now/host-media-setup.py')
 (pkg/'usr/lib/optiplex-now/host-media-setup.py').chmod(0o755)
 (pkg/'usr/lib/optiplex-now/host_media_adoption.py').chmod(0o755)

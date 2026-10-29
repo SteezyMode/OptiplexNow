@@ -1,3 +1,7 @@
+## 2026-10-29 — Salvage upstream virtual input isolation from old PR #194
+
+Draft #194 was too stale to merge safely. Ported its pinned Wolf virtual-controller udev policy, conservative conflict refusal, pre-Docker reload journal, explicit consent, package resources and filesystem mocks to draft #229 on current main; retained later Docker/Compose and Wolf readiness work. Its PR-head CI passed both jobs, but the real controller/desktop active-seat test on disposable hardware is still required. Do not change the working reference OptiPlex.
+
 ## 2026-10-29 — PR-history audit: owner-only alpha vs stale guest and onboarding branches
 
 - **Evidence:** Audited all 180 PRs and the 41 open issues against `main`; old #51, #57 and #58 trail current client authorization/pairing/Moonlight implementation by ~180 commits, and their historical green CI cannot prove today's behavior. Closed each **without merge**, documenting replacements and preserved unfinished goals in its PR conversation. Keep #194 for carefully porting its pinned Wolf udev input-isolation rules onto current host installer; old branch ~85 commits behind and previous CI cancelled. Do not merge old design branches to "complete" fresh-client access.

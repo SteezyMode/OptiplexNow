@@ -1,3 +1,7 @@
+## October 29 — Wolf controller isolation source candidate (draft PR #229)
+
+Selective salvage from the stale #194 now adds checksum-pinned upstream Wolf input policy, create-only conflict review, no-global-trigger udev reload before clean-host Wolf startup, failure journal, package resources and filesystem/mock regressions **on a current-main branch**. The first PR-head CI run #40889634718 passed native ASan/UBSan and package/build tests. Package installation alone does not activate policy. No reference-host mutation, release change, physical controller/host-desktop input isolation test or Private Alpha 1 acceptance occurred.
+
 ## October 29 — PR backlog and alpha release-contract reconciliation
 
 **Current release:** Official Latest remains [v1.21.9](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.9), working on the configured owner environment per owner report. More recent fresh-client wizard corrections (#226/#227) are in `main`, not in the published .deb. Last verified merged-main check: [CI #40873360566](https://github.com/SteezyMode/OptiplexNow/actions/runs/40873360566) passed both jobs. **Private Alpha 1 remains NOT ACCEPTED.**

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Sanitized owner-bound NOW search transport; no downloader action or admin URL."""
+import base64
 import json
 from pathlib import Path
 import re
@@ -102,11 +103,61 @@ def fetch(host, user, query, *, full=False, runner=subprocess.run):
         raise ValueError("Invalid owner search response") from exc
     return present(data)
 
+def stream_fetch(host, user, query, *, popen=subprocess.Popen):
+    """Forward validated snapshots as one encoded line each for GTK.
+
+    One SSH session == one qBittorrent search. The restricted server is solely
+    responsible for authentication and search-job lifecycle. Do not expose
+    private endpoints, cookies, or unvalidated upstream JSON to GTK.
+    """
+    if not valid_host(host) or not valid_user(user) or not KEY.is_file():
+        raise ValueError("Approved NOW host or device unavailable")
+    if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
+            or any(ord(c)<32 or ord(c)==127 for c in query)):
+        raise ValueError("Invalid search phrase")
+    request=(json.dumps({"version":1,"action":"downloads_search",
+                         "query":query.strip(),"stream":True},
+                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
+    if len(request)>767:
+        raise ValueError("Oversized search request")
+    cmd=["ssh","-F","/dev/null","-T","-i",str(KEY),
+         "-o","IdentitiesOnly=yes","-o","BatchMode=yes",
+         "-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=6",
+         f"{user}@{host}"]
+    proc=popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
+               stderr=subprocess.DEVNULL)
+    count=0
+    try:
+        proc.stdin.write(request)
+        proc.stdin.close()
+        for line in proc.stdout:
+            if len(line)>MAX_RESPONSE or count>=14:
+                raise ValueError("Oversized search stream")
+            try:
+                frame=json.loads(line)
+            except (ValueError,UnicodeDecodeError) as exc:
+                raise ValueError("Invalid search stream") from exc
+            wire=present(frame)
+            payload=base64.b64encode(wire.encode("utf-8")).decode("ascii")
+            print("SNAPSHOT\t"+payload,flush=True)
+            count+=1
+        if proc.wait(timeout=65)!=0 or count==0:
+            raise ValueError("Search stream failed")
+        print("DONE",flush=True)
+    finally:
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait(timeout=5)
+
 if __name__=="__main__":
     try:
-        if len(sys.argv) not in (4,5) or (len(sys.argv)==5 and sys.argv[4]!="--full"):
-            raise ValueError("Expected host, SSH user, search phrase, and optional --full")
-        print(fetch(*sys.argv[1:4],full=len(sys.argv)==5))
+        if len(sys.argv) not in (4,5) or (len(sys.argv)==5 and
+                sys.argv[4] not in ("--full","--stream")):
+            raise ValueError("Expected host, SSH user, phrase, and optional --stream")
+        if len(sys.argv)==5 and sys.argv[4]=="--stream":
+            stream_fetch(*sys.argv[1:4])
+        else:
+            print(fetch(*sys.argv[1:4],full=len(sys.argv)==5))
     except (ValueError,OSError,subprocess.SubprocessError):
         print("Search unavailable. Check owner approval, VPN and search plugins.",
               file=sys.stderr)

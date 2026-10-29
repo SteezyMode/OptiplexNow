@@ -78,6 +78,19 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn("open_owner_enrollment_for(cfg[0],cfg[1]);", SOURCE)
         self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)
 
+    def test_first_run_finish_does_not_claim_host_access(self):
+        self.assertIn('NEXT: VERIFY DEVICE ACCESS', SOURCE)
+        self.assertNotIn('CONNECTION SETTINGS SAVED', SOURCE)
+        self.assertIn('Saving a server address does not prove device authorization.', SOURCE)
+        self.assertIn('do not assume Games or Downloads works until the host verifies it.', SOURCE)
+        self.assertIn('SERVER LINUX ACCOUNT (OWNER ALPHA)', SOURCE)
+        self.assertIn('This does not grant ', SOURCE)
+        self.assertIn('ordinary SSH or server permissions.', SOURCE)
+        self.assertIn('REQUEST OWNER APPROVAL (PHONE QR)', SOURCE)
+        # No new credential or host operation is triggered by Finish.
+        self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)
+        self.assertNotIn('wizard_button(c,six,', SOURCE)
+
     def test_wolf_pairing_search_is_bounded_and_owner_approved(self):
         # Structural guards: full behavior still requires physical GTK tests.
         self.assertIn("state->auto_refresh_id = g_timeout_add_seconds(3,", SOURCE)

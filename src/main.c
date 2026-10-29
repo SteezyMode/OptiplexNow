@@ -2830,7 +2830,7 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         wizard->assistant && !wizard->closing) {
         gtk_entry_set_text(GTK_ENTRY(wizard->host), servers[selected].address);
         gtk_label_set_text(GTK_LABEL(wizard->notice),
-            "ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+            "ADDRESS FILLED. CONFIRM THE SERVER ACCOUNT, THEN CONTINUE.");
     }
     gtk_widget_destroy(dialog);
     wizard_unref(wizard);
@@ -2959,8 +2959,14 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->find_button=wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SSH USER","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"SSH username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
+ add(two,label("SERVER LINUX ACCOUNT (OWNER ALPHA)","helper"),0);
+ c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"Server Linux username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
+ GtkWidget*owner_account_hint=label(
+   "The owner-only alpha currently needs the host's configured Linux "
+   "account to address the restricted service broker. This does not grant "
+   "ordinary SSH or server permissions. Do not share an administrator password.", "helper");
+ gtk_label_set_line_wrap(GTK_LABEL(owner_account_hint),TRUE);
+ add(two,owner_account_hint,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
@@ -2989,12 +2995,14 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"NOW Setup: Games");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
- add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
+ add(six,label("NEXT: VERIFY DEVICE ACCESS","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Wolf pairing and NOW owner approval are separate. Use Request Owner Approval "
-   "on the Games setup page if this device has not been authorized, then Verify "
-   "Access. Videos opens your authorized Jellyfin library in the browser. "
-   "Advanced service settings remain available under Settings.",
+   "Saving a server address does not prove device authorization. First confirm "
+   "Moonlight/Wolf pairing, then use REQUEST OWNER APPROVAL on the Games setup "
+   "page and VERIFY ACCESS in the approval window. Your owner must independently "
+   "approve this device. The wizard may finish with access still pending; "
+   "do not assume Games or Downloads works until the host verifies it. "
+   "Videos opens Jellyfin in your browser and may require its own login.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);

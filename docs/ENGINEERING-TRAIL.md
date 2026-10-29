@@ -1,3 +1,10 @@
+## 2026-10-29 — Keep two owner approval methods, make alpha first-run state truthful
+
+- **Owner decision:** Preserve phone QR approval and eventually add a second approval surface inside existing NOW **Settings → Devices & Access** on previously trusted owner devices. No separate approval app, public approval account or SMS dependency. Owner-local recovery replaces a lost phone after trusted host authentication; server, never the requesting client or merely a Tailnet-connected node, decides authorization.
+- **Scope:** This is **post-Private-Alpha 1** permission UX. Alpha remains one owner on personally operated devices, and the existing opt-in QR host listener remains intact. Later household Admin/User, per-service grants and restricted SFTP shared directories must enforce policy on the host and upstream services rather than hiding UI actions.
+- **Current problem:** First-run wizard allowed a user to finish after storing host coordinates without verifying Wolf pairing or NOW restricted owner authority, while presenting an overly positive Finish headline. Change Finish to an explicit pending access checkpoint and keep the owner-only Linux account field truthful. Test that a denied Tailnet request cannot fall back to admin SSH.
+- **Evidence and recovery:** Source/test change subject to CI, not physically accepted. No host or credential mutation, no new .deb/tag. v1.21.9 remains the known-good release. Next safe operation is one independent new-client QR/wolf/authenticated Steam physical test; capture the first real blocker before expanding the enrollment protocol.
+
 ## 2026-10-29 — Package-owned host code instead of manual Python deployment
 
 - **Issue and outcome:** The v1.21.4 desktop installer excluded the live owner restricted host backend, so all-machine .deb updates did not update Search/Transfers on the real OptiPlex. This contradicts the one-application goal and blocked alpha acceptance.

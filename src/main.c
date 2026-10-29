@@ -2820,7 +2820,7 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         wizard->assistant && !wizard->closing) {
         gtk_entry_set_text(GTK_ENTRY(wizard->host), servers[selected].address);
         gtk_label_set_text(GTK_LABEL(wizard->notice),
-            "ADDRESS FILLED. CONFIRM THE SSH USER, THEN CONTINUE.");
+            "ADDRESS FILLED. CONFIRM THE SERVER ACCOUNT, THEN CONTINUE.");
     }
     gtk_widget_destroy(dialog);
     wizard_unref(wizard);
@@ -2940,8 +2940,14 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->find_button=wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
  add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
  c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SSH USER","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"SSH username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
+ add(two,label("SERVER LINUX ACCOUNT (OWNER ALPHA)","helper"),0);
+ c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"Server Linux username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
+ GtkWidget*owner_account_hint=label(
+   "Current owner-only alpha still needs the server's configured Linux "
+   "account for its restricted host connection. This is not a guest login "
+   "or permission grant. Future member onboarding will not ask for it.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(owner_account_hint),TRUE);
+ add(two,owner_account_hint,0);
  g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
@@ -2958,20 +2964,26 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
  GtkWidget*owner_access_note=label(
-   "Wolf pairing lets this device open the host's published game streams. "
-   "Owner-only Downloads and managed host operations require separate "
-   "restricted authorization under Settings > Gaming & Streaming. "
-   "Alpha limitation: this pairing helper still depends on preapproved owner SSH; "
-   "no-SSH client enrollment is not yet implemented.", "helper");
+   "Moonlight pairing authorizes Wolf-published streams only. The host's "
+   "owner-enabled Tailscale pairing service can handle new devices; when "
+   "it is not enabled, this alpha pairing path still needs trusted owner SSH. "
+   "After pairing, request separate owner-service access under "
+   "Settings > Gaming & Streaming. Do not share administrator credentials.", "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
  add(four,owner_access_note,0);
  
  gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
- add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
+ add(six,label("NEXT: VERIFY DEVICE ACCESS","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Wolf-paired devices can open published games. Owner-only Downloads and managed host operations require restricted access from Gaming & Streaming settings. Videos uses authorized Jellyfin discovery when available; Music is optional. Service URL overrides remain in Advanced Settings.",
+   "Saving a server address does not pair Moonlight or authorize owner "
+   "services. Confirm Moonlight pairing, then open Settings > Gaming & "
+   "Streaming > APPROVE THIS DEVICE (OWNER QR). Your server owner must "
+   "enable the trusted approval service before a new device can complete "
+   "phone approval. Use VERIFY ACCESS afterward. Videos and Downloads "
+   "also require the corresponding host services. No administrator "
+   "credentials should be transferred to a new client.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);

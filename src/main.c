@@ -661,10 +661,10 @@ static gboolean finish_on_main(void *arg) {
     const gboolean vpn_check=strstr(vpn_state,"VPN  CHECKING")!=NULL;
     const gboolean vpn_running=strstr(vpn_state,"VPN  RUNNING")!=NULL;
     gtk_label_set_text(GTK_LABEL(metric_vpn),
-      vpn_ok?"● DOWNLOAD VPN HEALTHY":
-      vpn_bad?"● DOWNLOAD VPN UNHEALTHY":
-      (vpn_check||vpn_running)?"● DOWNLOAD VPN UNVERIFIED":
-      "● DOWNLOAD VPN UNKNOWN");
+      vpn_ok?"VPN: HEALTHY":
+      vpn_bad?"VPN: UNVERIFIED":
+      (vpn_check||vpn_running)?"VPN: UNVERIFIED":
+      "VPN: UNKNOWN");
     GtkStyleContext*cs=gtk_widget_get_style_context(metric_vpn);
     gtk_style_context_remove_class(cs,"vpn-ok");
     gtk_style_context_remove_class(cs,"vpn-warn");
@@ -3311,7 +3311,7 @@ int main(int argc,char**argv) {
  GtkWidget*right=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);gtk_widget_set_valign(right,GTK_ALIGN_CENTER);add(head,right,0);
  GtkWidget*tools=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(right,tools,0);
  indicator=label("● CHECKING","state");add(tools,indicator,0);
- metric_vpn=label("● DOWNLOAD VPN UNKNOWN","state");
+ metric_vpn=label("VPN: UNKNOWN","state");
  gtk_widget_set_tooltip_text(metric_vpn,
    "Gluetun container status from server diagnostics. Not a verified "
    "VPN egress or kill-switch test.");

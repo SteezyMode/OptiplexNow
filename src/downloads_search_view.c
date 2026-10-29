@@ -92,6 +92,7 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    if(!strcmp(parts[3],"1"))
      g_object_set_data_full(G_OBJECT(row),"now-magnet",g_strdup(parts[5]),g_free);
    GtkWidget *name=text(parts[4]);
+   gtk_widget_set_name(name,"nowsearchtitle");
    gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
@@ -104,6 +105,7 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
                                 "Plugin link unsupported");
    g_free(size_text);g_free(seed_text);
    GtkWidget *meta=text(detail);
+   gtk_widget_set_name(meta,"nowsearchmeta");
    g_free(detail);
    /* Avoid rendering filesystem paths, HTML result links or private hashes. */
    gtk_box_pack_start(GTK_BOX(row),meta,FALSE,FALSE,0);
@@ -216,11 +218,13 @@ GtkWidget *now_downloads_search_view_new(void){
  s->status=text("Connect an approved owner device to search.");
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
  s->results=gtk_scrolled_window_new(NULL,NULL);
+ gtk_widget_set_name(s->results,"nowsearchresults");
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->results),
                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_widget_set_size_request(s->results,-1,150);
  gtk_widget_set_no_show_all(s->results,TRUE);
  s->list=gtk_list_box_new();
+ gtk_widget_set_name(s->list,"nowsearchlist");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(s->list),GTK_SELECTION_SINGLE);
  g_signal_connect(s->list,"row-activated",G_CALLBACK(on_result_activated),view);
  gtk_container_add(GTK_CONTAINER(s->results),s->list);

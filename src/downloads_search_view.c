@@ -9,8 +9,9 @@
 #define PAGE_SIZE 20
 #define MAX_WIRE 180000
 typedef struct {
- GtkWidget *entry,*button,*more,*sort,*status,*list,*results,*pager,*previous,*next,*page_label;
- guint result_count,page;
+ GtkWidget *entry,*button,*more,*headers[4],*status,*list,*results,*pager,*previous,*next,*page_label;
+ guint result_count,page,sort_column;
+ gboolean ascending;
  gchar *host,*user,*helper,*last_query;
  NowDownloadsMagnetSelected on_select;
  gpointer select_data;
@@ -30,36 +31,54 @@ static void free_state(gpointer data){
  SearchView *s=data;
  g_free(s->host);g_free(s->user);g_free(s->helper);g_free(s->last_query);g_free(s);
 }
-/* GtkListBox owns the sorted order. Compare only bounded validated fields.
- * Unknown sizes/seeds sort last, not as fake tiny files or zero seeders. */
+/* Sort the retrieved search batch, not just the visible page. Unknown
+ * numeric values always go last in either direction. */
 static gint compare_rows(GtkListBoxRow *left,GtkListBoxRow *right,gpointer data){
  SearchView *s=data;
  GtkWidget *a=gtk_bin_get_child(GTK_BIN(left));
  GtkWidget *b=gtk_bin_get_child(GTK_BIN(right));
- const gint64 *asz=a?g_object_get_data(G_OBJECT(a),"now-search-size"):NULL;
- const gint64 *bsz=b?g_object_get_data(G_OBJECT(b),"now-search-size"):NULL;
- const gint64 *asd=a?g_object_get_data(G_OBJECT(a),"now-search-seeds"):NULL;
- const gint64 *bsd=b?g_object_get_data(G_OBJECT(b),"now-search-seeds"):NULL;
- const gint64 *apub=a?g_object_get_data(G_OBJECT(a),"now-search-published"):NULL;
- const gint64 *bpub=b?g_object_get_data(G_OBJECT(b),"now-search-published"):NULL;
  const char *an=a?g_object_get_data(G_OBJECT(a),"now-search-title"):NULL;
  const char *bn=b?g_object_get_data(G_OBJECT(b),"now-search-title"):NULL;
- const char *mode=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->sort));
- gint64 av=0,bv=0;
- if(g_strcmp0(mode,"seeds")==0){
-   av=asd?*asd:-1;bv=bsd?*bsd:-1;
-   if(av<0 || bv<0){if(av<0 && bv>=0)return 1;if(bv<0 && av>=0)return -1;}
-   if(av!=bv)return av>bv?-1:1;
- }else if(g_strcmp0(mode,"small")==0 || g_strcmp0(mode,"large")==0){
-   av=asz?*asz:-1;bv=bsz?*bsz:-1;
-   if(av<0 || bv<0){if(av<0 && bv>=0)return 1;if(bv<0 && av>=0)return -1;}
-   if(av!=bv)return (av<bv ? -1 : 1)*(g_strcmp0(mode,"large")==0?-1:1);
- }else if(g_strcmp0(mode,"newest")==0 || g_strcmp0(mode,"oldest")==0){
-   av=apub?*apub:-1;bv=bpub?*bpub:-1;
-   if(av<=0 || bv<=0){if(av<=0 && bv>0)return 1;if(bv<=0 && av>0)return -1;}
-   if(av!=bv)return (av>bv ? -1 : 1)*(g_strcmp0(mode,"oldest")==0?-1:1);
+ if(s->sort_column==0){
+   gint cmp=g_ascii_strcasecmp(an?an:"",bn?bn:"");
+   return s->ascending?cmp:-cmp;
  }
+ const char *field=s->sort_column==1 ? "now-search-size" :
+                   s->sort_column==2 ? "now-search-seeds" :
+                                       "now-search-published";
+ const gint64 *ap=a?g_object_get_data(G_OBJECT(a),field):NULL;
+ const gint64 *bp=b?g_object_get_data(G_OBJECT(b),field):NULL;
+ gint64 av=ap?*ap:-1,bv=bp?*bp:-1;
+ if(av<0 || bv<0){
+   if(av<0 && bv>=0)return 1;
+   if(bv<0 && av>=0)return -1;
+ }
+ if(av!=bv)return (av<bv?-1:1)*(s->ascending?1:-1);
  return g_ascii_strcasecmp(an?an:"",bn?bn:"");
+}
+static void show_page(SearchView *s);
+static void header_clicked(GtkButton *button,gpointer data){
+ SearchView *s=state(GTK_WIDGET(data));
+ if(!s || !s->list)return;
+ guint column=GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(button),"now-sort-column"));
+ if(column<1 || column>4)return;
+ column--;
+ if(s->sort_column==column)s->ascending=!s->ascending;
+ else{
+   s->sort_column=column;
+   s->ascending=(column==0 || column==1);
+ }
+ const char *labels[]={"NAME","SIZE","SEEDERS","PUBLISHED"};
+ for(guint i=0;i<4;i++){
+   gchar *label=i==s->sort_column ?
+       g_strdup_printf("%s %s",labels[i],s->ascending?"↑":"↓") :
+       g_strdup(labels[i]);
+   gtk_button_set_label(GTK_BUTTON(s->headers[i]),label);
+   g_free(label);
+ }
+ s->page=0;
+ gtk_list_box_invalidate_sort(GTK_LIST_BOX(s->list));
+ show_page(s);
 }
 static void show_page(SearchView *s){
  if(!s || !s->pager || !s->list)return;
@@ -158,16 +177,22 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  clear_results(s);
  for(guint i=1;lines[i];i++){
    gchar **parts=g_strsplit(lines[i],"\t",-1);
-   GtkWidget *row=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
+   GtkWidget *row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
    gtk_widget_set_margin_start(row,6);
    gtk_widget_set_margin_end(row,6);
    gtk_widget_set_margin_top(row,5);
    gtk_widget_set_margin_bottom(row,5);
-   if(!strcmp(parts[3],"1"))
+   gboolean usable=!strcmp(parts[3],"1");
+   if(usable)
      g_object_set_data_full(G_OBJECT(row),"now-magnet",g_strdup(parts[5]),g_free);
+   gtk_widget_set_tooltip_text(row,usable ?
+     "Select to choose a download folder" :
+     "Plugin returned a webpage rather than a usable magnet link");
    GtkWidget *name=text(parts[4]);
    gtk_widget_set_name(name,"nowsearchtitle");
-   gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
+   gtk_widget_set_hexpand(name,TRUE);
+   gtk_widget_set_tooltip_text(name,parts[4]);
+   gtk_box_pack_start(GTK_BOX(row),name,TRUE,TRUE,0);
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
    gint64 published=parts[6] ? g_ascii_strtoll(parts[6],NULL,10):-1;
@@ -178,25 +203,24 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    g_object_set_data_full(G_OBJECT(row),"now-search-size",size_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-seeds",seed_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-title",g_strdup(parts[4]),g_free);
-   gchar *size_text=size>=0 ? g_format_size((guint64)size) : g_strdup("Size unknown");
-   gchar *seed_text=seeds>=0 ? g_strdup_printf("%lld seeds",(long long)seeds) :
-                               g_strdup("Seeds unknown");
+   gchar *size_text=size>=0 ? g_format_size((guint64)size) : g_strdup("—");
+   gchar *seed_text=seeds>=0 ? g_strdup_printf("%lld",(long long)seeds) :
+                               g_strdup("—");
    GDateTime *published_date=published>0 ?
       g_date_time_new_from_unix_local(published):NULL;
    gchar *date_text=published_date ?
-      g_date_time_format(published_date,"Published %Y-%m-%d") :
-      g_strdup("Publication date unknown");
+      g_date_time_format(published_date,"%Y-%m-%d") : g_strdup("—");
    if(published_date)g_date_time_unref(published_date);
-   gchar *detail=g_strdup_printf("%s  ·  %s  ·  %s  ·  %s",
-       size_text,seed_text,date_text,
-       !strcmp(parts[3],"1") ? "Magnet link ready" :
-                                "Plugin link unsupported");
+   const char *fields[]={size_text,seed_text,date_text};
+   const gint widths[]={108,84,122};
+   for(guint col=0;col<3;col++){
+     GtkWidget *cell=text(fields[col]);
+     gtk_widget_set_name(cell,"nowsearchmeta");
+     gtk_widget_set_size_request(cell,widths[col],-1);
+     gtk_widget_set_halign(cell,GTK_ALIGN_START);
+     gtk_box_pack_start(GTK_BOX(row),cell,FALSE,FALSE,0);
+   }
    g_free(size_text);g_free(seed_text);g_free(date_text);
-   GtkWidget *meta=text(detail);
-   gtk_widget_set_name(meta,"nowsearchmeta");
-   g_free(detail);
-   /* Avoid rendering filesystem paths, HTML result links or private hashes. */
-   gtk_box_pack_start(GTK_BOX(row),meta,FALSE,FALSE,0);
    gtk_container_add(GTK_CONTAINER(s->list),row);
    g_strfreev(parts);
  }
@@ -242,11 +266,6 @@ void now_downloads_search_view_on_select(GtkWidget *view,
                                          gpointer user_data){
  SearchView *s=state(view);
  if(s){s->on_select=callback;s->select_data=user_data;}
-}
-static void sort_changed(GtkComboBox *unused,gpointer data){
- (void)unused;
- SearchView *s=state(GTK_WIDGET(data));
- if(s && s->list){s->page=0;gtk_list_box_invalidate_sort(GTK_LIST_BOX(s->list));show_page(s);}
 }
 static void search_complete(GObject *unused,GAsyncResult *res,gpointer data){
  (void)unused;
@@ -335,16 +354,27 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_box_pack_start(GTK_BOX(bar),s->button,FALSE,FALSE,0);
  g_signal_connect(s->button,"clicked",G_CALLBACK(start_search),view);
  g_signal_connect(s->entry,"activate",G_CALLBACK(start_search),view);
- s->sort=gtk_combo_box_text_new();
- gtk_widget_set_name(s->sort,"nowsearchsort");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"small","SMALLER FILES FIRST");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"seeds","MOST SEEDERS");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"large","LARGER FILES FIRST");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"newest","NEWEST PUBLISHED");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"oldest","OLDEST PUBLISHED");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->sort),"small");
- gtk_box_pack_start(GTK_BOX(bar),s->sort,FALSE,FALSE,0);
- g_signal_connect(s->sort,"changed",G_CALLBACK(sort_changed),view);
+ /* Compact tracker-like sortable table: a click flips direction. */
+ GtkWidget *head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
+ gtk_widget_set_margin_start(head,6);
+ gtk_widget_set_margin_end(head,6);
+ const char *headers[]={"NAME","SIZE ↑","SEEDERS","PUBLISHED"};
+ const char *ids[]={"nowsearchheader_name","nowsearchheader_size",
+                   "nowsearchheader_seeds","nowsearchheader_published"};
+ const gint widths[]={-1,108,84,122};
+ for(guint col=0;col<4;col++){
+   GtkWidget *button=gtk_button_new_with_label(headers[col]);
+   gtk_widget_set_name(button,ids[col]);
+   gtk_widget_set_tooltip_text(button,"Click to sort; click again to reverse");
+   if(col==0)gtk_widget_set_hexpand(button,TRUE);
+   else gtk_widget_set_size_request(button,widths[col],-1);
+   gtk_box_pack_start(GTK_BOX(head),button,col==0,col==0,0);
+   g_object_set_data(G_OBJECT(button),"now-sort-column",GUINT_TO_POINTER(col+1));
+   g_signal_connect(button,"clicked",G_CALLBACK(header_clicked),view);
+   s->headers[col]=button;
+ }
+ s->sort_column=1;s->ascending=TRUE;
+ gtk_box_pack_start(GTK_BOX(view),head,FALSE,FALSE,0);
  s->status=text("Connect an approved owner device to search.");
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
  s->more=gtk_button_new_with_label("MORE RESULTS");

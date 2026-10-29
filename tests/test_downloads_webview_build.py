@@ -28,7 +28,7 @@ class DownloadsWebviewTests(unittest.TestCase):
         web=(ROOT/"src/downloads_webview.c").read_text()
         self.assertIn("now_downloads_webview_url_allowed", flow)
         self.assertIn("g_subprocess_get_successful(job->proc)",flow)
-        self.assertIn("now_downloads_webview_new(target,job->host)",flow)
+        self.assertIn("now_downloads_webview_new(approved_web_url,last_host)",flow)
         self.assertIn("WEBUI_PORT=",flow)
         self.assertIn("Discovering VPN-bound downloader",flow)
         self.assertIn("now_downloads_open(cfg[0],cfg[1],cfg[7]);",shell)

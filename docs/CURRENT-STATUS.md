@@ -1,3 +1,11 @@
+## October 29 — Search P2 follow-up: broaden results on demand and sort by publication date
+
+**Owner-observed problem:** Current Alpha v1.21.1 Search physically fills the page and responds within a few seconds, but typically returns ~25 partial results and can prioritize huge 2160p files. The fast-return backend intentionally stops its search job on the first nonempty results, so merely sorting the short subset cannot expose later smaller 1080p results.
+
+**Source-level change under PR #219 (not yet host/device accepted):** Keep the fast default; allow an explicit bounded **More Results** search of enabled qBittorrent plugins, up to 100 results and twelve polls. Native Search sorts the returned batch by smaller/larger size, highest seed count, and **newest/oldest publication date**. qBittorrent supplies `pubDate` when plugins support it; this is not the date added to the user's transfer queue. Missing dates sort last, and the new parser accepts legacy six-field hosts. Exact owner authorization, bounded magnet-only data and transient search-job cleanup are unchanged. CI status is tracked on PR #219.
+
+**Release and safety:** v1.21.1 is still the published Current Alpha; no replacement release or reference-host mutation has been made. The thorough-mode host broker and search module must be deployed after read-only checks and safe backups, then validated physically. P2 Transfers actions and broad Private Alpha 1 acceptance remain open.
+
 ## October 29 — P2 Downloads integrated source, host acceptance outstanding
 
 **Actual reference-host evidence:** Using the installed PR #214 client on the 2012 Mint MacBook Air, the owner physically demonstrated search results, selecting a media subfolder before Add, and a torrent progressing to 90% in VueTorrent; the native Downloads queue was a static snapshot, not a proven live monitor. Separate read-only checks confirmed qBittorrent shares Gluetun's network namespace, real egress IP differs from host, routing selects `tun0`, and the firewall's OUTPUT policy is DROP with an explicit tunnel exception. This is consistent with VPN isolation, **not** a deliberate tunnel-failure/kill-switch test.

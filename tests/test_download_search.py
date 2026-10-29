@@ -159,6 +159,25 @@ class DownloadSearchTests(unittest.TestCase):
         self.assertEqual([c[-1].rsplit("/",1)[-1]
                           for c in fake.commands[-2:]],["stop","delete"])
 
+    def test_publication_dates_are_bounded_and_optional(self):
+        cases=[(1767225600,1767225600),(None,-1),(-1,-1),(0,-1)]
+        for value,expected in cases:
+            result={"status":"Stopped","total":1,"results":[{
+                "fileName":"Public domain video","fileSize":3000,
+                "nbSeeders":8,"fileUrl":MAGNET}]}
+            if value is not None:
+                result["results"][0]["pubDate"]=value
+            data=search_once("Ubuntu ISO",runner=FakeAPI(result=result),
+                             sleeper=lambda _:None)
+            self.assertEqual(data["results"][0]["published"],expected)
+        for invalid in ("today",True,253402300800,-2):
+            result={"status":"Stopped","total":1,"results":[{
+                "fileName":"Public domain video","fileSize":3000,
+                "nbSeeders":8,"fileUrl":MAGNET,"pubDate":invalid}]}
+            with self.subTest(value=invalid),self.assertRaises(SearchError):
+                search_once("Ubuntu ISO",runner=FakeAPI(result=result),
+                            sleeper=lambda _:None)
+
     def test_thorough_mode_rejects_non_boolean_before_network(self):
         with self.assertRaisesRegex(SearchError,"search depth"):
             search_once("Ubuntu ISO",full="yes",

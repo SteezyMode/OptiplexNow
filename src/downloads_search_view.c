@@ -84,11 +84,14 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
+   gchar *size_text=size>=0 ? g_format_size((guint64)size) : g_strdup("Size unknown");
+   gchar *seed_text=seeds>=0 ? g_strdup_printf("%lld seeds",(long long)seeds) :
+                               g_strdup("Seeds unknown");
    gchar *detail=g_strdup_printf("%s  ·  %s  ·  %s",
-       size>=0 ? "Size available" : "Size unknown",
-       seeds>=0 ? "Seeds reported" : "Seeds unknown",
-       !strcmp(parts[3],"1") ? "Magnet available" :
-                                "Plugin link cannot be added directly");
+       size_text,seed_text,
+       !strcmp(parts[3],"1") ? "Magnet link ready" :
+                                "Plugin link unsupported");
+   g_free(size_text);g_free(seed_text);
    GtkWidget *meta=text(detail);
    g_free(detail);
    /* Avoid rendering filesystem paths, HTML result links or private hashes. */

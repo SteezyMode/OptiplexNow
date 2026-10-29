@@ -5,9 +5,12 @@
 #include <gio/gio.h>
 #include <string.h>
 
-#define RESULT_LIMIT 20
+#define RESULT_LIMIT 100
+#define PAGE_SIZE 20
+#define MAX_WIRE 180000
 typedef struct {
- GtkWidget *entry,*button,*status,*list,*results;
+ GtkWidget *entry,*button,*status,*list,*results,*pager,*previous,*next,*page_label;
+ guint result_count,page;
  gchar *host,*user,*helper;
  NowDownloadsMagnetSelected on_select;
  gpointer select_data;
@@ -26,8 +29,44 @@ static void free_state(gpointer data){
  SearchView *s=data;
  g_free(s->host);g_free(s->user);g_free(s->helper);g_free(s);
 }
+static void show_page(SearchView *s){
+ if(!s || !s->pager || !s->list)return;
+ guint pages=(s->result_count+PAGE_SIZE-1)/PAGE_SIZE;
+ if(!pages){gtk_widget_hide(s->pager);return;}
+ if(s->page>=pages)s->page=pages-1;
+ GList *rows=gtk_container_get_children(GTK_CONTAINER(s->list));
+ guint index=0;
+ for(GList *at=rows;at;at=at->next,index++){
+   GtkWidget *row=GTK_WIDGET(at->data);
+   gboolean visible=index>=s->page*PAGE_SIZE &&
+                    index<(s->page+1)*PAGE_SIZE;
+   gtk_widget_set_no_show_all(row,!visible);
+   if(visible)gtk_widget_show(row);
+   else gtk_widget_hide(row);
+ }
+ g_list_free(rows);
+ gchar *caption=g_strdup_printf("Page %u of %u  ·  %u results",
+                                  s->page+1,pages,s->result_count);
+ gtk_label_set_text(GTK_LABEL(s->page_label),caption);
+ g_free(caption);
+ gtk_widget_set_sensitive(s->previous,s->page>0);
+ gtk_widget_set_sensitive(s->next,s->page+1<pages);
+ gtk_widget_show_all(s->pager);
+}
+static void previous_page(GtkButton *unused,gpointer data){
+ (void)unused;
+ SearchView *s=state(GTK_WIDGET(data));
+ if(s && s->page){s->page--;show_page(s);}
+}
+static void next_page(GtkButton *unused,gpointer data){
+ (void)unused;
+ SearchView *s=state(GTK_WIDGET(data));
+ if(s && (s->page+1)*PAGE_SIZE<s->result_count){s->page++;show_page(s);}
+}
 static void clear_results(SearchView *s){
  if(!s)return;
+ s->result_count=0;s->page=0;
+ if(s->pager)gtk_widget_hide(s->pager);
  GList *items=gtk_container_get_children(GTK_CONTAINER(s->list));
  for(GList *item=items;item;item=item->next)
    gtk_widget_destroy(GTK_WIDGET(item->data));
@@ -57,7 +96,7 @@ static gboolean integer(const char *value,gint64 min,gint64 max,gint64 *out){
 }
 gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  SearchView *s=state(view);
- if(!s || !wire || !*wire || strlen(wire)>32768 ||
+ if(!s || !wire || !*wire || strlen(wire)>MAX_WIRE ||
     wire[strlen(wire)-1]=='\n' || !g_utf8_validate(wire,-1,NULL))
    return FALSE;
  gchar **lines=g_strsplit(wire,"\n",-1);
@@ -112,9 +151,12 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_container_add(GTK_CONTAINER(s->list),row);
    g_strfreev(parts);
  }
+ s->result_count=count;
+ s->page=0;
  if(count){
    gtk_widget_show_all(s->list);
    gtk_widget_show(s->results);
+   show_page(s);
    gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
        count,count==1?"":"s",partial?" (partial)":"");
    gtk_label_set_text(GTK_LABEL(s->status),message);
@@ -156,7 +198,7 @@ static void search_complete(GObject *unused,GAsyncResult *res,gpointer data){
    job->proc,res,&stdout_text,NULL,&err);
  if(s && !g_strcmp0(s->host,job->host) && !g_strcmp0(s->user,job->user)){
    gboolean ok=completed && g_subprocess_get_successful(job->proc) &&
-      stdout_text && strlen(stdout_text)<=32768 &&
+      stdout_text && strlen(stdout_text)<=MAX_WIRE &&
       now_downloads_search_view_update(job->view,g_strchomp(stdout_text));
    if(!ok){
      clear_results(s);
@@ -230,6 +272,18 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_container_add(GTK_CONTAINER(s->results),s->list);
  gtk_box_pack_start(GTK_BOX(view),s->results,FALSE,FALSE,0);
  gtk_widget_hide(s->results);
+ s->pager=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_widget_set_no_show_all(s->pager,TRUE);
+ s->previous=gtk_button_new_with_label("PREVIOUS");
+ s->next=gtk_button_new_with_label("NEXT");
+ s->page_label=gtk_label_new("Page 1");
+ gtk_box_pack_start(GTK_BOX(s->pager),s->previous,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(s->pager),s->page_label,TRUE,TRUE,0);
+ gtk_box_pack_end(GTK_BOX(s->pager),s->next,FALSE,FALSE,0);
+ g_signal_connect(s->previous,"clicked",G_CALLBACK(previous_page),view);
+ g_signal_connect(s->next,"clicked",G_CALLBACK(next_page),view);
+ gtk_box_pack_start(GTK_BOX(view),s->pager,FALSE,FALSE,0);
+ gtk_widget_hide(s->pager);
  return view;
 }
 void now_downloads_search_view_configure(GtkWidget *view,const char *host,

@@ -123,9 +123,11 @@ def _results(raw):
         title = item.get("fileName")
         size = item.get("fileSize")
         seeds = item.get("nbSeeders")
+        leechers = item.get("nbLeechers", -1)
         if (not isinstance(title, str) or not title or len(title) > 512
-                or type(size) is not int or size < -1
-                or type(seeds) is not int or seeds < -1):
+                or type(size) is not int or not -1 <= size <= 2**63-1
+                or type(seeds) is not int or not -1 <= seeds <= 2**31-1
+                or type(leechers) is not int or not -1 <= leechers <= 2**31-1):
             raise SearchError("Search result has invalid fields")
         # Upstream pubDate is a Unix timestamp (not when the user queued it).
         # Some plugins provide no date; preserve that as unknown (-1).
@@ -137,6 +139,7 @@ def _results(raw):
         safe_title = "".join(c if c.isprintable() else " " for c in title)[:160]
         magnet = checked_magnet(item.get("fileUrl"))
         sanitized.append({"name": safe_title, "bytes": size, "seeders": seeds,
+                          "leechers": leechers,
                           "can_add": bool(magnet), "magnet": magnet,
                           "published": date if date > 0 else -1})
     return {"status": payload["status"], "total": payload["total"],

@@ -16,26 +16,62 @@ from owner_host_pilot import inspect_candidate
 from media_endpoint import inspect_local_jellyfin
 from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
-from download_search import search_once, checked_query
+from download_search import search_once, checked_query, checked_magnet
+from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
+                                   add_magnet as enqueue_download, _relative, ROOT_ID)
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_search"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add"))
 
 
 def _validated_request(request):
     if not isinstance(request, dict):
         raise PolicyError("Unsupported owner Games request")
     action = request.get("action")
-    fields = {"version", "action", "query"} if action == "downloads_search" else {"version", "action"}
+    fields = {"version", "action"}
+    if action == "downloads_roots":
+        try:
+            return {"success": True, "service": "qbittorrent",
+                    **inspect_download_roots()}
+        except InventoryError:
+            return {"success": False, "status": "destinations_unavailable"}
+
+    if action == "downloads_browse":
+        try:
+            return {"success": True, "service": "qbittorrent",
+                    **browse_downloads(request["root"], request["relative"])}
+        except InventoryError:
+            return {"success": False, "status": "folder_unavailable"}
+
+    if action == "downloads_add":
+        try:
+            return {"success": True,
+                    **enqueue_download(request["root"],request["relative"],request["magnet"])}
+        except InventoryError:
+            return {"success": False, "status": "add_unavailable"}
+
+    if action == "downloads_search":
+        fields.add("query")
+    elif action == "downloads_browse":
+        fields.update(("root", "relative"))
+    elif action == "downloads_add":
+        fields.update(("root", "relative", "magnet"))
     if (set(request) != fields
             or type(request.get("version")) is not int or request["version"] != VERSION
             or not isinstance(action, str) or action not in ACTIONS):
         raise PolicyError("Unsupported owner Games request")
-    if action == "downloads_search":
-        try:
+    try:
+        if action == "downloads_search":
             checked_query(request["query"])
-        except InventoryError:
-            raise PolicyError("Invalid download search") from None
+        elif action in ("downloads_browse", "downloads_add"):
+            root = request["root"]
+            if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
+                raise PolicyError("Invalid download library root")
+            _relative(request["relative"])
+            if action == "downloads_add" and checked_magnet(request["magnet"]) is None:
+                raise PolicyError("Invalid magnet URI")
+    except InventoryError:
+        raise PolicyError("Invalid download operation") from None
     return action
 
 

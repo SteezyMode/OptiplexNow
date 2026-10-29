@@ -16,17 +16,27 @@ from owner_host_pilot import inspect_candidate
 from media_endpoint import inspect_local_jellyfin
 from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
+from download_search import search_once, checked_query
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_search"))
 
 
 def _validated_request(request):
-    if (not isinstance(request, dict) or set(request) != {"version", "action"}
-            or type(request["version"]) is not int or request["version"] != VERSION
-            or not isinstance(request["action"], str) or request["action"] not in ACTIONS):
+    if not isinstance(request, dict):
         raise PolicyError("Unsupported owner Games request")
-    return request["action"]
+    action = request.get("action")
+    fields = {"version", "action", "query"} if action == "downloads_search" else {"version", "action"}
+    if (set(request) != fields
+            or type(request.get("version")) is not int or request["version"] != VERSION
+            or not isinstance(action, str) or action not in ACTIONS):
+        raise PolicyError("Unsupported owner Games request")
+    if action == "downloads_search":
+        try:
+            checked_query(request["query"])
+        except InventoryError:
+            raise PolicyError("Invalid download search") from None
+    return action
 
 
 def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
@@ -60,6 +70,15 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         profile_id = binding["wolf_profile_id"]
         if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
             raise PolicyError("Owner Steam lease/workspace mismatch")
+
+    if action == "downloads_search":
+        try:
+            # Only enabled, pre-existing qBittorrent plugins. No add/delete,
+            # custom endpoint, file path or plugin install accepted.
+            return {"success": True, "service": "qbittorrent",
+                    **search_once(request["query"])}
+        except InventoryError:
+            return {"success": False, "status": "search_unavailable"}
 
     if action == "downloads_queue":
         try:

@@ -7,8 +7,8 @@ import subprocess
 import sys
 
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
-MAX_RESPONSE = 40000
-MAX_RESULTS = 20
+MAX_RESPONSE = 262144
+MAX_RESULTS = 100
 
 def valid_host(s):
     return (isinstance(s, str) and
@@ -58,7 +58,10 @@ def present(response):
                 ord(c)<33 or ord(c)>126 for c in safe_magnet)):
             raise ValueError("Invalid magnet field")
         lines.append(f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}")
-    return "\n".join(lines)
+    wire="\n".join(lines)
+    if len(wire.encode("utf-8"))>180000:
+        raise ValueError("Search response too large for UI")
+    return wire
 
 def fetch(host, user, query, *, runner=subprocess.run):
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():

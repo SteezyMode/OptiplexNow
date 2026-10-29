@@ -135,13 +135,15 @@ def _results(raw):
             "results": sanitized}
 
 
-def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
-    """Return the first usable bounded snapshot without a mandatory 12s wait.
+def search_once(query, *, full=False, runner=subprocess.run, sleeper=time.sleep):
+    """Quick search returns the first matches; explicit full searches can take 12s.
 
-    Still poll up to twelve times when the enabled plugins find nothing.
-    Return partial=True when plugins are running; each search uses one fresh
-    SID and cleans up only its own search job. Never enqueue torrent data.
+    Both modes reuse one qBittorrent session per job and clean up that job only.
+    When plugins are still running at the deadline, return partial=True.
+    The returned results cannot enqueue a torrent without a separate approval.
     """
+    if type(full) is not bool:
+        raise SearchError("Invalid search depth")
     pattern = checked_query(query)
     gateway, port = locate_verified_downloader(runner=runner)
     raw, session = _api(runner, gateway, port, "start",
@@ -167,7 +169,7 @@ def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
             # search plugin to finish its 12-second window. The response
             # explicitly marks partial=True if plugins are still running.
             # Cleanup remains restricted to this search job, never torrents.
-            if last["status"] == "Stopped" or last["results"]:
+            if last["status"] == "Stopped" or (last["results"] and not full):
                 break
         if last is None:
             raise SearchError("Search produced no response")

@@ -58,7 +58,7 @@ xvfb-run -a dbus-run-session -- bash -c '
       tail -40 "$1/stderr.log" >&2 || true
       exit 1
     fi
-    if xwininfo -root -tree 2>/dev/null | grep -F "OptiPlex Now | Setup" >/dev/null; then
+    if xwininfo -root -tree 2>/dev/null | grep -F "NOW Setup: Tailscale" >/dev/null; then
       echo "NOW first-run setup wizard opened inside an isolated profile."
       exit 0
     fi

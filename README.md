@@ -6,7 +6,7 @@
 
 ## Download NOW — Current Alpha
 
-**[Download the Linux .deb (v1.21.0)](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)**
+**[Download NOW — Current Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
 
 For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, and install with your normal package installer. No compiling or GitHub Actions required.
 

@@ -11,6 +11,9 @@ static GtkWidget *queue_label;
 static GtkWidget *queue_view;
 static GtkWidget *search_view;
 static GtkWidget *destination_view;
+static GtkWidget *downloads_subtabs;
+static GtkWidget *transfers_tab,*search_tab;
+static gboolean queue_has_data;
 static GtkWidget *advanced_button;
 static GtkWidget *back_button;
 static gchar *approved_web_url;
@@ -113,11 +116,14 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
    else gtk_label_set_text(GTK_LABEL(queue_label),
      "Owner service request failed. Check restricted device approval and server/downloads availability. Ordinary SSH and Moonlight pairing are separate.");
    if(!accepted){
+     queue_has_data=FALSE;
      now_downloads_queue_view_message(queue_view,"Download queue unavailable.");
      if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
        "DOWNLOADS NOT AVAILABLE — SEE AUTHORIZATION DETAILS BELOW");
-   }else if(status_label)
+   }else if(status_label){
+     queue_has_data=TRUE;
      gtk_label_set_text(GTK_LABEL(status_label),"QUEUE UPDATED");
+   }
  }
  running=FALSE;
  if(!accepted && pending_web_host && !reconnect_used && !reconnect_source){
@@ -206,8 +212,40 @@ void now_downloads_refresh(const char *host,const char *user){
  job->user=g_strdup(user);
  running=TRUE;
  gtk_label_set_text(GTK_LABEL(queue_label),"Current downloads");
- now_downloads_queue_view_message(queue_view,"Refreshing approved download queue...");
+ if(!queue_has_data)
+   now_downloads_queue_view_message(queue_view,"Refreshing approved download queue...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,complete,job);
+}
+static gboolean refresh_visible_transfers(gpointer unused){
+ (void)unused;
+ if(queue_stack && downloads_subtabs && last_host && last_user &&
+    gtk_widget_get_mapped(queue_stack) && !running &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(queue_stack)),"queue") &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(downloads_subtabs)),"transfers"))
+   now_downloads_refresh(last_host,last_user);
+ return G_SOURCE_CONTINUE;
+}
+static void update_download_tab_buttons(void){
+ if(!downloads_subtabs)return;
+ const char *active=gtk_stack_get_visible_child_name(GTK_STACK(downloads_subtabs));
+ GtkStyleContext *a=gtk_widget_get_style_context(transfers_tab);
+ GtkStyleContext *b=gtk_widget_get_style_context(search_tab);
+ if(active && !strcmp(active,"search")){
+   gtk_style_context_remove_class(a,"active");
+   gtk_style_context_add_class(b,"active");
+ }else{
+   gtk_style_context_add_class(a,"active");
+   gtk_style_context_remove_class(b,"active");
+ }
+}
+static void switch_download_subtab(GtkButton *button,gpointer unused){
+ (void)unused;
+ if(!downloads_subtabs)return;
+ const char *page=g_object_get_data(G_OBJECT(button),"now-download-tab");
+ gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),page);
+ update_download_tab_buttons();
+ if(!strcmp(page,"transfers") && last_host && last_user && !running)
+   now_downloads_refresh(last_host,last_user);
 }
 static void show_queue(GtkWidget *button,gpointer unused){
  (void)button;(void)unused;
@@ -336,7 +374,7 @@ GtkWidget *now_downloads_page(void){
  gtk_box_pack_start(GTK_BOX(toolbar),refresh,FALSE,FALSE,0);
  /* Refresh uses only the already-paired host and SSH user. */
  g_signal_connect(refresh,"clicked",G_CALLBACK(on_refresh_clicked),NULL);
- advanced_button=gtk_button_new_with_label("ADVANCED VUETORRENT");
+ advanced_button=gtk_button_new_with_label("ADVANCED · VUETORRENT");
  gtk_widget_set_sensitive(advanced_button,FALSE);
  gtk_box_pack_start(GTK_BOX(toolbar),advanced_button,FALSE,FALSE,0);
  g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL);
@@ -360,19 +398,41 @@ GtkWidget *now_downloads_page(void){
  gtk_stack_add_named(GTK_STACK(queue_stack),view_holder,"web");
 
  GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
- search_view=now_downloads_search_view_new();
- gtk_box_pack_start(GTK_BOX(body),search_view,FALSE,FALSE,0);
- destination_view=now_downloads_destination_view_new();
- gtk_box_pack_start(GTK_BOX(body),destination_view,FALSE,FALSE,0);
- now_downloads_search_view_on_select(search_view,on_search_result,NULL);
- now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
+ GtkWidget *tabs=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
+ transfers_tab=gtk_button_new_with_label("TRANSFERS");
+ search_tab=gtk_button_new_with_label("SEARCH");
+ gtk_widget_set_name(transfers_tab,"downloadsubtab");
+ gtk_widget_set_name(search_tab,"downloadsubtab");
+ g_object_set_data(G_OBJECT(transfers_tab),"now-download-tab","transfers");
+ g_object_set_data(G_OBJECT(search_tab),"now-download-tab","search");
+ g_signal_connect(transfers_tab,"clicked",G_CALLBACK(switch_download_subtab),NULL);
+ g_signal_connect(search_tab,"clicked",G_CALLBACK(switch_download_subtab),NULL);
+ gtk_box_pack_start(GTK_BOX(tabs),transfers_tab,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(tabs),search_tab,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(body),tabs,FALSE,FALSE,0);
+ downloads_subtabs=gtk_stack_new();
+ gtk_widget_set_vexpand(downloads_subtabs,TRUE);
+ gtk_box_pack_start(GTK_BOX(body),downloads_subtabs,TRUE,TRUE,0);
+ GtkWidget *transfers=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  queue_label=gtk_label_new("Current downloads");
  gtk_label_set_xalign(GTK_LABEL(queue_label),0);
  gtk_label_set_line_wrap(GTK_LABEL(queue_label),TRUE);
- gtk_box_pack_start(GTK_BOX(body),queue_label,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(transfers),queue_label,FALSE,FALSE,0);
  queue_view=now_downloads_queue_view_new();
- gtk_box_pack_start(GTK_BOX(body),queue_view,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(transfers),queue_view,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers");
+ GtkWidget *search=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ search_view=now_downloads_search_view_new();
+ gtk_box_pack_start(GTK_BOX(search),search_view,FALSE,FALSE,0);
+ destination_view=now_downloads_destination_view_new();
+ gtk_box_pack_start(GTK_BOX(search),destination_view,FALSE,FALSE,0);
+ now_downloads_search_view_on_select(search_view,on_search_result,NULL);
+ now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
+ gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
+ gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
+ update_download_tab_buttons();
  gtk_stack_add_named(GTK_STACK(queue_stack),body,"queue");
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
+ g_timeout_add_seconds(3,refresh_visible_transfers,NULL);
  return root;
 }

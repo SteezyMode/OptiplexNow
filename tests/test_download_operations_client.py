@@ -48,6 +48,34 @@ class OwnerOperationsTests(unittest.TestCase):
         self.assertEqual(self.call("browse","bigdisk","Movies"),
             "FOLDERS\tbigdisk\tMovies\nFOLDER\tAction \nFOLDER\tHorror")
 
+    def test_vpn_health_uses_authorized_inventory_and_never_claims_leak_proof(self):
+        healthy={"success":True,"version":1,
+            "downloaders":[{"service":"qbittorrent","gateway_bound":True,
+                "gateway_healthy":True,"vpn_provider":"airvpn",
+                "vpn_egress_verified":False,"killswitch_verified":False}]}
+        self.assertEqual(mod.present("vpn",healthy),"VPN\\tHEALTHY\\tairvpn")
+        healthy["downloaders"][0]["gateway_healthy"]=False
+        self.assertEqual(mod.present("vpn",healthy),"VPN\\tUNVERIFIED\\tairvpn")
+        healthy["downloaders"][0]["vpn_provider"]="injected-url"
+        with self.assertRaises(ValueError):
+            mod.present("vpn",healthy)
+
+    def test_vpn_request_requires_same_owner_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"id_ed25519";key.write_text("test only")
+            def runner(cmd,**kwargs):
+                self.assertEqual(json.loads(kwargs["input"]),
+                    {"version":1,"action":"downloads_status"})
+                result={"success":True,"version":1,
+                        "downloaders":[{"service":"qbittorrent",
+                                        "gateway_bound":True,
+                                        "gateway_healthy":True}]}
+                return subprocess.CompletedProcess(cmd,0,json.dumps(result).encode(),b"")
+            with patch.object(mod,"KEY",key):
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex",
+                                           "vpn",runner=runner),
+                                 "VPN\\tHEALTHY\\tother")
+
     def test_add_only_explicit_client_request(self):
         self.assertEqual(self.call("add","bigdisk","Movies/Horror",MAGNET),
                          "SUBMITTED")

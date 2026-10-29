@@ -1,4 +1,8 @@
-"""End-to-end *helper-protocol* simulation for NOW's Beta 1 client.
+"""Legacy SSH *helper-protocol* simulation; NOT new-client alpha acceptance.
+
+This covers the older owner SSH/ssh-copy-id path and mocked Wolf pairing.
+It does not prove current QR/phone enrollment, real independent Wolf
+authorization, GUI setup completion, or first-time Tailscale approval.
 
 Runs the real packaged-source Tailscale status/discovery, SSH key-enrollment,
 Wolf SSH client and Wolf host helper as separate subprocesses. Only fake CLI

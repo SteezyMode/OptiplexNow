@@ -2952,7 +2952,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
     wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
  }
  c->tailscale_poll_id=g_timeout_add_seconds(5,wizard_tailscale_poll,c);
- gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"TAILSCALE");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"NOW Setup: Tailscale");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
  /* Page 2: choose your server. All values are prefilled from saved configuration. */
  GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
  add(two,label("FIND YOUR SERVER","modalheading"),0);
@@ -2965,7 +2965,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
- gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"NOW Setup: Server");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
  /* Page 3: independent Moonlight identity for this Linux profile. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("CONNECT TO GAME HOST","modalheading"),0);
@@ -2986,7 +2986,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
  add(four,owner_access_note,0);
  
- gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"NOW Setup: Games");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
@@ -3000,7 +3000,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  add(six,owner_ready_note,0);
  add(six,label("Saved settings carry over between updates.","helper"),0);
  add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"FINISH");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"NOW Setup: Finish");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  g_signal_connect_data(a,"prepare",(GCallback)wizard_prepare,c,NULL,0);
  g_signal_connect_data(a,"apply",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"cancel",(GCallback)wizard_cancel,c,NULL,0);

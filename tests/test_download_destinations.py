@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"server"))
 from download_destinations import DestinationError, roots, browse, add_magnet
+from download_inventory import InventoryError
 
 VPN="a"*64
 QBIT="b"*64
@@ -121,9 +122,9 @@ class DestinationTests(unittest.TestCase):
 
     def test_unsafe_topology_denies_all(self):
         self.fake.records[0]["State"]["Health"]["Status"]="unhealthy"
-        with self.assertRaises(DestinationError):
+        with self.assertRaises(InventoryError):
             roots(runner=self.fake)
-        with self.assertRaises(DestinationError):
+        with self.assertRaises(InventoryError):
             add_magnet("bigdisk","Movies/Horror",MAGNET,runner=self.fake)
 
 if __name__=="__main__":

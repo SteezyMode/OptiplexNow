@@ -1,6 +1,6 @@
 name: Publish OptiPlex NOW
 
-# Explicit v1.21.0 Friends & Family release: a single marked, CI-verified main
+# Explicit v1.21.0 official .deb: a single marked, CI-verified main
 # merge may publish its curated version without manual tag credentials.
 # All other main pushes and PRs are inert; regular tags remain supported.
 on:
@@ -102,7 +102,6 @@ jobs:
             dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
             --verify-tag \
-            --title "OptiPlex NOW ${tag} Closed Beta" \
+            --title "OptiPlex NOW ${tag} — Friends & Family"  \
             --notes-file "$notes" \
-            --prerelease \
-            --latest=false
+            --latest

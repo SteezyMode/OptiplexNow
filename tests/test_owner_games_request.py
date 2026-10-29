@@ -117,6 +117,38 @@ class TrustedGamesGateTests(unittest.TestCase):
             self.assertEqual(self.call("downloads_search"),
                              {"success":False,"status":"search_unavailable"})
 
+    def test_streaming_search_requires_verified_owner_and_trusted_emitter(self):
+        from unittest.mock import patch
+        request={"version":1,"action":"downloads_search",
+                 "query":"Ubuntu ISO","stream":True}
+        def call(client="1001",emit=None):
+            return handle_owner_games_request(
+                request,verified_client_id=client,store=self.store,
+                wolf_api=self.api,search_emitter=emit)
+        snapshots=[]
+        def run(query,emit):
+            self.assertEqual(query,"Ubuntu ISO")
+            emit({"status":"Running","partial":True,"total":1,"results":[]})
+            emit({"status":"Stopped","partial":False,"total":2,"results":[]})
+        with patch("owner_games_request.stream_search",side_effect=run) as backend:
+            self.assertIsNone(call(emit=snapshots.append))
+            self.assertEqual(len(snapshots),2)
+            self.assertTrue(all(x["success"] and x["service"]=="qbittorrent"
+                                for x in snapshots))
+            with self.assertRaises(PolicyError):
+                call(client="99999999",emit=snapshots.append)
+            with self.assertRaises(PolicyError):
+                call(emit=None)
+            self.assertEqual(backend.call_count,1)
+        for bad in (False,"true",1,None):
+            request["stream"]=bad
+            with self.assertRaises(PolicyError):
+                call(emit=snapshots.append)
+        request["stream"]=True
+        request["full"]=True
+        with self.assertRaises(PolicyError):
+            call(emit=snapshots.append)
+
     def test_download_search_rejects_untrusted_fields_before_host_access(self):
         from unittest.mock import patch
         invalid=(

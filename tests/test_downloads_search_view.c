@@ -20,10 +20,10 @@ static void test_mapped_full_results(void){
  GtkWidget *view=now_downloads_search_view_new();
  gtk_container_add(GTK_CONTAINER(window),view);
  gtk_widget_show_all(window);
- GString *wire=g_string_new("SEARCH\\t1\\t90");
+ GString *wire=g_string_new("SEARCH\t1\t90");
  for(int i=0;i<20;i++)
    g_string_append_printf(wire,
-      "\\nRESULT\\t%u\\t%u\\t0\\tLinux release %02d\\t-",
+      "\nRESULT\t%u\t%u\t0\tLinux release %02d\t-",
       (unsigned)(i+1000),(unsigned)(i+1),i);
  for(int i=0;i<8;i++){
    g_assert_true(now_downloads_search_view_update(view,wire->str));

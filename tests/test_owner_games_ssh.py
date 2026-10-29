@@ -131,7 +131,7 @@ class ForcedGamesBridgeTests(unittest.TestCase):
         for data,expected in (
             (b'{"version":1,"action":"status"}\n',{"version":1,"action":"status"}),
             (b'{"version":1,"action":"status"}\n{"action":"stop"}\n',"Multiple"),
-            (b"f"*800+b"\n","exceeds"),
+            (b"f"*2200+b"\n","exceeds"),
             (b'{"version":1,"action":"bad"\n',"Invalid"),
         ):
             read,write=os.pipe()

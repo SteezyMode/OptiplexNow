@@ -29,7 +29,7 @@ from owner_games_request import handle_owner_games_request
 from wolf_docker_adapter import WolfDockerAPI
 
 CONFIG_PATH = Path.home() / ".config/optiplex-now/owner-games-host.json"
-MAX_INPUT = 768  # Bounded UTF-8 search query JSON; never a general shell
+MAX_INPUT = 2048  # Bounded owner requests, including approved magnet URLs; no shell
 MAX_CONFIG = 2048
 VIDEO_CAPS = frozenset(("video/x-raw", "video/x-raw(memory:CUDAMemory)"))
 STEAM_NAME = re.compile(r"^(steam|steamwebhelper|wineserver|wine|proton|pressure-vessel|re2(\.exe)?$)", re.I)

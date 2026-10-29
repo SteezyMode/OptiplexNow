@@ -195,53 +195,60 @@ def search_once(query, *, full=False, runner=subprocess.run, sleeper=time.sleep)
 
 
 def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
-    """One owner-approved qBittorrent search, yielding successive snapshots.
+    """Emit successive incremental results from one existing qBittorrent job.
 
-    Like VueTorrent: start once, poll the SAME SID once per second, and emit
-    changed result sets before finishing. Never add torrents, expose URLs, or
-    persist qBittorrent cookies. The bounded job is always cleaned up.
+    Follow the same offset-based polling model as VueTorrent. The validated
+    initial frame replaces the list; following frames APPEND only fresh rows.
+    Bound total work to 12 polls / 1000 results, preserving the job SID and
+    cleaning up this ephemeral job only, never any torrent transfer.
     """
     if not callable(emit):
         raise SearchError("Search stream unavailable")
-    pattern = checked_query(query)
-    gateway, port = locate_verified_downloader(runner=runner)
-    raw, session = _api(runner, gateway, port, "start",
-                        fields={"pattern": pattern, "plugins": "enabled",
-                                "category": "all"})
+    pattern=checked_query(query)
+    gateway,port=locate_verified_downloader(runner=runner)
+    raw,session=_api(runner,gateway,port,"start",
+                     fields={"pattern":pattern,"plugins":"enabled",
+                             "category":"all"})
     try:
-        started = json.loads(raw)
-    except (UnicodeDecodeError, ValueError) as exc:
+        started=json.loads(raw)
+    except (UnicodeDecodeError,ValueError) as exc:
         raise SearchError("Search job did not start") from exc
-    if (not isinstance(started, dict) or type(started.get("id")) is not int
-            or not 0 <= started["id"] < 2**31):
+    if (not isinstance(started,dict) or type(started.get("id")) is not int
+            or not 0<=started["id"]<2**31):
         raise SearchError("Invalid search job ID")
-    job_id = started["id"]
-    last_count = -1
-    last = None
+    job_id=started["id"]
+    received=0
+    last=None
     try:
         for _ in range(12):
             sleeper(1)
-            reply, _ = _api(runner, gateway, port, "results",
-                            fields={"id": job_id, "limit": MAX_RESULTS,
-                                    "offset": 0}, session=session)
-            last = _results(reply)
-            last["partial"] = last["status"] == "Running"
-            count = len(last["results"])
-            if count != last_count or not last["partial"]:
-                emit(last)
-                last_count = count
-            if not last["partial"] or count >= MAX_RESULTS:
+            reply,_=_api(runner,gateway,port,"results",
+                         fields={"id":job_id,"limit":min(MAX_RESULTS,1000-received),
+                                 "offset":received},session=session)
+            last=_results(reply)
+            rows=last["results"]
+            # The first packet always resets the client list; later packets
+            # only append new results, so sorting and scroll stay intact.
+            if rows or received==0 or last["status"]=="Stopped":
+                frame={**last,"partial":last["status"]=="Running",
+                       "append":received>0}
+                emit(frame)
+            received+=len(rows)
+            if last["status"]=="Stopped" or received>=1000:
                 break
         if last is None:
             raise SearchError("Search produced no response")
-        if last["partial"]:
-            # Final boundary is explicit even if no new results appeared.
-            emit(last)
-        return last
+        if last["status"]=="Running":
+            # Explicit completion for the bounded window. Don't imply every
+            # plugin finished if qBittorrent still reports Running.
+            emit({"status":"Running","total":last["total"],"results":[],
+                  "partial":True,"append":received>0})
+        return {"status":last["status"],"total":last["total"],
+                "received":received}
     finally:
-        for action in ("stop", "delete"):
+        for action in ("stop","delete"):
             try:
-                _api(runner, gateway, port, action, fields={"id": job_id},
+                _api(runner,gateway,port,action,fields={"id":job_id},
                      session=session)
             except SearchError:
                 pass

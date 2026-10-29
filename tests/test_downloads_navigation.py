@@ -113,7 +113,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Moonlight pairing authorizes Wolf-published streams only.", wizard)
         self.assertIn("this alpha pairing path still needs trusted owner SSH.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
-        self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
+        self.assertIn("NEXT: VERIFY DEVICE ACCESS", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
 

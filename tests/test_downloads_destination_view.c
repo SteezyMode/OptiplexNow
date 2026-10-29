@@ -21,6 +21,24 @@ static void test_folder_navigation_and_preserve_trailing_space(void){
  g_assert_true(read_response(s,'a',"SUBMITTED"));
  gtk_widget_destroy(view);
 }
+static void test_borrowed_combo_id_is_never_freed(void){
+ GtkWidget *view=now_downloads_destination_view_new();
+ Picker *s=state(view);
+ g_assert_true(read_response(s,'r',
+     "ROOTS\nROOT\tbigdisk\t4 TB Media\nROOT\texpansion\t2 TB Media"));
+ /* GTK 3 returns an interned borrowed pointer, not a heap allocation.
+  * Ensure our state keeps a private copy, including when the root changes. */
+ const char *borrowed=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+ g_assert_nonnull(borrowed);
+ on_root(GTK_COMBO_BOX(s->roots),view);
+ g_assert_cmpstr(s->root,==,"bigdisk");
+ g_assert_true(s->root!=borrowed);
+ gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),1);
+ g_assert_cmpstr(s->root,==,"expansion");
+ const char *borrowed_again=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+ g_assert_true(s->root!=borrowed_again);
+ gtk_widget_destroy(view);
+}
 static void test_reject_untrusted_host_folder_reply(void){
  GtkWidget *view=now_downloads_destination_view_new();
  Picker *s=state(view);
@@ -46,6 +64,7 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/destination/genres",test_folder_navigation_and_preserve_trailing_space);
+ g_test_add_func("/destination/borrowed-combo-id",test_borrowed_combo_id_is_never_freed);
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);
  return g_test_run();
 }

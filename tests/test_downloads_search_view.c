@@ -13,6 +13,61 @@ static void test_valid(void){
  g_assert_true(now_downloads_search_view_update(view,"SEARCH\t1\t0"));
  gtk_widget_destroy(view);
 }
+static GtkWidget *find_named(GtkWidget *widget,const char *name){
+ if(!g_strcmp0(gtk_widget_get_name(widget),name))return widget;
+ if(!GTK_IS_CONTAINER(widget))return NULL;
+ GList *children=gtk_container_get_children(GTK_CONTAINER(widget));
+ GtkWidget *found=NULL;
+ for(GList *at=children;at && !found;at=at->next)
+   found=find_named(GTK_WIDGET(at->data),name);
+ g_list_free(children);
+ return found;
+}
+static guint visible_rows(GtkWidget *list){
+ GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
+ guint visible=0;
+ for(GList *at=rows;at;at=at->next)
+   if(gtk_widget_get_visible(GTK_WIDGET(at->data)))visible++;
+ g_list_free(rows);
+ return visible;
+}
+static void test_mapped_full_results(void){
+ /* Live regression: 100 results; 20 per page in a mapped GTK window. */
+ GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+ GtkWidget *view=now_downloads_search_view_new();
+ gtk_container_add(GTK_CONTAINER(window),view);
+ gtk_widget_show_all(window);
+ GString *wire=g_string_new("SEARCH\t1\t130");
+ for(int i=0;i<100;i++)
+   g_string_append_printf(wire,
+      "\nRESULT\t%u\t%u\t0\tLinux release %02d\t-",
+      (unsigned)(i+1000),(unsigned)(i+1),i);
+ GtkWidget *list=find_named(view,"nowsearchlist");
+ g_assert_nonnull(list);
+ for(int i=0;i<3;i++){
+   g_assert_true(now_downloads_search_view_update(view,wire->str));
+   while(gtk_events_pending())gtk_main_iteration();
+   g_assert_cmpuint(visible_rows(list),==,20);
+   GList *controls=gtk_container_get_children(GTK_CONTAINER(view));
+   GtkWidget *pager=g_list_last(controls)->data;
+   g_list_free(controls);
+   GList *buttons=gtk_container_get_children(GTK_CONTAINER(pager));
+   GtkWidget *next=g_list_last(buttons)->data;
+   GtkWidget *previous=buttons->data;
+   g_list_free(buttons);
+   g_assert_true(gtk_widget_get_sensitive(next));
+   for(int page=0;page<4;page++){
+     g_signal_emit_by_name(next,"clicked");
+     g_assert_cmpuint(visible_rows(list),==,20);
+   }
+   g_assert_false(gtk_widget_get_sensitive(next));
+   g_assert_true(gtk_widget_get_sensitive(previous));
+   g_signal_emit_by_name(previous,"clicked");
+   g_assert_true(gtk_widget_get_sensitive(next));
+ }
+ g_string_free(wire,TRUE);
+ gtk_widget_destroy(window);
+}
 static void test_reject(void){
  GtkWidget *view=now_downloads_search_view_new();
  const char *bad[]={
@@ -37,6 +92,7 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/search/valid",test_valid);
+ g_test_add_func("/search/mapped-full-results",test_mapped_full_results);
  g_test_add_func("/search/reject",test_reject);
  return g_test_run();
 }

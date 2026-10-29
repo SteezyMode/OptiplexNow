@@ -27,8 +27,10 @@ class NativeSearchViewTests(unittest.TestCase):
         module=(ROOT/"src/downloads_search_view.c").read_text()
         self.assertIn("now_downloads_search_view_new()",flow)
         self.assertIn("now_downloads_queue_view_new()",flow)
-        self.assertLess(flow.index("gtk_box_pack_start(GTK_BOX(body),search_view"),
-                        flow.index("gtk_box_pack_start(GTK_BOX(body),queue_view"))
+        self.assertIn("gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,\"search\")",flow)
+        self.assertIn("gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,\"transfers\")",flow)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(search),search_view",flow)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(transfers),queue_view",flow)
         self.assertIn('"/usr/bin/python3",s->helper,s->host,s->user,query,NULL',module)
         self.assertIn('g_subprocess_communicate_utf8_async',module)
         self.assertNotIn("torrents/add",module)

@@ -136,6 +136,12 @@ static const char *CSS =
 "#mainnav {background:#181b19;border-bottom:1px solid #414743;padding:6px 10px;}"
 "#navback,#navtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:4px 9px;min-height:25px;font-size:11px;font-weight:700;}"
 "#navback:hover,#navtab:hover {background:#c47d65;color:#101111;}"
+"#navtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
+"#navtab.active:hover {background:#d39579;color:#101111;}"
+"#downloadsubtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;padding:6px 12px;font-weight:700;}"
+"#downloadsubtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
+"#downloadconfirm {background:#c47d65;color:#101111;border-radius:2px;padding:9px 12px;font-weight:800;}"
+"#vpnstatus {background:#1c2925;color:#b3e4cd;border:1px solid #497a61;border-radius:3px;padding:4px 10px;font-size:10px;font-weight:800;}"
 "#title {font-family:'Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-1.4px;color:#ece8e0;}"
 "#state {color:#bcb8af;background:#202523;border:1px solid #515b56;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;}"
 "#state.online {color:#e8c28f;border-color:#c47d65;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
@@ -144,6 +150,14 @@ static const char *CSS =
 "#section {font-weight:800;color:#b8b4ac;font-size:11px;letter-spacing:1px;}"
 "#metric {background:#171918;border:1px solid #444b46;color:#ece8e0;padding:8px 9px;font-size:12px;font-weight:700;}"
 "#drivemetric {background:#171918;border:1px solid #444b46;padding:8px 10px;}"
+"#nowsearchresults,#nowsearchresults viewport,#nowsearchlist,#nowsearchlist row {background:#171918;color:#ece8e0;}"
+"#nowsearchresults {border:1px solid #444b46;}"
+"#nowsearchlist row {border-bottom:1px solid #323b34;}"
+"#nowsearchlist row:hover {background:#29302b;}"
+"#nowsearchlist row:selected {background:#5b4036;}"
+"#nowsearchtitle {color:#ece8e0;font-size:12px;font-weight:700;}"
+"#nowsearchmeta {color:#b8b4ac;font-size:10px;}"
+"#nowqueuelist,#nowqueuelist row {background:#171918;color:#ece8e0;}"
 "#storagehead {font-size:10px;font-weight:800;color:#b8b4ac;}"
 "#drivefree {font-size:11px;font-weight:700;color:#ece8e0;}"
 "#drivefree.warn {color:#e7aa82;}"
@@ -3149,26 +3163,29 @@ int main(int argc,char**argv) {
  main_pages=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
- GtkWidget*back=button("‹ DASHBOARD","navback");
- now_nav_bind_link(back,main_pages,"dashboard");
- gtk_widget_set_no_show_all(back,TRUE);
- gtk_widget_hide(back);
- g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(now_nav_update_back),back);
- add(nav,back,0);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
  gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);
+ GtkWidget*dashboard_tab=button("DASHBOARD","navtab");
+ now_nav_bind_link(dashboard_tab,main_pages,"dashboard");
+ now_nav_mark_tab(dashboard_tab,"dashboard");
+ add(nav,dashboard_tab,0);
  GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
  g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
+ now_nav_mark_tab(downloads_tab,"downloads");
  add(nav,downloads_tab,0);
  GtkWidget*games_tab=button("GAMES","navtab");
  now_nav_bind_link(games_tab,main_pages,"games");
+ now_nav_mark_tab(games_tab,"games");
  add(nav,games_tab,0);
  GtkWidget*videos_tab=button("VIDEOS","navtab");
  g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);
+ now_nav_mark_tab(videos_tab,"videos");
  add(nav,videos_tab,0);
  GtkWidget*settings_tab=button("SETTINGS","navtab");
  g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
+ now_nav_mark_tab(settings_tab,"settings");
  add(nav,settings_tab,0);
+ g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(now_nav_update_tabs),nav);
   GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),
   GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);

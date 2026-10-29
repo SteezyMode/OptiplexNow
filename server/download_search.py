@@ -15,8 +15,8 @@ from urllib.parse import parse_qs, urlencode, urlsplit
 from download_inventory import InventoryError
 from download_queue import locate_verified_downloader
 
-MAX_BYTES = 65536
-MAX_RESULTS = 20
+MAX_BYTES = 262144
+MAX_RESULTS = 100
 MAX_MAGNET = 1024
 QUERY_LIMIT = 96
 
@@ -59,15 +59,27 @@ def checked_magnet(value):
     return value
 
 
-def _api(runner, gateway, port, action, *, fields=None):
-    """Fixed localhost API paths and subprocess argv; no caller-selected URL."""
+def _api(runner, gateway, port, action, *, fields=None, session=None):
+    """One localhost request within a single ephemeral qBittorrent search session.
+
+    The host's local WebUI issues a new SID if no Cookie is supplied. A search
+    job is scoped to the SID which created it: without reuse, results and
+    cleanup report HTTP 404 even though starting the job succeeded. Capture
+    the start response's Set-Cookie in memory only; never expose or log it.
+    """
     if action not in ("start", "results", "stop", "delete"):
         raise SearchError("Unsupported search API operation")
+    if action != "start" and (not isinstance(session, str) or
+                                not re.fullmatch(r"[A-Za-z0-9+/_=-]{1,256}", session)):
+        raise SearchError("Search session unavailable")
     url = f"http://127.0.0.1:{port}/api/v2/search/{action}"
-    argv = ["docker", "exec", gateway, "wget", "-q", "-T", "5", "-O", "-"]
+    argv = ["docker", "exec", gateway, "wget", "-q", "-T", "5", "-O", "-",
+            "--header", f"Referer: http://127.0.0.1:{port}/"]
     if action == "start":
-        argv += ["--post-data=" + urlencode(fields or {})]
-    elif action in ("stop", "delete"):
+        argv.append("-S")  # Headers to captured stderr, never to client.
+    else:
+        argv += ["--header", f"Cookie: SID={session}"]
+    if action in ("start", "stop", "delete"):
         argv += ["--post-data=" + urlencode(fields or {})]
     else:
         url += "?" + urlencode(fields or {})
@@ -79,7 +91,18 @@ def _api(runner, gateway, port, action, *, fields=None):
     if (completed.returncode != 0 or not isinstance(completed.stdout, bytes)
             or len(completed.stdout) > MAX_BYTES):
         raise SearchError("Search API request failed")
-    return completed.stdout
+    if action != "start":
+        return completed.stdout, session
+    # GNU wget -S emits HTTP response headers on stderr even with -q.
+    headers = completed.stderr
+    if not isinstance(headers, bytes) or len(headers) > 8192:
+        raise SearchError("Search session unavailable")
+    match = re.search(
+        rb"(?im)^[ \t]*set-cookie:[ \t]*SID=([A-Za-z0-9+/_=-]{1,256})(?:;|[ \t]*\r?$)",
+        headers)
+    if not match:
+        raise SearchError("Search session unavailable")
+    return completed.stdout, match.group(1).decode("ascii")
 
 
 def _results(raw):
@@ -121,9 +144,9 @@ def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
     """
     pattern = checked_query(query)
     gateway, port = locate_verified_downloader(runner=runner)
-    raw = _api(runner, gateway, port, "start",
-               fields={"pattern": pattern, "plugins": "enabled",
-                       "category": "all"})
+    raw, session = _api(runner, gateway, port, "start",
+                        fields={"pattern": pattern, "plugins": "enabled",
+                                "category": "all"})
     try:
         started = json.loads(raw)
     except (UnicodeDecodeError, ValueError) as exc:
@@ -134,11 +157,12 @@ def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
     job_id = started["id"]
     last = None
     try:
-        for _ in range(3):
+        for _ in range(12):
             sleeper(1)
-            last = _results(_api(runner, gateway, port, "results",
-                                 fields={"id": job_id, "limit": MAX_RESULTS,
-                                         "offset": 0}))
+            reply, _ = _api(runner, gateway, port, "results",
+                            fields={"id": job_id, "limit": MAX_RESULTS,
+                                    "offset": 0}, session=session)
+            last = _results(reply)
             if last["status"] == "Stopped":
                 break
         if last is None:
@@ -150,6 +174,7 @@ def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
         # Cleanup errors may leave an orphaned search, not a torrent transfer.
         for action in ("stop", "delete"):
             try:
-                _api(runner, gateway, port, action, fields={"id": job_id})
+                _api(runner, gateway, port, action, fields={"id": job_id},
+                     session=session)
             except SearchError:
                 pass

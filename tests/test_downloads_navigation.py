@@ -60,9 +60,14 @@ class DownloadsNavigationContract(unittest.TestCase):
 
     def test_native_queue_is_primary_and_webui_is_in_page_advanced_only(self):
         self.assertIn('gtk_button_new_with_label("REFRESH")', FLOW)
-        self.assertIn('gtk_button_new_with_label("ADVANCED VUETORRENT")', FLOW)
+        self.assertIn('gtk_button_new_with_label("ADVANCED · VUETORRENT")', FLOW)
         self.assertIn('gtk_button_new_with_label("BACK TO QUEUE")', FLOW)
         self.assertIn('now_downloads_queue_view_new()', FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers")', FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search")', FLOW)
+        self.assertIn('g_timeout_add_seconds(3,refresh_visible_transfers,NULL)', FLOW)
+        self.assertIn('on_transfer_action', FLOW)
+        self.assertIn('gtk_link_button_new_with_label(', FLOW)
         self.assertIn('now_downloads_queue_view_update(queue_view', FLOW)
         self.assertIn('"/usr/bin/python3",helper,host,user,"--native"', FLOW)
         self.assertIn('now_downloads_webview_new(approved_web_url,last_host)', FLOW)

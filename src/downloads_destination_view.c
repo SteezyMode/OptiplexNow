@@ -174,12 +174,12 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
    }
    s->running=FALSE;
    if(ok && job->action=='r'){
-     gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+     const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
      if(safe_root(id)){
-       g_free(s->root);s->root=id;
+       g_free(s->root);s->root=g_strdup(id);
        g_free(s->relative);s->relative=g_strdup("");
        start(s,'b');
-     }else{g_free(id);ok=FALSE;}
+     }else{ok=FALSE;}
    }
    if(!ok)gtk_label_set_text(GTK_LABEL(s->status),
                            "No approved folders available.");
@@ -219,9 +219,9 @@ static void start(Picker *s,char action){
 static void on_root(GtkComboBox *combo,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running || s->loading_roots)return;
- gchar *id=gtk_combo_box_get_active_id(combo);
- if(!safe_root(id)){g_free(id);return;}
- g_free(s->root);s->root=id;
+ const gchar *id=gtk_combo_box_get_active_id(combo);
+ if(!safe_root(id))return;
+ g_free(s->root);s->root=g_strdup(id);
  g_free(s->relative);s->relative=g_strdup("");
  start(s,'b');
 }
@@ -256,9 +256,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->up=gtk_button_new_with_label("UP");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
- s->add=gtk_button_new_with_label("ADD TO DOWNLOADS");
- g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
- gtk_box_pack_start(GTK_BOX(bar),s->add,FALSE,FALSE,0);
+
  s->path=gtk_label_new("Select a media drive.");
  gtk_label_set_xalign(GTK_LABEL(s->path),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_END);
@@ -274,6 +272,11 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_label_set_xalign(GTK_LABEL(s->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
+ s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
+ gtk_widget_set_halign(s->add,GTK_ALIGN_END);
+ gtk_widget_set_name(s->add,"downloadconfirm");
+ g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
+ gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
  button_states(s);
  return view;
 }

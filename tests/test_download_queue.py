@@ -34,10 +34,14 @@ def fake_runner(recs, payload=b"[]", code=0):
 class QueueTests(unittest.TestCase):
     def test_sanitized_queue(self):
         data=[{"name":"Example title","state":"downloading","progress":0.25,
-               "save_path":"/private/path","hash":"secret","dlspeed":150}]
+               "save_path":"/private/path","hash":"a"*40,"dlspeed":150,
+               "eta":180,"num_seeds":7}]
         self.assertEqual(inspect_queue(runner=fake_runner(records(),json.dumps(data).encode())),{
             "service":"qbittorrent","queue":[{"name":"Example title","state":"downloading",
-                                             "progress_percent":25.0}],"truncated":False,"webui_port":8085})
+                                             "progress_percent":25.0,
+                                             "torrent_hash":"a"*40,
+                                             "download_bps":150,"eta_seconds":180,
+                                             "seeders":7}],"truncated":False,"webui_port":8085})
     def test_no_vpn_binding(self):
         with self.assertRaises(InventoryError):
             inspect_queue(runner=fake_runner(records("bridge")))

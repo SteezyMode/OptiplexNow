@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
   }
   gtk_stack_add_named(GTK_STACK(stack), gtk_label_new("info"), "info");
   gtk_stack_add_named(GTK_STACK(stack), gtk_label_new("software"), "software");
-  now_nav_bind_link(tabs[0], stack, "dashboard");
+  gtk_widget_show_all(stack);\n  gtk_widget_show_all(nav);\n  now_nav_bind_link(tabs[0], stack, "dashboard");
   g_object_set_data(G_OBJECT(stack), "test-nav", nav);
   g_signal_connect(stack, "notify::visible-child",
                    G_CALLBACK(now_nav_update_tabs), nav);

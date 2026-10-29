@@ -174,12 +174,12 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
    }
    s->running=FALSE;
    if(ok && job->action=='r'){
-     gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+     const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
      if(safe_root(id)){
-       g_free(s->root);s->root=id;
+       g_free(s->root);s->root=g_strdup(id);
        g_free(s->relative);s->relative=g_strdup("");
        start(s,'b');
-     }else{g_free(id);ok=FALSE;}
+     }else{ok=FALSE;}
    }
    if(!ok)gtk_label_set_text(GTK_LABEL(s->status),
                            "No approved folders available.");
@@ -219,9 +219,9 @@ static void start(Picker *s,char action){
 static void on_root(GtkComboBox *combo,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running || s->loading_roots)return;
- gchar *id=gtk_combo_box_get_active_id(combo);
- if(!safe_root(id)){g_free(id);return;}
- g_free(s->root);s->root=id;
+ const gchar *id=gtk_combo_box_get_active_id(combo);
+ if(!safe_root(id))return;
+ g_free(s->root);s->root=g_strdup(id);
  g_free(s->relative);s->relative=g_strdup("");
  start(s,'b');
 }

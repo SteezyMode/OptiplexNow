@@ -40,7 +40,7 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),info_view,"info");', SOURCE)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");', SOURCE)
-        self.assertIn('GtkWidget*back=button("‹ DASHBOARD","navback");', SOURCE)
+        self.assertIn('GtkWidget*dashboard_tab=button("DASHBOARD","navtab");', SOURCE)
         self.assertIn('gtk_widget_set_no_show_all(back,TRUE);', SOURCE)
         self.assertIn('g_signal_connect(main_pages,"notify::visible-child"', SOURCE)
         self.assertNotIn('settings_link(software,main_pages,"‹ DASHBOARD","dashboard")', SOURCE)

@@ -109,6 +109,20 @@ static int desktop_label_path(char *out, size_t size)
     return written > 0 && (size_t)written < size;
 }
 
+/* Videos is a per-device preference, not part of portable host presets.
+ * Do not create a second config directory: reuse legacy tray settings. */
+static int videos_tray_path(char *out,size_t size){
+ const char *xdg=getenv("XDG_CONFIG_HOME");
+ const char *home=getenv("HOME");
+ int written;
+ if(xdg && *xdg)
+   written=snprintf(out,size,"%s/optiplex-desk/videos-tray-target",xdg);
+ else if(home && *home)
+   written=snprintf(out,size,"%s/.config/optiplex-desk/videos-tray-target",home);
+ else return 0;
+ return written>0 && (size_t)written<size;
+}
+
 /* Write a per-user preference without exposing partially written values. */
 static int atomic_private_write(const char *path, const char *data, size_t length)
 {
@@ -145,6 +159,23 @@ static int atomic_private_write(const char *path, const char *data, size_t lengt
     }
     unlink(temporary);
     return 0;
+}
+
+int now_tray_videos_open_in_app(void){
+ char path[PATH_MAX],value[32];
+ if(!videos_tray_path(path,sizeof path))return 0;
+ FILE *file=fopen(path,"r");
+ if(!file)return 0;
+ char *read=fgets(value,sizeof value,file);
+ fclose(file);
+ return read && (!strcmp(value,"app\\n") || !strcmp(value,"app"));
+}
+
+int now_tray_videos_set_open_in_app(int enabled){
+ char path[PATH_MAX];
+ if(!videos_tray_path(path,sizeof path))return 0;
+ const char *value=enabled?"app\\n":"browser\\n";
+ return atomic_private_write(path,value,strlen(value));
 }
 
 void now_tray_order_load(int order[NOW_TRAY_ACTIONS])

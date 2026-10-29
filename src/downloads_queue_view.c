@@ -85,6 +85,7 @@ static GtkWidget *action_button(GtkWidget *view,const char *label,
                                 const char *name){
  GtkWidget *button=gtk_button_new_with_label(label);
  gtk_widget_set_name(button,"downloadoperation");
+ gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
  g_object_set_data_full(G_OBJECT(button),"now-action",g_strdup(action),g_free);
  g_object_set_data_full(G_OBJECT(button),"now-hash",g_strdup(hash),g_free);
  g_object_set_data_full(G_OBJECT(button),"now-name",g_strdup(name),g_free);

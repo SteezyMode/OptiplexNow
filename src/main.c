@@ -145,6 +145,26 @@ static const char *CSS =
 "#navback:hover,#navtab:hover {background:#c47d65;color:#101111;}"
 "#navtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
 "#navtab.active:hover {background:#d39579;color:#101111;}"
+/* Unified NOW dark controls: never use the platform's white GTK defaults
+ * for ordinary Videos/Downloads buttons. No functional changes. */
+"button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
+"button.now-action label {color:#ece8e0;}"
+"button.now-action:hover,button.now-action:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"
+"button.now-action:hover label,button.now-action:focus label {color:#ece8e0;}"
+"button.now-action:active {background:#c47d65;color:#101111;}"
+"button.now-action:active label {color:#101111;}"
+"button.now-action:disabled {background:#1b1f1c;color:#898e88;border-color:#363d38;}"
+"button.now-action:disabled label {color:#898e88;}"
+"button.now-action.now-primary {background:#c47d65;color:#101111;border-color:#c47d65;min-height:33px;}"
+"button.now-action.now-primary label {color:#101111;}"
+"button.now-action.now-primary:hover,button.now-action.now-primary:focus {background:#d39579;color:#101111;}"
+"button.now-action.now-primary:hover label,button.now-action.now-primary:focus label {color:#101111;}"
+"button.now-action.now-primary:disabled {background:#55413a;color:#ac9a94;border-color:#55413a;}"
+"button.now-action.now-primary:disabled label {color:#ac9a94;}"
+"button.now-action.now-sort {background:#1e2320;color:#c6c7bd;border:1px solid #414a43;padding:3px 7px;min-height:23px;font-size:10px;}"
+"button.now-action.now-sort label {color:#c6c7bd;}"
+"button.now-action.now-sort:hover,button.now-action.now-sort:focus {background:#2c3430;border-color:#c47d65;}"
+"button.now-action.now-sort:hover label,button.now-action.now-sort:focus label {color:#ece8e0;}"
 "#downloadsubtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;padding:6px 12px;font-weight:700;}"
 "#downloadsubtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
 "#downloadconfirm {background:#c47d65;color:#101111;border-radius:2px;padding:9px 12px;font-weight:800;}"
@@ -3286,10 +3306,13 @@ int main(int argc,char**argv) {
  add(videos_home,videos_status,0);
  GtkWidget*video_in_app=button("WATCH IN NOW","setupaction");
  gtk_widget_set_name(video_in_app,"videos-open-in-app");
+ gtk_style_context_add_class(gtk_widget_get_style_context(video_in_app),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(video_in_app),"now-primary");
  g_signal_connect(video_in_app,"clicked",G_CALLBACK(videos_watch_in_app),NULL);
  add(videos_home,video_in_app,0);
  GtkWidget*video_browser=button("OPEN IN BROWSER","setting");
  gtk_widget_set_name(video_browser,"videos-open-in-browser");
+ gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-action");
  g_signal_connect(video_browser,"clicked",G_CALLBACK(videos_open_browser),NULL);
  add(videos_home,video_browser,0);
  GtkWidget*video_advanced=gtk_expander_new("VIDEO SETTINGS");

@@ -382,6 +382,8 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_entry_set_max_length(GTK_ENTRY(s->entry),96);
  gtk_box_pack_start(GTK_BOX(bar),s->entry,TRUE,TRUE,0);
  s->button=gtk_button_new_with_label("SEARCH");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-primary");
  gtk_widget_set_sensitive(s->button,FALSE);
  gtk_box_pack_start(GTK_BOX(bar),s->button,FALSE,FALSE,0);
  g_signal_connect(s->button,"clicked",G_CALLBACK(start_search),view);
@@ -397,6 +399,8 @@ GtkWidget *now_downloads_search_view_new(void){
  const gint widths[]={-1,108,84,84,122};
  for(guint col=0;col<5;col++){
    GtkWidget *button=gtk_button_new_with_label(headers[col]);
+   gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
+   gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-sort");
    gtk_widget_set_name(button,ids[col]);
    gtk_widget_set_tooltip_text(button,"Click to sort; click again to reverse");
    if(col==0)gtk_widget_set_hexpand(button,TRUE);
@@ -429,6 +433,8 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_widget_set_no_show_all(s->pager,TRUE);
  s->previous=gtk_button_new_with_label("PREVIOUS");
  s->next=gtk_button_new_with_label("NEXT");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->previous),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->next),"now-action");
  s->page_label=gtk_label_new("Page 1");
  gtk_box_pack_start(GTK_BOX(s->pager),s->previous,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(s->pager),s->page_label,TRUE,TRUE,0);

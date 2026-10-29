@@ -555,14 +555,17 @@ GtkWidget *now_downloads_page(void){
  g_signal_connect(vpn_button,"clicked",G_CALLBACK(on_vpn_clicked),NULL);
  g_timeout_add_seconds(60,vpn_poll,NULL);
  GtkWidget *refresh=gtk_button_new_with_label("REFRESH");
+ gtk_style_context_add_class(gtk_widget_get_style_context(refresh),"now-action");
  gtk_box_pack_start(GTK_BOX(toolbar),refresh,FALSE,FALSE,0);
  /* Refresh uses only the already-paired host and SSH user. */
  g_signal_connect(refresh,"clicked",G_CALLBACK(on_refresh_clicked),NULL);
  advanced_button=gtk_button_new_with_label("ADVANCED · VUETORRENT");
+ gtk_style_context_add_class(gtk_widget_get_style_context(advanced_button),"now-action");
  gtk_widget_set_sensitive(advanced_button,FALSE);
  gtk_box_pack_start(GTK_BOX(toolbar),advanced_button,FALSE,FALSE,0);
  g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL);
  back_button=gtk_button_new_with_label("BACK TO QUEUE");
+ gtk_style_context_add_class(gtk_widget_get_style_context(back_button),"now-action");
  gtk_box_pack_start(GTK_BOX(toolbar),back_button,FALSE,FALSE,0);
  g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL);
  gtk_widget_set_no_show_all(back_button,TRUE);

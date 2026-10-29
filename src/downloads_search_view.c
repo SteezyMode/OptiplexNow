@@ -40,6 +40,8 @@ static gint compare_rows(GtkListBoxRow *left,GtkListBoxRow *right,gpointer data)
  const gint64 *bsz=b?g_object_get_data(G_OBJECT(b),"now-search-size"):NULL;
  const gint64 *asd=a?g_object_get_data(G_OBJECT(a),"now-search-seeds"):NULL;
  const gint64 *bsd=b?g_object_get_data(G_OBJECT(b),"now-search-seeds"):NULL;
+ const gint64 *apub=a?g_object_get_data(G_OBJECT(a),"now-search-published"):NULL;
+ const gint64 *bpub=b?g_object_get_data(G_OBJECT(b),"now-search-published"):NULL;
  const char *an=a?g_object_get_data(G_OBJECT(a),"now-search-title"):NULL;
  const char *bn=b?g_object_get_data(G_OBJECT(b),"now-search-title"):NULL;
  const char *mode=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->sort));
@@ -52,6 +54,10 @@ static gint compare_rows(GtkListBoxRow *left,GtkListBoxRow *right,gpointer data)
    av=asz?*asz:-1;bv=bsz?*bsz:-1;
    if(av<0 || bv<0){if(av<0 && bv>=0)return 1;if(bv<0 && av>=0)return -1;}
    if(av!=bv)return (av<bv ? -1 : 1)*(g_strcmp0(mode,"large")==0?-1:1);
+ }else if(g_strcmp0(mode,"newest")==0 || g_strcmp0(mode,"oldest")==0){
+   av=apub?*apub:-1;bv=bpub?*bpub:-1;
+   if(av<=0 || bv<=0){if(av<=0 && bv>0)return 1;if(bv<=0 && av>0)return -1;}
+   if(av!=bv)return (av>bv ? -1 : 1)*(g_strcmp0(mode,"oldest")==0?-1:1);
  }
  return g_ascii_strcasecmp(an?an:"",bn?bn:"");
 }
@@ -135,14 +141,16 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  guint count=0;
  for(guint i=1;ok && lines[i];i++){
    gchar **parts=g_strsplit(lines[i],"\t",-1);
-   gint64 size=0,seeds=0,can_add=0;
-   if(++count>RESULT_LIMIT || g_strv_length(parts)!=6 ||
+   gint64 size=0,seeds=0,can_add=0,published=-1;
+   guint fields=g_strv_length(parts);
+   if(++count>RESULT_LIMIT || (fields!=6 && fields!=7) ||
       strcmp(parts[0],"RESULT") ||
       !integer(parts[1],-1,G_MAXINT64,&size) ||
       !integer(parts[2],-1,G_MAXINT32,&seeds) ||
       !integer(parts[3],0,1,&can_add) || !*parts[4] ||
       g_utf8_strlen(parts[4],-1)>160 ||
-      (can_add ? !magnet_field(parts[5]) : strcmp(parts[5],"-")))
+      (can_add ? !magnet_field(parts[5]) : strcmp(parts[5],"-")) ||
+      (fields==7 && !integer(parts[6],-1,253402300799LL,&published)))
      ok=FALSE;
    g_strfreev(parts);
  }
@@ -162,19 +170,28 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
+   gint64 published=parts[6] ? g_ascii_strtoll(parts[6],NULL,10):-1;
    gint64 *size_data=g_new(gint64,1),*seed_data=g_new(gint64,1);
-   *size_data=size;*seed_data=seeds;
+   gint64 *published_data=g_new(gint64,1);
+   *size_data=size;*seed_data=seeds;*published_data=published;
+   g_object_set_data_full(G_OBJECT(row),"now-search-published",published_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-size",size_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-seeds",seed_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-title",g_strdup(parts[4]),g_free);
    gchar *size_text=size>=0 ? g_format_size((guint64)size) : g_strdup("Size unknown");
    gchar *seed_text=seeds>=0 ? g_strdup_printf("%lld seeds",(long long)seeds) :
                                g_strdup("Seeds unknown");
-   gchar *detail=g_strdup_printf("%s  ·  %s  ·  %s",
-       size_text,seed_text,
+   GDateTime *published_date=published>0 ?
+      g_date_time_new_from_unix_local(published):NULL;
+   gchar *date_text=published_date ?
+      g_date_time_format(published_date,"Published %Y-%m-%d") :
+      g_strdup("Publication date unknown");
+   if(published_date)g_date_time_unref(published_date);
+   gchar *detail=g_strdup_printf("%s  ·  %s  ·  %s  ·  %s",
+       size_text,seed_text,date_text,
        !strcmp(parts[3],"1") ? "Magnet link ready" :
                                 "Plugin link unsupported");
-   g_free(size_text);g_free(seed_text);
+   g_free(size_text);g_free(seed_text);g_free(date_text);
    GtkWidget *meta=text(detail);
    gtk_widget_set_name(meta,"nowsearchmeta");
    g_free(detail);
@@ -323,6 +340,8 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"small","SMALLER FILES FIRST");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"seeds","MOST SEEDERS");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"large","LARGER FILES FIRST");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"newest","NEWEST PUBLISHED");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"oldest","OLDEST PUBLISHED");
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->sort),"small");
  gtk_box_pack_start(GTK_BOX(bar),s->sort,FALSE,FALSE,0);
  g_signal_connect(s->sort,"changed",G_CALLBACK(sort_changed),view);

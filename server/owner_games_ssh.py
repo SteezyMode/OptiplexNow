@@ -138,13 +138,20 @@ def execute(*, verified_client_id, environ=None, read_request=_request_line,
         raise PolicyError("No verified Games device binding")
     request = read_request()
     config = read_config()
+    def emit(snapshot):
+        # Each JSON line is bounded and contains only sanitized search fields.
+        print(json.dumps(snapshot, ensure_ascii=True, separators=(",", ":")),
+              flush=True)
+    kwargs={}
+    if isinstance(request, dict) and request.get("stream") is True:
+        kwargs["search_emitter"]=emit
     return handle_owner_games_request(
         request, verified_client_id=verified_client_id,
         store=OwnerStore(config["state_dir"]), wolf_api=wolf_api_factory(),
         host_video_caps=config["video_caps"],
         host_approved=(config["enabled"] is True and
                        config["legacy_links_reviewed"] is True),
-        host_writer_check=writer_check)
+        host_writer_check=writer_check, **kwargs)
 
 
 def main(argv=None):
@@ -153,7 +160,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         result = execute(verified_client_id=args.client_id)
-        print(json.dumps(result, sort_keys=True))
+        if result is not None:
+            print(json.dumps(result, sort_keys=True))
         return 0
     except (PolicyError, OSError, ValueError, subprocess.TimeoutExpired):
         # Errors can reveal host usernames, Steam state, private PINs, runner

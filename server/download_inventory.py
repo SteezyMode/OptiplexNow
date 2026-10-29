@@ -79,8 +79,15 @@ def inspect_download_topology(*, runner=subprocess.run):
             continue
         gateway = gateways[matches[0]]
         healthy = gateway.get("State", {}).get("Health", {}).get("Status") == "healthy"
+        # Expose a fixed provider label only. Never return VPN credentials,
+        # environment variables, connection files or underlying container IDs.
+        env = gateway.get("Config", {}).get("Env", [])
+        provider = "airvpn" if any(
+            item.strip().lower() == "vpn_service_provider=airvpn"
+            for item in env if isinstance(item, str)) else "other"
         results.append({
             "service": "qbittorrent",
+            "vpn_provider": provider,
             "gateway_bound": True,
             "gateway_healthy": healthy,
             "vpn_egress_verified": False,

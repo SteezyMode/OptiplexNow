@@ -1,3 +1,11 @@
+## October 29 — Native Videos landing and per-device tray target (source-level)
+
+**Owner-selected UX:** The Videos main tab is a native landing page, with **Watch in NOW** and **Open in Browser**, similar to Games. A collapsed **Video Settings** section selects the Videos tray shortcut target (browser, default; or NOW), saved per Linux account using the existing private tray preferences directory. The in-app path reuses the restricted owner Jellyfin endpoint discovery and NOW's optional same-origin WebKitGTK view. If WebKit is absent or the discovered endpoint cannot be embedded securely, the normal browser remains available. Navigating away stops hidden embedded playback. No Jellyfin credentials, root paths, server containers or owner keys are changed by these code commits.
+
+**Evidence:** Source present on `main`; GTK/packaging CI and preference regression under review. **No real Jellyfin playback, subtitle, audio, full-screen, codec compatibility or keyboard/controller navigation has been physically exercised through WebKit** on the MacBook Air/Mac mini. The browser path was already working. The deployed reference host is untouched.
+
+**Immediate next acceptance:** Keep one official Current Alpha release. Verify GitHub CI; then physically test the native Videos page and in-app video/audio on an approved client while checking WebKit availability and browser fallback. In parallel the new progressive qBittorrent Search client requires verified matching host modules and the two critical installed search plugins. Do not call either workflow accepted solely from CI.
+
 ## October 29 — Search P2 follow-up: broaden results on demand and sort by publication date
 
 **Owner-observed problem:** Current Alpha v1.21.1 Search physically fills the page and responds within a few seconds, but typically returns ~25 partial results and can prioritize huge 2160p files. The fast-return backend intentionally stops its search job on the first nonempty results, so merely sorting the short subset cannot expose later smaller 1080p results.

@@ -58,6 +58,22 @@ class FreshClientMediaTests(unittest.TestCase):
         # covered by make check-wizard-services.
         self.assertIn("now_safe_preset_url(urls[i])", SERVICE_SAVER)
 
+    def test_fresh_wizard_offers_separate_owner_approval(self):
+        # The existing owner-only authorization window is reachable without
+        # leaving the first-run wizard or saving incomplete server settings.
+        self.assertIn('wizard_button(c,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve");', SOURCE)
+        self.assertIn('else if(!strcmp(n,"w_owner_approve")){', SOURCE)
+        self.assertIn("open_owner_enrollment_for(host,user);", SOURCE)
+        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->host))', SOURCE)
+        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->user))', SOURCE)
+        self.assertIn("if(!now_valid_host(host)||!now_valid_user(user))", SOURCE)
+        self.assertIn('"/usr/lib/optiplex-now/owner-enroll-ui.py"', SOURCE)
+        self.assertNotIn("no-SSH client enrollment is not yet implemented", SOURCE)
+        self.assertIn("Requests never authorize themselves.", SOURCE)
+        # Both older Games settings users and new clients use one launcher.
+        self.assertIn("open_owner_enrollment_for(cfg[0],cfg[1]);", SOURCE)
+        self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)
+
     def test_wolf_pairing_search_is_bounded_and_owner_approved(self):
         # Structural guards: full behavior still requires physical GTK tests.
         self.assertIn("state->auto_refresh_id = g_timeout_add_seconds(3,", SOURCE)

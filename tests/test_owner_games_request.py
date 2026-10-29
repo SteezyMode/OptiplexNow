@@ -110,7 +110,7 @@ class TrustedGamesGateTests(unittest.TestCase):
             self.requests=lambda action: {"version":1,"action":action,"query":"Ubuntu ISO"}
             with self.assertRaises(PolicyError):
                 self.call("downloads_search",client="99999999")
-            self.assertEqual(run.call_count,1)
+            self.assertEqual(run.call_count,0)
             self.assertTrue(all(method=="GET" for method,_,_ in self.api.calls))
         with patch("owner_games_request.search_once",
                    side_effect=InventoryError("private backend")):

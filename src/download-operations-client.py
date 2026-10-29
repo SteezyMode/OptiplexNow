@@ -34,6 +34,23 @@ def relative(value):
 def present(action,data):
     if not isinstance(data,dict) or data.get("success") is not True:
         raise ValueError("Owner service denied the operation")
+    if action=="vpn":
+        records=data.get("downloaders")
+        if (data.get("version")!=1 or not isinstance(records,list) or
+                len(records)!=1 or not isinstance(records[0],dict) or
+                records[0].get("service")!="qbittorrent"):
+            raise ValueError("VPN status cannot be verified")
+        entry=records[0]
+        if (type(entry.get("gateway_bound")) is not bool or
+                (entry["gateway_bound"] and
+                 type(entry.get("gateway_healthy")) is not bool)):
+            raise ValueError("Invalid VPN status fields")
+        provider=entry.get("vpn_provider")
+        if provider not in ("airvpn","other",None):
+            raise ValueError("Invalid VPN provider")
+        status=("HEALTHY" if entry["gateway_bound"] and
+                entry["gateway_healthy"] else "UNVERIFIED")
+        return f"VPN\t{status}\t{provider or 'other'}"
     if action=="manage":
         if (data.get("status")!="submitted" or
                 data.get("operation") not in ("pause","resume","reannounce","recheck","remove")):
@@ -77,7 +94,8 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
-        "add":"downloads_add","manage":"downloads_manage"}.get(action)}
+        "add":"downloads_add","manage":"downloads_manage",
+        "vpn":"downloads_status"}.get(action)}
     if request["action"] is None:
         raise ValueError("Invalid download action")
     if action=="manage":
@@ -116,8 +134,8 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
 if __name__=="__main__":
     try:
         args=sys.argv[1:]
-        if len(args)<3 or args[2] not in ("roots","browse","add","manage") or (
-            (args[2]=="roots" and len(args)!=3) or
+        if len(args)<3 or args[2] not in ("roots","browse","add","manage","vpn") or (
+            (args[2] in ("roots","vpn") and len(args)!=3) or
             (args[2]=="browse" and len(args)!=5) or
             (args[2]=="add" and len(args)!=6) or
             (args[2]=="manage" and len(args)!=5)):

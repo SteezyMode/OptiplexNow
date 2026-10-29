@@ -4,7 +4,8 @@
 An opt-in owner-authenticated Tailscale listener is preferred. Existing trusted
 owner SSH remains as a controlled alpha fallback only when that listener is
 absent. The private key never leaves the client and no Wolf ID is guessed.
-Full remote owner approval and Wolf binding are NOT implemented here.
+The host verifies signed Moonlight proof and the independently pinned owner phone;
+no pending request or client-local artifact independently grants authority.
 """
 import http.client
 import ipaddress
@@ -23,6 +24,20 @@ REQUIRED = frozenset(("success", "status", "request_id", "code", "fingerprint"))
 HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 HEX20 = re.compile(r"[0-9a-f]{20}\Z")
 CODE = re.compile(r"[0-9]{6}\Z")
+RESTRICTED_ACCESS_STATES = frozenset((
+    "needs_wolf_ui", "wolf_ui_connected", "busy", "in_use",
+    "joined", "idle", "running", "finished"))
+
+
+def verified_restricted_access(reply):
+    """Accept only a positive, finite, host-verified restricted SSH reply.
+
+    A key file, a successful subprocess exit, a pending approval or a Wolf
+    pairing is never enough to claim NOW owner-service authorization.
+    """
+    return (isinstance(reply, dict) and reply.get("success") is True
+            and isinstance(reply.get("status"), str)
+            and reply["status"] in RESTRICTED_ACCESS_STATES)
 
 
 def _client_module():
@@ -299,8 +314,8 @@ def already_authorized(host, user, *, games=None):
     """
     module = games or _client_module()
     try:
-        module.invoke(host, user, "status")
-        return True
+        reply = module.invoke(host, user, "status")
+        return verified_restricted_access(reply)
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired,
             subprocess.CalledProcessError):
         return False

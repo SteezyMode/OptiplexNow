@@ -27,6 +27,7 @@
 #include "wolf_transport.h"
 #include "games_flow.h"
 #include "media_flow.h"
+#include "downloads_webview.h"
 #include "downloads_flow.h"
 #include "ui_navigation.h"
 #include "ui_games.h"
@@ -84,6 +85,9 @@ static GtkWidget *tray_menu = NULL;
 /* One main GTK window: the dashboard, Software, Settings, and Info pages. */
 static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static GtkWidget *games_page_status = NULL;
+static GtkWidget *videos_stack=NULL,*videos_embedded_holder=NULL,*videos_status=NULL;
+static GtkWidget *videos_embedded=NULL;
+static char *videos_verified_url=NULL;
 static int tray_restoring = 0;
 static guint geometry_save_timer=0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
@@ -113,6 +117,9 @@ static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
 static void open_games_settings(GtkWidget*w,gpointer data);
 static void on_videos_tab(GtkWidget*w,gpointer data);
+static void tray_show_window(void);
+static void videos_in_app_open(const char *url);
+static void videos_status_message(const char *message);
 static void on_system_info(void*w,void*p);
 static void settings_discard(GtkWidget*w,gpointer unused);
 static GtkWidget *tiles[9],*powers[4],*extras_grid;
@@ -1280,7 +1287,54 @@ static void open_games_settings(GtkWidget*w,gpointer data){
   if(stack)gtk_stack_set_visible_child_name(GTK_STACK(stack),"gaming");
  }
 }
-static void on_videos_tab(GtkWidget*w,gpointer data){(void)w;(void)data;now_media_open_videos();}
+static void videos_status_message(const char *message){
+ say(message);
+ if(videos_status)gtk_label_set_text(GTK_LABEL(videos_status),message);
+}
+static void videos_back_to_home(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ if(!videos_stack)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"home");
+ if(videos_embedded){gtk_widget_destroy(videos_embedded);videos_embedded=NULL;}
+ g_clear_pointer(&videos_verified_url,g_free);
+}
+static void videos_open_browser(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ if(videos_stack &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(videos_stack)),"player") &&
+    videos_verified_url && now_safe_preset_url(videos_verified_url))
+   browser_open(videos_verified_url);
+ else now_media_open_videos();
+}
+static void videos_in_app_open(const char *url){
+ if(!videos_stack || !videos_embedded_holder || !url)return;
+ GtkWidget *view=now_media_embedded_webview_new(url,cfg[0]);
+ if(!view){
+   videos_status_message("Embedded Jellyfin unavailable. Opening in your browser.");
+   browser_open(url);return;
+ }
+ if(videos_embedded)gtk_widget_destroy(videos_embedded);
+ videos_embedded=view;
+ g_free(videos_verified_url);videos_verified_url=g_strdup(url);
+ gtk_container_add(GTK_CONTAINER(videos_embedded_holder),view);
+ gtk_widget_show_all(videos_embedded_holder);
+ gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"player");
+ now_nav_show_page(main_pages,"videos");
+ videos_status_message("JELLYFIN OPEN IN NOW — USE BACK TO RETURN");
+}
+static void videos_watch_in_app(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;now_media_open_videos_in_app();
+}
+static void videos_tray_changed(GtkComboBox *combo,gpointer data){
+ (void)data;
+ if(!now_tray_videos_set_open_in_app(gtk_combo_box_get_active(GTK_COMBO_BOX(combo))==1))
+   videos_status_message("Unable to save Videos tray preference.");
+}
+static void on_videos_tab(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ if(videos_stack)gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"home");
+ now_nav_show_page(main_pages,"videos");
+}
 
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){open_downloads_page();}
@@ -1914,7 +1968,7 @@ static void on_downloads_tab(GtkWidget *widget,gpointer unused){
 static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else open_games_settings(NULL,NULL);
- }else if(n==1)now_media_open_videos();
+ }else if(n==1)on_videos_tab(NULL,NULL);
  else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
  else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
@@ -2998,6 +3052,14 @@ static void tray_dispatch_restart(void *context)
 static void tray_dispatch_service(void *context, int index)
 {
     (void)context;
+    if(index==1){
+        if(now_tray_videos_open_in_app()){
+            tray_show_window();
+            on_videos_tab(NULL,NULL);
+            now_media_open_videos_in_app();
+        }else now_media_open_videos();
+        return;
+    }
     on_tile(NULL, (void *)(long)index);
 }
 
@@ -3121,7 +3183,7 @@ int main(int argc,char**argv) {
  }
  int instance_result=now_instance_claim();
  if(instance_result<=0)return instance_result==0?0:1;
- fonts_register();gtk_init(&argc,&argv);now_media_bind(say,browser_open);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
+ fonts_register();gtk_init(&argc,&argv);now_media_bind(videos_status_message,browser_open,videos_in_app_open);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
  gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
  /* Give the dashboard enough height for server controls on normal displays.

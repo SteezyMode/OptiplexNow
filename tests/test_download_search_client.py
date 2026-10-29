@@ -15,7 +15,7 @@ spec.loader.exec_module(mod)
 MAGNET="magnet:?xt=urn:btih:"+"f"*40
 
 class SearchClientTests(unittest.TestCase):
-    def payload(self,query="Ubuntu ISO", response=None):
+    def payload(self,query="Ubuntu ISO", response=None,full=False):
         response=response or {"success":True,"service":"qbittorrent",
             "status":"Stopped","partial":False,"total":2,"results":[
                 {"name":"Ubuntu test","bytes":1000,"seeders":3,
@@ -31,11 +31,20 @@ class SearchClientTests(unittest.TestCase):
                 self.assertIn("StrictHostKeyChecking=yes",cmd)
                 self.assertEqual(cmd[-1],"optiplex@100.121.156.34")
                 self.assertEqual(kwargs["timeout"],65)
-                self.assertEqual(json.loads(kwargs["input"]),{
-                    "version":1,"action":"downloads_search","query":query.strip()})
+                expected={"version":1,"action":"downloads_search","query":query.strip()}
+                if full:
+                    expected["full"]=True
+                self.assertEqual(json.loads(kwargs["input"]),expected)
                 return subprocess.CompletedProcess(cmd,0,json.dumps(response).encode(),b"")
             with patch.object(mod,"KEY",key):
-                return mod.fetch("100.121.156.34","optiplex",query,runner=runner)
+                return mod.fetch("100.121.156.34","optiplex",query,full=full,runner=runner)
+
+    def test_thorough_mode_is_explicit_and_bounded(self):
+        quick=self.payload()
+        full=self.payload(full=True)
+        self.assertEqual(quick,full)
+        with self.assertRaisesRegex(ValueError,"search depth"):
+            self.payload(full="true")
 
     def test_safe_search_results_keep_only_validated_magnet_for_local_add(self):
         output=self.payload()

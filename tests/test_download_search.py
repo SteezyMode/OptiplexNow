@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 import unittest
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
@@ -73,10 +74,18 @@ class FakeAPI:
                 assert "--post-data=id=42" in command
                 out = b""
             else:
-                assert command[-1].endswith("/results?id=42&limit=100&offset=0")
+                uri=urlsplit(command[-1])
+                assert uri.path.endswith("/results")
+                params=parse_qs(uri.query)
+                assert params["id"]==["42"]
+                offset=int(params["offset"][0])
+                limit=int(params["limit"][0])
+                assert 0<=offset<=1000 and 1<=limit<=100
                 if self.fail_get:
                     return subprocess.CompletedProcess(command, 1, b"Internal Error", b"")
-                out = json.dumps(self.result).encode()
+                batch={**self.result,
+                       "results":self.result["results"][offset:offset+limit]}
+                out=json.dumps(batch).encode()
         return subprocess.CompletedProcess(command, 0, out, headers)
 
 
@@ -197,12 +206,14 @@ class DownloadSearchTests(unittest.TestCase):
         updates=[]
         result=stream_search("Ubuntu ISO",updates.append,runner=runner,
                              sleeper=lambda _:None)
-        self.assertEqual([len(x["results"]) for x in updates],[1,2])
+        self.assertEqual([len(x["results"]) for x in updates],[1,1])
         self.assertFalse(result["partial"])
-        self.assertEqual(updates[-1]["results"][1]["name"],"Smaller 1080p")
+        self.assertTrue(updates[-1]["append"])
+        self.assertEqual(updates[-1]["results"][0]["name"],"Smaller 1080p")
         urls=[c[-1] for c in fake.commands]
         self.assertEqual(sum(url.endswith("/start") for url in urls),1)
         self.assertEqual(len(polls),3)
+        self.assertEqual(sum("offset=1" in url for url in urls),2)
         self.assertTrue(urls[-2].endswith("/stop"))
         self.assertTrue(urls[-1].endswith("/delete"))
         self.assertFalse(any("torrents/add" in str(c) for c in fake.commands))

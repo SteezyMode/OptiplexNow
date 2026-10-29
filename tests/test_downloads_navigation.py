@@ -108,10 +108,12 @@ class DownloadsNavigationContract(unittest.TestCase):
     def test_wizard_does_not_misrepresent_owner_access_as_game_pairing(self):
         wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
             "static gboolean first_setup", 1)[0]
-        self.assertNotIn('"w_owner_request"', wizard)
-        self.assertNotIn('"REQUEST OWNER DEVICE APPROVAL"', wizard)
-        self.assertIn("Wolf pairing lets this device open the host's published game streams.", wizard)
-        self.assertIn("no-SSH client enrollment is not yet implemented.", wizard)
+        self.assertNotIn('"w_pair"', wizard)
+        self.assertIn('"w_owner_approve"', wizard)
+        self.assertIn("Two separate approvals: first pair Moonlight with Wolf", wizard)
+        self.assertIn("NOW owner access for managed Games and Downloads", wizard)
+        self.assertIn("Requests never authorize themselves.", wizard)
+        self.assertNotIn("no-SSH client enrollment is not yet implemented.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)

@@ -46,11 +46,29 @@ xvfb-run -a dbus-run-session -- bash -c '
     fi
     if xwininfo -root -tree 2>/dev/null | grep -F "OptiPlex Now" >/dev/null; then
       echo "NOW GTK window appeared under isolated Xvfb display."
+      break
+    fi
+    sleep .2
+  done
+  # A genuinely new profile must also show the first-run setup assistant.
+  # A working Dashboard alone can mask a broken onboarding wizard.
+  for ((i=0;i<50;i++)); do
+    if ! kill -0 "$pid" 2>/dev/null; then
+      echo "NOW exited before the fresh-client wizard appeared" >&2
+      tail -40 "$1/stderr.log" >&2 || true
+      exit 1
+    fi
+    if xwininfo -root -tree 2>/dev/null | grep -F "NOW Setup: Tailscale" >/dev/null; then
+      echo "NOW first-run setup wizard opened inside an isolated profile."
       exit 0
     fi
     sleep .2
   done
-  echo "NOW did not display a window inside 5 seconds" >&2
+  echo "First-run setup wizard did not appear within 10 seconds" >&2
+  echo "X11 window tree at timeout:" >&2
+  xwininfo -root -tree >&2 || true
+  echo "Fresh configuration files:" >&2
+  find "$XDG_CONFIG_HOME" -maxdepth 3 -type f -printf "%P\\n" >&2 || true
   tail -40 "$1/stderr.log" >&2 || true
   exit 1
 ' bash "$tmp"

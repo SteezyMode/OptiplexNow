@@ -1757,6 +1757,22 @@ static void wolf_pair_dialog(const char *generated_pin, GtkWindow *parent)
     state->auto_refresh_id = g_timeout_add_seconds(3, wolf_ui_auto_refresh, state);
     wolf_ui_start(state, "pending-text", NULL);
 }
+/* Enrollment stays an explicit user action. This helper accepts the wizard's
+ * staged host/user directly, so a fresh install need not prematurely save
+ * connection settings or grant ordinary SSH access just to request approval. */
+static void open_owner_enrollment_for(const char *host,const char *user){
+ if(!now_valid_host(host)||!now_valid_user(user)){
+  say("ENTER A VALID SERVER ADDRESS AND SSH USER TO REQUEST APPROVAL");
+  return;
+ }
+ gchar *argv[]={"/usr/bin/python3",
+  "/usr/lib/optiplex-now/owner-enroll-ui.py",(gchar *)host,(gchar *)user,NULL};
+ GError *error=NULL;
+ if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+  say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
+  g_clear_error(&error);
+ }
+}
 static void on_owner_enrollment(GtkWidget*w,gpointer data){
  (void)w;(void)data;
  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
@@ -1764,13 +1780,7 @@ static void on_owner_enrollment(GtkWidget*w,gpointer data){
   open_games_settings(NULL,NULL);
   return;
  }
- gchar *argv[]={"/usr/bin/python3",
-  "/usr/lib/optiplex-now/owner-enroll-ui.py",cfg[0],cfg[1],NULL};
- GError *error=NULL;
- if(!g_spawn_async(NULL,argv,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
-  say("OWNER ENROLLMENT WINDOW UNAVAILABLE; CHECK INSTALLATION");
-  g_clear_error(&error);
- }
+ open_owner_enrollment_for(cfg[0],cfg[1]);
 }
 static void pair_wolf(GtkWidget *origin){
  if(!has_moonlight()){say("INSTALL MOONLIGHT FIRST");return;}
@@ -2867,7 +2877,16 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_moonlight")){if(has_moonlight())open_moonlight();else install_moonlight();}
  else if(!strcmp(n,"w_appimage"))choose_appimage();
  else if(!strcmp(n,"w_wolf"))pair_wolf(w);
- 
+ else if(!strcmp(n,"w_owner_approve")){
+   /* The wizard's address is not saved until Finish; use its staged values.
+    * Opening the separate dialog never installs a host key or grants access. */
+   const char *host=gtk_entry_get_text(GTK_ENTRY(c->host));
+   const char *user=gtk_entry_get_text(GTK_ENTRY(c->user));
+   if(!now_valid_host(host)||!now_valid_user(user)){
+     gtk_label_set_text(GTK_LABEL(c->wolf_state),
+       "RETURN TO SERVER: ENTER A VALID HOST AND SSH USER.");
+   }else open_owner_enrollment_for(host,user);
+ }
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
    GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
@@ -2933,7 +2952,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
     wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
  }
  c->tailscale_poll_id=g_timeout_add_seconds(5,wizard_tailscale_poll,c);
- gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"TAILSCALE");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"NOW Setup: Tailscale");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
  /* Page 2: choose your server. All values are prefilled from saved configuration. */
  GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
  add(two,label("FIND YOUR SERVER","modalheading"),0);
@@ -2946,7 +2965,7 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
  c->notice=label("","helper");add(two,c->notice,0);
  wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
- gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"SERVER");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"NOW Setup: Server");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
  /* Page 3: independent Moonlight identity for this Linux profile. */
  GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
  add(four,label("CONNECT TO GAME HOST","modalheading"),0);
@@ -2957,27 +2976,31 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
  wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
  wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
+ wizard_button(c,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve");
  GtkWidget*owner_access_note=label(
-   "Wolf pairing lets this device open the host's published game streams. "
-   "Owner-only Downloads and managed host operations require separate "
-   "restricted authorization under Settings > Gaming & Streaming. "
-   "Alpha limitation: this pairing helper still depends on preapproved owner SSH; "
-   "no-SSH client enrollment is not yet implemented.", "helper");
+   "Two separate approvals: first pair Moonlight with Wolf, then request "
+   "NOW owner access for managed Games and Downloads. A configured private "
+   "Tailscale host listener can offer owner-phone QR approval without "
+   "preapproved SSH; otherwise the host owner must enable or review "
+   "enrollment. Requests never authorize themselves.", "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
  add(four,owner_access_note,0);
  
- gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"GAMES");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"NOW Setup: Games");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
  /* Page 4: finish without manual URLs. */
  GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
  add(six,label("CONNECTION SETTINGS SAVED","modalheading"),0);
  GtkWidget*owner_ready_note=label(
-   "Wolf-paired devices can open published games. Owner-only Downloads and managed host operations require restricted access from Gaming & Streaming settings. Videos uses authorized Jellyfin discovery when available; Music is optional. Service URL overrides remain in Advanced Settings.",
+   "Wolf pairing and NOW owner approval are separate. Use Request Owner Approval "
+   "on the Games setup page if this device has not been authorized, then Verify "
+   "Access. Videos opens your authorized Jellyfin library in the browser. "
+   "Advanced service settings remain available under Settings.",
    "helper");
  gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
  add(six,owner_ready_note,0);
  add(six,label("Saved settings carry over between updates.","helper"),0);
  add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"FINISH");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
+ gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"NOW Setup: Finish");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  g_signal_connect_data(a,"prepare",(GCallback)wizard_prepare,c,NULL,0);
  g_signal_connect_data(a,"apply",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"cancel",(GCallback)wizard_cancel,c,NULL,0);

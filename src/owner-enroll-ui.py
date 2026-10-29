@@ -135,6 +135,8 @@ class EnrollmentWindow:
         self.review_button.set_visible(True)
         self.review_button.set_sensitive(False)
         self.qr_box.hide()
+        # Never leave a previous request code visible after a failed retry.
+        self.code.set_text("")
         self.status.set_text("Contacting owner server through Tailscale...")
         self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
             self.host, self.user, include_transport=True), self.request_done)
@@ -190,6 +192,7 @@ class EnrollmentWindow:
     def proof_done(self, result, error):
         if error or result is not True:
             self.qr_box.hide()
+            self.code.set_text("")
             self.status.set_text(
                 "Moonlight identity could not be proven automatically. "
                 "No QR approval has been offered and no access was granted. "
@@ -294,7 +297,11 @@ class EnrollmentWindow:
             self.host, self.user, "status"), self.verify_done)
 
     def verify_done(self, answer, error):
-        if error:
+        # Successful job completion does not imply restricted authorization.
+        # Check the same finite host status contract as the pre-request probe.
+        if error or not load(
+                "now_owner_verify_response", "owner-enroll-client.py"
+        ).verified_restricted_access(answer):
             self.status.set_text(
                 "Not approved yet, or host unavailable. "
                 "Request a device review or ask the owner to approve access.")

@@ -18,7 +18,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("g_strcmp0(last_user,user)==0", opening)
         self.assertIn("g_strcmp0(last_override,webui_url)==0", opening)
         self.assertIn("if(same && webview && loaded_url", opening)
-        self.assertIn("show_web(NULL,NULL);", opening)
+        self.assertIn("show_queue(NULL,NULL);", opening)
         self.assertIn("if(!same){", opening)
         self.assertIn("gtk_container_remove(GTK_CONTAINER(view_holder),webview);", opening)
         self.assertIn("if(same && running)return;", opening)
@@ -58,11 +58,16 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SHELL)
         self.assertIn('g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);', SHELL)
 
-    def test_embedded_webview_uses_full_downloads_page(self):
-        self.assertNotIn('gtk_button_new_with_label("VUE TORRENT")', FLOW)
-        self.assertNotIn('gtk_button_new_with_label("QUEUE SNAPSHOT")', FLOW)
-        self.assertIn('gtk_widget_hide(status_label);', FLOW)
-        self.assertIn('gtk_widget_set_no_show_all(status_label,TRUE);', FLOW)
+    def test_native_queue_is_primary_and_webui_is_in_page_advanced_only(self):
+        self.assertIn('gtk_button_new_with_label("REFRESH")', FLOW)
+        self.assertIn('gtk_button_new_with_label("ADVANCED VUETORRENT")', FLOW)
+        self.assertIn('gtk_button_new_with_label("BACK TO QUEUE")', FLOW)
+        self.assertIn('now_downloads_queue_view_new()', FLOW)
+        self.assertIn('now_downloads_queue_view_update(queue_view', FLOW)
+        self.assertIn('"/usr/bin/python3",helper,host,user,"--native"', FLOW)
+        self.assertIn('now_downloads_webview_new(approved_web_url,last_host)', FLOW)
+        self.assertIn('gtk_widget_set_sensitive(advanced_button,approved_web_url!=NULL)', FLOW)
+        self.assertNotIn("now_downloads_webview_new(target,job->host)", FLOW)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")', FLOW)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web")', FLOW)
 

@@ -87,13 +87,18 @@ static const char *first_result_title(GtkWidget *list){
 static void test_sort_and_more(void){
  GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
  GtkWidget *view=now_downloads_search_view_new();
- gtk_window_set_default_size(GTK_WINDOW(window),800,560);
+ gtk_window_set_default_size(GTK_WINDOW(window),900,560);
  gtk_container_add(GTK_CONTAINER(window),view);
  gtk_widget_show_all(window);
  GtkWidget *list=find_named(view,"nowsearchlist");
  GtkWidget *more=find_named(view,"nowsearchmore");
- GtkWidget *sort=find_named(view,"nowsearchsort");
- g_assert_nonnull(list);g_assert_nonnull(more);g_assert_nonnull(sort);
+ GtkWidget *name=find_named(view,"nowsearchheader_name");
+ GtkWidget *size=find_named(view,"nowsearchheader_size");
+ GtkWidget *seeds=find_named(view,"nowsearchheader_seeds");
+ GtkWidget *published=find_named(view,"nowsearchheader_published");
+ g_assert_nonnull(list);g_assert_nonnull(more);
+ g_assert_nonnull(name);g_assert_nonnull(size);
+ g_assert_nonnull(seeds);g_assert_nonnull(published);
  g_assert_true(now_downloads_search_view_update(view,
    "SEARCH\t1\t35\n"
    "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\n"
@@ -101,20 +106,27 @@ static void test_sort_and_more(void){
    "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1"));
  while(gtk_events_pending())gtk_main_iteration();
  g_assert_true(gtk_widget_get_visible(more));
+ /* Size ascending is the default; click the same heading to reverse. */
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"seeds");
- while(gtk_events_pending())gtk_main_iteration();
+ g_signal_emit_by_name(size,"clicked");
  g_assert_cmpstr(first_result_title(list),==,"2160p huge");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"large");
- while(gtk_events_pending())gtk_main_iteration();
- g_assert_cmpstr(first_result_title(list),==,"2160p huge");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"newest");
- while(gtk_events_pending())gtk_main_iteration();
- g_assert_cmpstr(first_result_title(list),==,"2160p huge");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"oldest");
- while(gtk_events_pending())gtk_main_iteration();
+ g_signal_emit_by_name(size,"clicked");
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
- /* Old 6-field host responses still parse; unknown publication sorts last. */
+ /* Seeders defaults descending and flips ascending on the next click. */
+ g_signal_emit_by_name(seeds,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ g_signal_emit_by_name(seeds,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ /* Publish date defaults newest and flips oldest. Unknown is always last. */
+ g_signal_emit_by_name(published,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ g_signal_emit_by_name(published,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ g_signal_emit_by_name(name,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ g_signal_emit_by_name(name,"clicked");
+ g_assert_cmpstr(first_result_title(list),==,"Unknown size");
+ /* Old 6-field host responses remain valid. */
  g_assert_true(now_downloads_search_view_update(view,
    "SEARCH\t0\t1\nRESULT\t42\t5\t0\tLegacy result\t-"));
  g_assert_cmpstr(first_result_title(list),==,"Legacy result");

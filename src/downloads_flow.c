@@ -25,6 +25,7 @@ static gboolean vpn_inflight;
 static GtkWidget *webview;
 static gchar *loaded_url;
 static gboolean running;
+static gboolean manage_running;
 static gchar *last_host;
 static gchar *last_user;
 static gchar *last_override;
@@ -451,6 +452,59 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
      "Connect an approved server to discover downloads.");
  }
 }
+typedef struct {
+ GSubprocess *proc;
+ gchar *host,*user,*operation;
+} ManageJob;
+static void managed_finished(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
+ ManageJob *job=data;
+ gchar *out=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&error)
+             && g_subprocess_get_successful(job->proc) &&
+             out && !strcmp(g_strchomp(out),"MANAGED");
+ manage_running=FALSE;
+ if(!g_strcmp0(last_host,job->host) && !g_strcmp0(last_user,job->user)){
+   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+       ok?"Torrent action submitted.":"Torrent action failed; retry from Transfers.");
+   if(last_host && last_user && !running)now_downloads_refresh(last_host,last_user);
+ }
+ g_clear_error(&error);g_free(out);
+ g_object_unref(job->proc);
+ g_free(job->host);g_free(job->user);g_free(job->operation);g_free(job);
+}
+static void on_transfer_action(const char *operation,const char *torrent_hash,
+                               const char *name,gpointer unused){
+ (void)name;(void)unused;
+ if(manage_running || !last_host || !last_user ||
+    !now_valid_host(last_host) || !now_valid_user(last_user) ||
+    !owner_device_key_exists() || !operation || !torrent_hash)return;
+ gchar *queue_helper=helper_path();
+ gchar *directory=g_path_get_dirname(queue_helper);
+ gchar *helper=g_build_filename(directory,"download-operations-client.py",NULL);
+ if(g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+   const gchar *argv[]={"/usr/bin/python3",helper,last_host,last_user,
+                        "manage",operation,torrent_hash,NULL};
+   GError *error=NULL;
+   GSubprocess *proc=g_subprocess_newv(
+        argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+   if(proc){
+     ManageJob *job=g_new0(ManageJob,1);
+     job->proc=proc;
+     job->host=g_strdup(last_host);
+     job->user=g_strdup(last_user);
+     job->operation=g_strdup(operation);
+     manage_running=TRUE;
+     if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                        "Submitting approved torrent action...");
+     g_subprocess_communicate_utf8_async(proc,NULL,NULL,managed_finished,job);
+   }else if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                           "Unable to submit torrent action.");
+   g_clear_error(&error);
+ }
+ g_free(helper);g_free(directory);g_free(queue_helper);
+}
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
  if(destination_view)
@@ -549,6 +603,7 @@ GtkWidget *now_downloads_page(void){
  gtk_label_set_line_wrap(GTK_LABEL(queue_label),TRUE);
  gtk_box_pack_start(GTK_BOX(transfers),queue_label,FALSE,FALSE,0);
  queue_view=now_downloads_queue_view_new();
+ now_downloads_queue_view_on_action(queue_view,on_transfer_action,NULL);
  gtk_box_pack_start(GTK_BOX(transfers),queue_view,TRUE,TRUE,0);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers");
  GtkWidget *search=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);

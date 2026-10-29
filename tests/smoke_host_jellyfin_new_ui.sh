@@ -2,7 +2,10 @@
 set -euo pipefail
 # Installed on disposable CI only. This never clicks Check or Install.
 tmp="$(mktemp -d -t now-new-jellyfin-ui.XXXXXX)"
-trap 'rm -rf -- "$tmp"' EXIT
+# GVfs may leave a transient FUSE mount at XDG_RUNTIME_DIR/gvfs.
+# CI's disposable runner will clean it up; never fail a successful GTK
+# smoke test just because that mount outlives the app process.
+trap 'rm -rf -- "$tmp" 2>/dev/null || true' EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime"
 chmod 700 "$tmp/runtime"
 HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_RUNTIME_DIR="$tmp/runtime" \

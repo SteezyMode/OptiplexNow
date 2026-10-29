@@ -1,8 +1,8 @@
 name: Publish OptiPlex NOW
 
-# Tags remain the normal explicit release trigger. For v1.20.0 ONLY,
-# the specifically named squash-merge of its curated notes to main is a
-# one-time explicit publish instruction; ordinary main pushes cannot release.
+# Explicit v1.21.0 official .deb: a single marked, CI-verified main
+# merge may publish its curated version without manual tag credentials.
+# All other main pushes and PRs are inert; regular tags remain supported.
 on:
   push:
     tags:
@@ -10,7 +10,7 @@ on:
     branches:
       - main
     paths:
-      - 'docs/releases/v1.20.0.md'
+      - 'docs/releases/v1.21.0.md'
 
 permissions:
   contents: write
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.20.0]')) }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.21.0]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -39,8 +39,8 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            # This path runs ONLY on the deliberately marked v1.20.0 merge.
-            version="1.20.0"
+            # This path runs ONLY on the deliberately marked v1.21.0 merge.
+            version="1.21.0"
           fi
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\1/p' package.py)" = "$version"
@@ -102,7 +102,6 @@ jobs:
             dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
             --verify-tag \
-            --title "OptiPlex NOW ${tag} Closed Beta" \
+            --title "OptiPlex NOW ${tag} — Current Alpha"  \
             --notes-file "$notes" \
-            --prerelease \
-            --latest=false
+            --latest

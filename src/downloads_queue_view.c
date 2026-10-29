@@ -58,7 +58,11 @@ static void perform_action(GtkButton *button,gpointer data){
  const char *hash=g_object_get_data(G_OBJECT(button),"now-hash");
  const char *name=g_object_get_data(G_OBJECT(button),"now-name");
  if(!ctx || !ctx->callback || !action || !valid_hash(hash) || !name)return;
- if(!strcmp(action,"remove")){
+ /* The queue refresh may rebuild rows while a modal confirmation runs. */
+ gchar *operation_copy=g_strdup(action);
+ gchar *hash_copy=g_strdup(hash);
+ gchar *name_copy=g_strdup(name);
+ if(!strcmp(operation_copy,"remove")){
    GtkWidget *parent=gtk_widget_get_toplevel(view);
    GtkWidget *dialog=gtk_message_dialog_new(
      GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,GTK_DIALOG_MODAL,
@@ -70,9 +74,11 @@ static void perform_action(GtkButton *button,gpointer data){
                           "REMOVE TORRENT",GTK_RESPONSE_ACCEPT,NULL);
    gint result=gtk_dialog_run(GTK_DIALOG(dialog));
    gtk_widget_destroy(dialog);
-   if(result!=GTK_RESPONSE_ACCEPT)return;
+   if(result!=GTK_RESPONSE_ACCEPT)goto done;
  }
- ctx->callback(action,hash,name,ctx->user_data);
+ ctx->callback(operation_copy,hash_copy,name_copy,ctx->user_data);
+done:
+ g_free(operation_copy);g_free(hash_copy);g_free(name_copy);
 }
 static GtkWidget *action_button(GtkWidget *view,const char *label,
                                 const char *action,const char *hash,

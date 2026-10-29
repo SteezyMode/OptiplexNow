@@ -125,11 +125,11 @@ static void test_sort_and_stream(void){
  g_assert_cmpstr(first_result_title(list),==,"Unknown size");
  /* Second search snapshot adds later results without another search click. */
  g_assert_true(now_downloads_search_view_update(view,
-   "SEARCH\\t0\\t4\\n"
-   "RESULT\\t40000000000\\t45\\t0\\t2160p huge\\t-\\t1767225600\\n"
-   "RESULT\\t4000000000\\t10\\t0\\t1080p moderate\\t-\\t1727740800\\n"
-   "RESULT\\t2000000000\\t14\\t0\\t720p release\\t-\\t1710000000\\n"
-   "RESULT\\t-1\\t-1\\t0\\tUnknown size\\t-\\t-1"));
+   "SEARCH\t0\t4\n"
+   "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\n"
+   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\t1727740800\n"
+   "RESULT\t2000000000\t14\t0\t720p release\t-\t1710000000\n"
+   "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1"));
  g_assert_cmpuint(visible_rows(list),==,4);
  /* Old 6-field host responses remain valid. */
  g_assert_true(now_downloads_search_view_update(view,

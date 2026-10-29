@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from download_inventory import InventoryError
 from download_search import (SearchError, checked_magnet, checked_query,
-                             search_once, stream_search)
+                             search_once, stream_search, _results)
 
 VPN = "a" * 64
 QBIT = "b" * 64
@@ -83,8 +83,9 @@ class FakeAPI:
                 assert 0<=offset<=1000 and 1<=limit<=100
                 if self.fail_get:
                     return subprocess.CompletedProcess(command, 1, b"Internal Error", b"")
-                batch={**self.result,
-                       "results":self.result["results"][offset:offset+limit]}
+                batch={**self.result}
+                if isinstance(batch["results"],list):
+                    batch["results"]=batch["results"][offset:offset+limit]
                 out=json.dumps(batch).encode()
         return subprocess.CompletedProcess(command, 0, out, headers)
 
@@ -207,7 +208,7 @@ class DownloadSearchTests(unittest.TestCase):
         result=stream_search("Ubuntu ISO",updates.append,runner=runner,
                              sleeper=lambda _:None)
         self.assertEqual([len(x["results"]) for x in updates],[1,1])
-        self.assertFalse(result["partial"])
+        self.assertEqual(result["status"],"Stopped")
         self.assertTrue(updates[-1]["append"])
         self.assertEqual(updates[-1]["results"][0]["name"],"Smaller 1080p")
         urls=[c[-1] for c in fake.commands]
@@ -251,14 +252,20 @@ class DownloadSearchTests(unittest.TestCase):
             {"status":"Stopped","total":0,"results":{}},
             {"status":"Stopped","total":0,"results":[{"fileName":"a",
              "fileSize":1,"nbSeeders":False,"fileUrl":MAGNET}]},
-            {"status":"Stopped","total":0,"results":[{"fileName":"a",
-             "fileSize":1,"nbSeeders":2,"fileUrl":MAGNET}]*101},
+
         ]
         for result in invalid:
             fake=FakeAPI(result=result)
             with self.subTest(result=str(result)[:80]), self.assertRaises(SearchError):
                 search_once("Ubuntu ISO", runner=fake, sleeper=lambda x:None)
             self.assertTrue(fake.commands[-1][-1].endswith("/delete"))
+
+    def test_upstream_oversize_result_packet_fails_closed(self):
+        payload={"status":"Stopped","total":101,"results":[
+            {"fileName":"Linux ISO","fileSize":10,"nbSeeders":3,
+             "fileUrl":MAGNET} for _ in range(101)]}
+        with self.assertRaises(SearchError):
+            _results(json.dumps(payload).encode())
 
     def test_failed_result_query_still_cleans_own_job(self):
         fake=FakeAPI()

@@ -35,6 +35,7 @@ GtkWidget *now_downloads_queue_view_new(void){
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  GtkWidget *list=gtk_list_box_new();
+ gtk_widget_set_name(list,"nowqueuelist");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(scroll),list);
  g_object_set_data(G_OBJECT(scroll),"now-download-list",list);

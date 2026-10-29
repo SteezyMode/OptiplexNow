@@ -101,7 +101,8 @@ static void complete(GObject *source,GAsyncResult *res,gpointer data){
      }
    }
  }
- if(accepted && !now_downloads_queue_view_update(queue_view,\n        g_strchomp((gchar *)queue_text)))
+ if(accepted && !now_downloads_queue_view_update(queue_view,
+        g_strchomp((gchar *)queue_text)))
    accepted=FALSE;
  if(queue_label){
    if(accepted)gtk_label_set_text(GTK_LABEL(queue_label),"Current downloads");

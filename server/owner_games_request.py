@@ -29,27 +29,6 @@ def _validated_request(request):
         raise PolicyError("Unsupported owner Games request")
     action = request.get("action")
     fields = {"version", "action"}
-    if action == "downloads_roots":
-        try:
-            return {"success": True, "service": "qbittorrent",
-                    **inspect_download_roots()}
-        except InventoryError:
-            return {"success": False, "status": "destinations_unavailable"}
-
-    if action == "downloads_browse":
-        try:
-            return {"success": True, "service": "qbittorrent",
-                    **browse_downloads(request["root"], request["relative"])}
-        except InventoryError:
-            return {"success": False, "status": "folder_unavailable"}
-
-    if action == "downloads_add":
-        try:
-            return {"success": True,
-                    **enqueue_download(request["root"],request["relative"],request["magnet"])}
-        except InventoryError:
-            return {"success": False, "status": "add_unavailable"}
-
     if action == "downloads_search":
         fields.add("query")
     elif action == "downloads_browse":
@@ -106,6 +85,27 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         profile_id = binding["wolf_profile_id"]
         if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
             raise PolicyError("Owner Steam lease/workspace mismatch")
+
+    if action == "downloads_roots":
+        try:
+            return {"success": True, "service": "qbittorrent",
+                    **inspect_download_roots()}
+        except InventoryError:
+            return {"success": False, "status": "destinations_unavailable"}
+
+    if action == "downloads_browse":
+        try:
+            return {"success": True, "service": "qbittorrent",
+                    **browse_downloads(request["root"], request["relative"])}
+        except InventoryError:
+            return {"success": False, "status": "folder_unavailable"}
+
+    if action == "downloads_add":
+        try:
+            return {"success": True,
+                    **enqueue_download(request["root"],request["relative"],request["magnet"])}
+        except InventoryError:
+            return {"success": False, "status": "add_unavailable"}
 
     if action == "downloads_search":
         try:

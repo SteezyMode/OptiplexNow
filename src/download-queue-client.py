@@ -42,6 +42,14 @@ def fetch(host, user, runner=subprocess.run, include_port=False, native=False):
             raise ValueError("Malformed queue")
         name, state, progress = (item.get("name"), item.get("state"),
                                  item.get("progress_percent"))
+        torrent_hash=item.get("torrent_hash")
+        speed, eta, seeds=(item.get("download_bps"),item.get("eta_seconds"),
+                            item.get("seeders"))
+        if (not isinstance(torrent_hash,str) or
+                not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",torrent_hash)
+                or any(type(v) is not int or not -1<=v<=2**31-1
+                       for v in (speed,eta,seeds))):
+            raise ValueError("Malformed torrent status")
         if not isinstance(name, str) or not isinstance(state, str) or (
                 type(progress) not in (int, float)) or not 0 <= progress <= 100:
             raise ValueError("Malformed queue")
@@ -49,8 +57,8 @@ def fetch(host, user, runner=subprocess.run, include_port=False, native=False):
         clean_state = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in state)[:48]
         lines.append(f"{progress:5.1f}%   {clean_state:<16}   {clean_name}")
         # Printable, bounded, tab-free wire format for the native GTK queue.
-        # No raw hashes, paths, credentials or arbitrary qBittorrent JSON.
-        native_lines.append(f"ITEM\t{progress:.1f}\t{clean_state}\t{clean_name}")
+        # Only torrent content hashes (opaque selectors), no paths, credentials or raw JSON.
+        native_lines.append(f"ITEM\t{progress:.1f}\t{clean_state}\t{clean_name}\t{torrent_hash.lower()}\t{speed}\t{eta}\t{seeds}")
     display = "\n".join(lines) if lines else "No downloads in queue."
     if not include_port:
         return display

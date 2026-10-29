@@ -13,7 +13,9 @@ MAKE = (ROOT / "Makefile").read_text(encoding="utf-8")
 
 class CombinedGamesUITests(unittest.TestCase):
     def test_one_window_navigation_and_managed_games_button(self):
-        self.assertIn('GtkWidget*dashboard_tab=button("DASHBOARD","navtab");', SOURCE)\n        self.assertIn('now_nav_mark_tab(dashboard_tab,"dashboard");', SOURCE)\n        self.assertNotIn('GtkWidget*back=button("‹ DASHBOARD","navback");', SOURCE)
+        self.assertIn('GtkWidget*dashboard_tab=button("DASHBOARD","navtab");', SOURCE)
+        self.assertIn('now_nav_mark_tab(dashboard_tab,"dashboard");', SOURCE)
+        self.assertNotIn('GtkWidget*back=button("‹ DASHBOARD","navback");', SOURCE)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");', SOURCE)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
         self.assertIn('GtkWidget*games_page=now_games_page_new(G_CALLBACK(on_play_steam),', SOURCE)

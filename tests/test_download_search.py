@@ -117,6 +117,22 @@ class DownloadSearchTests(unittest.TestCase):
         urls = [c[-1] for c in fake.commands if "api/v2/search/results" in c[-1]]
         self.assertEqual(len(urls), 12)
 
+    def test_running_results_return_after_first_poll_and_cleanup(self):
+        fake = FakeAPI(result={"status":"Running","total":24,"results":[
+            {"fileName":"Linux ISO","fileSize":2048,"nbSeeders":12,
+             "fileUrl":MAGNET}]})
+        sleeps=[]
+        data = search_once("Ubuntu ISO", runner=fake, sleeper=sleeps.append)
+        self.assertTrue(data["partial"])
+        self.assertEqual(len(data["results"]),1)
+        self.assertEqual(data["results"][0]["magnet"],MAGNET)
+        self.assertEqual(sleeps,[1])
+        queries=[c for c in fake.commands
+                 if "/api/v2/search/results?" in c[-1]]
+        self.assertEqual(len(queries),1)
+        self.assertEqual([c[-1].rsplit("/",1)[-1]
+                          for c in fake.commands[-2:]],["stop","delete"])
+
     def test_results_can_fill_multiple_ui_pages(self):
         fake=FakeAPI(result={"status":"Stopped","total":100,
              "results":[{"fileName":f"Linux ISO {i}","fileSize":500+i,

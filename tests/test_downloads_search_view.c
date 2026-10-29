@@ -35,6 +35,7 @@ static void test_mapped_full_results(void){
  /* Live regression: 100 results; 20 per page in a mapped GTK window. */
  GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
  GtkWidget *view=now_downloads_search_view_new();
+ gtk_window_set_default_size(GTK_WINDOW(window),860,650);
  gtk_container_add(GTK_CONTAINER(window),view);
  gtk_widget_show_all(window);
  GString *wire=g_string_new("SEARCH\t1\t130");
@@ -48,6 +49,9 @@ static void test_mapped_full_results(void){
    g_assert_true(now_downloads_search_view_update(view,wire->str));
    while(gtk_events_pending())gtk_main_iteration();
    g_assert_cmpuint(visible_rows(list),==,20);
+   GtkWidget *scroller=find_named(view,"nowsearchresults");
+   g_assert_nonnull(scroller);
+   g_assert_cmpint(gtk_widget_get_allocated_height(scroller),>,320);
    GList *controls=gtk_container_get_children(GTK_CONTAINER(view));
    GtkWidget *pager=g_list_last(controls)->data;
    g_list_free(controls);

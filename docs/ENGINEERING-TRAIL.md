@@ -23,6 +23,14 @@ Keep the latest **implementation status** in CURRENT-STATUS, not here. An unmerg
 or a passing simulation is **not** a new deployable beta. Do not copy secrets,
 Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
 
+## 2026-10-29: P2 Search fills page and returns early results
+
+- **Evidence:** Owner reported the official v1.21.0 Search page was tiny and real searches took the full 12 seconds. Source confirmed two non-expanding GtkBox placements and a backend loop waiting for `Stopped`, even if results already existed.
+- **Change:** Expand Search and its scroller, and return the first validated qBittorrent result snapshot. Mark a still-running search partial. Continue to poll if no results; only the ephemeral search job gets stopped/deleted, never torrents.
+- **Tests:** Added GTK mapped-window height regression and fast-return/cleanup Python fake. CI and real owner-device acceptance tracked by PR #218.
+- **Non-goals / rollback:** No new daemon, broker, filesystem, API, VPN or downloader config. Revert the C layout or restore a backed-up `download_search.py` to restore prior behavior. The host Python module must be deployed separately from the .deb.
+- **Next action:** Verify the Current Alpha package and approved host after a matching, backup-safe host module update. Do not label it physically accepted from CI alone.
+
 ## 2026-10-29: Downloads P2 is a complete host/client acceptance gate
 
 - **Problem/evidence:** The owner physically verified native search and explicit save-folder Add on the reference OptiPlex using the PR #214 Linux Mint client, and separately verified qBittorrent's Gluetun topology, tunnel routing and default-drop firewall. PR #215 then added Transfers/Search, automatic polling, narrow management operations and a VPN health panel. Its exact-head Python/GTK/sanitizer/package CI passed and it was merged to main, but its new eight-field queue contract and host management module were **not** yet physically deployed or exercised.

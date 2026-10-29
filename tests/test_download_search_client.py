@@ -54,7 +54,7 @@ class SearchClientTests(unittest.TestCase):
                   "total":150,"results":entries}
         output=self.payload(response=response)
         self.assertEqual(len(output.splitlines()),101)
-        self.assertTrue(output.startswith("SEARCH\\t1\\t150"))
+        self.assertTrue(output.startswith("SEARCH\t1\t150"))
         self.assertLess(len(output.encode()),180000)
         response["results"].append(entries[0])
         with self.assertRaises(ValueError):

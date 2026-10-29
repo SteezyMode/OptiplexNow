@@ -136,11 +136,11 @@ def _results(raw):
 
 
 def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
-    """Gather a small snapshot, then tear down ONLY the newly created search job.
+    """Return the first usable bounded snapshot without a mandatory 12s wait.
 
-    No continuous background worker; a future broker can call this with an
-    explicit timeout, and surface partial=True if plugins are still searching.
-    The returned magnet is metadata, NOT a request to enqueue anything.
+    Still poll up to twelve times when the enabled plugins find nothing.
+    Return partial=True when plugins are running; each search uses one fresh
+    SID and cleans up only its own search job. Never enqueue torrent data.
     """
     pattern = checked_query(query)
     gateway, port = locate_verified_downloader(runner=runner)
@@ -163,7 +163,11 @@ def search_once(query, *, runner=subprocess.run, sleeper=time.sleep):
                             fields={"id": job_id, "limit": MAX_RESULTS,
                                     "offset": 0}, session=session)
             last = _results(reply)
-            if last["status"] == "Stopped":
+            # Show the first validated results without waiting for every
+            # search plugin to finish its 12-second window. The response
+            # explicitly marks partial=True if plugins are still running.
+            # Cleanup remains restricted to this search job, never torrents.
+            if last["status"] == "Stopped" or last["results"]:
                 break
         if last is None:
             raise SearchError("Search produced no response")

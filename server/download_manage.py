@@ -48,7 +48,8 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
         raise InventoryError("Invalid torrent lookup") from exc
     if (not isinstance(torrents, list) or len(torrents) != 1 or
             not isinstance(torrents[0], dict) or
-            torrents[0].get("hash", "").lower() != torrent_hash):
+            not isinstance(torrents[0].get("hash"), str) or
+            torrents[0]["hash"].lower() != torrent_hash):
         raise InventoryError("Torrent no longer exists")
     fields = {"hashes": torrent_hash}
     if operation == "remove":

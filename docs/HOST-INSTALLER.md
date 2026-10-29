@@ -140,3 +140,9 @@ The GitHub workflow builds the real Debian package, installs it on disposable ru
 - [ ] Record exact OS, GPU/driver, Docker, Wolf digest, NOW package, network conditions and pass/fail evidence in [Current status](CURRENT-STATUS.md).
 
 **Release rule:** a proven clean-host install and stream is the next priority. Do not add more simulated infrastructure or speculative service scope before completing this test. The separate existing-host client checklist remains in [Beta acceptance](BETA-ACCEPTANCE.md).
+
+## Package-owned owner broker (Private Alpha 1 upgrade path, development)
+
+The package now contains the restricted one-owner Games, media and downloads host broker, its Wolf adapter, persistent-owner launcher and all required downloader modules under `/usr/lib/optiplex-now/owner-bridge`. Installing NOW on the host does **not** automatically enable this broker or rewrite SSH permissions. An existing manually adopted reference host uses **Server Setup → OWNER HOST | USE PACKAGED UPDATES** once (or explicit, owner-confirmed local command). It checks only the legacy restricted `authorized_keys` entries pointing into that host owner's `.local/lib/optiplex-now-games/server/owner_games_ssh.py`, saves a private backup, then switches those entries to the root-owned packaged handler. All other keys and owner state remain untouched; on unrelated clients with no approved host keys the action reports not configured without creating privileges. After this initial migration, ordinary `.deb` updates update the code on both host and client.
+
+A package install does **not** prove that its running host is upgraded until the one-time migration is verified. This is not automatic clean-host provision, role admission, VPN kill switch validation or real streaming/media acceptance. Private Alpha 1 remains open.

@@ -1,3 +1,10 @@
+## 2026-10-29 — Package-owned host code instead of manual Python deployment
+
+- **Issue and outcome:** The v1.21.4 desktop installer excluded the live owner restricted host backend, so all-machine .deb updates did not update Search/Transfers on the real OptiPlex. This contradicts the one-application goal and blocked alpha acceptance.
+- **Boundary and change:** Include existing, unchanged restricted owner broker modules and dependency graph inside the existing `owner-bridge` package directory. Offer an owner-approved one-time switch of only trusted `authorized_keys` forced-command script paths to the package-owned handler. Normal package installation has NO SSH policy/host side effect; code remains root-owned, per-device key permissions remain unchanged.
+- **Safety:** Only exact legacy owner-only restricted key lines are accepted; foreign/malformed commands block; preserve unrelated keys and save a durable owner-only backup before atomic rewrite. Do not restart Wolf, Jellyfin, qBittorrent, Gluetun or change any media/Steam state. No silent migration and no automatic retry after uncertain response.
+- **Evidence and next:** Source and isolated regression tests in PR #220; package CI and actual host migration not yet accepted. Next action: validate package CI, then explicitly adopt on the live host with the owner and prove actual three-pillar functions.
+
 # Engineering trail: decisions, incidents and handoffs
 
 This is the **append-only engineering trail**, not another roadmap or current-status page.

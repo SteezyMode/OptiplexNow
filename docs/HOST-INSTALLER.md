@@ -49,6 +49,12 @@ New state is isolated at root-owned `/var/lib/optiplex-now/jellyfin-host-pilot`,
 
 Source: Jellyfin's official container instructions require persistent config/cache and support read-only media bind mounts. Docker's Compose documentation warns that omitting the host IP exposes published ports on all interfaces. Both guide this deliberately scoped pilot; actual host behavior needs physical acceptance and any Docker network/firewall effects must be reviewed first.
 
+## October 29 — Clean-host virtual-controller seat isolation (development, PR #229)
+
+Only an explicit clean-host Wolf install will now check and apply the unmodified upstream `85-wolf.rules` from games-on-whales/wolf revision `9f29d9c4ceb5b0fb83875d98dad67af8237f5495` (SHA256 `52567af7cce1feb6a6625938b804e0def2c1fee6f70db69f36c366f7cdf8151c`). The package also carries the upstream license, but a `.deb` install alone does not activate rules. Before Docker operations the installer refuses existing conflicting Wolf udev policy, preserves identical trusted policy, creates only when absent, reloads udev without a global device trigger, and journals failure before stopping. A failed reload leaves the new file and journal for explicit provenance-reviewed recovery; a downgrade does not undo host policy.
+
+Prior success on the reference OptiPlex does not prove correctness on new machines: physical checks must confirm controller, motion sensor and touchpad input cannot affect the local active desktop, and inspect seat/logind ACLs and users with broad `input` group access. Perform the test on **separate disposable supported hardware**, never the current reference server. Current Docker prerequisite/Steam readiness code is preserved; the pilot remains unaccepted.
+
 ## Implemented path
 
 The separate GTK window `src/host_setup.c` opens from **Settings > Connections & Server > Check This PC for Server Setup**.

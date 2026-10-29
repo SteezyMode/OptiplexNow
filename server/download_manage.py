@@ -17,7 +17,7 @@ OPERATIONS = {
     "recheck": "recheck",
     "remove": "delete",
 }
-HASH = re.compile(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?\\Z")
+HASH = re.compile(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?\Z")
 
 
 def checked_hash(value):

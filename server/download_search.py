@@ -16,8 +16,8 @@ from download_inventory import InventoryError
 from download_queue import locate_verified_downloader
 
 MAX_BYTES = 65536
-MAX_RESULTS = 50
-MAX_MAGNET = 2048
+MAX_RESULTS = 20
+MAX_MAGNET = 1024
 QUERY_LIMIT = 96
 
 

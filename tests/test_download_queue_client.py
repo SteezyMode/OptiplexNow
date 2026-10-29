@@ -31,7 +31,8 @@ class QueueClientTests(unittest.TestCase):
     def test_sanitized_queue_display(self):
         payload = json.dumps({"success":True,"service":"qbittorrent",
             "queue":[{"name":"test\nmovie","state":"downloading","progress_percent":21.25,
-                      "save_path":"/not-for-client","hash":"secret"}]}).encode()
+                      "save_path":"/not-for-client","torrent_hash":"a"*40,
+                      "download_bps":150,"eta_seconds":60,"seeders":2}]}).encode()
         out = self.run_payload(payload)
         self.assertIn("test movie", out)
         self.assertIn("21.2%", out)
@@ -63,12 +64,14 @@ class QueueClientTests(unittest.TestCase):
     def test_native_queue_sanitizes_and_keeps_only_fixed_fields(self):
         payload=json.dumps({"success":True,"service":"qbittorrent",
             "queue":[{"name":"movie\tname\n2026","state":"stalledUP",
-                      "progress_percent":26.8,"hash":"privatehash",
+                      "progress_percent":26.8,"torrent_hash":"b"*40,
+                      "download_bps":1024,"eta_seconds":45,"seeders":3,
                       "save_path":"/private/root"}], "webui_port":8085}).encode()
         out=self.run_payload(payload,include_port=True,native=True)
-        self.assertEqual(out,"WEBUI_PORT=8085\nITEM\t26.8\tstalledUP\tmovie name 2026")
+        self.assertEqual(out,"WEBUI_PORT=8085\nITEM\t26.8\tstalledUP\tmovie name 2026\t" +
+            "b"*40 + "\t1024\t45\t3")
         self.assertNotIn("/private",out)
-        self.assertNotIn("privatehash",out)
+        self.assertNotIn("/private",out)
 
     def test_native_empty_and_malformed_response(self):
         self.assertEqual(self.run_payload(
@@ -80,10 +83,13 @@ class QueueClientTests(unittest.TestCase):
         for value in ("tab\tfield", "line\nbreak"):
             payload=json.dumps({"success":True,"service":"qbittorrent",
                 "queue":[{"name":value,"state":"downloading",
-                          "progress_percent":5}]}).encode()
+                          "progress_percent":5,
+                          "torrent_hash":"c"*40,"download_bps":0,
+                          "eta_seconds":-1,"seeders":0}]}).encode()
             out=self.run_payload(payload,include_port=True,native=True)
             self.assertEqual(out,"WEBUI_PORT=0\nITEM\t5.0\tdownloading\t"+
-                             value.replace("\t"," ").replace("\n"," "))
+                             value.replace("\t"," ").replace("\n"," ")+
+                             "\t"+"c"*40+"\t0\t-1\t0")
 
     def test_discovery_rejects_untrusted_port(self):
         for port in (True, -1, 22, 0.5, 65536, "8085"):

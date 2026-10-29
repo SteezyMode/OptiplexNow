@@ -43,6 +43,7 @@ class FakeAPI:
                  "nbSeeders": 1, "fileUrl": "https://example.org/info.html"},
             ]}
         self.fail_get = False
+        self.sid = "test+search/42="
 
     def __call__(self, command, **kwargs):
         self.commands.append(command)
@@ -56,18 +57,27 @@ class FakeAPI:
         assert "127.0.0.1:8085/api/v2/search/" in command[-1]
         assert not any(part in command[-1] for part in
                        ("example.org", "localhost.evil", "file:///"))
+        assert "--header" in command
+        assert "Referer: http://127.0.0.1:8085/" in command
         if command[-1].endswith("/start"):
+            assert "-S" in command
+            assert not any(c.startswith("Cookie:") for c in command)
             assert "--post-data=pattern=Ubuntu+ISO&plugins=enabled&category=all" in command
             out = b'{"id":42}'
-        elif command[-1].endswith("/stop") or command[-1].endswith("/delete"):
-            assert "--post-data=id=42" in command
-            out = b""
+            headers = b"  HTTP/1.1 200 OK\r\n  set-cookie: SID=test+search/42=; HttpOnly\r\n"
         else:
-            assert command[-1].endswith("/results?id=42&limit=20&offset=0")
-            if self.fail_get:
-                return subprocess.CompletedProcess(command, 1, b"Internal Error", b"")
-            out = json.dumps(self.result).encode()
-        return subprocess.CompletedProcess(command, 0, out, b"")
+            assert "-S" not in command
+            assert "Cookie: SID=" + self.sid in command
+            headers = b""
+            if command[-1].endswith("/stop") or command[-1].endswith("/delete"):
+                assert "--post-data=id=42" in command
+                out = b""
+            else:
+                assert command[-1].endswith("/results?id=42&limit=20&offset=0")
+                if self.fail_get:
+                    return subprocess.CompletedProcess(command, 1, b"Internal Error", b"")
+                out = json.dumps(self.result).encode()
+        return subprocess.CompletedProcess(command, 0, out, headers)
 
 
 class DownloadSearchTests(unittest.TestCase):
@@ -84,6 +94,20 @@ class DownloadSearchTests(unittest.TestCase):
         self.assertEqual([x[-1].split("/")[-1] for x in fake.commands[-2:]],
                          ["stop", "delete"])
         self.assertFalse(any("torrents/add" in str(c) for c in fake.commands))
+
+    def test_missing_sid_fails_closed_and_does_not_poll(self):
+        fake = FakeAPI()
+        original = fake.__call__
+
+        def without_sid(command, **kwargs):
+            result = original(command, **kwargs)
+            if command[-1].endswith("/start"):
+                return subprocess.CompletedProcess(command, 0, result.stdout, b"")
+            return result
+
+        with self.assertRaisesRegex(SearchError, "session unavailable"):
+            search_once("Ubuntu ISO", runner=without_sid, sleeper=lambda x: None)
+        self.assertFalse(any("api/v2/search/results" in str(c) for c in fake.commands))
 
     def test_running_result_returns_explicit_partial(self):
         fake = FakeAPI(result={"status":"Running","total":0,"results":[]})

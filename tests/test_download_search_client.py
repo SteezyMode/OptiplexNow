@@ -45,6 +45,21 @@ class SearchClientTests(unittest.TestCase):
         self.assertIn(MAGNET,output)
         self.assertNotIn("https://",output)
 
+    def test_100_results_pass_as_one_bounded_payload_for_gtk_paging(self):
+        entries=[{"name":f"Linux ISO {i}","bytes":1000+i,
+                  "seeders":i,"can_add":True,"magnet":MAGNET}
+                 for i in range(100)]
+        response={"success":True,"service":"qbittorrent",
+                  "status":"Running","partial":True,
+                  "total":150,"results":entries}
+        output=self.payload(response=response)
+        self.assertEqual(len(output.splitlines()),101)
+        self.assertTrue(output.startswith("SEARCH\\t1\\t150"))
+        self.assertLess(len(output.encode()),180000)
+        response["results"].append(entries[0])
+        with self.assertRaises(ValueError):
+            self.payload(response=response)
+
     def test_reject_bogus_responses(self):
         invalid=[
             {"success":False,"status":"search_unavailable"},

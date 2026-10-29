@@ -53,7 +53,7 @@ static gboolean valid_state(const char *state){
 }
 gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
  GtkWidget *list=list_for(view);
- if(!list || !wire || !*wire || wire[strlen(wire)-1]=='\\n' ||
+ if(!list || !wire || !*wire || wire[strlen(wire)-1]=='\n' ||
     strlen(wire)>32768 ||
     !g_utf8_validate(wire,-1,NULL))return FALSE;
  gchar **lines=g_strsplit(wire,"\n",-1);

@@ -110,8 +110,8 @@ class DownloadsNavigationContract(unittest.TestCase):
             "static gboolean first_setup", 1)[0]
         self.assertNotIn('"w_owner_request"', wizard)
         self.assertNotIn('"REQUEST OWNER DEVICE APPROVAL"', wizard)
-        self.assertIn("Wolf pairing lets this device open the host's published game streams.", wizard)
-        self.assertIn("no-SSH client enrollment is not yet implemented.", wizard)
+        self.assertIn("Moonlight pairing authorizes Wolf-published streams only.", wizard)
+        self.assertIn("this alpha pairing path still needs trusted owner SSH.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
         self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)

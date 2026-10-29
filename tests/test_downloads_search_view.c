@@ -96,9 +96,9 @@ static void test_sort_and_more(void){
  g_assert_nonnull(list);g_assert_nonnull(more);g_assert_nonnull(sort);
  g_assert_true(now_downloads_search_view_update(view,
    "SEARCH\t1\t35\n"
-   "RESULT\t40000000000\t45\t0\t2160p huge\t-\n"
-   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\n"
-   "RESULT\t-1\t-1\t0\tUnknown size\t-"));
+   "RESULT\t40000000000\t45\t0\t2160p huge\t-\t1767225600\n"
+   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\t1727740800\n"
+   "RESULT\t-1\t-1\t0\tUnknown size\t-\t-1"));
  while(gtk_events_pending())gtk_main_iteration();
  g_assert_true(gtk_widget_get_visible(more));
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
@@ -108,6 +108,16 @@ static void test_sort_and_more(void){
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"large");
  while(gtk_events_pending())gtk_main_iteration();
  g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"newest");
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"oldest");
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ /* Old 6-field host responses still parse; unknown publication sorts last. */
+ g_assert_true(now_downloads_search_view_update(view,
+   "SEARCH\t0\t1\nRESULT\t42\t5\t0\tLegacy result\t-"));
+ g_assert_cmpstr(first_result_title(list),==,"Legacy result");
  g_assert_true(now_downloads_search_view_update(view,"SEARCH\t0\t0"));
  g_assert_false(gtk_widget_get_visible(more));
  gtk_widget_destroy(window);
@@ -126,6 +136,8 @@ static void test_reject(void){
    "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\tbadmagnet",
    "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\tmagnet:?xt=urn:btih:ffffffffffffffffffffffffffffffffffffffff",
    "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\n",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\tbad",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\t253402300800",
    NULL
  };
  for(guint i=0;bad[i];i++)

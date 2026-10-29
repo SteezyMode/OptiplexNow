@@ -63,6 +63,7 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise InventoryError("Torrent operation unavailable") from exc
     if (response.returncode or not isinstance(response.stdout, bytes)
-            or len(response.stdout) > 1024):
+            or len(response.stdout) > 1024
+            or response.stdout.strip() not in (b"", b"Ok.")):
         raise InventoryError("Torrent operation failed")
     return {"status": "submitted", "operation": operation}

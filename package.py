@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.21.0"
+DEFAULT_VERSION = "1.21.1"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")

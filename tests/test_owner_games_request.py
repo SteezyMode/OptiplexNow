@@ -63,7 +63,7 @@ class TrustedGamesGateTests(unittest.TestCase):
             {"version":1,"action":"downloads_search","query":""},
             {"version":1,"action":"downloads_search","query":"x"},
             {"version":1,"action":"downloads_search","query":"a"*97},
-            {"version":1,"action":"downloads_search","query":"bad\\nname"},
+            {"version":1,"action":"downloads_search","query":"bad\nname"},
             {"version":1,"action":"downloads_search","query":"Ubuntu",
              "save_path":"/library/bigdisk/Movies/Horror"},
             {"version":1,"action":"downloads_queue","query":"Ubuntu"},

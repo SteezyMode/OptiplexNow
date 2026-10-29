@@ -195,7 +195,8 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_widget_show(s->results);
    show_page(s);
    gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
-       count,count==1?"":"s",partial?" (partial — More Results available)":"");
+       count,count==1?"":"s",partial ? (count<RESULT_LIMIT ?
+       " (partial — More Results available)" : " (partial; first 100 shown)") : "");
    gtk_label_set_text(GTK_LABEL(s->status),message);
    g_free(message);
  }else{
@@ -318,6 +319,7 @@ GtkWidget *now_downloads_search_view_new(void){
  g_signal_connect(s->button,"clicked",G_CALLBACK(start_search),view);
  g_signal_connect(s->entry,"activate",G_CALLBACK(start_search),view);
  s->sort=gtk_combo_box_text_new();
+ gtk_widget_set_name(s->sort,"nowsearchsort");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"small","SMALLER FILES FIRST");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"seeds","MOST SEEDERS");
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->sort),"large","LARGER FILES FIRST");
@@ -327,6 +329,7 @@ GtkWidget *now_downloads_search_view_new(void){
  s->status=text("Connect an approved owner device to search.");
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
  s->more=gtk_button_new_with_label("MORE RESULTS");
+ gtk_widget_set_name(s->more,"nowsearchmore");
  gtk_widget_set_no_show_all(s->more,TRUE);
  gtk_box_pack_start(GTK_BOX(view),s->more,FALSE,FALSE,0);
  gtk_widget_hide(s->more);

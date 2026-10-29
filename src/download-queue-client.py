@@ -14,7 +14,7 @@ def valid_host(s):
 def valid_user(s):
     return bool(re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]{0,31}", s))
 
-def fetch(host, user, runner=subprocess.run, include_port=False):
+def fetch(host, user, runner=subprocess.run, include_port=False, native=False):
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device key unavailable")
     cmd = ["ssh", "-F", "/dev/null", "-T", "-i", str(KEY),
@@ -33,7 +33,10 @@ def fetch(host, user, runner=subprocess.run, include_port=False):
     items = obj.get("queue")
     if not isinstance(items, list) or len(items) > 100:
         raise ValueError("Malformed queue")
+    if native and not include_port:
+        raise ValueError("Native queue requires approved port metadata")
     lines = []
+    native_lines = []
     for item in items:
         if not isinstance(item, dict):
             raise ValueError("Malformed queue")
@@ -45,6 +48,9 @@ def fetch(host, user, runner=subprocess.run, include_port=False):
         clean_name = "".join(ch if ch.isprintable() else " " for ch in name)[:160]
         clean_state = "".join(ch if ch.isalnum() or ch in "_-" else "_" for ch in state)[:48]
         lines.append(f"{progress:5.1f}%   {clean_state:<16}   {clean_name}")
+        # Printable, bounded, tab-free wire format for the native GTK queue.
+        # No raw hashes, paths, credentials or arbitrary qBittorrent JSON.
+        native_lines.append(f"ITEM\t{progress:.1f}\t{clean_state}\t{clean_name}")
     display = "\n".join(lines) if lines else "No downloads in queue."
     if not include_port:
         return display
@@ -52,13 +58,19 @@ def fetch(host, user, runner=subprocess.run, include_port=False):
     port = obj.get("webui_port", 0)
     if type(port) is not int or not (port == 0 or 1024 <= port <= 65535):
         raise ValueError("Unusable download endpoint")
+    if native:
+        return f"WEBUI_PORT={port}\n" + (
+            "\n".join(native_lines) if native_lines else "EMPTY")
     return f"WEBUI_PORT={port}\n{display}"
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and sys.argv[3] != "--with-port"):
+        if len(sys.argv) not in (3, 4) or (len(sys.argv) == 4 and
+                sys.argv[3] not in ("--with-port", "--native")):
             raise ValueError("Expected server and SSH user")
-        print(fetch(sys.argv[1], sys.argv[2], include_port=len(sys.argv) == 4))
+        native = len(sys.argv) == 4 and sys.argv[3] == "--native"
+        print(fetch(sys.argv[1], sys.argv[2], include_port=len(sys.argv) == 4,
+                    native=native))
     except (ValueError, OSError, subprocess.SubprocessError, json.JSONDecodeError):
         print("Queue unavailable. Check approved host and downloader.")
         sys.exit(1)

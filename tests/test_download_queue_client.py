@@ -66,24 +66,24 @@ class QueueClientTests(unittest.TestCase):
                       "progress_percent":26.8,"hash":"privatehash",
                       "save_path":"/private/root"}], "webui_port":8085}).encode()
         out=self.run_payload(payload,include_port=True,native=True)
-        self.assertEqual(out,"WEBUI_PORT=8085\\nITEM\\t26.8\\tstalledUP\\tmovie name 2026")
+        self.assertEqual(out,"WEBUI_PORT=8085\nITEM\t26.8\tstalledUP\tmovie name 2026")
         self.assertNotIn("/private",out)
         self.assertNotIn("privatehash",out)
 
     def test_native_empty_and_malformed_response(self):
         self.assertEqual(self.run_payload(
             b'{"success":true,"service":"qbittorrent","queue":[]}',
-            include_port=True,native=True), "WEBUI_PORT=0\\nEMPTY")
+            include_port=True,native=True), "WEBUI_PORT=0\nEMPTY")
         with self.assertRaises(ValueError):
             self.run_payload(b'{"success":true,"service":"qbittorrent","queue":[]}',
                              native=True)
-        for value in ("tab\\tfield", "line\\nbreak"):
+        for value in ("tab\tfield", "line\nbreak"):
             payload=json.dumps({"success":True,"service":"qbittorrent",
                 "queue":[{"name":value,"state":"downloading",
                           "progress_percent":5}]}).encode()
             out=self.run_payload(payload,include_port=True,native=True)
-            self.assertEqual(out,"WEBUI_PORT=0\\nITEM\\t5.0\\tdownloading\\t"+
-                             value.replace("\\t"," ").replace("\\n"," "))
+            self.assertEqual(out,"WEBUI_PORT=0\nITEM\t5.0\tdownloading\t"+
+                             value.replace("\t"," ").replace("\n"," "))
 
     def test_discovery_rejects_untrusted_port(self):
         for port in (True, -1, 22, 0.5, 65536, "8085"):

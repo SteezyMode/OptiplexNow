@@ -1,3 +1,11 @@
+## October 29 — Alpha polish (development, release pending)
+
+The owner selected browser-first Videos. The native VIDEOS landing now has one OPEN VIDEO LIBRARY action invoking restricted host-verified Jellyfin discovery in the default browser, a VIDEO SETTINGS expander and server-settings link. The broken embedded player UI, in-app action and tray toggle are no longer offered. Existing private tray preference files remain unchanged, and the Videos tray shortcut uses the same browser path.
+
+A shared package-owned dark GTK3 stylesheet covers otherwise unstyled controls throughout NOW desktop, Host Setup, owner approval/enrollment, video host setup and host upgrade dialogs. Existing named navigation/primary/danger styling retains precedence. The Dashboard now displays DOWNLOAD VPN state beside Server Online/Offline while Downloads retains its detailed readout. Both are host-health observations, not VPN egress or kill-switch verification. Unknown connectivity never displays as healthy. No live host or torrent service changes.
+
+Status: Source-level fix; exact-head CI, packaged GUI smoke and physical Mint/Pop appearance checks required. Owner reports Search works after backend migration, and v1.21.7 already fixes scrolling. Fresh independent client, Jellyfin playback and disposable clean-host/VPN outage acceptance remain open. Natsuyo's Ubuntu laptop is suitable for supervised installation and browser playback only, not owner-privilege enrollment.
+
 ## October 29 — Search scroll while progressive results arrive (PR #222; pending physical verification)
 
 **User-observed defect in v1.21.6:** Search is functional and the host now returns progressive plugin results, but only the first 20 results are visible. Previous/Next pagination controls at the bottom of the viewport do not provide the expected scrolling-through-results behavior. Videos embedded playback also reportedly fails; browser playback is the existing fallback and this secondary issue is not asserted fixed by this patch.

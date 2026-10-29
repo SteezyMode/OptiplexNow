@@ -28,13 +28,13 @@ class NativeActionThemeTests(unittest.TestCase):
 
     def test_video_buttons_keep_explicit_theme(self):
         src = (SRC / "main.c").read_text()
-        for button in ("video_in_app", "video_browser"):
+        for button in ("video_browser",):
             self.assertIn(
                 'gtk_style_context_add_class(gtk_widget_get_style_context('
                 + button + '),"now-action");',
                 src)
         self.assertIn(
-            'gtk_style_context_add_class(gtk_widget_get_style_context(video_in_app),"now-primary");',
+            'gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary");',
             src)
 
     def test_downloads_toolbar_search_and_queue(self):

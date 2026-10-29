@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.21.7"
+DEFAULT_VERSION = "1.21.8"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")
@@ -23,6 +23,9 @@ shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remo
 shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-web-gaming-admin')
 (pkg/'usr/lib/optiplex-now/open-web-gaming-admin').chmod(0o755)
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
+# Shared theme used by main GTK UI and owner/host Python dialogs.
+shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
+shutil.copy2(root/'src/now_theme.py',pkg/'usr/lib/optiplex-now/now_theme.py')
 shutil.copy2(root/'src/find-servers.py',pkg/'usr/lib/optiplex-now/find-servers.py')
 shutil.copy2(root/'src/tailscale-status.py',pkg/'usr/lib/optiplex-now/tailscale-status.py')
 shutil.copy2(root/'src/tailscale-install.py',pkg/'usr/lib/optiplex-now/tailscale-install.py')

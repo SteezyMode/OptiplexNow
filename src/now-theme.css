@@ -1,0 +1,52 @@
+/* OptiPlex NOW shared GTK3 desktop palette: fallback for controls not carrying
+ * an individual app style ID. Explicit danger/active styles are owned by UI. */
+window, dialog, popover, .background, assistant, notebook {
+  background-color:#101111; color:#ece8e0;
+}
+label {color:#ece8e0;}
+button, button.flat, modelbutton {
+  background:#222724; color:#ece8e0; border:1px solid #4b544d;
+  border-radius:3px; padding:5px 10px; min-height:25px;
+  font-size:11px; font-weight:700;
+}
+button label, modelbutton label {color:#ece8e0;}
+button:hover, button:focus, modelbutton:hover {
+  background:#303831; color:#ece8e0; border-color:#c47d65;
+}
+button:hover label, button:focus label {color:#ece8e0;}
+button:active, button:checked {background:#c47d65; color:#101111;}
+button:active label, button:checked label {color:#101111;}
+button:disabled {background:#1b1f1c; color:#898e88; border-color:#363d38;}
+button:disabled label {color:#898e88;}
+entry, spinbutton, textview, textview text, treeview, list, viewport {
+  background-color:#1d2220; color:#ece8e0; caret-color:#ece8e0;
+}
+entry:focus, spinbutton:focus {border-color:#c47d65;}
+combobox button, spinbutton button, filechooserbutton button {
+  background:#222724; color:#ece8e0; border:1px solid #4b544d;
+}
+checkbutton, radiobutton, switch, scale, expander {color:#ece8e0;}
+checkbutton check, radiobutton radio {
+  background:#252a27; border:1px solid #727a72; color:#ece8e0;
+}
+checkbutton check:checked, radiobutton radio:checked {
+  background:#c47d65; color:#101111; border-color:#c47d65;
+}
+switch {background:#303831; border:1px solid #5b665d;}
+switch:checked {background:#4a7860;}
+switch slider {background:#ece8e0;}
+scale trough {background:#323934;}
+scale highlight, scale slider {background:#c47d65;}
+treeview.view:selected, list row:selected {background:#5b4036; color:#ece8e0;}
+popover, popover.background, menu, menuitem, tooltip {
+  background-color:#222724; color:#ece8e0;
+}
+menuitem:hover, menuitem:selected {background:#75534b; color:#ece8e0;}
+popover label, tooltip label {color:#ece8e0;}
+notebook header, notebook tab {background:#1d2220; color:#ece8e0;}
+notebook tab:checked {background:#303831; border-bottom:2px solid #c47d65;}
+scrollbar trough {background:#1a1e1c;}
+scrollbar slider {background:#424d45; border-radius:3px;}
+scrollbar slider:hover {background:#5b665d;}
+separator {background:#414743;}
+textview text selection, entry selection {background-color:#75534b; color:#ffffff;}

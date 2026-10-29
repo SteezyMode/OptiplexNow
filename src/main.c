@@ -85,9 +85,7 @@ static GtkWidget *tray_menu = NULL;
 /* One main GTK window: the dashboard, Software, Settings, and Info pages. */
 static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static GtkWidget *games_page_status = NULL;
-static GtkWidget *videos_stack=NULL,*videos_embedded_holder=NULL,*videos_status=NULL;
-static GtkWidget *videos_embedded=NULL;
-static char *videos_verified_url=NULL;
+static GtkWidget *videos_status=NULL;
 static int tray_restoring = 0;
 static guint geometry_save_timer=0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
@@ -118,7 +116,6 @@ static void on_settings(void*w,void*p);
 static void open_games_settings(GtkWidget*w,gpointer data);
 static void on_videos_tab(GtkWidget*w,gpointer data);
 static void tray_show_window(void);
-static void videos_in_app_open(const char *url);
 static void videos_status_message(const char *message);
 static void on_system_info(void*w,void*p);
 static void settings_discard(GtkWidget*w,gpointer unused);
@@ -172,6 +169,7 @@ static const char *CSS =
 "#title {font-family:'Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-1.4px;color:#ece8e0;}"
 "#state {color:#bcb8af;background:#202523;border:1px solid #515b56;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;}"
 "#state.online {color:#e8c28f;border-color:#c47d65;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
+"#state.vpn-ok {color:#b3e4cd;border-color:#497a61;} #state.vpn-warn {color:#e8ce90;border-color:#9b8354;}"
 "#detail {font-size:10px;color:#aaa79e;}"
 "#rule {background:#75534b;min-height:1px;}"
 "#section {font-weight:800;color:#b8b4ac;font-size:11px;letter-spacing:1px;}"
@@ -656,10 +654,23 @@ static gboolean finish_on_main(void *arg) {
    if(metric_network){gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  connected":"TAILSCALE  disconnected");
     GtkStyleContext*cs=gtk_widget_get_style_context(metric_network);gtk_style_context_remove_class(cs,"good");gtk_style_context_remove_class(cs,"bad");
     gtk_style_context_add_class(cs,r->tail?"good":"bad");}
-   if(metric_vpn){gtk_label_set_text(GTK_LABEL(metric_vpn),r->success==1?(*r->vpn_state?r->vpn_state:"VPN  UNKNOWN"):"VPN  --");
-    GtkStyleContext*cs=gtk_widget_get_style_context(metric_vpn);gtk_style_context_remove_class(cs,"good");gtk_style_context_remove_class(cs,"bad");
-    if(r->success==1 && strstr(r->vpn_state,"VPN  HEALTHY"))gtk_style_context_add_class(cs,"good");
-    else if(r->success==1 && strstr(r->vpn_state,"VPN  UNHEALTHY"))gtk_style_context_add_class(cs,"bad");}
+   if(metric_vpn){
+    const char *vpn_state=r->success==1?r->vpn_state:"";
+    const gboolean vpn_ok=strstr(vpn_state,"VPN  HEALTHY")!=NULL;
+    const gboolean vpn_bad=strstr(vpn_state,"VPN  UNHEALTHY")!=NULL;
+    const gboolean vpn_check=strstr(vpn_state,"VPN  CHECKING")!=NULL;
+    const gboolean vpn_running=strstr(vpn_state,"VPN  RUNNING")!=NULL;
+    gtk_label_set_text(GTK_LABEL(metric_vpn),
+      vpn_ok?"● DOWNLOAD VPN HEALTHY":
+      vpn_bad?"● DOWNLOAD VPN UNHEALTHY":
+      (vpn_check||vpn_running)?"● DOWNLOAD VPN UNVERIFIED":
+      "● DOWNLOAD VPN UNKNOWN");
+    GtkStyleContext*cs=gtk_widget_get_style_context(metric_vpn);
+    gtk_style_context_remove_class(cs,"vpn-ok");
+    gtk_style_context_remove_class(cs,"vpn-warn");
+    if(vpn_ok)gtk_style_context_add_class(cs,"vpn-ok");
+    else if(vpn_bad||vpn_check||vpn_running)gtk_style_context_add_class(cs,"vpn-warn");
+   }
    if(metric_wolf){gtk_label_set_text(GTK_LABEL(metric_wolf),r->success==1?(*r->wolf_state?r->wolf_state:"WOLF SERVICE  UNKNOWN"):"WOLF SERVICE  --");
     GtkStyleContext*cs=gtk_widget_get_style_context(metric_wolf);gtk_style_context_remove_class(cs,"good");
     if(r->success==1 && strstr(r->wolf_state,"WOLF SERVICE  running"))gtk_style_context_add_class(cs,"good");}
@@ -1311,56 +1322,14 @@ static void videos_status_message(const char *message){
  say(message);
  if(videos_status)gtk_label_set_text(GTK_LABEL(videos_status),message);
 }
-static void videos_back_to_home(GtkWidget *unused,gpointer data){
- (void)unused;(void)data;
- if(!videos_stack)return;
- gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"home");
- if(videos_embedded){gtk_widget_destroy(videos_embedded);videos_embedded=NULL;}
- g_clear_pointer(&videos_verified_url,g_free);
-}
+/* The primary Videos action is a verified handoff to Jellyfin in the
+ * default browser, just as Games hands off to Moonlight. */
 static void videos_open_browser(GtkWidget *unused,gpointer data){
  (void)unused;(void)data;
- if(videos_stack &&
-    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(videos_stack)),"player") &&
-    videos_verified_url && now_safe_preset_url(videos_verified_url))
-   browser_open(videos_verified_url);
- else now_media_open_videos();
-}
-static void videos_in_app_open(const char *url){
- if(!videos_stack || !videos_embedded_holder || !url)return;
- GtkWidget *view=now_media_embedded_webview_new(url,cfg[0]);
- if(!view){
-   videos_status_message("Embedded Jellyfin unavailable. Opening in your browser.");
-   browser_open(url);return;
- }
- if(videos_embedded)gtk_widget_destroy(videos_embedded);
- videos_embedded=view;
- g_free(videos_verified_url);videos_verified_url=g_strdup(url);
- gtk_container_add(GTK_CONTAINER(videos_embedded_holder),view);
- gtk_widget_show_all(videos_embedded_holder);
- gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"player");
- now_nav_show_page(main_pages,"videos");
- videos_status_message("JELLYFIN OPEN IN NOW — USE BACK TO RETURN");
-}
-static void videos_watch_in_app(GtkWidget *unused,gpointer data){
- (void)unused;(void)data;now_media_open_videos_in_app();
-}
-static void videos_tray_changed(GtkComboBox *combo,gpointer data){
- (void)data;
- if(!now_tray_videos_set_open_in_app(gtk_combo_box_get_active(GTK_COMBO_BOX(combo))==1))
-   videos_status_message("Unable to save Videos tray preference.");
-}
-static void videos_main_navigation_changed(GObject *source,GParamSpec *spec,
-                                           gpointer data){
- (void)source;(void)spec;(void)data;
- if(videos_stack && main_pages &&
-    g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(main_pages)),"videos") &&
-    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(videos_stack)),"player"))
-   videos_back_to_home(NULL,NULL);
+ now_media_open_videos();
 }
 static void on_videos_tab(GtkWidget*w,gpointer data){
  (void)w;(void)data;
- if(videos_stack)videos_back_to_home(NULL,NULL);
  now_nav_show_page(main_pages,"videos");
 }
 
@@ -3080,14 +3049,7 @@ static void tray_dispatch_restart(void *context)
 static void tray_dispatch_service(void *context, int index)
 {
     (void)context;
-    if(index==1){
-        if(now_tray_videos_open_in_app()){
-            tray_show_window();
-            on_videos_tab(NULL,NULL);
-            now_media_open_videos_in_app();
-        }else now_media_open_videos();
-        return;
-    }
+    if(index==1){now_media_open_videos();return;}
     on_tile(NULL, (void *)(long)index);
 }
 
@@ -3211,9 +3173,22 @@ int main(int argc,char**argv) {
  }
  int instance_result=now_instance_claim();
  if(instance_result<=0)return instance_result==0?0:1;
- fonts_register();gtk_init(&argc,&argv);now_media_bind(videos_status_message,browser_open,videos_in_app_open);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
+ fonts_register();gtk_init(&argc,&argv);now_media_bind(videos_status_message,browser_open,NULL);gtk_window_set_default_icon_name("optiplex-now");now_config_load();
  GtkCssProvider*cp=gtk_css_provider_new();gtk_css_provider_load_from_data(GTK_CSS_PROVIDER(cp),CSS,-1,NULL);
- gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+ gtk_style_context_add_provider_for_screen(gdk_screen_get_default(),GTK_STYLE_PROVIDER(cp),GTK_STYLE_PROVIDER_PRIORITY_APPLICATION+1);
+ /* Shared baseline covers stock GTK controls. Existing app component styles
+  * retain precedence for navigation, dangers and primary actions. */
+ const char *theme_path=g_file_test("/usr/lib/optiplex-now/now-theme.css",G_FILE_TEST_IS_REGULAR)
+   ? "/usr/lib/optiplex-now/now-theme.css" : "src/now-theme.css";
+ if(g_file_test(theme_path,G_FILE_TEST_IS_REGULAR)){
+   GtkCssProvider*base_theme=gtk_css_provider_new();
+   if(gtk_css_provider_load_from_path(base_theme,theme_path,NULL))
+     gtk_style_context_add_provider_for_screen(
+       gdk_screen_get_default(),GTK_STYLE_PROVIDER(base_theme),
+       GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+   g_object_unref(base_theme);
+ }
+
  /* Give the dashboard enough height for server controls on normal displays.
    Bound it to the monitor's usable area so older laptops and projectors can
    still access everything through the existing scrolled container. */
@@ -3276,7 +3251,6 @@ int main(int argc,char**argv) {
  now_nav_mark_tab(settings_tab,"settings");
  add(nav,settings_tab,0);
  g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(now_nav_update_tabs),nav);
-  g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(videos_main_navigation_changed),NULL);
   GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),
   GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);
@@ -3292,60 +3266,41 @@ int main(int argc,char**argv) {
  GtkWidget*downloads_page=now_downloads_page();
  gtk_stack_add_named(GTK_STACK(main_pages),downloads_page,"downloads");
  gtk_widget_show_all(downloads_page);
- /* Videos home keeps Jellyfin's full library UI behind one explicit action. */
- videos_stack=gtk_stack_new();
- gtk_widget_set_vexpand(videos_stack,TRUE);
- GtkWidget*videos_home=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);
+ /* One trustworthy browser-first Jellyfin handoff; no unverified WebKit
+  * player or per-device tray destinations are exposed in Private Alpha 1. */
+ GtkWidget*videos_home=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);
+ gtk_widget_set_name(videos_home,"videos-home");
+ gtk_widget_set_vexpand(videos_home,TRUE);
  gtk_container_set_border_width(GTK_CONTAINER(videos_home),20);
  add(videos_home,label("VIDEOS","modalheading"),0);
- GtkWidget*videos_intro=label("Your Jellyfin media library on the approved server.","helper");
+ GtkWidget*videos_intro=label(
+    "Your personal Jellyfin library on your approved server.","helper");
  gtk_label_set_line_wrap(GTK_LABEL(videos_intro),TRUE);
  add(videos_home,videos_intro,0);
- videos_status=label("Choose where to open your media library.","helper");
+ videos_status=label("Open the library in your default browser.","helper");
  gtk_label_set_line_wrap(GTK_LABEL(videos_status),TRUE);
  add(videos_home,videos_status,0);
- GtkWidget*video_in_app=button("WATCH IN NOW","setupaction");
- gtk_widget_set_name(video_in_app,"videos-open-in-app");
- gtk_style_context_add_class(gtk_widget_get_style_context(video_in_app),"now-action");
- gtk_style_context_add_class(gtk_widget_get_style_context(video_in_app),"now-primary");
- g_signal_connect(video_in_app,"clicked",G_CALLBACK(videos_watch_in_app),NULL);
- add(videos_home,video_in_app,0);
- GtkWidget*video_browser=button("OPEN IN BROWSER","setting");
- gtk_widget_set_name(video_browser,"videos-open-in-browser");
+ GtkWidget*video_browser=button("OPEN VIDEO LIBRARY  ↗","videos-open-library");
  gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary");
  g_signal_connect(video_browser,"clicked",G_CALLBACK(videos_open_browser),NULL);
  add(videos_home,video_browser,0);
  GtkWidget*video_advanced=gtk_expander_new("VIDEO SETTINGS");
  gtk_widget_set_name(video_advanced,"videos-settings");
- GtkWidget*video_pref_box=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
- gtk_container_set_border_width(GTK_CONTAINER(video_pref_box),8);
- add(video_pref_box,label("System tray Videos shortcut:","helper"),0);
- GtkWidget*video_tray_combo=gtk_combo_box_text_new();
- gtk_widget_set_name(video_tray_combo,"videos-tray-target");
- gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(video_tray_combo),"Open in browser (default)");
- gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(video_tray_combo),"Open in NOW");
- gtk_combo_box_set_active(GTK_COMBO_BOX(video_tray_combo),now_tray_videos_open_in_app()?1:0);
- g_signal_connect(video_tray_combo,"changed",G_CALLBACK(videos_tray_changed),NULL);
- add(video_pref_box,video_tray_combo,0);
+ GtkWidget*video_pref_box=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ gtk_container_set_border_width(GTK_CONTAINER(video_pref_box),10);
+ GtkWidget*video_info=label(
+   "Playback opens in your browser using Jellyfin's own account and controls. "
+   "The tray shortcut opens the same authorized library.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(video_info),TRUE);
+ add(video_pref_box,video_info,0);
+ GtkWidget*video_settings=button("SERVER & VIDEO SETTINGS","setupaction");
+ g_signal_connect(video_settings,"clicked",G_CALLBACK(on_settings),NULL);
+ add(video_pref_box,video_settings,0);
  gtk_container_add(GTK_CONTAINER(video_advanced),video_pref_box);
  add(videos_home,video_advanced,0);
- gtk_stack_add_named(GTK_STACK(videos_stack),videos_home,"home");
- GtkWidget*videos_player_panel=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
- GtkWidget*videos_bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- GtkWidget*videos_back=button("‹ BACK TO VIDEOS","navback");
- g_signal_connect(videos_back,"clicked",G_CALLBACK(videos_back_to_home),NULL);
- add(videos_bar,videos_back,0);
- GtkWidget*videos_external=button("OPEN IN BROWSER","navback");
- g_signal_connect(videos_external,"clicked",G_CALLBACK(videos_open_browser),NULL);
- add(videos_bar,videos_external,0);
- add(videos_player_panel,videos_bar,0);
- videos_embedded_holder=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
- gtk_widget_set_vexpand(videos_embedded_holder,TRUE);
- add(videos_player_panel,videos_embedded_holder,1);
- gtk_stack_add_named(GTK_STACK(videos_stack),videos_player_panel,"player");
- gtk_stack_add_named(GTK_STACK(main_pages),videos_stack,"videos");
- gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"home");
- gtk_widget_show_all(videos_stack);
+ gtk_stack_add_named(GTK_STACK(main_pages),videos_home,"videos");
+ gtk_widget_show_all(videos_home);
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);
@@ -3356,6 +3311,11 @@ int main(int argc,char**argv) {
  GtkWidget*right=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);gtk_widget_set_valign(right,GTK_ALIGN_CENTER);add(head,right,0);
  GtkWidget*tools=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);add(right,tools,0);
  indicator=label("● CHECKING","state");add(tools,indicator,0);
+ metric_vpn=label("● DOWNLOAD VPN UNKNOWN","state");
+ gtk_widget_set_tooltip_text(metric_vpn,
+   "Gluetun container status from server diagnostics. Not a verified "
+   "VPN egress or kill-switch test.");
+ add(tools,metric_vpn,0);
  /* Page links live in the fixed navigation bar, not duplicated here. */
  status_detail=label("","detail");add(right,status_detail,0);
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
@@ -3372,7 +3332,6 @@ int main(int argc,char**argv) {
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,2);
   metric_network=label("TAILSCALE  --","statusmetric");add(body,metric_network,0);
-  metric_vpn=label("VPN  --","statusmetric");add(body,metric_vpn,0);
   metric_wolf=label("WOLF SERVICE  --","statusmetric");add(body,metric_wolf,0);
   metric_wolf_sessions=label("WOLF DESKTOPS  --","statusmetric");add(body,metric_wolf_sessions,0);
  /* The dashboard prioritizes host state. Launchers live on Software page. */

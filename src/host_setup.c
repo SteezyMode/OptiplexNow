@@ -668,6 +668,18 @@ int main(int argc, char **argv)
     if (auto_check)
         argc = 1;
     gtk_init(&argc, &argv);
+    /* Match the main app's dark palette, including host review controls. */
+    const char *theme_path =
+        g_file_test("/usr/lib/optiplex-now/now-theme.css", G_FILE_TEST_IS_REGULAR)
+            ? "/usr/lib/optiplex-now/now-theme.css" : "src/now-theme.css";
+    if (g_file_test(theme_path, G_FILE_TEST_IS_REGULAR)) {
+        GtkCssProvider *theme = gtk_css_provider_new();
+        if (gtk_css_provider_load_from_path(theme, theme_path, NULL))
+            gtk_style_context_add_provider_for_screen(
+                gdk_screen_get_default(), GTK_STYLE_PROVIDER(theme),
+                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+        g_object_unref(theme);
+    }
 
     HostSetupUI *ui = g_new0(HostSetupUI, 1);
     ui->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);

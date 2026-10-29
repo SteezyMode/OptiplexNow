@@ -15,6 +15,9 @@ test -x /usr/bin/optiplex-now
 test -x /usr/lib/optiplex-now/optiplex-now-backup
 test -x /usr/lib/optiplex-now/now-ssh-askpass
 test -r /usr/lib/optiplex-now/ssh-authorize.py
+test -r /usr/lib/optiplex-now/now-theme.css
+test -r /usr/lib/optiplex-now/now_theme.py
+python3 -c 'from pathlib import Path; f=Path("/usr/lib/optiplex-now/now_theme.py"); compile(f.read_text(), str(f), "exec")'
 test -x /usr/lib/optiplex-now/now-host-setup
 test -r /usr/lib/optiplex-now/host_preflight.py
 test -r /usr/lib/optiplex-now/host_plan.py

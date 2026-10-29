@@ -20,8 +20,11 @@ class NativeDownloadsQueueTests(unittest.TestCase):
                 "tests/test_downloads_queue_view.c",
                 "src/downloads_queue_view.c","-o",exe,*flags,"-lm"],
                 cwd=ROOT,check=True,capture_output=True)
-            subprocess.run(["xvfb-run","-a",exe],cwd=ROOT,
-                           check=True,capture_output=True,timeout=25)
+            check=subprocess.run(["xvfb-run","-a",exe],cwd=ROOT,
+                                 check=False,capture_output=True,text=True,
+                                 timeout=25)
+            self.assertEqual(check.returncode,0,
+                             check.stdout+"\n"+check.stderr)
 
     def test_queue_has_no_direct_docker_or_admin_transport(self):
         src=(ROOT/"src/downloads_queue_view.c").read_text()

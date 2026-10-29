@@ -154,6 +154,8 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertIn("verified_restricted_access(answer)", source)
         self.assertIn("self.code.set_text(\"\")", source)
         self.assertIn("if error or not load(", source)
+        self.assertIn("self.remote_review_available", source)
+        self.assertIn("self.review_button.set_sensitive(self.remote_review_available)", source)
 
     def test_tailnet_owner_denial_does_not_fall_back_to_admin_ssh(self):
         # An explicit server-side identity refusal must not downgrade the
@@ -200,8 +202,9 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertIn('typed != request["code"]', host_ui)
         self.assertNotIn("client_combo", host_ui)
         self.assertIn("single_active_wolf_ui", host_ui)
-        self.assertIn("self.review_button.set_visible(not self.phone_approval_mode)", client_ui)
-        self.assertIn("or self.phone_approval_mode", client_ui)
+        self.assertIn("self.review_button.set_visible(self.remote_review_available)", client_ui)
+        self.assertIn('answer.get("transport") == "tailnet" and not self.phone_approval_mode', client_ui)
+        self.assertIn("if self.pending_request is None or not self.remote_review_available", client_ui)
         self.assertIn("submit_moonlight_proof(self.host, answer)", client_ui)
         self.assertIn('answer.get("status") == "already_authorized"', client_ui)
         self.assertIn("ALREADY AUTHORIZED for NOW-managed host services.", client_ui)

@@ -95,10 +95,10 @@ static void test_sort_and_more(void){
  GtkWidget *sort=find_named(view,"nowsearchsort");
  g_assert_nonnull(list);g_assert_nonnull(more);g_assert_nonnull(sort);
  g_assert_true(now_downloads_search_view_update(view,
-   "SEARCH\\t1\\t35\\n"
-   "RESULT\\t40000000000\\t45\\t0\\t2160p huge\\t-\\n"
-   "RESULT\\t4000000000\\t10\\t0\\t1080p moderate\\t-\\n"
-   "RESULT\\t-1\\t-1\\t0\\tUnknown size\\t-"));
+   "SEARCH\t1\t35\n"
+   "RESULT\t40000000000\t45\t0\t2160p huge\t-\n"
+   "RESULT\t4000000000\t10\t0\t1080p moderate\t-\n"
+   "RESULT\t-1\t-1\t0\tUnknown size\t-"));
  while(gtk_events_pending())gtk_main_iteration();
  g_assert_true(gtk_widget_get_visible(more));
  g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
@@ -108,7 +108,7 @@ static void test_sort_and_more(void){
  gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"large");
  while(gtk_events_pending())gtk_main_iteration();
  g_assert_cmpstr(first_result_title(list),==,"2160p huge");
- g_assert_true(now_downloads_search_view_update(view,"SEARCH\\t0\\t0"));
+ g_assert_true(now_downloads_search_view_update(view,"SEARCH\t0\t0"));
  g_assert_false(gtk_widget_get_visible(more));
  gtk_widget_destroy(window);
 }

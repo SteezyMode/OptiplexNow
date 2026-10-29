@@ -151,7 +151,10 @@ def add_magnet(root,relative,magnet,*,runner=subprocess.run):
     # qBittorrent from silently overriding the selected genre directory.
     form=urlencode({"urls":checked,"savepath":savepath,"autoTMM":"false"})
     url=f"http://127.0.0.1:{port}/api/v2/torrents/add"
+    # Same-origin Referer satisfies qBittorrent's local WebUI CSRF check;
+    # the restricted owner broker has already authorized this exact Add.
     command=["docker","exec",gateway,"wget","-q","-T","5","-O","-",
+             "--header",f"Referer: http://127.0.0.1:{port}/",
              "--post-data="+form,url]
     try:
         result=runner(command,capture_output=True,timeout=8,check=False)

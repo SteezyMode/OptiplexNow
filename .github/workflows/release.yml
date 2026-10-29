@@ -102,6 +102,6 @@ jobs:
             dist/SHA256SUMS \
             --target "$GITHUB_SHA" \
             --verify-tag \
-            --title "OptiPlex NOW ${tag} — Friends & Family"  \
+            --title "OptiPlex NOW ${tag} — Current Alpha"  \
             --notes-file "$notes" \
             --latest

@@ -99,7 +99,15 @@ class TrustedGamesGateTests(unittest.TestCase):
         with patch("owner_games_request.search_once", return_value=source) as run:
             self.assertEqual(self.call("downloads_search"),
                              {"success":True,"service":"qbittorrent",**source})
-            run.assert_called_once_with("Ubuntu ISO")
+            run.assert_called_once_with("Ubuntu ISO",full=False)
+            run.reset_mock()
+            self.requests=lambda action: {"version":1,"action":action,
+                                          "query":"Ubuntu ISO","full":True}
+            self.assertEqual(self.call("downloads_search"),
+                             {"success":True,"service":"qbittorrent",**source})
+            run.assert_called_once_with("Ubuntu ISO",full=True)
+            run.reset_mock()
+            self.requests=lambda action: {"version":1,"action":action,"query":"Ubuntu ISO"}
             with self.assertRaises(PolicyError):
                 self.call("downloads_search",client="99999999")
             self.assertEqual(run.call_count,1)
@@ -119,6 +127,9 @@ class TrustedGamesGateTests(unittest.TestCase):
             {"version":1,"action":"downloads_search","query":"bad\nname"},
             {"version":1,"action":"downloads_search","query":"Ubuntu",
              "save_path":"/library/bigdisk/Movies/Horror"},
+            {"version":1,"action":"downloads_search","query":"Ubuntu","full":"true"},
+            {"version":1,"action":"downloads_search","query":"Ubuntu","full":1},
+            {"version":1,"action":"downloads_search","query":"Ubuntu","full":None},
             {"version":1,"action":"downloads_queue","query":"Ubuntu"},
             {"version":1,"action":"downloads_search","query":17},
         )

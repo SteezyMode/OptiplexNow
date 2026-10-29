@@ -9,7 +9,7 @@
 #define PAGE_SIZE 20
 #define MAX_WIRE 180000
 typedef struct {
- GtkWidget *entry,*button,*headers[4],*status,*list,*results,*pager,*previous,*next,*page_label;
+ GtkWidget *entry,*button,*headers[5],*status,*list,*results,*pager,*previous,*next,*page_label;
  guint result_count,page,sort_column;
  gboolean ascending;
  gchar *host,*user,*helper;
@@ -46,6 +46,7 @@ static gint compare_rows(GtkListBoxRow *left,GtkListBoxRow *right,gpointer data)
  }
  const char *field=s->sort_column==1 ? "now-search-size" :
                    s->sort_column==2 ? "now-search-seeds" :
+                   s->sort_column==3 ? "now-search-leechers" :
                                        "now-search-published";
  const gint64 *ap=a?g_object_get_data(G_OBJECT(a),field):NULL;
  const gint64 *bp=b?g_object_get_data(G_OBJECT(b),field):NULL;
@@ -62,15 +63,15 @@ static void header_clicked(GtkButton *button,gpointer data){
  SearchView *s=state(GTK_WIDGET(data));
  if(!s || !s->list)return;
  guint column=GPOINTER_TO_UINT(g_object_get_data(G_OBJECT(button),"now-sort-column"));
- if(column<1 || column>4)return;
+ if(column<1 || column>5)return;
  column--;
  if(s->sort_column==column)s->ascending=!s->ascending;
  else{
    s->sort_column=column;
    s->ascending=(column==0 || column==1);
  }
- const char *labels[]={"NAME","SIZE","SEEDERS","PUBLISHED"};
- for(guint i=0;i<4;i++){
+ const char *labels[]={"NAME","SIZE","SEEDERS","LEECHERS","PUBLISHED"};
+ for(guint i=0;i<5;i++){
    gchar *label=i==s->sort_column ?
        g_strdup_printf("%s %s",labels[i],s->ascending?"↑":"↓") :
        g_strdup(labels[i]);
@@ -163,16 +164,17 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  guint count=0;
  for(guint i=1;ok && lines[i];i++){
    gchar **parts=g_strsplit(lines[i],"\t",-1);
-   gint64 size=0,seeds=0,can_add=0,published=-1;
+   gint64 size=0,seeds=0,can_add=0,published=-1,leechers=-1;
    guint fields=g_strv_length(parts);
-   if(++count>RESULT_LIMIT || (fields!=6 && fields!=7) ||
+   if(++count>RESULT_LIMIT || (fields!=6 && fields!=7 && fields!=8) ||
       strcmp(parts[0],"RESULT") ||
       !integer(parts[1],-1,G_MAXINT64,&size) ||
       !integer(parts[2],-1,G_MAXINT32,&seeds) ||
       !integer(parts[3],0,1,&can_add) || !*parts[4] ||
       g_utf8_strlen(parts[4],-1)>160 ||
       (can_add ? !magnet_field(parts[5]) : strcmp(parts[5],"-")) ||
-      (fields==7 && !integer(parts[6],-1,253402300799LL,&published)))
+      (fields>=7 && !integer(parts[6],-1,253402300799LL,&published)) ||
+      (fields==8 && !integer(parts[7],-1,G_MAXINT32,&leechers)))
      ok=FALSE;
    g_strfreev(parts);
  }
@@ -200,9 +202,11 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
    gint64 seeds=g_ascii_strtoll(parts[2],NULL,10);
    gint64 published=parts[6] ? g_ascii_strtoll(parts[6],NULL,10):-1;
+   gint64 leechers=parts[7] ? g_ascii_strtoll(parts[7],NULL,10):-1;
    gint64 *size_data=g_new(gint64,1),*seed_data=g_new(gint64,1);
-   gint64 *published_data=g_new(gint64,1);
-   *size_data=size;*seed_data=seeds;*published_data=published;
+   gint64 *published_data=g_new(gint64,1),*leecher_data=g_new(gint64,1);
+   *size_data=size;*seed_data=seeds;*published_data=published;*leecher_data=leechers;
+   g_object_set_data_full(G_OBJECT(row),"now-search-leechers",leecher_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-published",published_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-size",size_data,g_free);
    g_object_set_data_full(G_OBJECT(row),"now-search-seeds",seed_data,g_free);
@@ -210,21 +214,23 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gchar *size_text=size>=0 ? g_format_size((guint64)size) : g_strdup("—");
    gchar *seed_text=seeds>=0 ? g_strdup_printf("%lld",(long long)seeds) :
                                g_strdup("—");
+   gchar *leecher_text=leechers>=0 ? g_strdup_printf("%lld",(long long)leechers) :
+                               g_strdup("—");
    GDateTime *published_date=published>0 ?
       g_date_time_new_from_unix_local(published):NULL;
    gchar *date_text=published_date ?
       g_date_time_format(published_date,"%Y-%m-%d") : g_strdup("—");
    if(published_date)g_date_time_unref(published_date);
-   const char *fields[]={size_text,seed_text,date_text};
-   const gint widths[]={108,84,122};
-   for(guint col=0;col<3;col++){
+   const char *fields[]={size_text,seed_text,leecher_text,date_text};
+   const gint widths[]={108,84,84,122};
+   for(guint col=0;col<4;col++){
      GtkWidget *cell=text(fields[col]);
      gtk_widget_set_name(cell,"nowsearchmeta");
      gtk_widget_set_size_request(cell,widths[col],-1);
      gtk_widget_set_halign(cell,GTK_ALIGN_START);
      gtk_box_pack_start(GTK_BOX(row),cell,FALSE,FALSE,0);
    }
-   g_free(size_text);g_free(seed_text);g_free(date_text);
+   g_free(size_text);g_free(seed_text);g_free(leecher_text);g_free(date_text);
    gtk_container_add(GTK_CONTAINER(s->list),row);
    g_strfreev(parts);
  }
@@ -383,11 +389,12 @@ GtkWidget *now_downloads_search_view_new(void){
  GtkWidget *head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
  gtk_widget_set_margin_start(head,6);
  gtk_widget_set_margin_end(head,6);
- const char *headers[]={"NAME","SIZE ↑","SEEDERS","PUBLISHED"};
+ const char *headers[]={"NAME","SIZE ↑","SEEDERS","LEECHERS","PUBLISHED"};
  const char *ids[]={"nowsearchheader_name","nowsearchheader_size",
-                   "nowsearchheader_seeds","nowsearchheader_published"};
- const gint widths[]={-1,108,84,122};
- for(guint col=0;col<4;col++){
+                   "nowsearchheader_seeds","nowsearchheader_leechers",
+                   "nowsearchheader_published"};
+ const gint widths[]={-1,108,84,84,122};
+ for(guint col=0;col<5;col++){
    GtkWidget *button=gtk_button_new_with_label(headers[col]);
    gtk_widget_set_name(button,ids[col]);
    gtk_widget_set_tooltip_text(button,"Click to sort; click again to reverse");

@@ -219,6 +219,52 @@ class DownloadSearchTests(unittest.TestCase):
         self.assertTrue(urls[-1].endswith("/delete"))
         self.assertFalse(any("torrents/add" in str(c) for c in fake.commands))
 
+    def test_stream_stays_live_beyond_old_forty_poll_limit(self):
+        # A slower plugin contributes more matches after 60+ one-second polls.
+        # No new qBittorrent job or torrent queue action is created.
+        initial=[{"fileName":f"Ubuntu seed {i}","fileSize":1024+i,
+                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+        additional=[{"fileName":f"Ubuntu late {i}","fileSize":4096+i,
+                     "nbSeeders":i,"fileUrl":MAGNET} for i in range(45)]
+        fake=FakeAPI(result={"status":"Running","total":25,"results":initial})
+        original=fake.__call__
+        polls=[]
+        def runner(command,**kwargs):
+            if "/api/v2/search/results?" in command[-1]:
+                polls.append(1)
+                if len(polls)==70:
+                    fake.result={"status":"Stopped","total":70,
+                                 "results":initial+additional}
+            return original(command,**kwargs)
+        frames=[]
+        result=stream_search("Ubuntu ISO",frames.append,runner=runner,
+                             sleeper=lambda _:None)
+        self.assertEqual(result["received"],70)
+        self.assertEqual([len(f["results"]) for f in frames],[25,45])
+        self.assertTrue(frames[1]["append"])
+        self.assertEqual(frames[1]["results"][-1]["name"],"Ubuntu late 44")
+        self.assertEqual(len(polls),70)
+        urls=[cmd[-1] for cmd in fake.commands]
+        self.assertEqual(sum(url.endswith("/start") for url in urls),1)
+        self.assertTrue(urls[-2].endswith("/stop"))
+        self.assertTrue(urls[-1].endswith("/delete"))
+
+    def test_stream_no_more_results_is_bounded_and_does_not_fabricate(self):
+        initial=[{"fileName":f"Ubuntu seed {i}","fileSize":1024+i,
+                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+        fake=FakeAPI(result={"status":"Running","total":25,"results":initial})
+        frames=[]
+        outcome=stream_search("Ubuntu ISO",frames.append,runner=fake,
+                              sleeper=lambda _:None)
+        self.assertEqual(outcome["received"],25)
+        self.assertEqual([len(f["results"]) for f in frames],[25,0])
+        self.assertTrue(frames[-1]["partial"])
+        self.assertTrue(frames[-1]["append"])
+        self.assertEqual(
+            sum("/api/v2/search/results?" in cmd[-1] for cmd in fake.commands),
+            120)
+        self.assertTrue(fake.commands[-1][-1].endswith("/delete"))
+
     def test_thorough_mode_rejects_non_boolean_before_network(self):
         with self.assertRaisesRegex(SearchError,"search depth"):
             search_once("Ubuntu ISO",full="yes",

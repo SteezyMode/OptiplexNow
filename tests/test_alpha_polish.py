@@ -21,8 +21,8 @@ class AlphaPolishTests(unittest.TestCase):
         self.assertNotIn('now_tray_videos_open_in_app()', SOURCE)
 
     def test_vpn_dashboard_badge_is_not_a_kill_switch_claim(self):
-        self.assertIn('metric_vpn=label("● DOWNLOAD VPN UNKNOWN","state")', SOURCE)
-        self.assertIn('● DOWNLOAD VPN UNVERIFIED', SOURCE)
+        self.assertIn('metric_vpn=label("VPN: UNKNOWN","state")', SOURCE)
+        self.assertIn('VPN: UNVERIFIED', SOURCE)
         self.assertIn('Gluetun container status from server diagnostics', SOURCE)
         self.assertIn('VPN  HEALTHY', SOURCE)
         self.assertIn('VPN  UNHEALTHY', SOURCE)

@@ -1,3 +1,11 @@
+## October 29 — Search returns only an initial ~25 hits while saying "searching" (PR #224)
+
+**Actual owner observation (v1.21.8):** The old paged client appeared to find more results that were inaccessible; the post-scrolling releases displayed about 25 rows and then remained on "searching..." without more visible arrivals. A source comparison confirmed v1.21.6 → v1.21.8 did not alter search backend, but current host Search allows only 40 polls / 50 seconds. GTK also fails to replace its "searching" status when a bounded run completes while qBittorrent still reports Running. Thus the owner-observed truncation is not proven to be caused by the scrolling change; the incomplete search window and misleading completion status are confirmed code defects.
+
+**Candidate remedy:** Extend one owner-authenticated, qBittorrent-SID-bound, offset-based search to at most 120 polls / 150 seconds, cap 1,000 results and preserve magnet-only operations, cleanup and both installed search plugins. Increase trusted client stream frame bound accordingly. GTK shows source-reported total vs received count and displays an explicit bounded-window completion message, while keeping the scroll and sort. Dashboard badge matches Downloads literally: VPN: HEALTHY / UNVERIFIED / UNKNOWN.
+
+**Evidence classification:** Source/tests pending exact-head CI and owner MacBook physical test; do not claim a given search will necessarily return more than 25 if qBittorrent's enabled providers return only 25. Do not reconfigure VPN, Wolf, downloads or plugin engines. Roll back client to v1.21.8 if regressions appear.
+
 ## October 29 — Alpha polish (development, release pending)
 
 The owner selected browser-first Videos. The native VIDEOS landing now has one OPEN VIDEO LIBRARY action invoking restricted host-verified Jellyfin discovery in the default browser, a VIDEO SETTINGS expander and server-settings link. The broken embedded player UI, in-app action and tray toggle are no longer offered. Existing private tray preference files remain unchanged, and the Videos tray shortcut uses the same browser path.

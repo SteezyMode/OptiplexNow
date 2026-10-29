@@ -101,14 +101,14 @@ class SearchClientTests(unittest.TestCase):
         self.assertNotIn("Small",first)
         self.assertIn("Small",final)
 
-    def test_stream_accepts_all_forty_bounded_poll_frames(self):
+    def test_stream_accepts_all_extended_bounded_poll_frames(self):
         frame={"success":True,"service":"qbittorrent","status":"Running",
                "partial":True,"total":0,"append":False,"results":[]}
         class FakeProcess:
             def __init__(self):
                 self.stdin=io.BytesIO()
                 self.stdout=io.BytesIO(
-                    (json.dumps(frame)+"\n").encode()*40)
+                    (json.dumps(frame)+"\n").encode()*121)
                 self.returncode=None
             def wait(self,timeout=0):
                 self.returncode=0
@@ -124,7 +124,7 @@ class SearchClientTests(unittest.TestCase):
                     mod.stream_fetch("100.121.156.34","optiplex","Ubuntu ISO",
                                      popen=lambda *args,**kw:FakeProcess())
         lines=output.getvalue().splitlines()
-        self.assertEqual(len(lines),41)
+        self.assertEqual(len(lines),122)
         self.assertEqual(lines[-1],"DONE")
 
     def test_publication_date_seven_field_wire_and_legacy_six(self):

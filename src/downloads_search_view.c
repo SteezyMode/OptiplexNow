@@ -207,7 +207,12 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  if(s->result_count){
    gtk_widget_show_all(s->list);
    gtk_widget_show(s->results);
-   gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
+   gchar *message=NULL;
+   if(total>s->result_count)
+     message=g_strdup_printf("%u of %"G_GINT64_FORMAT" results%s — select a magnet to choose its folder",
+       s->result_count,total,partial?" (searching...)":" (source count differs)");
+   else
+     message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
        s->result_count,s->result_count==1?"":"s",partial ?
        (s->result_count>=1000?" (first 1000 shown)":" (searching...)") : "");
    gtk_label_set_text(GTK_LABEL(s->status),message);
@@ -253,6 +258,12 @@ static void stream_finished(GObject *source,GAsyncResult *res,gpointer data){
        if(!job->got_frame)clear_results(s);
        gtk_label_set_text(GTK_LABEL(s->status),
          "Search stopped or unavailable; previously received results retained.");
+     }else if(s->partial){
+       gchar *ended=g_strdup_printf(
+         "%u result%s collected; search time limit reached. Some plugins may not have finished.",
+         s->result_count,s->result_count==1?"":"s");
+       gtk_label_set_text(GTK_LABEL(s->status),ended);
+       g_free(ended);
      }
    }
    s->running=FALSE;

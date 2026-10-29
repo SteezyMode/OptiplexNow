@@ -18,6 +18,10 @@ int now_tray_order_save(const int order[NOW_TRAY_ACTIONS]);
 void now_tray_desktop_caption(char *out, size_t capacity);
 int now_tray_desktop_caption_save(const char *value);
 
+/* Per-device Videos tray shortcut target. Default remains browser. */
+int now_tray_videos_open_in_app(void);
+int now_tray_videos_set_open_in_app(int enabled);
+
 /* Service metadata is independent of GTK and the menu backend. */
 const char *now_tray_service_name(int index);
 int now_tray_service_caption(int index, const char *desktop, char *out,

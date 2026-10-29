@@ -37,12 +37,13 @@ class SearchClientTests(unittest.TestCase):
             with patch.object(mod,"KEY",key):
                 return mod.fetch("100.121.156.34","optiplex",query,runner=runner)
 
-    def test_safe_search_results_and_private_magnet_redaction(self):
+    def test_safe_search_results_keep_only_validated_magnet_for_local_add(self):
         output=self.payload()
         self.assertEqual(output,
-            "SEARCH\t0\t2\nRESULT\t1000\t3\t1\tUbuntu test\n"
-            "RESULT\t-1\t-1\t0\tno magnet from plugin")
-        self.assertNotIn(MAGNET,output)
+            "SEARCH\t0\t2\nRESULT\t1000\t3\t1\tUbuntu test\t"+MAGNET+"\n"
+            "RESULT\t-1\t-1\t0\tno magnet from plugin\t-")
+        self.assertIn(MAGNET,output)
+        self.assertNotIn("https://",output)
 
     def test_reject_bogus_responses(self):
         invalid=[

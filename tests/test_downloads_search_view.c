@@ -7,8 +7,9 @@ static void test_valid(void){
  GtkWidget *view=now_downloads_search_view_new();
  g_assert_true(now_downloads_search_view_update(view,
    "SEARCH\t0\t2\n"
-   "RESULT\t9876543\t12\t1\tExample Linux ISO\n"
-   "RESULT\t-1\t-1\t0\tUnsupported plugin link"));
+   "RESULT\t9876543\t12\t1\tExample Linux ISO\t"
+   "magnet:?xt=urn:btih:ffffffffffffffffffffffffffffffffffffffff\n"
+   "RESULT\t-1\t-1\t0\tUnsupported plugin link\t-"));
  g_assert_true(now_downloads_search_view_update(view,"SEARCH\t1\t0"));
  gtk_widget_destroy(view);
 }
@@ -21,7 +22,11 @@ static void test_reject(void){
    "SEARCH\t0\t1\nRESULT\t1\t5\t1\t",
    "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\tprivate",
    "SEARCH\t0\t1\nRESULT\t1\t5\t2\tname",
-   "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\n",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\t-",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\t",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t1\tname\tbadmagnet",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\tmagnet:?xt=urn:btih:ffffffffffffffffffffffffffffffffffffffff",
+   "SEARCH\t0\t1\nRESULT\t1\t5\t0\tname\t-\n",
    NULL
  };
  for(guint i=0;bad[i];i++)

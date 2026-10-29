@@ -1,6 +1,5 @@
-/* One native GTK search panel, above—not instead of—the read-only queue.
- * Uses only the owner-bound sanitized search helper. This is NOT a torrent
- * add interface: destination authorization must ship before enabling Add.
+/* Native GTK search panel above the download queue. Result activation
+ * passes only a validated magnet to the separate inline destination chooser.
  */
 #include "downloads_search_view.h"
 #include <gio/gio.h>
@@ -10,6 +9,8 @@
 typedef struct {
  GtkWidget *entry,*button,*status,*list,*results;
  gchar *host,*user,*helper;
+ NowDownloadsMagnetSelected on_select;
+ gpointer select_data;
  gboolean running;
 } SearchView;
 typedef struct {
@@ -39,6 +40,13 @@ static GtkWidget *text(const char *value){
  gtk_label_set_ellipsize(GTK_LABEL(label),PANGO_ELLIPSIZE_END);
  return label;
 }
+static gboolean magnet_field(const char *value){
+ if(!value || strlen(value)>1024 || strlen(value)<24 ||
+    !g_str_has_prefix(value,"magnet:?xt=urn:bt"))return FALSE;
+ for(const unsigned char *p=(const unsigned char *)value;*p;p++)
+   if(*p<33 || *p>126)return FALSE;
+ return TRUE;
+}
 static gboolean integer(const char *value,gint64 min,gint64 max,gint64 *out){
  if(!value || !*value)return FALSE;
  gchar *end=NULL;
@@ -62,12 +70,13 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  for(guint i=1;ok && lines[i];i++){
    gchar **parts=g_strsplit(lines[i],"\t",-1);
    gint64 size=0,seeds=0,can_add=0;
-   if(++count>RESULT_LIMIT || g_strv_length(parts)!=5 ||
+   if(++count>RESULT_LIMIT || g_strv_length(parts)!=6 ||
       strcmp(parts[0],"RESULT") ||
       !integer(parts[1],-1,G_MAXINT64,&size) ||
       !integer(parts[2],-1,G_MAXINT32,&seeds) ||
       !integer(parts[3],0,1,&can_add) || !*parts[4] ||
-      g_utf8_strlen(parts[4],-1)>160)
+      g_utf8_strlen(parts[4],-1)>160 ||
+      (can_add ? !magnet_field(parts[5]) : strcmp(parts[5],"-")))
      ok=FALSE;
    g_strfreev(parts);
  }
@@ -80,6 +89,8 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_widget_set_margin_end(row,6);
    gtk_widget_set_margin_top(row,5);
    gtk_widget_set_margin_bottom(row,5);
+   if(!strcmp(parts[3],"1"))
+     g_object_set_data_full(G_OBJECT(row),"now-magnet",g_strdup(parts[5]),g_free);
    GtkWidget *name=text(parts[4]);
    gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
    gint64 size=g_ascii_strtoll(parts[1],NULL,10);
@@ -102,7 +113,7 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  if(count){
    gtk_widget_show_all(s->list);
    gtk_widget_show(s->results);
-   gchar *message=g_strdup_printf("%u result%s%s — destination picker not yet enabled",
+   gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
        count,count==1?"":"s",partial?" (partial)":"");
    gtk_label_set_text(GTK_LABEL(s->status),message);
    g_free(message);
@@ -112,6 +123,26 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  }
  g_strfreev(lines);
  return TRUE;
+}
+static void on_result_activated(GtkListBox *list,GtkListBoxRow *row,
+                                gpointer data){
+ (void)list;
+ SearchView *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ GtkWidget *child=gtk_bin_get_child(GTK_BIN(row));
+ const char *magnet=child?g_object_get_data(G_OBJECT(child),"now-magnet"):NULL;
+ if(!magnet){
+   gtk_label_set_text(GTK_LABEL(s->status),
+     "This plugin result is a webpage, not a direct magnet. Try another result.");
+   return;
+ }
+ if(s->on_select)s->on_select(magnet,s->select_data);
+}
+void now_downloads_search_view_on_select(GtkWidget *view,
+                                         NowDownloadsMagnetSelected callback,
+                                         gpointer user_data){
+ SearchView *s=state(view);
+ if(s){s->on_select=callback;s->select_data=user_data;}
 }
 static void search_complete(GObject *unused,GAsyncResult *res,gpointer data){
  (void)unused;
@@ -190,7 +221,8 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_widget_set_size_request(s->results,-1,150);
  gtk_widget_set_no_show_all(s->results,TRUE);
  s->list=gtk_list_box_new();
- gtk_list_box_set_selection_mode(GTK_LIST_BOX(s->list),GTK_SELECTION_NONE);
+ gtk_list_box_set_selection_mode(GTK_LIST_BOX(s->list),GTK_SELECTION_SINGLE);
+ g_signal_connect(s->list,"row-activated",G_CALLBACK(on_result_activated),view);
  gtk_container_add(GTK_CONTAINER(s->results),s->list);
  gtk_box_pack_start(GTK_BOX(view),s->results,FALSE,FALSE,0);
  gtk_widget_hide(s->results);

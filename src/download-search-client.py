@@ -52,7 +52,12 @@ def present(response):
                 or not isinstance(magnet, (type(None),str))
                 or bool(magnet) != can_add):
             raise ValueError("Invalid search result fields")
-        lines.append(f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}")
+        # The magnet remains local for the owner's explicit Add click.
+        safe_magnet = magnet if can_add else "-"
+        if can_add and (len(safe_magnet)>1024 or any(
+                ord(c)<33 or ord(c)>126 for c in safe_magnet)):
+            raise ValueError("Invalid magnet field")
+        lines.append(f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}")
     return "\n".join(lines)
 
 def fetch(host, user, query, *, runner=subprocess.run):

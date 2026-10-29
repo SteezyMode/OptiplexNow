@@ -1,4 +1,4 @@
-/* Native Transfers. Receives bounded owner SSH data; no privileged APIs here. */
+/* Native Transfers. Receives bounded, owner-approved data; no privileged APIs here. */
 #include "downloads_queue_view.h"
 #include <math.h>
 #include <string.h>

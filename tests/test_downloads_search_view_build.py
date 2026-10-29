@@ -34,14 +34,16 @@ class NativeSearchViewTests(unittest.TestCase):
         self.assertIn("gtk_widget_set_vexpand(s->results,TRUE)",module)
         self.assertIn("gtk_box_pack_start(GTK_BOX(transfers),queue_view",flow)
         self.assertIn('"/usr/bin/python3",s->helper,s->host,s->user,query,',module)
-        self.assertIn('full?"--full":NULL',module)
+        self.assertIn('"--stream",NULL',module)
+        self.assertIn('g_data_input_stream_read_line_async',module)
+        self.assertIn('g_subprocess_wait_async',module)
+        self.assertNotIn('MORE RESULTS',module)
         self.assertIn('gtk_list_box_set_sort_func',module)
         self.assertIn('gtk_list_box_invalidate_sort',module)
         self.assertIn('gtk_button_set_label(GTK_BUTTON(s->headers[i])',module)
         for header in ('name','size','seeds','published'):
             self.assertIn('nowsearchheader_'+header,module)
         self.assertNotIn('gtk_combo_box_text_new()',module)
-        self.assertIn('g_subprocess_communicate_utf8_async',module)
         self.assertNotIn("torrents/add",module)
         self.assertNotIn("docker exec",module)
 

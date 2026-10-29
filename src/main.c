@@ -1330,9 +1330,17 @@ static void videos_tray_changed(GtkComboBox *combo,gpointer data){
  if(!now_tray_videos_set_open_in_app(gtk_combo_box_get_active(GTK_COMBO_BOX(combo))==1))
    videos_status_message("Unable to save Videos tray preference.");
 }
+static void videos_main_navigation_changed(GObject *source,GParamSpec *spec,
+                                           gpointer data){
+ (void)source;(void)spec;(void)data;
+ if(videos_stack && main_pages &&
+    g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(main_pages)),"videos") &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(videos_stack)),"player"))
+   videos_back_to_home(NULL,NULL);
+}
 static void on_videos_tab(GtkWidget*w,gpointer data){
  (void)w;(void)data;
- if(videos_stack)gtk_stack_set_visible_child_name(GTK_STACK(videos_stack),"home");
+ if(videos_stack)videos_back_to_home(NULL,NULL);
  now_nav_show_page(main_pages,"videos");
 }
 
@@ -3248,6 +3256,7 @@ int main(int argc,char**argv) {
  now_nav_mark_tab(settings_tab,"settings");
  add(nav,settings_tab,0);
  g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(now_nav_update_tabs),nav);
+  g_signal_connect(main_pages,"notify::visible-child",G_CALLBACK(videos_main_navigation_changed),NULL);
   GtkWidget*dash_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(dash_scroll),
   GTK_POLICY_AUTOMATIC,GTK_POLICY_AUTOMATIC);

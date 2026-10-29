@@ -256,9 +256,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->up=gtk_button_new_with_label("UP");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
- s->add=gtk_button_new_with_label("ADD TO DOWNLOADS");
- g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
- gtk_box_pack_start(GTK_BOX(bar),s->add,FALSE,FALSE,0);
+
  s->path=gtk_label_new("Select a media drive.");
  gtk_label_set_xalign(GTK_LABEL(s->path),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_END);
@@ -274,6 +272,11 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_label_set_xalign(GTK_LABEL(s->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
+ s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
+ gtk_widget_set_halign(s->add,GTK_ALIGN_END);
+ gtk_widget_set_name(s->add,"downloadconfirm");
+ g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
+ gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
  button_states(s);
  return view;
 }

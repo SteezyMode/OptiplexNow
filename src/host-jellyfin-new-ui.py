@@ -216,6 +216,8 @@ class NewJellyfinSetup:
 
 def main():
     Gtk.init([])
+    from now_theme import install as install_theme
+    install_theme()
     NewJellyfinSetup()
     Gtk.main()
 

@@ -214,5 +214,7 @@ class OwnerApprovals:
 
 if __name__ == "__main__":
     Gtk.init([])
+    from now_theme import install as install_theme
+    install_theme()
     OwnerApprovals()
     Gtk.main()

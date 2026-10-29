@@ -156,6 +156,8 @@ def gui():
     import gi
     gi.require_version("Gtk", "3.0")
     from gi.repository import Gtk
+    from now_theme import install as install_theme
+    install_theme()
 
     def message(title, detail, *, question=False):
         dialog = Gtk.MessageDialog(

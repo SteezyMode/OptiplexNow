@@ -309,6 +309,8 @@ def main():
     if len(sys.argv) != 3:
         return 1
     Gtk.init([])
+    from now_theme import install as install_theme
+    install_theme()
     EnrollmentWindow(sys.argv[1], sys.argv[2])
     Gtk.main()
     return 0

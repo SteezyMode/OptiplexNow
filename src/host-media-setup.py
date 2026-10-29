@@ -228,6 +228,8 @@ class VideosSetup:
 
 def main():
     Gtk.init([])
+    from now_theme import install as install_theme
+    install_theme()
     VideosSetup()
     Gtk.main()
 

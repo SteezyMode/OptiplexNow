@@ -1,3 +1,7 @@
+## October 29 — Fresh owner approval readiness must be affirmative (draft PR #230)
+
+The current owner enrollment already stages only restricted keys, checks signed Moonlight proof and keeps phone approval independent. One remaining GUI weakness: Verify Access could display a successful-looking state whenever its worker returned without error, even for a non-affirmative response; an earlier failed attempt could also leave a stale request code visible. PR #230 makes pre-request `ALREADY AUTHORIZED` and the GUI share a finite restricted-service positive-status predicate, clears stale code on replacement/proof failure and adds offline negative tests. No change to the real QR listener, host keys, Wolf, Tailscale, Steam or published v1.21.9. Fresh client/phone grant, real Steam launch/reconnect and wrong-phone/offline UI outcomes remain physically unaccepted.
+
 ## October 29 — PR backlog and alpha release-contract reconciliation
 
 **Current release:** Official Latest remains [v1.21.9](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.9), working on the configured owner environment per owner report. More recent fresh-client wizard corrections (#226/#227) are in `main`, not in the published .deb. Last verified merged-main check: [CI #40873360566](https://github.com/SteezyMode/OptiplexNow/actions/runs/40873360566) passed both jobs. **Private Alpha 1 remains NOT ACCEPTED.**

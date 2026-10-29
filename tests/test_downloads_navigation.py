@@ -115,7 +115,8 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Requests never authorize themselves.", wizard)
         self.assertNotIn("no-SSH client enrollment is not yet implemented.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
-        self.assertIn("CONNECTION SETTINGS SAVED", SHELL)
+        self.assertIn("NEXT: VERIFY DEVICE ACCESS", SHELL)
+        self.assertNotIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
         self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
 

@@ -43,7 +43,7 @@ static void test_reject_untrusted_host_folder_reply(void){
  gtk_widget_destroy(view);
 }
 int main(int argc,char **argv){
- gtk_init(&argc,&argv,NULL);
+ gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/destination/genres",test_folder_navigation_and_preserve_trailing_space);
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);

@@ -6,6 +6,19 @@
 
 **OptiPlex NOW is an internal development codename, not the future commercial name.**
 
+## Download — current official Linux `.deb`
+
+**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download NOW v1.21.0 Friends & Family Beta (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)
+
+[Release notes / checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest) · [Older versions](https://github.com/SteezyMode/OptiplexNow/releases)
+
+Download the package and open it using the desktop package installer. Terminal alternative:
+
+```sh
+sudo apt install ./OptiPlex-Now_1.21.0_amd64.deb
+```
+
+
 **Current development milestone:** [Private Alpha 1](docs/PRIVATE-ALPHA.md). The immediate release target is a physically tested, GUI-managed three-pillar system for a small approved tester group. No existing release meets this contract yet. Coding agents should follow [AGENTS.md](AGENTS.md); the public-alpha contract describes the later, broader launch. The goal is a single, easy host-and-client application that makes one compatible personal computer a remotely accessible entertainment server. Think **your own GeForce NOW-style game streaming and Netflix-style personal library**, using your hardware and content, without needing to learn Docker, VPN networking, or streaming servers. These comparisons describe user experience, not affiliations or provided catalogs.
 
 ### The three public-alpha pillars
@@ -24,19 +37,8 @@
 
 [Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
-**Release channel:** **v1.21.0 Friends & Family Closed Beta (client)**, for owner-approved Linux clients of an already prepared personal host. This is a tester prerelease, **not accepted Private Alpha 1**, a turnkey host installer, or a member-permissions release. Protected Downloads requires the matching restricted owner-host modules; installing the .deb does not update the host.
+**Current official download: v1.21.0** — Linux client for already approved devices on an owner-prepared server. This is a real GitHub release, **not** a claim that the entire Private Alpha 1 roadmap is accepted. Owner Downloads requires matching host modules; installing the client does not change the server.
 
-## Download
-
-**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download NOW v1.21.0 Friends & Family Beta (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)
-
-[Release notes and SHA256 checksums](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.0) · [All releases / rollback versions](https://github.com/SteezyMode/OptiplexNow/releases) · [Private Alpha 1 acceptance checklist](docs/PRIVATE-ALPHA.md)
-
-Download the package and open it using the desktop package installer. Terminal alternative:
-
-```sh
-sudo apt install ./OptiPlex-Now_1.21.0_amd64.deb
-```
 
 **Before upgrading:** retain existing NOW settings, Moonlight identity and restricted Games keys. A client package update does not install, restart or migrate Wolf, Steam, Jellyfin or the optional QR host service. Windows and macOS packages do not exist.
 

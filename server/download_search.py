@@ -202,8 +202,8 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
 
     Follow the same offset-based polling model as VueTorrent. The validated
     initial frame replaces the list; following frames APPEND only fresh rows.
-    Bound total work to 12 polls / 1000 results, preserving the job SID and
-    cleaning up this ephemeral job only, never any torrent transfer.
+    Bound total work to 40 polls / 50 seconds / 1000 results, preserving
+    the job SID and cleaning up this search job only, never any transfer.
     """
     if not callable(emit):
         raise SearchError("Search stream unavailable")
@@ -222,8 +222,11 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
     job_id=started["id"]
     received=0
     last=None
+    deadline=time.monotonic()+50
     try:
-        for _ in range(12):
+        for _ in range(40):
+            if time.monotonic()>=deadline:
+                break
             sleeper(1)
             reply,_=_api(runner,gateway,port,"results",
                          fields={"id":job_id,"limit":min(MAX_RESULTS,1000-received),

@@ -1,108 +1,44 @@
 # OptiPlex NOW
 
-[![Validate NOW](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/SteezyMode/OptiplexNow/actions/workflows/ci.yml)
+*Development name — not affiliated with Dell.*
 
-**Your own entertainment server. Games, video, and private downloads.**
+**Play games, watch your Jellyfin library, and manage VPN-isolated downloads on your own Linux server.** One desktop client; the server and its content remain yours.
 
-**OptiPlex NOW is an internal development codename, not the future commercial name.**
+## Download NOW — Current Alpha
 
-## Download — current official Linux `.deb`
+**[Download the Linux .deb (v1.21.0)](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)**
 
-**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download NOW v1.21.0 Friends & Family Beta (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)
+For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, and install with your normal package installer. No compiling or GitHub Actions required.
 
-[Release notes / checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest) · [Older versions](https://github.com/SteezyMode/OptiplexNow/releases)
+[Release details and checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest)
 
-Download the package and open it using the desktop package installer. Terminal alternative:
+**Who this is for:** Owner-approved devices accessing an **already configured** Linux server. This release is being physically validated. It is not a general-purpose host installer or a multi-user account system.
 
-```sh
-sudo apt install ./OptiPlex-Now_1.21.0_amd64.deb
-```
+## What it does
 
+- **Games:** Launch the owner's Steam streaming session through Wolf and Moonlight, while the server remains usable.
+- **Videos:** Open the server's existing Jellyfin media library.
+- **Downloads:** Search for torrents, choose an approved media folder, view transfers, and use approved torrent controls. Only qBittorrent traffic goes through the dedicated Gluetun VPN.
+- **Status:** Check connection and VPN health. Advanced VueTorrent remains available under Downloads.
 
-**Current development milestone:** [Private Alpha 1](docs/PRIVATE-ALPHA.md). The immediate release target is a physically tested, GUI-managed three-pillar system for a small approved tester group. No existing release meets this contract yet. Coding agents should follow [AGENTS.md](AGENTS.md); the public-alpha contract describes the later, broader launch. The goal is a single, easy host-and-client application that makes one compatible personal computer a remotely accessible entertainment server. Think **your own GeForce NOW-style game streaming and Netflix-style personal library**, using your hardware and content, without needing to learn Docker, VPN networking, or streaming servers. These comparisons describe user experience, not affiliations or provided catalogs.
+## Connect to an existing server
 
-### The three public-alpha pillars
+1. Install the .deb and sign in to Tailscale on an owner-approved device.
+2. Open NOW and use **Settings → Setup Wizard** to find the host.
+3. Complete host approval and Moonlight pairing as required.
+4. Open **Games**, **Videos**, or **Downloads**.
 
-| Core experience | Product requirement |
-| --- | --- |
-| **Independent games** | Stream a real game from the home PC while its physical screen, desktop, keyboard and mouse stay independently usable. |
-| **Personal video** | Stream an owner-managed Jellyfin library remotely, even while the server performs other tasks. |
-| **Private Downloads** | Search reviewed sources, control qBittorrent and choose download folders remotely. Route **only designated downloader traffic** through an isolated commercial VPN, while the host, Jellyfin and gaming remain on normal networking. Downloads must stop safely if the VPN fails. |
+**Important:** Wolf pairing and NOW owner permission are separate. Do not pair an untrusted person to a Wolf catalog exposing your Steam account. The new native Transfers controls require matching, owner-authorized modules on the host; the client installer does **not** update your server, VPN or containers. Fresh-client authorization and the newest Downloads controls still require real-device acceptance testing. This is an alpha, not a guarantee of a fully automatic setup.
 
-**Owner/admin:** manages downloads, file organization, VPN settings and the server. **Member/viewer:** can play authorized media and permitted games, without file-management or downloader-administration privileges. Enforcement belongs on the server, not just behind hidden buttons.
+## Project status
 
-**Goal:** approximately **15 minutes to a first authenticated game stream** between two compatible, OS-ready computers, using a simple graphical setup and approved-device flow. A single easy sign-in experience is the longer-term design goal; current separate upstream authentications are not yet unified. Linux first, **Windows clients planned**, Windows host support a longer-term feasibility target.
+**Current work: make the three complete workflows reliable, then validate the official client against the reference host.** No additional features are required for this alpha.
 
-**Public-alpha definition:** all three experiences must be working and independently tested on supported hardware. Media and downloader components remain optional choices for individual customers; an alpha demonstration must qualify all three. Music, books and comics are later possibilities, not first-alpha requirements. VPN subscriptions, including a potential bundled ~$7/month plan, are exploratory and **not needed** for public alpha: customers may use a compatible existing VPN.
+- [Product roadmap](docs/PRODUCT.md) — scope and delivery order
+- [Current status](docs/CURRENT-STATUS.md) — implemented versus physically verified
+- [Private Alpha acceptance criteria](docs/PRIVATE-ALPHA.md) — what still must pass
+- [Development instructions](AGENTS.md) — contributor and coding-agent rules
 
-[Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
+Older installers remain in [GitHub Releases](https://github.com/SteezyMode/OptiplexNow/releases) for rollback. They are not alternate products or recommended downloads.
 
-**Current official download: v1.21.0** — Linux client for already approved devices on an owner-prepared server. This is a real GitHub release, **not** a claim that the entire Private Alpha 1 roadmap is accepted. Owner Downloads requires matching host modules; installing the client does not change the server.
-
-
-**Before upgrading:** retain existing NOW settings, Moonlight identity and restricted Games keys. A client package update does not install, restart or migrate Wolf, Steam, Jellyfin or the optional QR host service. Windows and macOS packages do not exist.
-
-**v1.21.0 contents:** Native Dashboard/Games/Videos/Downloads navigation; native Transfers and Search pages, owner-only transfer controls, folder selection, Advanced VueTorrent, and Gluetun status. **Live downloads and management require the appropriate owner-authorized host deployment.** Source builds passed automated GTK/security checks; the new UI and fresh-owner-device onboarding still need physical testing. v1.20.0 remains available for rollback.
-
-**Not yet turnkey:** clean host installation, no-URL Videos setup, VPN kill-switch/egress assurance, safe end-to-end media/download file management, and a fresh-client-to-game walkthrough. The standalone QR pilot is **not auto-enabled** by a `.deb`; there is no member/viewer isolation in this one-owner release. See [Current status](docs/CURRENT-STATUS.md) and [October 26 developer handoff](docs/HANDOFF-2026-10-26.md).
-
-## Current media and download integration
-
-On the existing reference server, NOW opens a configured Jellyfin library and qBittorrent/VueTorrent interface, provides SFTP access and reports a Gluetun container health result. The VPN-isolated download arrangement is **manually configured on that host**, not deployed by the NOW installer. A healthy Docker container does not prove VPN egress or leak prevention. Today's generic SFTP shortcut also does **not** enforce the intended future owner/member access rules. This is useful reference behavior, not accepted turnkey installation.
-
-## Experimental development: NOW Host pilot
-
-The current source includes a separate **Server Setup** GUI with real read-only hardware checks and a deliberately restricted advanced installer for a **new** Ubuntu/Pop!_OS 24.04 AMD, Intel or NVIDIA host. The pilot needs Docker/Compose, owner confirmation, OS administrator authentication and verified immutable image inputs. NVIDIA requires an exact driver-installer SHA256 and builds a new versioned userspace volume without changing host drivers.
-
-**It is included as a guarded experimental tool in the closed-beta package, but is not a one-click consumer installer and has not been accepted on clean physical GPU hardware.** No complete streaming, automatic driver-update migration, repair or uninstall has been demonstrated. Do not install onto an already working Wolf host.
-
-See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTALLER.md) and [Current verification](docs/CURRENT-STATUS.md).
-
-## Connect to an existing host
-
-1. Install NOW and sign into Tailscale with an account already approved for the host.
-2. In **Settings > Setup Wizard**, discover the host or enter its address and SSH username. Confirm the expected SSH fingerprint.
-3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
-4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
-
-**Release compatibility:** v1.21.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
-
-**Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. An earlier v1.18.0 Mint client paired Moonlight and played Jellyfin video successfully, but Steam streaming, pairing focus, and wizard URL persistence failed. See the [physical test report](docs/QA-MACBOOK-2026-10-21.md). On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
-
-## Available functions
-
-- Start Steam or a configured desktop through Moonlight and Wolf.
-- Open configured video, music, download and optional Web Gaming services in a browser. These are user-supplied endpoints, not project-hosted services.
-- Open an SFTP file browser and an SSH terminal.
-- Show CPU/GPU/memory information and host service states for Tailscale, VPN, Wolf, and desktop containers.
-- Configure primary and tray actions; request host power or global streaming-service restart with confirmation.
-- Export non-secret connection presets and encrypted client-identity backups.
-- Use optional server-specific maintenance tools with documented prerequisites.
-
-A green VPN indicator reports the selected Gluetun container's own health check, not an independently verified exit IP. A running Wolf desktop container is not necessarily an active connected streaming client.
-
-## Development
-
-```sh
-make check-process check-presets
-python3 -m unittest discover -s tests -v
-make package
-```
-
-A clean build fetches pinned, integrity-checked fonts. See [Contributing](CONTRIBUTING.md) for dependencies, source map, CI rules, and host safety. Installers publish only through an explicit versioned release; see the release process. Generated `.deb` files are not committed to source control.
-
-## Documentation
-
-| Subject | Primary reference |
-| --- | --- |
-| Scope, vision, principles, phases | [Product direction](docs/PRODUCT.md) |
-| Public-alpha three-pillar requirements and owner/member permission gates | [Public alpha](docs/PUBLIC-ALPHA.md) |
-| Implemented, published, unverified | [Current status](docs/CURRENT-STATUS.md) |
-| First external tester acceptance | [Beta acceptance](docs/BETA-ACCEPTANCE.md) and [October 21 physical beta report](docs/QA-MACBOOK-2026-10-21.md) |
-| Code layout and compatibility contracts | [Architecture](docs/application-design.md) |
-| Build, release, rollback | [Contributing](CONTRIBUTING.md) and [Release process](docs/RELEASE-PROCESS.md) |
-| Host preparation, pairing, future installer and fork policy | [Documentation index](docs/README.md) |
-
-OptiPlex Studio is a [separate local-first creation application](https://github.com/SteezyMode/OptiplexStudio). NOW may stream its desktop but does not manage creative projects. The deprecated Suite is not a dependency.
-
-Application-code licensing has not been selected. Public source availability does not by itself grant redistribution rights. This project is not affiliated with Dell.
+The current client is **Linux x86-64 only**. Windows support and new-host installation are future work.

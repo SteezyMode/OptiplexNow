@@ -70,6 +70,10 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('"/usr/lib/optiplex-now/owner-enroll-ui.py"', SOURCE)
         self.assertNotIn("no-SSH client enrollment is not yet implemented", SOURCE)
         self.assertIn("Requests never authorize themselves.", SOURCE)
+        self.assertIn('"NOW Setup: Tailscale"', SOURCE)
+        self.assertIn('"NOW Setup: Server"', SOURCE)
+        self.assertIn('"NOW Setup: Games"', SOURCE)
+        self.assertIn('"NOW Setup: Finish"', SOURCE)
         # Both older Games settings users and new clients use one launcher.
         self.assertIn("open_owner_enrollment_for(cfg[0],cfg[1]);", SOURCE)
         self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)

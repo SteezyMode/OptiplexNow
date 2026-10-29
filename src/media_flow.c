@@ -8,18 +8,23 @@
 
 static void (*now_media_status_cb)(const char *);
 static void (*now_media_open_cb)(const char *);
+static void (*now_media_in_app_cb)(const char *);
 static const char *now_media_host(void){ return cfg[0]; }
 static const char *now_media_user(void){ return cfg[1]; }
 static const char *now_media_fallback(void){ return cfg[5]; }
 static void now_media_say(const char *text){ if(now_media_status_cb)now_media_status_cb(text); }
 static void now_media_browser_open(const char *url){ if(now_media_open_cb)now_media_open_cb(url); }
-void now_media_bind(void (*status)(const char *),void (*open)(const char *)){now_media_status_cb=status;now_media_open_cb=open;}
+void now_media_bind(void (*status)(const char *),void (*open)(const char *),
+                    void (*in_app)(const char *)){
+ now_media_status_cb=status;now_media_open_cb=open;now_media_in_app_cb=in_app;
+}
 
 /* Videos discovers a strictly bounded endpoint through restricted owner SSH.
  * A media helper cannot dictate a hostname, credentials or arbitrary URL. */
 typedef struct {
  GSubprocess *process;
  char *host;
+ gboolean embedded;
 } MediaDiscovery;
 
 static gboolean media_discovery_running=FALSE;
@@ -54,13 +59,15 @@ static void media_discovery_complete(GObject *unused,GAsyncResult *res,gpointer 
     now_valid_host(job->host))
    url=now_media_url_from_token(job->host,reply);
  if(url){
-  now_media_say("OPENING VERIFIED JELLYFIN");
-  now_media_browser_open(url);
+  now_media_say(job->embedded?"OPENING JELLYFIN IN NOW":"OPENING VERIFIED JELLYFIN");
+  if(job->embedded && now_media_in_app_cb)now_media_in_app_cb(url);
+  else now_media_browser_open(url);
  }else if(*now_media_fallback() && now_safe_preset_url(now_media_fallback())){
   /* Explicit legacy override remains functional when automatic discovery
    * is unavailable. Never open an address from the SSH response. */
   now_media_say("DISCOVERY UNAVAILABLE. USING SAVED VIDEOS URL");
-  now_media_browser_open(now_media_fallback());
+  if(job->embedded && now_media_in_app_cb)now_media_in_app_cb(now_media_fallback());
+  else now_media_browser_open(now_media_fallback());
  }else{
   now_media_say("JELLYFIN NOT VERIFIED. CHECK SERVER CONNECTION OR MEDIA SETUP");
  }
@@ -71,17 +78,21 @@ static void media_discovery_complete(GObject *unused,GAsyncResult *res,gpointer 
  g_free(job->host);
  g_free(job);
 }
-void now_media_open_videos(void){
+static void now_media_open_target(gboolean embedded){
  if(media_discovery_running){now_media_say("CHECKING JELLYFIN CONNECTION");return;}
  if(!now_valid_host(now_media_host()) || !now_valid_user(now_media_user())){
-  if(*now_media_fallback() && now_safe_preset_url(now_media_fallback()))now_media_browser_open(now_media_fallback());
-  else now_media_say("CONNECT AN AUTHORIZED HOST IN SETTINGS");
+  if(*now_media_fallback() && now_safe_preset_url(now_media_fallback())){
+    if(embedded && now_media_in_app_cb)now_media_in_app_cb(now_media_fallback());
+    else now_media_browser_open(now_media_fallback());
+  }else now_media_say("CONNECT AN AUTHORIZED HOST IN SETTINGS");
   return;
  }
  char *helper=media_helper_path();
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
-  if(*now_media_fallback() && now_safe_preset_url(now_media_fallback()))now_media_browser_open(now_media_fallback());
-  else now_media_say("JELLYFIN DISCOVERY HELPER MISSING");
+  if(*now_media_fallback() && now_safe_preset_url(now_media_fallback())){
+    if(embedded && now_media_in_app_cb)now_media_in_app_cb(now_media_fallback());
+    else now_media_browser_open(now_media_fallback());
+  }else now_media_say("JELLYFIN DISCOVERY HELPER MISSING");
   g_free(helper);return;
  }
  const gchar *argv[]={"/usr/bin/python3",helper,now_media_host(),now_media_user(),NULL};
@@ -98,9 +109,13 @@ void now_media_open_videos(void){
  MediaDiscovery *job=g_new0(MediaDiscovery,1);
  job->process=process;
  job->host=g_strdup(now_media_host());
+ job->embedded=embedded;
  media_discovery_running=TRUE;
  now_media_say("DISCOVERING JELLYFIN THROUGH AUTHORIZED HOST...");
  g_subprocess_communicate_utf8_async(process,NULL,NULL,
                                      media_discovery_complete,job);
 }
 
+
+void now_media_open_videos(void){now_media_open_target(FALSE);}
+void now_media_open_videos_in_app(void){now_media_open_target(TRUE);}

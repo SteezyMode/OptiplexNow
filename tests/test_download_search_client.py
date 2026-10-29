@@ -1,5 +1,7 @@
 """No-network tests for bounded, owner-bound native search transport."""
+import contextlib
 import importlib.util
+import io
 import json
 from pathlib import Path
 import subprocess
@@ -53,6 +55,51 @@ class SearchClientTests(unittest.TestCase):
             "RESULT\t-1\t-1\t0\tno magnet from plugin\t-")
         self.assertIn(MAGNET,output)
         self.assertNotIn("https://",output)
+
+    def test_stream_fetch_yields_multiple_sanitized_frames(self):
+        response={"success":True,"service":"qbittorrent",
+                  "status":"Running","partial":True,"total":1,
+                  "results":[{"name":"Big","bytes":40_000_000_000,
+                              "seeders":4,"can_add":True,"magnet":MAGNET}]}
+        second={"success":True,"service":"qbittorrent",
+                "status":"Stopped","partial":False,"total":2,
+                "results":response["results"]+[{
+                    "name":"Small","bytes":4_000_000_000,
+                    "seeders":12,"can_add":True,"magnet":MAGNET}]}
+        observed={}
+        class FakeProcess:
+            def __init__(self):
+                self.stdin=io.BytesIO()
+                self.stdout=io.BytesIO(
+                    (json.dumps(response)+"\\n"+json.dumps(second)+"\\n").encode())
+                self.returncode=None
+            def wait(self,timeout=0):
+                self.returncode=0
+                return 0
+            def poll(self):
+                return self.returncode
+        def popen(cmd,**kwargs):
+            self.assertEqual(cmd[0],"ssh")
+            self.assertEqual(cmd[-1],"optiplex@100.121.156.34")
+            observed["proc"]=FakeProcess()
+            return observed["proc"]
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"id_ed25519"
+            key.write_text("testing only")
+            with patch.object(mod,"KEY",key):
+                output=io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    mod.stream_fetch("100.121.156.34","optiplex","Ubuntu ISO",
+                                     popen=popen)
+        frames=output.getvalue().splitlines()
+        self.assertEqual(len(frames),3)
+        self.assertEqual(frames[-1],"DONE")
+        import base64
+        first=base64.b64decode(frames[0].split("\\t",1)[1]).decode()
+        final=base64.b64decode(frames[1].split("\\t",1)[1]).decode()
+        self.assertIn("Big",first)
+        self.assertNotIn("Small",first)
+        self.assertIn("Small",final)
 
     def test_publication_date_seven_field_wire_and_legacy_six(self):
         response={"success":True,"service":"qbittorrent",

@@ -8,6 +8,17 @@
 
 **Next physical gate:** Using a genuinely disposable Linux user profile and an owner-controlled Tailscale phone, test initial Wolf pair → new restricted key phone review → Verify Access → real Steam video/audio/controller/reconnect, without copying keys or modifying the working OptiPlex stack. After that test host-independent Jellyfin playback and VPN fail-closed downloads; the **separate disposable clean-host graphical install** is still mandatory. No live host changes, release tag or new .deb from this cleanup.
 
+### Open-issue classification after October 29 triage (40 open; no blanket closures)
+
+| Bucket | Issues | Decision |
+| --- | --- | --- |
+| **17 alpha/release acceptance and real physical tests** | #192, #191, #190, #189, #187, #171, #154, #152, #148, #145, #144, #141, #137, #98, #76, #10, #8 | Preserve until the documented end-to-end check succeeds. Some features are already code-complete; an open ticket does not authorize redesigning them. |
+| **3 candidate fixes requiring narrow UI/device verification** | #146, #70, #66 | Existing GTK/tray implementations appear to address much of the historical request; verify actual Mint/Pop screen behavior before closure. |
+| **20 deferred, optional or conditional hardening tasks** | #193, #188, #185, #170, #157, #155, #153, #94, #85, #68, #59, #53, #38, #37, #28, #21, #15, #14, #12, #11 | Not Private Alpha 1 requirements; revisit only after owner alpha or when a concrete blocker demands it. |
+| **Closed superseded product implementation** | #186 | Native Downloads replaces mandatory embedded VueTorrent; Advanced remains optional. Closed as `not_planned` with explanatory comment, not as a completed alpha gate. |
+
+Current cross-issue decision: the older #76 **ten-minute** either-Steam-or-Jellyfin Beta 1 target was replaced by one-owner Private Alpha 1's **approximately fifteen-minute** first authenticated game-stream target from two OS-ready supported machines. Issue #94's NOW-account/email-login model is deferred in favor of current trusted QR plus a later in-NOW Devices & Access approval screen. #194 is the only remaining open code PR and must be ported/tested against current host installer, not blindly merged. The **alpha contract** in `PRIVATE-ALPHA.md` controls when issue descriptions or older beta plans conflict.
+
 ## October 29 — First-run readiness and future owner-approval decision (merged main, physical acceptance open)
 
 **Observed source behavior:** On a clean profile the GTK setup assistant can persist a server address and finish without proving Moonlight pairing or the restricted NOW owner credential. The old Finish header said “CONNECTION SETTINGS SAVED,” which a first-time user could mistake for full access. The Server page still asks for a Linux/SSH username, a necessary owner-alpha implementation detail but not a guest login. A separate explicit **Request Owner Approval (Phone QR)** action was merged in PR #226; PR-head and merged-main CI passed. The official v1.21.9 .deb **does not** contain that action, and no physical new-credential approval has been accepted.

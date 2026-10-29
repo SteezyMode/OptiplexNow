@@ -15,7 +15,7 @@ typedef struct {
  gchar *host,*user,*helper;
  NowDownloadsMagnetSelected on_select;
  gpointer select_data;
- gboolean running,partial;
+ gboolean running,partial,received_initial;
 } SearchView;
 typedef struct {
  GtkWidget *view;
@@ -117,7 +117,7 @@ static void next_page(GtkButton *unused,gpointer data){
 }
 static void clear_results(SearchView *s){
  if(!s)return;
- s->result_count=0;s->page=0;s->partial=FALSE;
+ s->result_count=0;s->page=0;s->partial=FALSE;s->received_initial=FALSE;
  if(s->pager)gtk_widget_hide(s->pager);
  GList *items=gtk_container_get_children(GTK_CONTAINER(s->list));
  for(GList *item=items;item;item=item->next)
@@ -154,8 +154,11 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  gchar **lines=g_strsplit(wire,"\n",-1);
  gchar **header=g_strsplit(lines[0],"\t",-1);
  gint64 partial=0,total=0;
- gboolean ok=g_strv_length(header)==3 && !strcmp(header[0],"SEARCH") &&
+ gboolean append=g_strv_length(header)==3 && !strcmp(header[0],"APPEND");
+ gboolean ok=g_strv_length(header)==3 &&
+   (!strcmp(header[0],"SEARCH") || append) &&
    integer(header[1],0,1,&partial) && integer(header[2],0,1000000,&total);
+ if(append && (!s->received_initial || s->result_count>=1000))ok=FALSE;
  g_strfreev(header);
  guint count=0;
  for(guint i=1;ok && lines[i];i++){
@@ -173,8 +176,9 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
      ok=FALSE;
    g_strfreev(parts);
  }
+ if(ok && count+(append?s->result_count:0)>1000)ok=FALSE;
  if(!ok){g_strfreev(lines);return FALSE;}
- clear_results(s);
+ if(!append){clear_results(s);s->received_initial=TRUE;}
  for(guint i=1;lines[i];i++){
    gchar **parts=g_strsplit(lines[i],"\t",-1);
    GtkWidget *row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
@@ -224,21 +228,21 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    gtk_container_add(GTK_CONTAINER(s->list),row);
    g_strfreev(parts);
  }
- s->result_count=count;
- s->page=0;s->partial=partial!=0;
+ s->result_count+=count;
+ s->partial=partial!=0;
  gtk_list_box_invalidate_sort(GTK_LIST_BOX(s->list));
- if(count){
+ if(s->result_count){
    gtk_widget_show_all(s->list);
    gtk_widget_show(s->results);
    show_page(s);
    gchar *message=g_strdup_printf("%u result%s%s — select a magnet to choose its folder",
-       count,count==1?"":"s",partial ?
-       (count>=RESULT_LIMIT?" (first 100 shown)":" (searching...)") : "");
+       s->result_count,s->result_count==1?"":"s",partial ?
+       (s->result_count>=1000?" (first 1000 shown)":" (searching...)") : "");
    gtk_label_set_text(GTK_LABEL(s->status),message);
    g_free(message);
  }else{
    gtk_label_set_text(GTK_LABEL(s->status),partial ?
-      "Still searching; retry for more results." : "No results from enabled plugins.");
+      "Searching enabled plugins..." : "No results from enabled plugins.");
  }
  g_strfreev(lines);
  return TRUE;

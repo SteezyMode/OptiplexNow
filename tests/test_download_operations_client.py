@@ -53,9 +53,9 @@ class OwnerOperationsTests(unittest.TestCase):
             "downloaders":[{"service":"qbittorrent","gateway_bound":True,
                 "gateway_healthy":True,"vpn_provider":"airvpn",
                 "vpn_egress_verified":False,"killswitch_verified":False}]}
-        self.assertEqual(mod.present("vpn",healthy),"VPN\\tHEALTHY\\tairvpn")
+        self.assertEqual(mod.present("vpn",healthy),"VPN\tHEALTHY\tairvpn")
         healthy["downloaders"][0]["gateway_healthy"]=False
-        self.assertEqual(mod.present("vpn",healthy),"VPN\\tUNVERIFIED\\tairvpn")
+        self.assertEqual(mod.present("vpn",healthy),"VPN\tUNVERIFIED\tairvpn")
         healthy["downloaders"][0]["vpn_provider"]="injected-url"
         with self.assertRaises(ValueError):
             mod.present("vpn",healthy)
@@ -74,7 +74,7 @@ class OwnerOperationsTests(unittest.TestCase):
             with patch.object(mod,"KEY",key):
                 self.assertEqual(mod.fetch("100.121.156.34","optiplex",
                                            "vpn",runner=runner),
-                                 "VPN\\tHEALTHY\\tother")
+                                 "VPN\tHEALTHY\tother")
 
     def test_add_only_explicit_client_request(self):
         self.assertEqual(self.call("add","bigdisk","Movies/Horror",MAGNET),

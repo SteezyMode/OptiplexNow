@@ -46,7 +46,8 @@ def _validated_request(request):
         if action == "downloads_search":
             checked_query(request["query"])
         elif action == "downloads_manage":
-            if request["operation"] not in OPERATIONS:
+            if (not isinstance(request["operation"], str) or
+                    request["operation"] not in OPERATIONS):
                 raise PolicyError("Unsupported download operation")
             checked_hash(request["torrent_hash"])
         elif action in ("downloads_browse", "downloads_add"):

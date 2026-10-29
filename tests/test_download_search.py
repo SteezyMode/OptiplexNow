@@ -133,6 +133,56 @@ class DownloadSearchTests(unittest.TestCase):
         self.assertEqual([c[-1].rsplit("/",1)[-1]
                           for c in fake.commands[-2:]],["stop","delete"])
 
+    def test_thorough_search_collects_later_smaller_results(self):
+        fake = FakeAPI(result={"status":"Running","total":25,"results":[
+            {"fileName":"Large 2160p","fileSize":40_000_000_000,
+             "nbSeeders":12,"fileUrl":MAGNET}]})
+        original=fake.__call__
+        polls=[]
+        def runner(command, **kwargs):
+            if "/api/v2/search/results?" in command[-1]:
+                polls.append(len(polls)+1)
+                if len(polls)>=3:
+                    fake.result={"status":"Stopped","total":2,"results":[
+                        {"fileName":"Large 2160p","fileSize":40_000_000_000,
+                         "nbSeeders":12,"fileUrl":MAGNET},
+                        {"fileName":"Normal 1080p","fileSize":4_000_000_000,
+                         "nbSeeders":9,"fileUrl":MAGNET}]}
+            return original(command,**kwargs)
+        sleeps=[]
+        data=search_once("Ubuntu ISO",full=True,runner=runner,sleeper=sleeps.append)
+        self.assertFalse(data["partial"])
+        self.assertEqual(len(data["results"]),2)
+        self.assertEqual(data["results"][1]["name"],"Normal 1080p")
+        self.assertEqual(sleeps,[1,1,1])
+        self.assertEqual(len(polls),3)
+        self.assertEqual([c[-1].rsplit("/",1)[-1]
+                          for c in fake.commands[-2:]],["stop","delete"])
+
+    def test_publication_dates_are_bounded_and_optional(self):
+        cases=[(1767225600,1767225600),(None,-1),(-1,-1),(0,-1)]
+        for value,expected in cases:
+            result={"status":"Stopped","total":1,"results":[{
+                "fileName":"Public domain video","fileSize":3000,
+                "nbSeeders":8,"fileUrl":MAGNET}]}
+            if value is not None:
+                result["results"][0]["pubDate"]=value
+            data=search_once("Ubuntu ISO",runner=FakeAPI(result=result),
+                             sleeper=lambda _:None)
+            self.assertEqual(data["results"][0]["published"],expected)
+        for invalid in ("today",True,253402300800,-2):
+            result={"status":"Stopped","total":1,"results":[{
+                "fileName":"Public domain video","fileSize":3000,
+                "nbSeeders":8,"fileUrl":MAGNET,"pubDate":invalid}]}
+            with self.subTest(value=invalid),self.assertRaises(SearchError):
+                search_once("Ubuntu ISO",runner=FakeAPI(result=result),
+                            sleeper=lambda _:None)
+
+    def test_thorough_mode_rejects_non_boolean_before_network(self):
+        with self.assertRaisesRegex(SearchError,"search depth"):
+            search_once("Ubuntu ISO",full="yes",
+                runner=lambda *a,**kw:self.fail("No Docker"))
+
     def test_results_can_fill_multiple_ui_pages(self):
         fake=FakeAPI(result={"status":"Stopped","total":100,
              "results":[{"fileName":f"Linux ISO {i}","fileSize":500+i,

@@ -23,6 +23,15 @@ Keep the latest **implementation status** in CURRENT-STATUS, not here. An unmerg
 or a passing simulation is **not** a new deployable beta. Do not copy secrets,
 Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
 
+## 2026-10-29: Bounded search completion and local Search sorting
+
+- **Observed deficiency:** The owner accepted the faster Search page but reported roughly 25 partial results weighted toward enormous 2160p files. The previous early-return change stopped the underlying plugin search on first matches, leaving no access to later 1080p results.
+- **Decision and scope:** Default search still returns the first safe snapshot. An explicit **More Results** action repeats the same query in thorough mode (up to twelve polls, 100 results). The existing GTK list sorts the received batch before paging by smaller/larger size, seeders, and publication date ascending/descending. These are publication timestamps from qBittorrent's optional `pubDate`, **not** the user's "date added" to Transfers. Missing/unknown dates rank last.
+- **Security/compatibility:** Restricted owner key and same SID, plugin allowlist, VPN-bound network checks, bounded response, magnet validation and transient search-job stop/delete remain. Existing clients continue getting the six-field list; the new client understands six-field legacy or optional seven-field dated lines. No Docker, VPN, torrent queues or downloaded files are changed.
+- **Tests:** Python fake search for late-arriving 1080p results, owner restriction and date-validation tests, and GTK sorting/date fallbacks. CI is recorded in PR #219; no live reference-host install or physical verification yet.
+- **Rollback:** Restore prior host `download_search.py` and `owner_games_request.py` from saved backups; reinstall the pinned v1.21.1 client if needed. Never update live host modules without owner approval and tested backup. Avoid a new release until physical acceptance.
+- **Next action:** Review green CI, then physically test the revised search on the existing approved Linux client and reference host with a backup-safe matching backend deployment.
+
 ## 2026-10-29: P2 Search fills page and returns early results
 
 - **Evidence:** Owner reported the official v1.21.0 Search page was tiny and real searches took the full 12 seconds. Source confirmed two non-expanding GtkBox placements and a backend loop waiting for `Stopped`, even if results already existed.

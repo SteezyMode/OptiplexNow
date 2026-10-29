@@ -57,19 +57,33 @@ def present(response):
         if can_add and (len(safe_magnet)>1024 or any(
                 ord(c)<33 or ord(c)>126 for c in safe_magnet)):
             raise ValueError("Invalid magnet field")
-        lines.append(f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}")
+        # Seven-field wire is used when the updated host provides publication
+        # dates; older deployed hosts remain compatible with six fields.
+        published=item.get("published")
+        if published is not None and (type(published) is not int
+                or not -1 <= published <= 253402300799):
+            raise ValueError("Invalid search publication date")
+        wire=f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}"
+        if published is not None:
+            wire+=f"\t{published}"
+        lines.append(wire)
     wire="\n".join(lines)
     if len(wire.encode("utf-8"))>180000:
         raise ValueError("Search response too large for UI")
     return wire
 
-def fetch(host, user, query, *, runner=subprocess.run):
+def fetch(host, user, query, *, full=False, runner=subprocess.run):
+    if type(full) is not bool:
+        raise ValueError("Invalid search depth")
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device unavailable")
     if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
             or any(ord(c)<32 or ord(c)==127 for c in query)):
         raise ValueError("Invalid search phrase")
-    request=(json.dumps({"version":1,"action":"downloads_search","query":query.strip()},
+    payload={"version":1,"action":"downloads_search","query":query.strip()}
+    if full:
+        payload["full"]=True
+    request=(json.dumps(payload,
                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
@@ -90,9 +104,9 @@ def fetch(host, user, query, *, runner=subprocess.run):
 
 if __name__=="__main__":
     try:
-        if len(sys.argv)!=4:
-            raise ValueError("Expected host, SSH user and search phrase")
-        print(fetch(*sys.argv[1:4]))
+        if len(sys.argv) not in (4,5) or (len(sys.argv)==5 and sys.argv[4]!="--full"):
+            raise ValueError("Expected host, SSH user, search phrase, and optional --full")
+        print(fetch(*sys.argv[1:4],full=len(sys.argv)==5))
     except (ValueError,OSError,subprocess.SubprocessError):
         print("Search unavailable. Check owner approval, VPN and search plugins.",
               file=sys.stderr)

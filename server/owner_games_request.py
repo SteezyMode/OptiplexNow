@@ -32,6 +32,9 @@ def _validated_request(request):
     fields = {"version", "action"}
     if action == "downloads_search":
         fields.add("query")
+        # Explicit opt-in only; older clients continue to send query alone.
+        if "full" in request:
+            fields.add("full")
     elif action == "downloads_manage":
         fields.update(("operation", "torrent_hash"))
     elif action == "downloads_browse":
@@ -45,6 +48,8 @@ def _validated_request(request):
     try:
         if action == "downloads_search":
             checked_query(request["query"])
+            if "full" in request and type(request["full"]) is not bool:
+                raise PolicyError("Invalid search depth")
         elif action == "downloads_manage":
             if (not isinstance(request["operation"], str) or
                     request["operation"] not in OPERATIONS):
@@ -120,7 +125,7 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
             # Only enabled, pre-existing qBittorrent plugins. No add/delete,
             # custom endpoint, file path or plugin install accepted.
             return {"success": True, "service": "qbittorrent",
-                    **search_once(request["query"])}
+                    **search_once(request["query"], full=request.get("full", False))}
         except InventoryError:
             return {"success": False, "status": "search_unavailable"}
 

@@ -101,6 +101,32 @@ class SearchClientTests(unittest.TestCase):
         self.assertNotIn("Small",first)
         self.assertIn("Small",final)
 
+    def test_stream_accepts_all_forty_bounded_poll_frames(self):
+        frame={"success":True,"service":"qbittorrent","status":"Running",
+               "partial":True,"total":0,"append":False,"results":[]}
+        class FakeProcess:
+            def __init__(self):
+                self.stdin=io.BytesIO()
+                self.stdout=io.BytesIO(
+                    (json.dumps(frame)+"\n").encode()*40)
+                self.returncode=None
+            def wait(self,timeout=0):
+                self.returncode=0
+                return 0
+            def poll(self):
+                return self.returncode
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"id_ed25519"
+            key.write_text("fixture")
+            with patch.object(mod,"KEY",key):
+                output=io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    mod.stream_fetch("100.121.156.34","optiplex","Ubuntu ISO",
+                                     popen=lambda *args,**kw:FakeProcess())
+        lines=output.getvalue().splitlines()
+        self.assertEqual(len(lines),41)
+        self.assertEqual(lines[-1],"DONE")
+
     def test_publication_date_seven_field_wire_and_legacy_six(self):
         response={"success":True,"service":"qbittorrent",
                   "status":"Running","partial":True,"total":1,

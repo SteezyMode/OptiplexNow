@@ -34,6 +34,59 @@ class TrustedGamesGateTests(unittest.TestCase):
             wolf_api=self.api, host_video_caps=caps, host_approved=approved,
             host_writer_check=writer_check)
 
+    def test_downloads_library_actions_only_after_owner_grant(self):
+        from unittest.mock import patch
+        self.requests=lambda action: (
+            {"version":1,"action":"downloads_roots"} if action=="downloads_roots" else
+            {"version":1,"action":"downloads_browse","root":"bigdisk",
+             "relative":"Movies"} if action=="downloads_browse" else
+            {"version":1,"action":"downloads_add","root":"bigdisk",
+             "relative":"Movies/Horror",
+             "magnet":"magnet:?xt=urn:btih:"+"f"*40})
+        root_result={"roots":[{"id":"bigdisk","label":"Bigdisk"}]}
+        browse_result={"root":"bigdisk","relative":"Movies","folders":["Horror"]}
+        with patch("owner_games_request.inspect_download_roots",return_value=root_result) as root_call, \\
+             patch("owner_games_request.browse_downloads",return_value=browse_result) as browse_call, \\
+             patch("owner_games_request.enqueue_download",return_value={"status":"submitted"}) as add_call:
+            self.assertEqual(self.call("downloads_roots"),
+                             {"success":True,"service":"qbittorrent",**root_result})
+            self.assertEqual(self.call("downloads_browse"),
+                             {"success":True,"service":"qbittorrent",**browse_result})
+            self.assertEqual(self.call("downloads_add"),
+                             {"success":True,"status":"submitted"})
+            root_call.assert_called_once()
+            browse_call.assert_called_once_with("bigdisk","Movies")
+            add_call.assert_called_once()
+            self.assertTrue(all(method=="GET" for method,_,_ in self.api.calls))
+            with self.assertRaises(PolicyError):
+                self.call("downloads_add",client="99999999")
+            self.assertEqual(add_call.call_count,1)
+
+    def test_download_add_rejects_arbitrary_paths_and_fields_before_wolf(self):
+        from unittest.mock import patch
+        magnet="magnet:?xt=urn:btih:"+"f"*40
+        requests=(
+          {"version":1,"action":"downloads_add","root":"bigdisk",
+           "relative":"../Movies/Horror","magnet":magnet},
+          {"version":1,"action":"downloads_add","root":"/etc",
+           "relative":"Movies/Horror","magnet":magnet},
+          {"version":1,"action":"downloads_add","root":"bigdisk",
+           "relative":"Movies/Horror","magnet":"https://example.org/torrent"},
+          {"version":1,"action":"downloads_add","root":"bigdisk",
+           "relative":"Movies/Horror","magnet":magnet,
+           "command":"docker exec"},
+          {"version":1,"action":"downloads_browse","root":"bigdisk",
+           "relative":"/etc"},
+          {"version":1,"action":"downloads_roots","root":"bigdisk"},
+        )
+        with patch("owner_games_request.enqueue_download") as add:
+            for request in requests:
+                with self.subTest(request=request),self.assertRaises(PolicyError):
+                    handle_owner_games_request(request,verified_client_id="1001",
+                                              store=self.store,wolf_api=self.api)
+            add.assert_not_called()
+            self.assertEqual(self.api.calls,[])
+
     def test_downloads_search_requires_device_identity_and_bounded_query(self):
         from unittest.mock import patch
         from download_inventory import InventoryError

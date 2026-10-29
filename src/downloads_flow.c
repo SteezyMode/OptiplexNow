@@ -104,7 +104,7 @@ static void vpn_finished(GObject *source,GAsyncResult *res,gpointer data){
     !g_strcmp0(last_user,job->user)){
    gboolean valid=communicated && g_subprocess_get_successful(job->proc) &&
                   output && strlen(output)<128;
-   gchar **fields=valid?g_strsplit(g_strchomp(output),"\\t",-1):NULL;
+   gchar **fields=valid?g_strsplit(g_strchomp(output),"\t",-1):NULL;
    valid=fields && g_strv_length(fields)==3 &&
          !strcmp(fields[0],"VPN") &&
          (!strcmp(fields[1],"HEALTHY") || !strcmp(fields[1],"UNVERIFIED")) &&
@@ -115,14 +115,14 @@ static void vpn_finished(GObject *source,GAsyncResult *res,gpointer data){
      GDateTime *now=g_date_time_new_now_local();
      gchar *clock=g_date_time_format(now,"Last checked at %H:%M");
      vpn_set_status(healthy?"VPN: HEALTHY":"VPN: UNVERIFIED",
-       healthy?"Gluetun is healthy and qBittorrent shares its network.\\n"
+       healthy?"Gluetun is healthy and qBittorrent shares its network.\n"
                "This is not continuous egress or kill-switch verification.":
-               "The VPN-bound downloader could not be confirmed healthy.\\n"
+               "The VPN-bound downloader could not be confirmed healthy.\n"
                "Do not assume downloads are protected.",
        clock,airvpn);
      g_free(clock);g_date_time_unref(now);
    }else{
-     vpn_set_status("VPN: UNKNOWN","VPN status unavailable.\\n"
+     vpn_set_status("VPN: UNKNOWN","VPN status unavailable.\n"
                     "Do not assume downloads are protected.",
                     "Last check failed",FALSE);
    }
@@ -404,12 +404,12 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
    g_free(operations_helper);g_free(search_helper);
    g_free(parent);g_free(queue_helper);
  }
- vpn_refresh();
  if(same && webview && loaded_url &&
     now_downloads_webview_url_allowed(loaded_url,host)){
    /* Keep the WebKit session alive but show the native queue on entry. */
    show_queue(NULL,NULL);
    if(!running)now_downloads_refresh(host,user);
+   vpn_refresh();
    return;
  }
  /* Host identity, SSH user and explicit override are separate from the
@@ -422,12 +422,15 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
    g_free(last_host);last_host=g_strdup(host);
    g_free(last_user);last_user=g_strdup(user);
    g_free(last_override);last_override=g_strdup(webui_url);
+   vpn_set_status("VPN: UNKNOWN","Checking the selected download host.",
+                  "No verification yet",FALSE);
    if(webview){
      gtk_container_remove(GTK_CONTAINER(view_holder),webview);
      webview=NULL;
      g_clear_pointer(&loaded_url,g_free);
    }
  }
+ vpn_refresh();
  /* If the initial authorization is still in flight, leave it alone;
   * selecting this tab again must not restart or duplicate the request. */
  if(same && running)return;

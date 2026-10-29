@@ -4,7 +4,9 @@ set -euo pipefail
 # Installed package, separate Xvfb session and disposable user home. The
 # Videos setup window's idle check is read-only; no approval is clicked.
 tmp="$(mktemp -d -t now-host-videos-ui.XXXXXX)"
-trap 'rm -rf -- "$tmp"' EXIT
+# A transient GVfs FUSE mount may outlive this isolated GUI smoke run.
+# The disposable CI runner clears it; cleanup must not invalidate a passed GUI check.
+trap 'rm -rf -- "$tmp" 2>/dev/null || true' EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime"
 chmod 700 "$tmp/runtime"
 HOME="$tmp/home" XDG_CONFIG_HOME="$tmp/config" XDG_RUNTIME_DIR="$tmp/runtime" \

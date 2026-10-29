@@ -127,10 +127,18 @@ def _results(raw):
                 or type(size) is not int or size < -1
                 or type(seeds) is not int or seeds < -1):
             raise SearchError("Search result has invalid fields")
+        # Upstream pubDate is a Unix timestamp (not when the user queued it).
+        # Some plugins provide no date; preserve that as unknown (-1).
+        date = item.get("pubDate", -1)
+        if date is None:
+            date = -1
+        if (type(date) is not int or not -1 <= date <= 253402300799):
+            raise SearchError("Invalid search publication date")
         safe_title = "".join(c if c.isprintable() else " " for c in title)[:160]
         magnet = checked_magnet(item.get("fileUrl"))
         sanitized.append({"name": safe_title, "bytes": size, "seeders": seeds,
-                          "can_add": bool(magnet), "magnet": magnet})
+                          "can_add": bool(magnet), "magnet": magnet,
+                          "published": date if date > 0 else -1})
     return {"status": payload["status"], "total": payload["total"],
             "results": sanitized}
 

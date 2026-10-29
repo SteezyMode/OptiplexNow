@@ -2,6 +2,7 @@
 #include "downloads_webview.h"
 #include "downloads_queue_view.h"
 #include "downloads_search_view.h"
+#include "downloads_destination_view.h"
 #include "presets.h"
 #include <gio/gio.h>
 #include <string.h>
@@ -9,6 +10,7 @@
 static GtkWidget *queue_label;
 static GtkWidget *queue_view;
 static GtkWidget *search_view;
+static GtkWidget *destination_view;
 static GtkWidget *advanced_button;
 static GtkWidget *back_button;
 static gchar *approved_web_url;
@@ -249,12 +251,20 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
    gchar *queue_helper=helper_path();
    gchar *parent=g_path_get_dirname(queue_helper);
    gchar *search_helper=g_build_filename(parent,"download-search-client.py",NULL);
-   gboolean enabled=now_valid_host(host) && now_valid_user(user) &&
-     owner_device_key_exists() && g_file_test(search_helper,G_FILE_TEST_IS_REGULAR);
+   gchar *operations_helper=g_build_filename(parent,"download-operations-client.py",NULL);
+   gboolean enrolled=now_valid_host(host) && now_valid_user(user) &&
+                     owner_device_key_exists();
+   gboolean search_ready=enrolled && g_file_test(search_helper,G_FILE_TEST_IS_REGULAR);
+   gboolean picker_ready=enrolled && g_file_test(operations_helper,G_FILE_TEST_IS_REGULAR);
    now_downloads_search_view_configure(search_view,
-                                       enabled?host:NULL,enabled?user:NULL,
-                                       enabled?search_helper:NULL);
-   g_free(search_helper);g_free(parent);g_free(queue_helper);
+       search_ready?host:NULL,search_ready?user:NULL,
+       search_ready?search_helper:NULL);
+   if(destination_view)
+     now_downloads_destination_view_configure(destination_view,
+       picker_ready?host:NULL,picker_ready?user:NULL,
+       picker_ready?operations_helper:NULL);
+   g_free(operations_helper);g_free(search_helper);
+   g_free(parent);g_free(queue_helper);
  }
  if(same && webview && loaded_url &&
     now_downloads_webview_url_allowed(loaded_url,host)){
@@ -299,6 +309,16 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
      "Connect an approved server to discover downloads.");
  }
 }
+static void on_search_result(const char *magnet,gpointer unused){
+ (void)unused;
+ if(destination_view)
+   now_downloads_destination_view_select(destination_view,magnet);
+}
+static void on_download_submitted(gpointer unused){
+ (void)unused;
+ if(last_host && last_user)
+   now_downloads_refresh(last_host,last_user);
+}
 static void on_refresh_clicked(GtkButton *button,gpointer unused){
  (void)button;(void)unused;
  if(last_host && last_user)
@@ -342,6 +362,10 @@ GtkWidget *now_downloads_page(void){
  GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  search_view=now_downloads_search_view_new();
  gtk_box_pack_start(GTK_BOX(body),search_view,FALSE,FALSE,0);
+ destination_view=now_downloads_destination_view_new();
+ gtk_box_pack_start(GTK_BOX(body),destination_view,FALSE,FALSE,0);
+ now_downloads_search_view_on_select(search_view,on_search_result,NULL);
+ now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
  queue_label=gtk_label_new("Current downloads");
  gtk_label_set_xalign(GTK_LABEL(queue_label),0);
  gtk_label_set_line_wrap(GTK_LABEL(queue_label),TRUE);

@@ -72,6 +72,46 @@ static void test_mapped_full_results(void){
  g_string_free(wire,TRUE);
  gtk_widget_destroy(window);
 }
+/* Regression: sort is applied across the full result batch, and partial
+ * results offer an explicit deeper search without changing the first batch. */
+static const char *first_result_title(GtkWidget *list){
+ GtkListBoxRow *first=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);
+ g_assert_nonnull(first);
+ GtkWidget *content=gtk_bin_get_child(GTK_BIN(first));
+ GList *labels=gtk_container_get_children(GTK_CONTAINER(content));
+ g_assert_nonnull(labels);
+ const char *title=gtk_label_get_text(GTK_LABEL(labels->data));
+ g_list_free(labels);
+ return title;
+}
+static void test_sort_and_more(void){
+ GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+ GtkWidget *view=now_downloads_search_view_new();
+ gtk_window_set_default_size(GTK_WINDOW(window),800,560);
+ gtk_container_add(GTK_CONTAINER(window),view);
+ gtk_widget_show_all(window);
+ GtkWidget *list=find_named(view,"nowsearchlist");
+ GtkWidget *more=find_named(view,"nowsearchmore");
+ GtkWidget *sort=find_named(view,"nowsearchsort");
+ g_assert_nonnull(list);g_assert_nonnull(more);g_assert_nonnull(sort);
+ g_assert_true(now_downloads_search_view_update(view,
+   "SEARCH\\t1\\t35\\n"
+   "RESULT\\t40000000000\\t45\\t0\\t2160p huge\\t-\\n"
+   "RESULT\\t4000000000\\t10\\t0\\t1080p moderate\\t-\\n"
+   "RESULT\\t-1\\t-1\\t0\\tUnknown size\\t-"));
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_true(gtk_widget_get_visible(more));
+ g_assert_cmpstr(first_result_title(list),==,"1080p moderate");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"seeds");
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(sort),"large");
+ while(gtk_events_pending())gtk_main_iteration();
+ g_assert_cmpstr(first_result_title(list),==,"2160p huge");
+ g_assert_true(now_downloads_search_view_update(view,"SEARCH\\t0\\t0"));
+ g_assert_false(gtk_widget_get_visible(more));
+ gtk_widget_destroy(window);
+}
 static void test_reject(void){
  GtkWidget *view=now_downloads_search_view_new();
  const char *bad[]={
@@ -97,6 +137,7 @@ int main(int argc,char **argv){
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/search/valid",test_valid);
  g_test_add_func("/search/mapped-full-results",test_mapped_full_results);
+ g_test_add_func("/search/sort-and-more",test_sort_and_more);
  g_test_add_func("/search/reject",test_reject);
  return g_test_run();
 }

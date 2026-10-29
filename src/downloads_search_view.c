@@ -158,7 +158,7 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
  gboolean ok=g_strv_length(header)==3 &&
    (!strcmp(header[0],"SEARCH") || append) &&
    integer(header[1],0,1,&partial) && integer(header[2],0,1000000,&total);
- if(append && (!s->received_initial || s->result_count>=1000))ok=FALSE;
+ if(append && !s->received_initial)ok=FALSE;
  g_strfreev(header);
  guint count=0;
  for(guint i=1;ok && lines[i];i++){

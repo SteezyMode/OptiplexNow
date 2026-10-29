@@ -34,12 +34,14 @@ def present(response):
             or response.get("status") not in ("Running","Stopped")
             or type(response.get("partial")) is not bool
             or type(response.get("total")) is not int
-            or not 0 <= response["total"] <= 1000000):
+            or not 0 <= response["total"] <= 1000000
+            or type(response.get("append",False)) is not bool):
         raise ValueError("Invalid authorized search response")
     items=response.get("results")
     if not isinstance(items, list) or len(items)>MAX_RESULTS:
         raise ValueError("Invalid search result collection")
-    lines=[f"SEARCH\t{int(response['partial'])}\t{response['total']}"]
+    mode="APPEND" if response.get("append",False) else "SEARCH"
+    lines=[f"{mode}\t{int(response['partial'])}\t{response['total']}"]
     for item in items:
         if not isinstance(item,dict):
             raise ValueError("Invalid search result")

@@ -244,6 +244,7 @@ static void start_search(GtkWidget *unused,gpointer data){
 }
 GtkWidget *now_downloads_search_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_widget_set_vexpand(view,TRUE);
  SearchView *s=g_new0(SearchView,1);
  g_object_set_data_full(G_OBJECT(view),"now-search-state",s,free_state);
  GtkWidget *bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
@@ -264,13 +265,14 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->results),
                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_widget_set_size_request(s->results,-1,150);
+ gtk_widget_set_vexpand(s->results,TRUE);
  gtk_widget_set_no_show_all(s->results,TRUE);
  s->list=gtk_list_box_new();
  gtk_widget_set_name(s->list,"nowsearchlist");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(s->list),GTK_SELECTION_SINGLE);
  g_signal_connect(s->list,"row-activated",G_CALLBACK(on_result_activated),view);
  gtk_container_add(GTK_CONTAINER(s->results),s->list);
- gtk_box_pack_start(GTK_BOX(view),s->results,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view),s->results,TRUE,TRUE,0);
  gtk_widget_hide(s->results);
  s->pager=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
  gtk_widget_set_no_show_all(s->pager,TRUE);

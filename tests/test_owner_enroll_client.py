@@ -110,6 +110,51 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["transport"], "tailnet")
 
+    def test_only_affirmative_restricted_status_proves_owner_access(self):
+        good = ("needs_wolf_ui", "wolf_ui_connected", "busy", "in_use",
+                "joined", "idle", "running", "finished")
+        for status in good:
+            with self.subTest(status=status):
+                self.assertTrue(mod.verified_restricted_access(
+                    {"success": True, "status": status}))
+        for reply in (None, {}, [], "idle",
+                      {"success": False, "status": "idle"},
+                      {"success": 1, "status": "idle"},
+                      {"success": True, "status": "pending"},
+                      {"success": True, "status": "approved"},
+                      {"success": True, "status": "unavailable"},
+                      {"success": True, "status": None}):
+            with self.subTest(reply=reply):
+                self.assertFalse(mod.verified_restricted_access(reply))
+
+    def test_stale_local_key_or_nonaffirmative_reply_never_skips_phone_request(self):
+        from unittest.mock import patch
+
+        class StaleRestrictedKey:
+            def invoke(self, host, user, action):
+                self_call = (host, user, action)
+                assert self_call == ("100.121.156.34", "optiplex", "status")
+                # A subprocess completion or local key alone is not a grant.
+                return {"success": False, "status": "idle"}
+
+        request = {"success": True, "status": "pending",
+                   "request_id": "f" * 32, "code": "293847",
+                   "fingerprint": "a" * 20, "phone_approval_available": True}
+        with patch.object(mod, "_client_module", return_value=StaleRestrictedKey()), \
+             patch.object(mod, "request_tailnet", return_value=request) as tailnet, \
+             patch.object(mod, "request", side_effect=AssertionError("admin SSH fallback")):
+            answer = mod.request_using_available_transport(
+                "100.121.156.34", "optiplex", include_transport=True)
+        self.assertEqual(answer["status"], "pending")
+        self.assertEqual(answer["transport"], "tailnet")
+        tailnet.assert_called_once_with("100.121.156.34")
+
+    def test_ui_verification_uses_host_result_and_resets_stale_code(self):
+        source = (ROOT / "src/owner-enroll-ui.py").read_text()
+        self.assertIn("verified_restricted_access(answer)", source)
+        self.assertIn("self.code.set_text(\"\")", source)
+        self.assertIn("if error or not load(", source)
+
     def test_tailnet_owner_denial_does_not_fall_back_to_admin_ssh(self):
         # An explicit server-side identity refusal must not downgrade the
         # enrollment boundary into an ordinary administrator SSH request.

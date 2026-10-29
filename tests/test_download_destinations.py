@@ -59,6 +59,8 @@ class FakeDocker:
             return subprocess.CompletedProcess(cmd,self_result,b"",b"")
         assert cmd[:3]==["docker","exec",VPN]
         assert cmd[-1]=="http://127.0.0.1:8085/api/v2/torrents/add"
+        assert "--header" in cmd
+        assert "Referer: http://127.0.0.1:8085/" in cmd
         data=[part for part in cmd if part.startswith("--post-data=")]
         assert len(data)==1
         fields=parse_qs(data[0].partition("=")[2])

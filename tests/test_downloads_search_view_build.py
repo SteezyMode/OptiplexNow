@@ -41,7 +41,7 @@ class NativeSearchViewTests(unittest.TestCase):
         self.assertIn('gtk_list_box_set_sort_func',module)
         self.assertIn('gtk_list_box_invalidate_sort',module)
         self.assertIn('gtk_button_set_label(GTK_BUTTON(s->headers[i])',module)
-        for header in ('name','size','seeds','published'):
+        for header in ('name','size','seeds','leechers','published'):
             self.assertIn('nowsearchheader_'+header,module)
         self.assertNotIn('gtk_combo_box_text_new()',module)
         self.assertNotIn("torrents/add",module)

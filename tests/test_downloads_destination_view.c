@@ -25,7 +25,7 @@ static void test_borrowed_combo_id_is_never_freed(void){
  GtkWidget *view=now_downloads_destination_view_new();
  Picker *s=state(view);
  g_assert_true(read_response(s,'r',
-     "ROOTS\\nROOT\\tbigdisk\\t4 TB Media\\nROOT\\texpansion\\t2 TB Media"));
+     "ROOTS\nROOT\tbigdisk\t4 TB Media\nROOT\texpansion\t2 TB Media"));
  /* GTK 3 returns an interned borrowed pointer, not a heap allocation.
   * Ensure our state keeps a private copy, including when the root changes. */
  const char *borrowed=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));

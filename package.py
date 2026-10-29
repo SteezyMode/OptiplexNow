@@ -77,6 +77,7 @@ for name in ('owner_enrollment.py','owner_games_enroll.py',
 shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
 shutil.copy2(root/'src/download-queue-client.py',pkg/'usr/lib/optiplex-now/download-queue-client.py')
 shutil.copy2(root/'src/download-search-client.py',pkg/'usr/lib/optiplex-now/download-search-client.py')
+shutil.copy2(root/'src/download-operations-client.py',pkg/'usr/lib/optiplex-now/download-operations-client.py')
 (pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')
 shutil.copy2(root/'server/wolf-driver-maintenance.py',pkg/'usr/lib/optiplex-now/wolf-driver-maintenance')

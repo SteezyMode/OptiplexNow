@@ -83,7 +83,18 @@ def inspect_queue(*, runner=subprocess.run):
             raise InventoryError("Queue item invalid")
         if type(progress) not in (int, float) or not 0 <= progress <= 1:
             raise InventoryError("Queue progress invalid")
+        torrent_hash = item.get("hash")
+        speed, eta, seeds = (item.get("dlspeed"), item.get("eta"),
+                             item.get("num_seeds"))
+        if (not isinstance(torrent_hash, str) or
+                not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?", torrent_hash)
+                or any(type(v) is not int or v < -1 or v > 2**31-1
+                       for v in (speed, eta, seeds))):
+            raise InventoryError("Torrent status has invalid fields")
         result.append({"name": name[:MAX_NAME], "state": state[:48],
-                       "progress_percent": round(progress * 100, 1)})
+                       "progress_percent": round(progress * 100, 1),
+                       "torrent_hash": torrent_hash.lower(),
+                       "download_bps": speed, "eta_seconds": eta,
+                       "seeders": seeds})
     return {"service": "qbittorrent", "queue": result, "truncated": False,
             "webui_port": port}

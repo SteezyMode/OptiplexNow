@@ -110,6 +110,27 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["transport"], "tailnet")
 
+    def test_tailnet_owner_denial_does_not_fall_back_to_admin_ssh(self):
+        # An explicit server-side identity refusal must not downgrade the
+        # enrollment boundary into an ordinary administrator SSH request.
+        from unittest.mock import patch
+        with patch.object(mod, "already_authorized", return_value=False), \
+             patch.object(mod, "request_tailnet", side_effect=ValueError("not authorized")), \
+             patch.object(mod, "request", side_effect=AssertionError("unsafe fallback")) as ssh:
+            with self.assertRaisesRegex(ValueError, "not authorized"):
+                mod.request_using_available_transport(
+                    "100.121.156.34", "optiplex", include_transport=True)
+            ssh.assert_not_called()
+
+    def test_no_owner_listener_and_no_trusted_ssh_cannot_grant_access(self):
+        from unittest.mock import patch
+        with patch.object(mod, "already_authorized", return_value=False), \
+             patch.object(mod, "request_tailnet", side_effect=ConnectionRefusedError()), \
+             patch.object(mod, "request", side_effect=ValueError("owner SSH not configured")):
+            with self.assertRaisesRegex(ValueError, "owner SSH not configured"):
+                mod.request_using_available_transport(
+                    "100.121.156.34", "optiplex", include_transport=True)
+
     def test_gui_and_host_bridge_scripts_compile_without_gtk_session(self):
         import py_compile
         for source in (

@@ -17,6 +17,13 @@ Read, in this order, before proposing work:
 
 ## Work selection: finish workflows, not fragments
 
+**Duplicate-work preflight (required before creating a new feature or fix PR):**
+1. Verify current `main` and the official published .deb separately; read the current acceptance contract and last merged/main CI evidence.
+2. Search the existing implementation **and** relevant open, merged, and closed-unmerged PRs and their issue comments for the same user-facing behavior. Old passing CI on a diverged branch is not acceptance.
+3. Identify what is *missing in current source* versus what is *implemented but physically unverified*. Do not reintroduce superseded Web Gaming, VueTorrent-webview, broad SSH-pairing or auto-trust designs just because their PR titles match a request.
+4. Prefer updating the existing owning issue and targeted tests over inventing a parallel module, new framework, issue or PR. Link replacement PRs and record why an old branch is closed or selectively salvaged. Do not close a real hardware/security acceptance gate on mock evidence.
+5. Owner-only **Private Alpha 1** excludes member/viewer account implementation, though unapproved host-service requests must be denied. The product roadmap may include post-alpha roles without adding them to the release gate.
+
 - Pursue one critical path at a time: **Games, then Video, then Downloads/Files, then integrated installation and release acceptance**, with security/regression fixes allowed as necessary.
 - Every issue/PR must name the end-user outcome, the relevant private-alpha acceptance check, the observed deficiency, and how completion will be demonstrated.
 - Do not build optional music/books/comics, separate member Steam instances, pooled game installs, Windows hosts, custom VPN sales, billing, novelty widgets, or in-stream overlays for Private Alpha 1.

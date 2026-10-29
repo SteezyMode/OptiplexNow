@@ -1,12 +1,14 @@
 /* Native GTK queue regression. Disposable Xvfb only; no network, Docker or SSH. */
 #include "downloads_queue_view.h"
 #include <glib.h>
+#define HASH_A "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+#define HASH_B "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 
 static void test_queue_items(void){
  GtkWidget *view=now_downloads_queue_view_new();
  g_assert_true(now_downloads_queue_view_update(view,
-   "ITEM\t21.2\tdownloading\tExample Movie\n"
-   "ITEM\t100.0\tstalledUP\tOlder File"));
+   "ITEM\t21.2\tdownloading\tExample Movie\t" HASH_A "\t150\t180\t7\n"
+   "ITEM\t100.0\tstalledUP\tOlder File\t" HASH_B "\t0\t-1\t0"));
  GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
  g_assert_nonnull(list);
  GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
@@ -27,6 +29,7 @@ static void test_malformed_refused(void){
    "ITEM\t5.0\tbroken state\tname",
    "ITEM\t5.0\tdownloading\t",
    "ITEM\t5.0\tdownloading\tname\tprivate",
+   "ITEM\t5.0\tdownloading\tname\t" HASH_A "\t0\t0\t-2",
    "ITEM\t5.0\tdownloading\tname\n",
    "ITEM\t5.0\tdownloading\tname\nITEM\toops\tdownloading\tname",
    NULL

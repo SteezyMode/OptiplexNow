@@ -55,6 +55,17 @@ class ManageTests(unittest.TestCase):
             with self.assertRaisesRegex(InventoryError,"no longer exists"):
                 mod.manage_torrent("remove",HASH,runner=runner)
         self.assertEqual(len(commands),1)
+    def test_http_success_with_failure_payload_is_not_success(self):
+        def runner(argv,**kwargs):
+            if "torrents/info?" in argv[-1]:
+                return subprocess.CompletedProcess(argv,0,
+                    ('[{"hash":"'+HASH+'"}]').encode(),b"")
+            return subprocess.CompletedProcess(argv,0,b"Fails.",b"")
+        with patch.object(mod,"locate_verified_downloader",
+                          return_value=(GATEWAY,8085)):
+            with self.assertRaisesRegex(InventoryError,"operation failed"):
+                mod.manage_torrent("recheck",HASH,runner=runner)
+
     def test_failed_post_never_claims_success(self):
         def runner(argv,**kwargs):
             if "torrents/info?" in argv[-1]:

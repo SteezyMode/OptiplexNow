@@ -23,6 +23,14 @@ Keep the latest **implementation status** in CURRENT-STATUS, not here. An unmerg
 or a passing simulation is **not** a new deployable beta. Do not copy secrets,
 Moonlight pairing keys, Steam state, VPN credentials or live session payloads.
 
+## 2026-10-29: Downloads P2 is a complete host/client acceptance gate
+
+- **Problem/evidence:** The owner physically verified native search and explicit save-folder Add on the reference OptiPlex using the PR #214 Linux Mint client, and separately verified qBittorrent's Gluetun topology, tunnel routing and default-drop firewall. PR #215 then added Transfers/Search, automatic polling, narrow management operations and a VPN health panel. Its exact-head Python/GTK/sanitizer/package CI passed and it was merged to main, but its new eight-field queue contract and host management module were **not** yet physically deployed or exercised.
+- **Decision/boundary:** Do not publish a client-only release implying that Downloads works before the reference host's restricted owner broker has matching modules and real transfer state/actions pass. Keep the current qBittorrent, VPN, Games and Jellyfin containers untouched. The client must never be granted general SSH/Docker administration.
+- **Testing:** The existing #215 exact-head CI established code/package readiness, not server deployment. A P2 follow-up tightens qBittorrent management response checking; test malformed response fail-closed without hitting live torrents. Validate transfer visibility, a harmless reversible pause/resume on a disposable torrent, safe remove preserving media only after explicit approval, client upgrade/restart and VPN health.
+- **Migration/rollback:** Stage only reviewed host Python modules after a read-only inventory, checksum verification, on-host syntax check and backup. Deploy a compatible client deliberately; preserve installed v1.20 and prior PR #214 packages for rollback. Do not change active Tailscale, Wolf, Jellyfin, Gluetun or qBittorrent configuration.
+- **Next action:** Owner runs the read-only reference-host Downloads preflight from the MacBook Air. Use its actual installed state to prepare a minimal, reversible host module update, then test on real devices before tagging the next beta.
+
 ## 2026-10-24: Owner-controlled GUI enrollment pilot, PR #184
 
 - **Problem/evidence:** A fresh Linux account paired Wolf and ordinary SSH but could not access Games or Downloads until the owner bound its *distinct* restricted SSH key and approved the correct Wolf client ID manually. The older and newer MacBook profile identities differed. No host service restart was required.

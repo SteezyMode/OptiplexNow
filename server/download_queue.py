@@ -13,7 +13,12 @@ MAX_BYTES = 65536
 MAX_ITEMS = 100
 MAX_NAME = 160
 
-def inspect_queue(*, runner=subprocess.run):
+def locate_verified_downloader(*, runner=subprocess.run):
+    """Return only the private verified gateway container ID and WebUI port.
+
+    Never return these privileged locators in owner-client responses.
+    Gateway health confirms topology, not VPN egress/kill-switch correctness.
+    """
     records = _containers(runner=runner)
     gateways = {}
     for record in records:
@@ -46,6 +51,11 @@ def inspect_queue(*, runner=subprocess.run):
     port = int(ports[0])
     if not 1024 <= port <= 65535:
         raise InventoryError("Downloader port invalid")
+    return gateway_id, port
+
+
+def inspect_queue(*, runner=subprocess.run):
+    gateway_id, port = locate_verified_downloader(runner=runner)
     url = f"http://127.0.0.1:{port}/api/v2/torrents/info"
     try:
         completed = runner(["docker", "exec", gateway_id, "wget", "-q", "-T", "5",

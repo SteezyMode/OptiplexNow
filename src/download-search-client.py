@@ -57,7 +57,16 @@ def present(response):
         if can_add and (len(safe_magnet)>1024 or any(
                 ord(c)<33 or ord(c)>126 for c in safe_magnet)):
             raise ValueError("Invalid magnet field")
-        lines.append(f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}")
+        # Seven-field wire is used when the updated host provides publication
+        # dates; older deployed hosts remain compatible with six fields.
+        published=item.get("published")
+        if published is not None and (type(published) is not int
+                or not -1 <= published <= 253402300799):
+            raise ValueError("Invalid search publication date")
+        wire=f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}"
+        if published is not None:
+            wire+=f"\t{published}"
+        lines.append(wire)
     wire="\n".join(lines)
     if len(wire.encode("utf-8"))>180000:
         raise ValueError("Search response too large for UI")

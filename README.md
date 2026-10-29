@@ -24,23 +24,23 @@
 
 [Read the public-alpha requirements and acceptance checklist](docs/PUBLIC-ALPHA.md). [Track delivery](https://github.com/SteezyMode/OptiplexNow/issues/137). [Product roadmap](docs/PRODUCT.md). [Current implementation status](docs/CURRENT-STATUS.md).
 
-**Release channel:** **v1.20.0 Closed Beta** packages the current Games, Videos, owner Downloads UI, host inspection and opt-in QR enrollment work. It is a developer/tester prerelease, **not accepted Private Alpha 1**. A separately approved and prepared host is still required; QR host approval is disabled unless deliberately started on the host.
+**Release channel:** **v1.21.0 Friends & Family Closed Beta (client)**, for owner-approved Linux clients of an already prepared personal host. This is a tester prerelease, **not accepted Private Alpha 1**, a turnkey host installer, or a member-permissions release. Protected Downloads requires the matching restricted owner-host modules; installing the .deb does not update the host.
 
 ## Download
 
-**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download OptiPlex NOW v1.20.0 (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.20.0/OptiPlex-Now_1.20.0_amd64.deb)
+**Linux Mint / Pop!_OS / Ubuntu, x86-64:** [**Download NOW v1.21.0 Friends & Family Beta (.deb)**](https://github.com/SteezyMode/OptiplexNow/releases/download/v1.21.0/OptiPlex-Now_1.21.0_amd64.deb)
 
-[Release notes and SHA256 checksums](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.20.0) · [All releases / rollback versions](https://github.com/SteezyMode/OptiplexNow/releases) · [Private Alpha 1 acceptance checklist](docs/PRIVATE-ALPHA.md)
+[Release notes and SHA256 checksums](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.0) · [All releases / rollback versions](https://github.com/SteezyMode/OptiplexNow/releases) · [Private Alpha 1 acceptance checklist](docs/PRIVATE-ALPHA.md)
 
 Download the package and open it using the desktop package installer. Terminal alternative:
 
 ```sh
-sudo apt install ./OptiPlex-Now_1.20.0_amd64.deb
+sudo apt install ./OptiPlex-Now_1.21.0_amd64.deb
 ```
 
 **Before upgrading:** retain existing NOW settings, Moonlight identity and restricted Games keys. A client package update does not install, restart or migrate Wolf, Steam, Jellyfin or the optional QR host service. Windows and macOS packages do not exist.
 
-**v1.20.0 contents:** Linux GTK3 launcher with authenticated owner-managed Steam Games, existing-server status and setup, Jellyfin discovery integration under development, owner-only Downloads/VueTorrent integration, and experimental host installation/adoption helpers. Existing services and credentials are prerequisites for many features. The source includes the tested opt-in owner iPhone QR approval pilot; a valid phone page and candidate proof were physically demonstrated but a **fresh-key approval has not yet succeeded**.
+**v1.21.0 contents:** Native Dashboard/Games/Videos/Downloads navigation; native Transfers and Search pages, owner-only transfer controls, folder selection, Advanced VueTorrent, and Gluetun status. **Live downloads and management require the appropriate owner-authorized host deployment.** Source builds passed automated GTK/security checks; the new UI and fresh-owner-device onboarding still need physical testing. v1.20.0 remains available for rollback.
 
 **Not yet turnkey:** clean host installation, no-URL Videos setup, VPN kill-switch/egress assurance, safe end-to-end media/download file management, and a fresh-client-to-game walkthrough. The standalone QR pilot is **not auto-enabled** by a `.deb`; there is no member/viewer isolation in this one-owner release. See [Current status](docs/CURRENT-STATUS.md) and [October 26 developer handoff](docs/HANDOFF-2026-10-26.md).
 
@@ -63,7 +63,7 @@ See [Host installer scope, safety and physical alpha checklist](docs/HOST-INSTAL
 3. Choose **Connect to Game Host**. Install/select Moonlight if needed and complete Wolf pairing.
 4. Use **Games** for the configured streaming apps or **Videos** for the media service URL.
 
-**Release compatibility:** v1.20.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
+**Release compatibility:** v1.21.0 starts fresh profiles without the previous developer-specific host, SSH username, Videos, Music, Downloads or Web Gaming defaults. Configure services belonging to your own host or import a trusted connection preset. Previously saved URLs remain intact. Tailscale does not sign into Jellyfin.
 
 **Still requires owner action:** server-side Wolf pairing support must already be configured; Tailscale sign-in, host fingerprint verification, and Wolf/Moonlight authorization require explicit owner participation. An earlier v1.18.0 Mint client paired Moonlight and played Jellyfin video successfully, but Steam streaming, pairing focus, and wizard URL persistence failed. See the [physical test report](docs/QA-MACBOOK-2026-10-21.md). On an existing installation, configure the optional **Web Gaming URL** once under Settings > Gaming & Streaming if you previously relied on the developer-specific fallback. Streaming, Videos, Music and Downloads are independent services. See [Beta acceptance](docs/BETA-ACCEPTANCE.md).
 

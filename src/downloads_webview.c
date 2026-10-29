@@ -135,7 +135,7 @@ static void free_policy(gpointer data,GClosure *closure){
  if(p->origin)g_uri_unref(p->origin);
  g_free(p);
 }
-GtkWidget *now_downloads_webview_new(const char *url,const char *approved_host){
+GtkWidget *now_media_embedded_webview_new(const char *url,const char *approved_host){
  if(!now_downloads_webview_url_allowed(url,approved_host) ||
     !load_browser())return NULL;
  GtkWidget *view=api.new_view();
@@ -152,4 +152,9 @@ GtkWidget *now_downloads_webview_new(const char *url,const char *approved_host){
  }
  api.load_uri(view,url);
  return view;
+}
+
+/* Existing Downloads API retains identical restrictions and behavior. */
+GtkWidget *now_downloads_webview_new(const char *url,const char *approved_host){
+ return now_media_embedded_webview_new(url,approved_host);
 }

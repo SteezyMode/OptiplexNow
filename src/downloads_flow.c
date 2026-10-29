@@ -608,7 +608,7 @@ GtkWidget *now_downloads_page(void){
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers");
  GtkWidget *search=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  search_view=now_downloads_search_view_new();
- gtk_box_pack_start(GTK_BOX(search),search_view,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(search),search_view,TRUE,TRUE,0);
  destination_view=now_downloads_destination_view_new();
  gtk_box_pack_start(GTK_BOX(search),destination_view,FALSE,FALSE,0);
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);

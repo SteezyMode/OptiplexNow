@@ -110,6 +110,36 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertEqual(result["status"], "pending")
         self.assertEqual(result["transport"], "tailnet")
 
+    def test_explicit_host_denial_never_falls_back_to_admin_ssh(self):
+        # A real owner phone / Tailnet identity denial is not an excuse to
+        # stage over the ordinary Linux administrator account.
+        from unittest.mock import patch
+
+        with patch.object(mod, "already_authorized", return_value=False), \
+             patch.object(mod, "request_tailnet",
+                          side_effect=ValueError("not authorized")) as tailnet, \
+             patch.object(mod, "request",
+                          side_effect=AssertionError("unsafe SSH fallback")) as ssh:
+            with self.assertRaisesRegex(ValueError, "not authorized"):
+                mod.request_using_available_transport(
+                    "100.121.156.34", "optiplex", include_transport=True)
+            tailnet.assert_called_once()
+            ssh.assert_not_called()
+
+    def test_absent_owner_listener_is_not_successful_new_client_approval(self):
+        # Current compatibility mode still needs a previously trusted SSH
+        # account; a fresh client lacking it must fail without inventing access.
+        from unittest.mock import patch
+
+        with patch.object(mod, "already_authorized", return_value=False), \
+             patch.object(mod, "request_tailnet",
+                          side_effect=ConnectionRefusedError()), \
+             patch.object(mod, "request",
+                          side_effect=ValueError("Ordinary owner SSH is not configured")):
+            with self.assertRaisesRegex(ValueError, "owner SSH"):
+                mod.request_using_available_transport(
+                    "100.121.156.34", "optiplex", include_transport=True)
+
     def test_gui_and_host_bridge_scripts_compile_without_gtk_session(self):
         import py_compile
         for source in (

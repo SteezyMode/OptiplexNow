@@ -29,7 +29,7 @@ class UIStateTests(unittest.TestCase):
         make = (ROOT / "Makefile").read_text()
         self.assertIn('#include "ui_state.h"', main)
         self.assertIn('#include "ui_navigation.h"', main)
-        self.assertIn('now_nav_bind_link(back,main_pages,"dashboard");', main)
+        self.assertIn('now_nav_bind_link(dashboard_tab,main_pages,"dashboard");', main)\n        self.assertIn('G_CALLBACK(now_nav_update_tabs),nav', main)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', main)
         self.assertIn('now_ui_state_save();', main)
         self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', main)

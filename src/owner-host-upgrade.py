@@ -198,10 +198,21 @@ def gui():
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--activate", action="store_true")
+    parser.add_argument("--confirm-owner-upgrade", action="store_true")
     parser.add_argument("--gui", action="store_true")
     args = parser.parse_args()
     if args.gui:
         gui()
+        return
+    if args.activate:
+        if not args.confirm_owner_upgrade:
+            parser.error("An explicit owner upgrade confirmation is required")
+        try:
+            print(json.dumps(activate(), sort_keys=True))
+        except (HostUpgradeError, OSError) as exc:
+            print(json.dumps({"status": "blocked", "reason": str(exc)}))
+            raise SystemExit(1)
         return
     if args.check:
         try:
@@ -210,7 +221,7 @@ def main():
             print(json.dumps({"status": "blocked", "reason": str(exc)}))
             raise SystemExit(1)
         return
-    parser.error("Use the Host Setup GUI to approve a host upgrade; --check is read-only")
+    parser.error("Use the Host Setup GUI or an explicitly confirmed owner upgrade; --check is read-only")
 
 
 if __name__ == "__main__":

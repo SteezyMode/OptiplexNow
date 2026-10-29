@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from download_inventory import InventoryError
 from download_search import (SearchError, checked_magnet, checked_query,
-                             search_once)
+                             search_once, stream_search)
 
 VPN = "a" * 64
 QBIT = "b" * 64
@@ -177,6 +177,35 @@ class DownloadSearchTests(unittest.TestCase):
             with self.subTest(value=invalid),self.assertRaises(SearchError):
                 search_once("Ubuntu ISO",runner=FakeAPI(result=result),
                             sleeper=lambda _:None)
+
+    def test_stream_collects_later_1080p_without_restarting_search(self):
+        fake=FakeAPI(result={"status":"Running","total":1,"results":[
+            {"fileName":"Large 2160p","fileSize":40_000_000_000,
+             "nbSeeders":9,"fileUrl":MAGNET}]})
+        base=fake.__call__
+        polls=[]
+        def runner(command,**kwargs):
+            if "/api/v2/search/results?" in command[-1]:
+                polls.append(True)
+                if len(polls)==3:
+                    fake.result={"status":"Stopped","total":2,"results":[
+                        {"fileName":"Large 2160p","fileSize":40_000_000_000,
+                         "nbSeeders":9,"fileUrl":MAGNET},
+                        {"fileName":"Smaller 1080p","fileSize":4_000_000_000,
+                         "nbSeeders":17,"fileUrl":MAGNET}]}
+            return base(command,**kwargs)
+        updates=[]
+        result=stream_search("Ubuntu ISO",updates.append,runner=runner,
+                             sleeper=lambda _:None)
+        self.assertEqual([len(x["results"]) for x in updates],[1,2])
+        self.assertFalse(result["partial"])
+        self.assertEqual(updates[-1]["results"][1]["name"],"Smaller 1080p")
+        urls=[c[-1] for c in fake.commands]
+        self.assertEqual(sum(url.endswith("/start") for url in urls),1)
+        self.assertEqual(len(polls),3)
+        self.assertTrue(urls[-2].endswith("/stop"))
+        self.assertTrue(urls[-1].endswith("/delete"))
+        self.assertFalse(any("torrents/add" in str(c) for c in fake.commands))
 
     def test_thorough_mode_rejects_non_boolean_before_network(self):
         with self.assertRaisesRegex(SearchError,"search depth"):

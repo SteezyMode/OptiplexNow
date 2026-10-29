@@ -1,12 +1,14 @@
 #include "downloads_flow.h"
 #include "downloads_webview.h"
 #include "downloads_queue_view.h"
+#include "downloads_search_view.h"
 #include "presets.h"
 #include <gio/gio.h>
 #include <string.h>
 
 static GtkWidget *queue_label;
 static GtkWidget *queue_view;
+static GtkWidget *search_view;
 static GtkWidget *advanced_button;
 static GtkWidget *back_button;
 static gchar *approved_web_url;
@@ -243,6 +245,17 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
  gboolean same=g_strcmp0(last_host,host)==0 &&
                g_strcmp0(last_user,user)==0 &&
                g_strcmp0(last_override,webui_url)==0;
+ if(search_view){
+   gchar *queue_helper=helper_path();
+   gchar *parent=g_path_get_dirname(queue_helper);
+   gchar *search_helper=g_build_filename(parent,"download-search-client.py",NULL);
+   gboolean enabled=now_valid_host(host) && now_valid_user(user) &&
+     owner_device_key_exists() && g_file_test(search_helper,G_FILE_TEST_IS_REGULAR);
+   now_downloads_search_view_configure(search_view,
+                                       enabled?host:NULL,enabled?user:NULL,
+                                       enabled?search_helper:NULL);
+   g_free(search_helper);g_free(parent);g_free(queue_helper);
+ }
  if(same && webview && loaded_url &&
     now_downloads_webview_url_allowed(loaded_url,host)){
    /* Keep the WebKit session alive but show the native queue on entry. */
@@ -327,6 +340,8 @@ GtkWidget *now_downloads_page(void){
  gtk_stack_add_named(GTK_STACK(queue_stack),view_holder,"web");
 
  GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ search_view=now_downloads_search_view_new();
+ gtk_box_pack_start(GTK_BOX(body),search_view,FALSE,FALSE,0);
  queue_label=gtk_label_new("Current downloads");
  gtk_label_set_xalign(GTK_LABEL(queue_label),0);
  gtk_label_set_line_wrap(GTK_LABEL(queue_label),TRUE);

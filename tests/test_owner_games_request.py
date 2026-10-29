@@ -34,6 +34,50 @@ class TrustedGamesGateTests(unittest.TestCase):
             wolf_api=self.api, host_video_caps=caps, host_approved=approved,
             host_writer_check=writer_check)
 
+    def test_downloads_search_requires_device_identity_and_bounded_query(self):
+        from unittest.mock import patch
+        from download_inventory import InventoryError
+        source={"status":"Stopped","partial":False,"total":1,
+                "results":[{"name":"Test Linux ISO","bytes":900,
+                            "seeders":3,"can_add":True,
+                            "magnet":"magnet:?xt=urn:btih:"+"f"*40}]}
+        self.requests=lambda action: {"version":1,"action":action,
+                                      "query":"Ubuntu ISO"}
+        with patch("owner_games_request.search_once", return_value=source) as run:
+            self.assertEqual(self.call("downloads_search"),
+                             {"success":True,"service":"qbittorrent",**source})
+            run.assert_called_once_with("Ubuntu ISO")
+            with self.assertRaises(PolicyError):
+                self.call("downloads_search",client="99999999")
+            self.assertEqual(run.call_count,1)
+            self.assertTrue(all(method=="GET" for method,_,_ in self.api.calls))
+        with patch("owner_games_request.search_once",
+                   side_effect=InventoryError("private backend")):
+            self.assertEqual(self.call("downloads_search"),
+                             {"success":False,"status":"search_unavailable"})
+
+    def test_download_search_rejects_untrusted_fields_before_host_access(self):
+        from unittest.mock import patch
+        invalid=(
+            {"version":1,"action":"downloads_search"},
+            {"version":1,"action":"downloads_search","query":""},
+            {"version":1,"action":"downloads_search","query":"x"},
+            {"version":1,"action":"downloads_search","query":"a"*97},
+            {"version":1,"action":"downloads_search","query":"bad\nname"},
+            {"version":1,"action":"downloads_search","query":"Ubuntu",
+             "save_path":"/library/bigdisk/Movies/Horror"},
+            {"version":1,"action":"downloads_queue","query":"Ubuntu"},
+            {"version":1,"action":"downloads_search","query":17},
+        )
+        with patch("owner_games_request.search_once") as run:
+            for request in invalid:
+                with self.subTest(request=request),self.assertRaises(PolicyError):
+                    handle_owner_games_request(
+                        request,verified_client_id="1001",store=self.store,
+                        wolf_api=self.api)
+            run.assert_not_called()
+            self.assertEqual(self.api.calls,[])
+
     def test_downloads_queue_owner_only_and_no_private_fields(self):
         from unittest.mock import patch
         queue = {"service": "qbittorrent", "queue": [

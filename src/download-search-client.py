@@ -47,10 +47,13 @@ def present(response):
             raise ValueError("Invalid search result")
         size=item.get("bytes")
         seeds=item.get("seeders")
+        leechers=item.get("leechers")
         can_add=item.get("can_add")
         magnet=item.get("magnet")
         if (type(size) is not int or not -1 <= size <= 2**63-1
                 or type(seeds) is not int or not -1 <= seeds <= 2**31-1
+                or (leechers is not None and
+                    (type(leechers) is not int or not -1 <= leechers <= 2**31-1))
                 or type(can_add) is not bool
                 or not isinstance(magnet, (type(None),str))
                 or bool(magnet) != can_add):
@@ -67,8 +70,12 @@ def present(response):
                 or not -1 <= published <= 253402300799):
             raise ValueError("Invalid search publication date")
         wire=f"RESULT\t{size}\t{seeds}\t{int(can_add)}\t{_sanitize_text(item.get('name'))}\t{safe_magnet}"
+        if leechers is not None and published is None:
+            published=-1
         if published is not None:
             wire+=f"\t{published}"
+        if leechers is not None:
+            wire+=f"\t{leechers}"
         lines.append(wire)
     wire="\n".join(lines)
     if len(wire.encode("utf-8"))>180000:

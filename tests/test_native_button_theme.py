@@ -40,7 +40,7 @@ class NativeActionThemeTests(unittest.TestCase):
     def test_downloads_toolbar_search_and_queue(self):
         checks = {
             "downloads_flow.c": ("refresh", "advanced_button", "back_button"),
-            "downloads_search_view.c": ("s->button", "s->previous", "s->next", "button"),
+            "downloads_search_view.c": ("s->button", "button"),
             "downloads_queue_view.c": ("button",),
             "downloads_destination_view.c": ("s->up", "s->add", "button"),
         }

@@ -100,8 +100,9 @@ gboolean now_downloads_search_view_update(GtkWidget *view,const char *wire){
    g_strfreev(parts);
  }
  if(count){
-   gtk_widget_show_all(s->results);
-   gchar *message=g_strdup_printf("%u result%s%s — adding destinations follows next",
+   gtk_widget_show_all(s->list);
+   gtk_widget_show(s->results);
+   gchar *message=g_strdup_printf("%u result%s%s — destination picker not yet enabled",
        count,count==1?"":"s",partial?" (partial)":"");
    gtk_label_set_text(GTK_LABEL(s->status),message);
    g_free(message);
@@ -202,7 +203,7 @@ void now_downloads_search_view_configure(GtkWidget *view,const char *host,
  if(g_strcmp0(s->host,host) || g_strcmp0(s->user,user)){
    clear_results(s);
    gtk_label_set_text(GTK_LABEL(s->status),
-     host && user ? "Search enabled plugins; select a result to add later." :
+     host && user ? "Search enabled qBittorrent plugins." :
                     "Owner device approval required to search.");
  }
  g_free(s->host);s->host=g_strdup(host);

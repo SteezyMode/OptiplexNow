@@ -53,6 +53,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Catch malformed shell test changes before the expensive build/install.
+          bash -n tests/smoke_installed_package.sh tests/smoke_host_readiness.sh
           make check-instance-lock
           make check-process
           make check-presets

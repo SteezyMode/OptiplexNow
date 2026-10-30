@@ -7,6 +7,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text()
+SETTINGS = (ROOT / "src" / "ui_settings.c").read_text()
+SETTINGS_HEADER = (ROOT / "src" / "ui_settings.h").read_text()
 PRESET_SOURCE = (ROOT / "src" / "presets.c").read_text()
 CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
 CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
@@ -32,14 +34,14 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("now_tray_order_save(ordered)", SOURCE)
         self.assertIn("now_tray_desktop_caption_save(new_caption)", SOURCE)
         # Checkbox widgets now live in the long-lived in-window Settings form.
-        self.assertIn("GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];", SOURCE)
+        self.assertIn("GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];", SETTINGS_HEADER)
         self.assertIn("**featured_checks=form->featured_checks,**tray_checks=form->tray_checks", SOURCE)
-        self.assertIn('const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};', SOURCE)
+        self.assertIn('const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};', SETTINGS)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)
         self.assertIn("snprintf(cfg[FEATURED_MASK_SETTING],512", SOURCE)
         self.assertIn("snprintf(cfg[TRAY_MASK_SETTING],512", SOURCE)
-        self.assertIn("G_CALLBACK(tray_order_move)", SOURCE)
+        self.assertIn("G_CALLBACK(tray_order_move)", SETTINGS)
         self.assertIn("gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n)", SOURCE)
         self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
@@ -63,8 +65,8 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("browser_open(url);", SOURCE)
         self.assertNotIn('button("BRUISER AI ADMIN","setupaction")', SOURCE)
         self.assertNotIn('"WEB GAMING","BRUISER AI"}', SOURCE)
-        self.assertIn('button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction")', SOURCE)
-        self.assertIn('label("UPDATES & MAINTENANCE","modalheading")', SOURCE)
+        self.assertIn('button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction")', SETTINGS)
+        self.assertIn('label("UPDATES & MAINTENANCE","modalheading")', SETTINGS)
         self.assertNotIn("bruiser.monumentrisk.com", SOURCE)
 
     def test_old_connection_preset_remains_importable(self):

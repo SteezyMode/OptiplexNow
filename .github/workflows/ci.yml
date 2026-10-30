@@ -64,6 +64,7 @@ jobs:
           make check-wolf-pairing
           make check-wolf-transport
           make check-games-flow
+          make check-settings-values
           make check-ui-settings
           make check-media-endpoint-token
           make check-tailscale

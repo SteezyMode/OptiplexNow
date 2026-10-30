@@ -15,6 +15,7 @@ CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
 CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
 TRAY_HEADER = (ROOT / "src" / "tray_prefs.h").read_text()
 TRAY_SOURCE = (ROOT / "src" / "tray_prefs.c").read_text()
+WIZARD_SOURCE = (ROOT / "src" / "wizard_services.c").read_text()
 
 
 class OptionalServiceTests(unittest.TestCase):
@@ -77,9 +78,10 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("7,10,14,16}", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V2", PRESET_SOURCE)
         self.assertIn("PRESET_HEADER_V1", PRESET_SOURCE)
-        self.assertIn("if(c->preset_loaded){", SOURCE)
+        self.assertIn("if (preset_loaded)", WIZARD_SOURCE)
+        self.assertIn("now_wizard_merge_connection(", SOURCE)
         for index in (10, 14, 16):
-            self.assertIn(f"safe_copy(cfg[{index}],512,c->staged[{index}]);", SOURCE)
+            self.assertIn(f'snprintf(config[{index}], CONFIG_VALUE_SIZE, "%s", staged[{index}]);', WIZARD_SOURCE)
         self.assertIn("if(*line && *line!='#')", PRESET_SOURCE)
         self.assertIn("if(!now_safe_preset_url(v[14])||!now_safe_preset_url(v[16]))return 0;", PRESET_SOURCE)
 

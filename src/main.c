@@ -125,7 +125,6 @@ static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
-#define TRAY_MASK_SETTING 13
 static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }

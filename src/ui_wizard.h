@@ -26,4 +26,10 @@ GtkWidget *now_wizard_view_build(
     gboolean has_existing_setup, const char *moonlight_status,
     GCallback on_action, GCallback on_validate, gpointer context);
 
+/* Queue window destruction safely across nested GTK callbacks. The idle
+ * source retains its own GtkWidget reference until it runs or is removed,
+ * so another close path cannot leave the callback with a dangling pointer.
+ * Does not save settings or alter owner/network state. */
+void now_wizard_view_defer_destroy(GtkWidget *assistant);
+
 #endif

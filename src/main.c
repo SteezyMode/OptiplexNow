@@ -2409,7 +2409,7 @@ static void on_settings(void*w,void*p){
   .on_discard=G_CALLBACK(settings_discard),
   .on_save=G_CALLBACK(settings_save)
  };
- settings_view=now_settings_build(main_pages,win,&actions,
+ settings_view=now_settings_build(main_pages,win,&actions,cfg,
                                   featured_mask(),tray_button_mask(),
                                   &tailscale_label);
  if(!settings_view)return;

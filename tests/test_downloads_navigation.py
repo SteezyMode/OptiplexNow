@@ -10,6 +10,7 @@ FLOW = (ROOT / "src/downloads_flow.c").read_text(encoding="utf-8")
 TRAY = (ROOT / "src/tray_actions.c").read_text(encoding="utf-8")
 SHELL = (ROOT / "src/main.c").read_text(encoding="utf-8")
 WIZARD = (ROOT / "src/wizard_services.c").read_text(encoding="utf-8")
+WIZARD_VIEW = (ROOT / "src/ui_wizard.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 
 class DownloadsNavigationContract(unittest.TestCase):
@@ -108,8 +109,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
 
     def test_wizard_does_not_misrepresent_owner_access_as_game_pairing(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"w_pair"', wizard)
         self.assertIn('"w_owner_approve"', wizard)
         self.assertIn("Two separate approvals: first pair Moonlight with Wolf", wizard)
@@ -117,10 +117,10 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Requests never authorize themselves.", wizard)
         self.assertNotIn("no-SSH client enrollment is not yet implemented.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
-        self.assertIn("NEXT: VERIFY DEVICE ACCESS", SHELL)
+        self.assertIn("NEXT: VERIFY DEVICE ACCESS", WIZARD_VIEW)
         self.assertNotIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
-        self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
+        self.assertNotIn('add(six,label("READY","modalheading"),0);', WIZARD_VIEW)
 
     def test_unenrolled_games_button_opens_setup_but_no_stop_or_status_side_effect(self):
         # The normal wizard is not a privilege grant. A newly paired
@@ -135,8 +135,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
 
     def test_normal_wizard_never_offers_unrestricted_admin_ssh(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"w_pair"', wizard)
         self.assertNotIn('"w_relay"', wizard)
         self.assertNotIn('"AUTHORIZE SSH KEY"', wizard)
@@ -150,8 +149,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
     def test_normal_wizard_has_no_manual_service_url_page(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"SERVICES"', wizard)
         self.assertNotIn('"VIDEOS URL"', wizard)
         self.assertNotIn('"MUSIC URL"', wizard)

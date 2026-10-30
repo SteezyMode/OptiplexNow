@@ -24,9 +24,11 @@ REQUIRED = frozenset(("success", "status", "request_id", "code", "fingerprint"))
 HEX32 = re.compile(r"[0-9a-f]{32}\Z")
 HEX20 = re.compile(r"[0-9a-f]{20}\Z")
 CODE = re.compile(r"[0-9]{6}\Z")
-RESTRICTED_ACCESS_STATES = frozenset((
-    "needs_wolf_ui", "wolf_ui_connected", "busy", "in_use",
-    "joined", "idle", "running", "finished"))
+# Exact statuses emitted by the restricted host's read-only "status"
+# action. Values from other actions (start/observe/cleanup) do not establish
+# successful status verification, even if they are valid elsewhere.
+RESTRICTED_STATUS_STATES = frozenset((
+    "needs_wolf_ui", "wolf_ui_connected", "busy", "in_use"))
 
 
 def verified_restricted_access(reply):
@@ -37,7 +39,7 @@ def verified_restricted_access(reply):
     """
     return (isinstance(reply, dict) and reply.get("success") is True
             and isinstance(reply.get("status"), str)
-            and reply["status"] in RESTRICTED_ACCESS_STATES)
+            and reply["status"] in RESTRICTED_STATUS_STATES)
 
 
 def _client_module():

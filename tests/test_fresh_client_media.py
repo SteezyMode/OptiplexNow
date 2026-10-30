@@ -12,6 +12,7 @@ CONFIG = (ROOT / "src" / "config.c").read_text(encoding="utf-8")
 PERSISTENCE = (ROOT / "src" / "settings_persistence.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src" / "ui_settings.c").read_text(encoding="utf-8")
 SERVICE_SAVER = (ROOT / "src" / "wizard_services.c").read_text(encoding="utf-8")
+WIZARD_VIEW = (ROOT / "src" / "ui_wizard.c").read_text(encoding="utf-8")
 
 
 class FreshClientMediaTests(unittest.TestCase):
@@ -51,8 +52,8 @@ class FreshClientMediaTests(unittest.TestCase):
     def test_wizard_preserves_advanced_service_overrides(self):
         # Normal onboarding does not require manual URLs and must not clear
         # established owner settings. Importing a validated preset is explicit.
-        self.assertIn("if(page==c->finish_page)wizard_save(c);", SOURCE)
-        self.assertIn("c->finish_page=six;", SOURCE)
+        self.assertIn("if(page==c->view.finish_page)wizard_save(c);", SOURCE)
+        self.assertIn("view->finish_page=six;", WIZARD_VIEW)
         self.assertIn("if (preset_loaded)", SERVICE_SAVER)
         self.assertIn('now_wizard_merge_connection(', SOURCE)
         self.assertIn("now_safe_preset_url(urls[i])", SERVICE_SAVER)
@@ -66,34 +67,34 @@ class FreshClientMediaTests(unittest.TestCase):
     def test_fresh_wizard_offers_separate_owner_approval(self):
         # The existing owner-only authorization window is reachable without
         # leaving the first-run wizard or saving incomplete server settings.
-        self.assertIn('wizard_button(c,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve");', SOURCE)
+        self.assertIn('wizard_button(view,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve",on_action,context);', WIZARD_VIEW)
         self.assertIn('else if(!strcmp(n,"w_owner_approve")){', SOURCE)
         self.assertIn("open_owner_enrollment_for(host,user);", SOURCE)
-        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->host))', SOURCE)
-        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->user))', SOURCE)
+        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->view.host))', SOURCE)
+        self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->view.user))', SOURCE)
         self.assertIn("if(!now_valid_host(host)||!now_valid_user(user))", SOURCE)
         self.assertIn('"/usr/lib/optiplex-now/owner-enroll-ui.py"', SOURCE)
         self.assertNotIn("no-SSH client enrollment is not yet implemented", SOURCE)
-        self.assertIn("Requests never authorize themselves.", SOURCE)
-        self.assertIn('"NOW Setup: Tailscale"', SOURCE)
-        self.assertIn('"NOW Setup: Server"', SOURCE)
-        self.assertIn('"NOW Setup: Games"', SOURCE)
-        self.assertIn('"NOW Setup: Finish"', SOURCE)
+        self.assertIn("Requests never authorize themselves.", WIZARD_VIEW)
+        self.assertIn('"NOW Setup: Tailscale"', WIZARD_VIEW)
+        self.assertIn('"NOW Setup: Server"', WIZARD_VIEW)
+        self.assertIn('"NOW Setup: Games"', WIZARD_VIEW)
+        self.assertIn('"NOW Setup: Finish"', WIZARD_VIEW)
         # Both older Games settings users and new clients use one launcher.
         self.assertIn("open_owner_enrollment_for(cfg[0],cfg[1]);", SOURCE)
-        self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)
+        self.assertIn('if(page==c->view.finish_page)wizard_save(c);', SOURCE)
 
     def test_first_run_finish_does_not_claim_host_access(self):
-        self.assertIn('NEXT: VERIFY DEVICE ACCESS', SOURCE)
-        self.assertNotIn('CONNECTION SETTINGS SAVED', SOURCE)
-        self.assertIn('Saving a server address does not prove device authorization.', SOURCE)
-        self.assertIn('do not assume Games or Downloads works until the host verifies it.', SOURCE)
-        self.assertIn('SERVER LINUX ACCOUNT (OWNER ALPHA)', SOURCE)
-        self.assertIn('This does not grant ', SOURCE)
-        self.assertIn('ordinary SSH or server permissions.', SOURCE)
-        self.assertIn('REQUEST OWNER APPROVAL (PHONE QR)', SOURCE)
+        self.assertIn('NEXT: VERIFY DEVICE ACCESS', WIZARD_VIEW)
+        self.assertNotIn('CONNECTION SETTINGS SAVED', WIZARD_VIEW)
+        self.assertIn('Saving a server address does not prove device authorization.', WIZARD_VIEW)
+        self.assertIn('do not assume Games or Downloads works until the host verifies it.', WIZARD_VIEW)
+        self.assertIn('SERVER LINUX ACCOUNT (OWNER ALPHA)', WIZARD_VIEW)
+        self.assertIn('This does not grant ', WIZARD_VIEW)
+        self.assertIn('ordinary SSH or server permissions.', WIZARD_VIEW)
+        self.assertIn('REQUEST OWNER APPROVAL (PHONE QR)', WIZARD_VIEW)
         # No new credential or host operation is triggered by Finish.
-        self.assertIn('if(page==c->finish_page)wizard_save(c);', SOURCE)
+        self.assertIn('if(page==c->view.finish_page)wizard_save(c);', SOURCE)
         self.assertNotIn('wizard_button(c,six,', SOURCE)
 
     def test_wolf_pairing_search_is_bounded_and_owner_approved(self):

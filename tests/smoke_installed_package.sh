@@ -33,6 +33,10 @@ for f in owner_access.py owner_launch.py owner_lobby.py owner_host_pilot.py wolf
   test -r "/usr/lib/optiplex-now/owner-bridge/src/$f"
 done
 PYTHONPATH="/usr/lib/optiplex-now/owner-bridge/server:/usr/lib/optiplex-now/owner-bridge/src" python3 -c 'import owner_games_ssh, owner_games_request, owner_games_enroll, download_search, download_manage'
+
+# Exercise the ACTUAL installed owner bridge over isolated loopback/temporary
+# credentials; source-tree imports and host-network access are prohibited.
+/usr/bin/python3 tests/smoke_installed_owner_bridge.py
 test -r /usr/lib/optiplex-now/media_endpoint.py
 test -x /usr/lib/optiplex-now/host_media_adoption.py
 test -x /usr/lib/optiplex-now/host_jellyfin_install.py

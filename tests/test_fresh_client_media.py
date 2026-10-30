@@ -9,6 +9,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 CONFIG = (ROOT / "src" / "config.c").read_text(encoding="utf-8")
+PERSISTENCE = (ROOT / "src" / "settings_persistence.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src" / "ui_settings.c").read_text(encoding="utf-8")
 SERVICE_SAVER = (ROOT / "src" / "wizard_services.c").read_text(encoding="utf-8")
 
@@ -26,7 +27,8 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('open_web_gaming_path("/?launch=steam");', SOURCE)
         self.assertIn('gtk_entry_set_text(GTK_ENTRY(web_url_entry),values[16]);', SETTINGS)
         self.assertIn('now_settings_build(main_pages,win,&actions,cfg,', SOURCE)
-        self.assertIn('safe_copy(cfg[16],512,web_url);', SOURCE)
+        self.assertIn('copy_value(values[16], draft->web_gaming_url);', PERSISTENCE)
+        self.assertIn('now_settings_apply(&draft, cfg);', SOURCE)
         self.assertIn('now_media_open_videos();', SOURCE)
         self.assertIn('now_media_bind(videos_status_message,browser_open,NULL);', SOURCE)
         self.assertIn('now_media_open_videos();', SOURCE)

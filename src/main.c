@@ -124,7 +124,6 @@ static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
-#define TRAY_MASK_SETTING 13
 static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
@@ -2331,58 +2330,31 @@ static void settings_discard(GtkWidget*w,gpointer unused){
  gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"dashboard");
  gtk_container_remove(GTK_CONTAINER(main_pages),old);
 }
-static void settings_save(GtkWidget*w,gpointer data){
- (void)w;
- NowSettingsForm*form=data;
- GtkWidget **fields=form->fields,*combo=form->combo,*diskentry=form->diskentry,
-  *order_list=form->order_list,*web_url_entry=form->web_url_entry,
-  *desktop_caption_entry=form->desktop_caption_entry;
- GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
+static void settings_save(GtkWidget *widget, gpointer data)
+{
+ (void)widget;
+ NowSettingsDraft draft = {0};
+ now_settings_collect((const NowSettingsForm *)data, &draft);
+ NowSettingsApplyResult applied = now_settings_apply(&draft, cfg);
+ if (applied == NOW_SETTINGS_APPLY_AUTOSTART_FAILED ||
+     applied == NOW_SETTINGS_APPLY_INVALID_DRAFT) {
+   preset_alert(win,"Login startup not changed",
+     "Could not safely update the per-user autostart entry. "
+     "Check ~/.config/autostart/optiplex-now.desktop for a conflicting "
+     "or unwritable file. Other settings were not saved.");
+   return;
+ }
+ if (applied == NOW_SETTINGS_APPLY_INVALID_WEB_URL)
+   say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
 
-   gboolean login_tray_enabled=FALSE;
-   if (!now_desktop_autostart_get(&login_tray_enabled) ||
-       login_tray_enabled != gtk_toggle_button_get_active(
-           GTK_TOGGLE_BUTTON(form->login_tray_toggle)) &&
-       !now_desktop_autostart_set(gtk_toggle_button_get_active(
-           GTK_TOGGLE_BUTTON(form->login_tray_toggle)))) {
-     preset_alert(win,"Login startup not changed",
-       "Could not safely update the per-user autostart entry. "
-       "Check ~/.config/autostart/optiplex-now.desktop for a conflicting "
-       "or unwritable file. Other settings were not saved.");
-     return;
-   }
-   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
-   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
-   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-        unsigned selected=0,featured=0;
-    for(int i=0;i<8;i++){
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
-    }
-    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
-    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
-    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
-    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
-      now_tray_desktop_caption_save(new_caption);
-    int ordered[8];
-    for(int n=0;n<8;n++){
-      GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
-      ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
-    }
-    now_tray_order_save(ordered);
-    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
-    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
-    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
-    const char *start=gtk_combo_box_get_active_id(GTK_COMBO_BOX(form->startup_choice));
-    now_ui_state_set_start_page(start);
-    now_ui_state_save();
-    config_save();/* Never destroy the activating tray menu from its own callback. */
-    g_timeout_add(200,tray_rebuild_after_settings,NULL);
-    last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
-    reflow(dimensions.width>0?dimensions.width:660);
-    say("SETTINGS SAVED");refresh();
+ config_save(); /* Never destroy the activating tray menu from its callback. */
+ g_timeout_add(200,tray_rebuild_after_settings,NULL);
+ last_columns=-1;
+ GtkAllocation dimensions={0};
+ gtk_widget_get_allocation(win,&dimensions);
+ reflow(dimensions.width>0?dimensions.width:660);
+ say("SETTINGS SAVED");
+ refresh();
  settings_discard(NULL,NULL);
 }
 static void on_settings(void*w,void*p){

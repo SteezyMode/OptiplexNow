@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 MAKE = (ROOT / "Makefile").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
+PERSISTENCE = (ROOT / "src/settings_persistence.c").read_text(encoding="utf-8")
 
 
 class CombinedGamesUITests(unittest.TestCase):
@@ -39,7 +40,7 @@ class CombinedGamesUITests(unittest.TestCase):
 
     def test_login_tray_toggle_is_only_a_user_setting(self):
         self.assertIn('START MINIMIZED IN SYSTEM TRAY AT LOGIN', SETTINGS)
-        self.assertIn('now_desktop_autostart_set(', SOURCE)
+        self.assertIn('now_desktop_autostart_set(', PERSISTENCE)
         self.assertIn('now_desktop_autostart_get(', SETTINGS)
         self.assertIn('if(!start_in_tray || first_run)gtk_widget_show_all(win);', SOURCE)
         self.assertIn('g_timeout_add(1800,initial_tray_check,NULL);', SOURCE)

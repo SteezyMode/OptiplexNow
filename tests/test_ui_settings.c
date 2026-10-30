@@ -92,6 +92,16 @@ int main(int argc, char **argv)
         g_assert_nonnull(form->featured_checks[i]);
         g_assert_nonnull(form->tray_checks[i]);
     }
+    NowSettingsDraft draft = {0};
+    now_settings_collect(form, &draft);
+    g_assert_cmpstr(draft.fields[0], ==, "198.51.100.8");
+    g_assert_cmpstr(draft.fields[1], ==, "owner");
+    g_assert_cmpstr(draft.startup_page, ==, "dashboard");
+    for (int i = 0; i < 8; ++i) {
+        g_assert_cmpint(draft.order[i], ==, i);
+        g_assert_cmpuint(draft.tray_selected[i], ==, 1);
+        g_assert_cmpuint(draft.featured_selected[i], ==, !!(207u & (1u << i)));
+    }
     GtkWidget *pages = g_object_get_data(G_OBJECT(root),
                                          "now-settings-stack");
     g_assert_true(GTK_IS_STACK(pages));
@@ -121,6 +131,8 @@ int main(int argc, char **argv)
     g_assert_nonnull(save);
     g_assert_nonnull(cancel);
     gtk_entry_set_text(GTK_ENTRY(form->fields[0]), "203.0.113.17");
+    now_settings_collect(form, &draft);
+    g_assert_cmpstr(draft.fields[0], ==, "203.0.113.17");
     g_assert_cmpstr(cfg[0], ==, "192.0.2.10");
     gtk_button_clicked(GTK_BUTTON(save));
     gtk_button_clicked(GTK_BUTTON(cancel));

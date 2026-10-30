@@ -50,7 +50,7 @@ NowSettingsApplyResult now_settings_apply(
         if (draft->tray_selected[i]) tray |= 1u << i;
         if (draft->featured_selected[i]) featured |= 1u << i;
     }
-    snprintf(values[13], CONFIG_VALUE_SIZE, "%u", tray);
+    snprintf(values[TRAY_MASK_SETTING], CONFIG_VALUE_SIZE, "%u", tray);
     snprintf(values[FEATURED_MASK_SETTING], CONFIG_VALUE_SIZE, "%u", featured);
 
     if (draft->desktop_caption && *draft->desktop_caption &&

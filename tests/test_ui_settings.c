@@ -44,6 +44,9 @@ int main(int argc, char **argv)
     now_config_load_from(NULL);
     g_strlcpy(cfg[0], "192.0.2.10", CONFIG_VALUE_SIZE);
     g_strlcpy(cfg[1], "owner", CONFIG_VALUE_SIZE);
+    char preview[CONFIG_COUNT][CONFIG_VALUE_SIZE];
+    memcpy(preview, cfg, sizeof preview);
+    g_strlcpy(preview[0], "198.51.100.8", CONFIG_VALUE_SIZE);
 
     GtkWidget *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     GtkWidget *main_pages = gtk_stack_new();
@@ -69,7 +72,7 @@ int main(int argc, char **argv)
     };
     GtkWidget *tailscale_label = NULL;
     GtkWidget *root = now_settings_build(main_pages, window, &actions,
-                                         207u, 255u, &tailscale_label);
+                                         preview, 207u, 255u, &tailscale_label);
     g_assert_nonnull(root);
     g_assert_true(gtk_stack_get_child_by_name(GTK_STACK(main_pages),
                                               "settings") == root);
@@ -81,7 +84,7 @@ int main(int argc, char **argv)
     g_assert_nonnull(form);
     g_assert_true(form->root == root);
     g_assert_cmpstr(gtk_entry_get_text(GTK_ENTRY(form->fields[0])),
-                    ==, "192.0.2.10");
+                    ==, "198.51.100.8");
     g_assert_cmpstr(gtk_entry_get_text(GTK_ENTRY(form->fields[1])),
                     ==, "owner");
     for (int i = 0; i < 8; ++i) {

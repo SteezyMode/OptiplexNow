@@ -187,6 +187,8 @@ check-sanitizers: | build
 	$(SAN_ENV) ./build/sanitized/test-backup-async
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_tray_prefs.c src/tray_prefs.c -o build/sanitized/test-tray-prefs $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-tray-prefs
+	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags glib-2.0) tests/test_settings_persistence.c src/settings_persistence.c src/desktop_autostart.c src/tray_prefs.c src/ui_state.c src/host_metrics.c src/presets.c -o build/sanitized/test-settings-persistence $(shell pkg-config --libs glib-2.0) $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-settings-persistence
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_tray_actions.c src/tray_actions.c -o build/sanitized/test-tray-actions $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-tray-actions
 	$(CC) $(SAN_CFLAGS) -Isrc $(shell pkg-config --cflags gio-2.0) tests/test_moonlight_install.c src/moonlight_install.c -o build/sanitized/test-moonlight-install $(shell pkg-config --libs gio-2.0) $(SAN_LIBS)

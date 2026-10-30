@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FLOW = (ROOT / "src/downloads_flow.c").read_text(encoding="utf-8")
 TRAY = (ROOT / "src/tray_actions.c").read_text(encoding="utf-8")
 SHELL = (ROOT / "src/main.c").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 
 class DownloadsNavigationContract(unittest.TestCase):
     def test_view_reused_when_owner_and_override_unchanged(self):
@@ -53,7 +54,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('start_page="dashboard"', STATE)
         self.assertIn('!strcmp(page,"games")', STATE)
         self.assertNotIn('!strcmp(page,"downloads")', STATE)
-        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SHELL)
+        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SETTINGS)
         self.assertNotIn("startup_downloads_mapped", SHELL)
         self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SHELL)
         self.assertIn('g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);', SHELL)
@@ -140,9 +141,9 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('"AUTHORIZE SSH KEY"', wizard)
         self.assertNotIn('"AUTHORIZE RELAY KEY"', wizard)
         self.assertNotIn('"SECURE ACCESS"', wizard)
-        self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SHELL)
-        self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SHELL)
-        self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SHELL)
+        self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SETTINGS)
+        self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SETTINGS)
+        self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SETTINGS)
         self.assertIn("c->staged[2],c->staged[3],c->staged[4]", SHELL)
         self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
@@ -155,10 +156,10 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('"DOWNLOADS URL"', wizard)
         self.assertNotIn("service_inputs", wizard)
         self.assertNotIn("now_service_probe_start", SHELL)
-        self.assertIn("Videos URL (override)", SHELL)
-        self.assertIn("Music URL (optional)", SHELL)
-        self.assertIn("Downloads URL (override)", SHELL)
-        self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SHELL)
+        self.assertIn("Videos URL (override)", SETTINGS)
+        self.assertIn("Music URL (optional)", SETTINGS)
+        self.assertIn("Downloads URL (override)", SETTINGS)
+        self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SETTINGS)
         # A fresh setup must never wipe old or imported service settings.
         self.assertIn("if(c->preset_loaded && server_valid)", SHELL)
         self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SHELL)

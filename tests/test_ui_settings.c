@@ -131,6 +131,6 @@ int main(int argc, char **argv)
     g_rmdir(home);
     g_free(home);
     g_print("GTK Settings extraction contract passed: page navigation, form, "
-            "callbacks and no implicit save.\\n");
+            "callbacks and no implicit save.\n");
     return 0;
 }

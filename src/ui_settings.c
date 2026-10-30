@@ -53,6 +53,34 @@ static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
  g_object_unref(row);
  gtk_widget_show_all(GTK_WIDGET(list));
 }
+void now_settings_collect(const NowSettingsForm *form, NowSettingsDraft *draft)
+{
+    if (!form || !draft) return;
+    memset(draft, 0, sizeof *draft);
+    for (int i = 0; i < 8; ++i) {
+        draft->fields[i] = gtk_entry_get_text(GTK_ENTRY(form->fields[i]));
+        draft->tray_selected[i] = gtk_toggle_button_get_active(
+            GTK_TOGGLE_BUTTON(form->tray_checks[i]));
+        draft->featured_selected[i] = gtk_toggle_button_get_active(
+            GTK_TOGGLE_BUTTON(form->featured_checks[i]));
+        GtkListBoxRow *row = gtk_list_box_get_row_at_index(
+            GTK_LIST_BOX(form->order_list), i);
+        draft->order[i] = row ?
+            GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row), "service-id")) - 1 : i;
+    }
+    draft->disk_path = gtk_entry_get_text(GTK_ENTRY(form->diskentry));
+    draft->browser_choice = gtk_combo_box_get_active(GTK_COMBO_BOX(form->combo));
+    draft->desktop_caption = gtk_entry_get_text(
+        GTK_ENTRY(form->desktop_caption_entry));
+    draft->web_gaming_url = gtk_entry_get_text(
+        GTK_ENTRY(form->web_url_entry));
+    draft->startup_page = gtk_combo_box_get_active_id(
+        GTK_COMBO_BOX(form->startup_choice));
+    draft->login_tray_enabled = gtk_toggle_button_get_active(
+        GTK_TOGGLE_BUTTON(form->login_tray_toggle));
+}
+
+/* The view never saves preferences or performs owner/host actions. */
 GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
                               const NowSettingsCallbacks *callbacks,
                               const char values[CONFIG_COUNT][CONFIG_VALUE_SIZE],

@@ -65,6 +65,7 @@ jobs:
           make check-wolf-transport
           make check-games-flow
           make check-ui-settings
+          make check-settings-persistence
           make check-media-endpoint-token
           make check-tailscale
           make check-host-metrics

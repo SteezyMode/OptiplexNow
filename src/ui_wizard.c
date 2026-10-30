@@ -121,3 +121,20 @@ GtkWidget *now_wizard_view_build(
  gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"NOW Setup: Finish");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  return a;
 }
+
+
+/* A queued idle may outlive the wizard when a nested dialog or an external
+ * window-close signal destroys it first. Own a strong reference to the
+ * widget rather than leaving a raw pointer in the GLib source. */
+static gboolean wizard_destroy_idle(gpointer data)
+{
+    gtk_widget_destroy(GTK_WIDGET(data));
+    return G_SOURCE_REMOVE;
+}
+
+void now_wizard_view_defer_destroy(GtkWidget *assistant)
+{
+    g_return_if_fail(GTK_IS_WIDGET(assistant));
+    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, wizard_destroy_idle,
+                    g_object_ref(assistant), g_object_unref);
+}

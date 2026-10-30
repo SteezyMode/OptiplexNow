@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-ui-settings check-settings-persistence check-instance-lock check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-media-endpoint-token check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-desktop-autostart check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
+.PHONY: all clean package check-ui-wizard check-ui-settings check-settings-persistence check-instance-lock check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-media-endpoint-token check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-desktop-autostart check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass build/now-host-setup
 
 build:
@@ -158,6 +158,11 @@ SAN_ENV = ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stackt
 
 # Compiled behavioral tests run through AddressSanitizer + UBSan. No fonts,
 # server, network, live credentials, or graphical session are needed.
+# Isolated four-page first-run GTK view: no network, host or device identity.
+check-ui-wizard: | build
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) -Isrc tests/test_ui_wizard.c src/ui_wizard.c -o build/test-ui-wizard $(GTK_LIBS)
+	xvfb-run -a ./build/test-ui-wizard
+
 # Standalone GTK presentation behavior, no app shell or host/service access.
 # No GTK widgets or host services: isolated real local preferences.
 check-settings-persistence: | build

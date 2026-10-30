@@ -8,7 +8,7 @@ INTER_BLOB = 047c92f6e2212473dc436020afed689527076d44
 LIMELIGHT_BLOB = 879e7f9d7a6240defbc5ecf97cd819905ef0c242
 FONTBASE = https://raw.githubusercontent.com/google/fonts/$(FONT_REV)/ofl
 
-.PHONY: all clean package check-instance-lock check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-media-endpoint-token check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-desktop-autostart check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
+.PHONY: all clean package check-ui-settings check-instance-lock check-process check-presets check-config check-wolf-pairing check-wolf-transport check-games-flow check-media-endpoint-token check-tailscale check-host-metrics check-host-job-target check-backup-async check-tray-prefs check-tray-actions check-desktop-autostart check-moonlight-install check-wizard-network check-wizard-services check-service-probe check-sanitizers
 all: build/optiplex-desk build/optiplex-now-backup build/now-ssh-askpass build/now-host-setup
 
 build:
@@ -158,6 +158,10 @@ SAN_ENV = ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 UBSAN_OPTIONS=print_stackt
 
 # Compiled behavioral tests run through AddressSanitizer + UBSan. No fonts,
 # server, network, live credentials, or graphical session are needed.
+# Standalone GTK presentation behavior, no app shell or host/service access.
+check-ui-settings: | build
+	$(CC) $(CFLAGS) $(GTK_CFLAGS) -Isrc tests/test_ui_settings.c src/ui_settings.c src/ui_navigation.c src/config.c src/tray_prefs.c src/ui_state.c src/desktop_autostart.c -o build/test-ui-settings $(GTK_LIBS)
+	xvfb-run -a ./build/test-ui-settings
 check-sanitizers: | build
 	mkdir -p build/sanitized
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_instance_lock.c src/instance_lock.c -o build/sanitized/test-instance-lock $(SAN_LIBS)

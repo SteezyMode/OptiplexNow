@@ -2627,7 +2627,14 @@ static void wizard_action_body(void*w,Wizard*c){
    if(!now_valid_host(host)||!now_valid_user(user)){
      gtk_label_set_text(GTK_LABEL(c->view.wolf_state),
        "RETURN TO SERVER: ENTER A VALID HOST AND SSH USER.");
-   }else open_owner_enrollment_for(host,user);
+   }else{
+     /* Enrollment may display nested GTK UI. Borrowed GtkEntry strings
+      * must remain stable even if the assistant closes during that call. */
+     char *host_copy=g_strdup(host),*user_copy=g_strdup(user);
+     open_owner_enrollment_for(host_copy,user_copy);
+     g_free(host_copy);
+     g_free(user_copy);
+   }
  }
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){

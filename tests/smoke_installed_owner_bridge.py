@@ -35,7 +35,7 @@ assert SERVER.is_dir() and SOURCE.is_dir(), "Packaged owner bridge is missing"
 # Install paths take precedence even when launched from the source checkout.
 sys.path[:0] = [str(SERVER), str(SOURCE)]
 
-from owner_access import OwnerStore, PolicyError, approve_device, new_owner
+from owner_access import OwnerStore, PolicyError, approve_device, new_owner, revoke_device
 from owner_enrollment import approve_request
 from moonlight_cert_identity import wolf_certificate_client_id
 from owner_qr_approval import PAGE_PREFIX
@@ -294,9 +294,21 @@ def run():
             assert len(policy["devices"]) == 2
             assert len({device["client_id"]
                         for device in policy["devices"]}) == 2
+            # Revoking the separate NOW entitlement must block its SSH key
+            # even when Wolf still reports the certificate as paired.
+            revoke_device(policy, client_id)
+            with store.locked() as fd:
+                store.write(fd, policy)
+            try:
+                restricted_status()
+            except PolicyError:
+                pass
+            else:
+                raise AssertionError("Revoked restricted key retained NOW authority")
+            assert auth.read_text() == granted
             print("Installed .deb owner bridge passed: fresh key -> signed "
                   "proof -> pinned-phone approval -> restricted Games status; "
-                  "wrong phone/code and replay refused.")
+                  "wrong phone/code, replay and revoked NOW grant refused.")
         finally:
             server.shutdown()
             server.server_close()

@@ -49,7 +49,7 @@ static void test_normal_merge(void)
         assert(strcmp(prepared.values[i], input.connection[i]) == 0);
     assert(strcmp(prepared.values[8], "chrome") == 0);
     assert(strcmp(prepared.values[10], "/mnt/new-drive") == 0);
-    assert(strcmp(prepared.values[13], "85") == 0);
+    assert(strcmp(prepared.values[TRAY_MASK_SETTING], "85") == 0);
     assert(strcmp(prepared.values[FEATURED_MASK_SETTING], "170") == 0);
     assert(prepared.web_gaming_url_valid);
     assert(strcmp(prepared.values[16], "https://web.example") == 0);
@@ -78,7 +78,7 @@ static void test_rejected_edits_keep_original(void)
     assert(strcmp(prepared.values[3], saved[3]) == 0);
     assert(strcmp(prepared.values[10], "/mnt/old") == 0);
     assert(strcmp(prepared.values[8], "auto") == 0);
-    assert(strcmp(prepared.values[13], "0") == 0);
+    assert(strcmp(prepared.values[TRAY_MASK_SETTING], "0") == 0);
     assert(strcmp(prepared.values[FEATURED_MASK_SETTING], "255") == 0);
     assert(!prepared.web_gaming_url_valid);
     assert(strcmp(prepared.values[16], saved[16]) == 0);

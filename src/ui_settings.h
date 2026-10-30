@@ -3,6 +3,7 @@
 
 #include <gtk/gtk.h>
 #include "config.h"
+#include "settings_persistence.h"
 
 /* GTK presentation only. Callers own configuration commits, owner SSH,
  * backup/restore, installer launches and other privileged operations.
@@ -51,6 +52,12 @@ typedef struct {
  * masks are already-validated legacy config preferences supplied by app.
  * tailscale_label_out is a borrowed widget pointer; clear on page removal.
  */
+/* Read current form fields without saving. Returned string pointers are
+ * borrowed from GTK and valid only until the form is changed or destroyed.
+ * Apply the draft synchronously before running GTK callbacks or a main loop.
+ */
+void now_settings_collect(const NowSettingsForm *form, NowSettingsDraft *draft);
+
 GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
                               const NowSettingsCallbacks *callbacks,
                               const char values[CONFIG_COUNT][CONFIG_VALUE_SIZE],

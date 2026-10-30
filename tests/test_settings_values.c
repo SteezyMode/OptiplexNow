@@ -93,7 +93,7 @@ static void test_empty_override_and_long_values(void)
     huge[sizeof huge - 1] = '\0';
     NowSettingsInput input = example_input();
     input.connection[1] = huge;
-    input.disk_path = "/mnt/disk-with-spaces";
+    input.disk_path = "/mnt/disk with spaces";
     input.browser_choice = 99;
     input.web_gaming_url = "";
     NowSettingsPrepared prepared = {0};

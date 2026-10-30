@@ -2,6 +2,7 @@
 #define NOW_UI_SETTINGS_H
 
 #include <gtk/gtk.h>
+#include "config.h"
 
 /* GTK presentation only. Callers own configuration commits, owner SSH,
  * backup/restore, installer launches and other privileged operations.
@@ -46,11 +47,13 @@ typedef struct {
 /* Builds and displays the existing Settings page using the app's callbacks.
  * All widget/form ownership is attached to the returned GTK root; no
  * independently owned global form state and no host operations here.
+ * values are a borrowed, read-only snapshot of the current config values;
  * masks are already-validated legacy config preferences supplied by app.
  * tailscale_label_out is a borrowed widget pointer; clear on page removal.
  */
 GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
                               const NowSettingsCallbacks *callbacks,
+                              const char values[CONFIG_COUNT][CONFIG_VALUE_SIZE],
                               unsigned featured_mask, unsigned tray_mask,
                               GtkWidget **tailscale_label_out);
 

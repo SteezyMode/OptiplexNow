@@ -125,11 +125,49 @@ static void check_assistant(gboolean existing_setup)
     gtk_widget_destroy(parent);
 }
 
+/* An idle scheduled by Save/Cancel must never dereference a widget
+ * already destroyed by another GTK close path. Assert both close orders. */
+static void destroy_count(GtkWidget *widget, gpointer opaque)
+{
+    (void)widget;
+    ++*(guint *)opaque;
+}
+
+static void drain_idle(void)
+{
+    while (g_main_context_pending(NULL))
+        g_main_context_iteration(NULL, FALSE);
+}
+
+static void test_deferred_destroy(void)
+{
+    guint destroyed = 0;
+    GtkWidget *first = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    g_object_ref_sink(first);
+    g_signal_connect(first, "destroy", G_CALLBACK(destroy_count), &destroyed);
+    now_wizard_view_defer_destroy(first);
+    /* A different close path destroys it before our pending idle runs. */
+    gtk_widget_destroy(first);
+    g_assert_cmpuint(destroyed, ==, 1);
+    drain_idle();
+    g_assert_cmpuint(destroyed, ==, 1);
+    g_object_unref(first);
+
+    GtkWidget *second = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    g_object_ref_sink(second);
+    g_signal_connect(second, "destroy", G_CALLBACK(destroy_count), &destroyed);
+    now_wizard_view_defer_destroy(second);
+    drain_idle();
+    g_assert_cmpuint(destroyed, ==, 2);
+    g_object_unref(second);
+}
+
 int main(int argc, char **argv)
 {
     gtk_init(&argc, &argv);
     check_assistant(FALSE);
     check_assistant(TRUE);
+    test_deferred_destroy();
     g_print("GTK wizard pages: four-page structure, callbacks and no side effects passed.\n");
     return 0;
 }

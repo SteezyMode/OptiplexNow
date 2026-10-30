@@ -2407,6 +2407,7 @@ static void wizard_unref(Wizard *wizard)
 }
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
+ if(c->closing || !c->view.assistant)return;
  int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->view.host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->view.user)));
  gtk_assistant_set_page_complete(GTK_ASSISTANT(c->view.assistant),c->view.server_page,ok);
  gtk_label_set_text(GTK_LABEL(c->view.notice),"");
@@ -2451,6 +2452,7 @@ static gboolean wizard_tailscale_poll(gpointer data)
 }
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;Wizard*c=p;
+ if(c->closing || !c->view.assistant)return;
  /* Finish saves server selection; URL overrides remain optional. */
  if(page==c->view.finish_page)wizard_save(c);
  wizard_tailscale_poll(c);
@@ -2581,13 +2583,23 @@ static void find_server(Wizard *wizard)
         gtk_label_set_text(GTK_LABEL(wizard->view.notice), "SERVER SEARCH FAILED TO START");
     }
 }
-static void wizard_action(void*w,void*p){
- Wizard*c=p;
+static void wizard_action_body(void*w,Wizard*c){
+ if(c->closing || !c->view.assistant)return;
  const char*n=gtk_widget_get_name(w);if(!n)n="";
  if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->view.assistant);return;}
- else if(!strcmp(n,"w_restore")){if(full_backup_ui(c->view.assistant,1))gtk_widget_destroy(c->view.assistant);return;}
+ else if(!strcmp(n,"w_restore")){
+   gboolean restored=full_backup_ui(c->view.assistant,1);
+   /* The modal backup window can run nested GTK events that destroy this
+    * assistant. Never access a stale assistant after it returns. */
+   if(restored && !c->closing && c->view.assistant)
+     gtk_widget_destroy(c->view.assistant);
+   return;
+ }
  if(!strcmp(n,"w_import")){
-    char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->view.assistant,0))return;
+    char path[PATH_MAX];
+    if(!preset_pick(path,sizeof path,c->view.assistant,0))return;
+    /* A picker can itself dispatch assistant destroy/cancel callbacks. */
+    if(c->closing || !c->view.assistant)return;
     char v[CONFIG_COUNT][512];
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,c->staged[i]);
     if(!now_preset_read(path,v,keys)){
@@ -2615,7 +2627,14 @@ static void wizard_action(void*w,void*p){
    if(!now_valid_host(host)||!now_valid_user(user)){
      gtk_label_set_text(GTK_LABEL(c->view.wolf_state),
        "RETURN TO SERVER: ENTER A VALID HOST AND SSH USER.");
-   }else open_owner_enrollment_for(host,user);
+   }else{
+     /* Enrollment may display nested GTK UI. Borrowed GtkEntry strings
+      * must remain stable even if the assistant closes during that call. */
+     char *host_copy=g_strdup(host),*user_copy=g_strdup(user);
+     open_owner_enrollment_for(host_copy,user_copy);
+     g_free(host_copy);
+     g_free(user_copy);
+   }
  }
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
@@ -2627,11 +2646,21 @@ static void wizard_action(void*w,void*p){
    gtk_label_set_line_wrap(GTK_LABEL(l),1);add(box,l,0);
    gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  }
- if(c->view.game_state)gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
+ if(!c->closing && c->view.assistant && c->view.game_state)
+   gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
 }
-static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
-static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();g_idle_add(destroy_wizard_idle,w);}
-static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;g_idle_add(destroy_wizard_idle,w);}
+
+/* Callbacks can open nested GTK dialogs. Keep Wizard allocated until the
+ * outer action finishes, even if its window is destroyed inside a picker. */
+static void wizard_action(void*w,void*p)
+{
+ Wizard*c=p;
+ c->references++;
+ wizard_action_body(w,c);
+ wizard_unref(c);
+}
+static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();now_wizard_view_defer_destroy(GTK_WIDGET(w));}
+static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;now_wizard_view_defer_destroy(GTK_WIDGET(w));}
 static void wizard_destroy(void *widget, void *data)
 {
     if (active_setup_wizard == widget) {

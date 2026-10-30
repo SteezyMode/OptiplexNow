@@ -69,7 +69,10 @@ class FreshClientMediaTests(unittest.TestCase):
         # leaving the first-run wizard or saving incomplete server settings.
         self.assertIn('wizard_button(view,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve",on_action,context);', WIZARD_VIEW)
         self.assertIn('else if(!strcmp(n,"w_owner_approve")){', SOURCE)
-        self.assertIn("open_owner_enrollment_for(host,user);", SOURCE)
+        self.assertIn("char *host_copy=g_strdup(host),*user_copy=g_strdup(user);", SOURCE)
+        self.assertIn("open_owner_enrollment_for(host_copy,user_copy);", SOURCE)
+        self.assertIn("g_free(host_copy);", SOURCE)
+        self.assertIn("g_free(user_copy);", SOURCE)
         self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->view.host))', SOURCE)
         self.assertIn('gtk_entry_get_text(GTK_ENTRY(c->view.user))', SOURCE)
         self.assertIn("if(!now_valid_host(host)||!now_valid_user(user))", SOURCE)

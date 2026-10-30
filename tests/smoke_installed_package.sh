@@ -8,6 +8,19 @@ mapfile -t packages < <(find dist -maxdepth 1 -type f -name 'OptiPlex-Now_*_amd6
 package="$(realpath "${packages[0]}")"
 version="$(dpkg-deb -f "$package" Version)"
 [[ "$(dpkg-deb -f "$package" Package)" = "optiplex-now" ]]
+# A client .deb must not silently install a broker, rewrite host SSH rules,
+# activate udev policy or enable services. All host adoption is owner-initiated.
+# Inspect the built archive, not only the source packaging script.
+if dpkg-deb --ctrl-tarfile "$package" | tar -tf - |
+  grep -E '^\./(preinst|postinst|prerm|postrm)$'; then
+  echo "A package maintainer script requires owner safety review" >&2
+  exit 1
+fi
+if dpkg-deb --fsys-tarfile "$package" | tar -tf - |
+  grep -E '^\./(etc/|run/|var/|usr/lib/systemd/system/)'; then
+  echo "Package must not silently deploy host policy or services" >&2
+  exit 1
+fi
 export DEBIAN_FRONTEND=noninteractive
 sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
@@ -33,6 +46,10 @@ for f in owner_access.py owner_launch.py owner_lobby.py owner_host_pilot.py wolf
   test -r "/usr/lib/optiplex-now/owner-bridge/src/$f"
 done
 PYTHONPATH="/usr/lib/optiplex-now/owner-bridge/server:/usr/lib/optiplex-now/owner-bridge/src" python3 -c 'import owner_games_ssh, owner_games_request, owner_games_enroll, download_search, download_manage'
+
+# Exercise the ACTUAL installed owner bridge over isolated loopback/temporary
+# credentials; source-tree imports and host-network access are prohibited.
+/usr/bin/python3 tests/smoke_installed_owner_bridge.py
 test -r /usr/lib/optiplex-now/media_endpoint.py
 test -x /usr/lib/optiplex-now/host_media_adoption.py
 test -x /usr/lib/optiplex-now/host_jellyfin_install.py

@@ -4,6 +4,7 @@
 /* Retain on-disk field order. Other modules and older client presets use it. */
 #define CONFIG_COUNT 17
 #define CONFIG_VALUE_SIZE 512
+#define TRAY_MASK_SETTING 13
 #define FEATURED_MASK_SETTING 15
 #define EXISTING_INSTALL_FEATURED_MASK 255u
 

@@ -1,3 +1,7 @@
+## October 30 — Installed artifact owner authorization regression gate (draft #231; no release)
+
+A new source-independent smoke gate imports the actual installed `.deb` bridge and rehearses real public-key staging, signed Moonlight proof, pinned-phone approval, forced-command Games status, and policy revocation with synthetic Tailnet/Wolf and disposable keys. Initial full code run [#41026370557](https://github.com/SteezyMode/OptiplexNow/actions/runs/41026370557) passed. CI-only Host Setup GVfs teardown race was isolated and passed after repair in [#41026559299](https://github.com/SteezyMode/OptiplexNow/actions/runs/41026559299). Further packaging inertness and Bash syntax gates are pending exact-head CI. **Test evidence only; not a real phone, real gameplay or alpha acceptance.** Official v1.21.9 and production-like OptiPlex remain unchanged.
+
 ## October 29 — PR backlog and alpha release-contract reconciliation
 
 **Current release:** Official Latest remains [v1.21.9](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.9), working on the configured owner environment per owner report. More recent fresh-client wizard corrections (#226/#227) are in `main`, not in the published .deb. Last verified merged-main check: [CI #40873360566](https://github.com/SteezyMode/OptiplexNow/actions/runs/40873360566) passed both jobs. **Private Alpha 1 remains NOT ACCEPTED.**

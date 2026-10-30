@@ -28,6 +28,14 @@ int main(void)
     g_assert_cmpint(g_mkdir(xdg, 0700), ==, 0);
     g_setenv("HOME", home, TRUE);
     g_setenv("XDG_CONFIG_HOME", xdg, TRUE);
+    /* Existing users already have the legacy preference directories.
+     * The tray helpers intentionally do not provision them on Save. */
+    char *tray_dir = g_build_filename(xdg, "optiplex-desk", NULL);
+    char *home_dotconfig = g_build_filename(home, ".config", NULL);
+    char *home_config = g_build_filename(home_dotconfig, "optiplex-desk", NULL);
+    g_assert_cmpint(g_mkdir(tray_dir, 0700), ==, 0);
+    g_assert_cmpint(g_mkdir(home_dotconfig, 0700), ==, 0);
+    g_assert_cmpint(g_mkdir(home_config, 0700), ==, 0);
 
     char values[CONFIG_COUNT][CONFIG_VALUE_SIZE] = {{0}};
     g_strlcpy(values[0], "old-server", CONFIG_VALUE_SIZE);
@@ -138,10 +146,7 @@ int main(void)
                     NOW_SETTINGS_APPLY_INVALID_DRAFT);
 
     /* Explicitly remove only files under the test's new private root. */
-    char *tray_dir = g_build_filename(xdg, "optiplex-desk", NULL);
     char *ui_dir = g_build_filename(xdg, "optiplex-now", NULL);
-    char *home_config = g_build_filename(home, ".config", "optiplex-desk", NULL);
-    char *home_dotconfig = g_build_filename(home, ".config", NULL);
     clean_file(tray_dir, "tray-order");
     clean_file(ui_dir, "ui-state.ini");
     clean_file(home_config, "desktop-label");

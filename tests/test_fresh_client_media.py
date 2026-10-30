@@ -53,9 +53,10 @@ class FreshClientMediaTests(unittest.TestCase):
         # established owner settings. Importing a validated preset is explicit.
         self.assertIn("if(page==c->finish_page)wizard_save(c);", SOURCE)
         self.assertIn("c->finish_page=six;", SOURCE)
-        self.assertIn("if(c->preset_loaded && server_valid)", SOURCE)
-        self.assertIn("now_safe_preset_url(urls[i])", SOURCE)
-        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SOURCE)
+        self.assertIn("if (preset_loaded)", SERVICE_SAVER)
+        self.assertIn('now_wizard_merge_connection(', SOURCE)
+        self.assertIn("now_safe_preset_url(urls[i])", SERVICE_SAVER)
+        self.assertIn('snprintf(config[5 + i], CONFIG_VALUE_SIZE, "%s", urls[i]);', SERVICE_SAVER)
         self.assertNotIn("now_wizard_store_services(cfg,urls)", SOURCE)
         self.assertNotIn("c->services_page", SOURCE)
         # Low-level URL validation/persistence helper remains independently

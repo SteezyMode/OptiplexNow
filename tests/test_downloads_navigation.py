@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FLOW = (ROOT / "src/downloads_flow.c").read_text(encoding="utf-8")
 TRAY = (ROOT / "src/tray_actions.c").read_text(encoding="utf-8")
 SHELL = (ROOT / "src/main.c").read_text(encoding="utf-8")
+WIZARD = (ROOT / "src/wizard_services.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 
 class DownloadsNavigationContract(unittest.TestCase):
@@ -144,7 +145,8 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SETTINGS)
         self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SETTINGS)
         self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SETTINGS)
-        self.assertIn("c->staged[2],c->staged[3],c->staged[4]", SHELL)
+        self.assertIn("c->staged,c->preset_loaded", SHELL)
+        self.assertIn("host, user, staged[2], staged[3], staged[4]", WIZARD)
         self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
     def test_normal_wizard_has_no_manual_service_url_page(self):
@@ -161,8 +163,8 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Downloads URL (override)", SETTINGS)
         self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SETTINGS)
         # A fresh setup must never wipe old or imported service settings.
-        self.assertIn("if(c->preset_loaded && server_valid)", SHELL)
-        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SHELL)
+        self.assertIn("if (preset_loaded)", WIZARD)
+        self.assertIn('snprintf(config[5 + i], CONFIG_VALUE_SIZE, "%s", urls[i]);', WIZARD)
         self.assertIn("now_media_open_videos();", SHELL)
         self.assertIn("now_downloads_open(cfg[0],cfg[1],cfg[7]);", SHELL)
 

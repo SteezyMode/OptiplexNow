@@ -177,6 +177,8 @@ check-sanitizers: | build
 	$(SAN_ENV) ./build/sanitized/test-presets
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_config.c src/config.c -o build/sanitized/test-config $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-config
+	$(CC) $(SAN_CFLAGS) -Isrc tests/test_wizard_services.c src/wizard_services.c src/presets.c src/config.c -o build/sanitized/test-wizard-services $(SAN_LIBS)
+	$(SAN_ENV) ./build/sanitized/test-wizard-services
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_wolf_pairing.c src/wolf_pairing.c -o build/sanitized/test-wolf-pairing $(SAN_LIBS)
 	$(SAN_ENV) ./build/sanitized/test-wolf-pairing
 	$(CC) $(SAN_CFLAGS) -Isrc tests/test_host_metrics.c src/host_metrics.c -o build/sanitized/test-host-metrics $(SAN_LIBS)

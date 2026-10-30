@@ -55,9 +55,10 @@ static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
 }
 GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
                               const NowSettingsCallbacks *callbacks,
+                              const char values[CONFIG_COUNT][CONFIG_VALUE_SIZE],
                               unsigned featured_mask, unsigned tray_mask,
                               GtkWidget **tailscale_label_out){
- if(!main_pages || !parent || !callbacks)return NULL;
+ if(!main_pages || !parent || !callbacks || !values)return NULL;
  GtkWidget *win=parent;
  GtkWidget *settings_view=NULL;
  NowSettingsForm *form=g_new0(NowSettingsForm,1);
@@ -112,14 +113,14 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
   GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
   GtkWidget*dest=i<2?gt:advanced_grid;int row=i<2?i:i-2;
   gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
-  fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
+  fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),values[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
  }
  GtkWidget*disklabel=label("Downloads disk",NULL);
- GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
+ GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),values[10]);gtk_widget_set_hexpand(diskentry,1);
  gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
  GtkWidget*combo=gtk_combo_box_text_new();const char*opts[]={"Default browser (automatic)","System default","Chrome Flatpak","Chrome native"};
  for(int i=0;i<4;i++)gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo),opts[i]);
- int which=!strcmp(cfg[8],"system")?1:!strcmp(cfg[8],"chrome-flatpak")?2:!strcmp(cfg[8],"chrome")?3:0;
+ int which=!strcmp(values[8],"system")?1:!strcmp(values[8],"chrome-flatpak")?2:!strcmp(values[8],"chrome")?3:0;
  gtk_combo_box_set_active(GTK_COMBO_BOX(combo),which);
  gtk_grid_attach(GTK_GRID(advanced_grid),label("Browser",NULL),0,6,1,1);
  gtk_grid_attach(GTK_GRID(advanced_grid),combo,1,6,1,1);
@@ -150,7 +151,7 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  g_signal_connect_data(games,"clicked",callbacks->on_games_setup_from_settings,server_context,NULL,0);add(col,games,0);
  add(col,label("WEB GAMING URL (OPTIONAL)","helper"),0);
  GtkWidget*web_url_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(web_url_entry),"https://your-streaming-host.example");
- gtk_entry_set_text(GTK_ENTRY(web_url_entry),cfg[16]);add(col,web_url_entry,0);
+ gtk_entry_set_text(GTK_ENTRY(web_url_entry),values[16]);add(col,web_url_entry,0);
  GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
  g_signal_connect_data(websettings,"clicked",callbacks->on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
  GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");

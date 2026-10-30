@@ -32,6 +32,7 @@
 #include "ui_navigation.h"
 #include "ui_games.h"
 #include "ui_settings.h"
+#include "settings_values.h"
 #include "ui_state.h"
 #include "desktop_autostart.h"
 #include "tailscale_async.h"
@@ -2334,8 +2335,7 @@ static void settings_discard(GtkWidget*w,gpointer unused){
 static void settings_save(GtkWidget*w,gpointer data){
  (void)w;
  NowSettingsForm*form=data;
- GtkWidget **fields=form->fields,*combo=form->combo,*diskentry=form->diskentry,
-  *order_list=form->order_list,*web_url_entry=form->web_url_entry,
+ GtkWidget **fields=form->fields,*order_list=form->order_list,
   *desktop_caption_entry=form->desktop_caption_entry;
  GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
 
@@ -2351,18 +2351,25 @@ static void settings_save(GtkWidget*w,gpointer data){
        "or unwritable file. Other settings were not saved.");
      return;
    }
-   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
-   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
-   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-        unsigned selected=0,featured=0;
-    for(int i=0;i<8;i++){
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
-    }
-    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
-    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
+   NowSettingsInput edits={0};
+   for(int i=0;i<8;i++){
+     edits.connection[i]=gtk_entry_get_text(GTK_ENTRY(fields[i]));
+     if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))
+       edits.tray_mask|=1u<<i;
+     if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))
+       edits.featured_mask|=1u<<i;
+   }
+   edits.disk_path=gtk_entry_get_text(GTK_ENTRY(form->diskentry));
+   edits.browser_choice=gtk_combo_box_get_active(GTK_COMBO_BOX(form->combo));
+   edits.web_gaming_url=gtk_entry_get_text(GTK_ENTRY(form->web_url_entry));
+   NowSettingsPrepared prepared;
+   if(!now_settings_prepare_config(&prepared,cfg,&edits)){
+     preset_alert(win,"Settings not saved","The Settings form is incomplete.");
+     return;
+   }
+   /* The pure merge preserves all 17 legacy config fields and makes no
+    * filesystem changes. Autostart, tray, UI state and disk writes stay here. */
+   memcpy(cfg,prepared.values,sizeof cfg);
     const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
     if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
       now_tray_desktop_caption_save(new_caption);
@@ -2372,9 +2379,8 @@ static void settings_save(GtkWidget*w,gpointer data){
       ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
     }
     now_tray_order_save(ordered);
-    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
-    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
-    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
+    if(!prepared.web_gaming_url_valid)
+      say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
     const char *start=gtk_combo_box_get_active_id(GTK_COMBO_BOX(form->startup_choice));
     now_ui_state_set_start_page(start);
     now_ui_state_save();

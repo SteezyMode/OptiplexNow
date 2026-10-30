@@ -65,8 +65,8 @@ static void test_rejected_edits_keep_original(void)
     char saved[CONFIG_COUNT][CONFIG_VALUE_SIZE];
     original_config(saved);
     NowSettingsInput input = example_input();
-    input.connection[0] = "server\\nspoof";
-    input.connection[3] = "relay\\rinject";
+    input.connection[0] = "server\nspoof";
+    input.connection[3] = "relay\rinject";
     input.disk_path = "relative/untrusted";
     input.browser_choice = -1;
     input.tray_mask = 0;

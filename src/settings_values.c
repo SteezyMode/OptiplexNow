@@ -39,7 +39,8 @@ int now_settings_prepare_config(
     snprintf(next.values[8], CONFIG_VALUE_SIZE, "%s",
              browsers[choice >= 0 && choice < 4 ? choice : 0]);
 
-    snprintf(next.values[TRAY_MASK_SETTING], CONFIG_VALUE_SIZE, "%u",\n             input->tray_mask);
+    snprintf(next.values[TRAY_MASK_SETTING], CONFIG_VALUE_SIZE, "%u",
+             input->tray_mask);
     snprintf(next.values[FEATURED_MASK_SETTING], CONFIG_VALUE_SIZE, "%u",
              input->featured_mask);
 

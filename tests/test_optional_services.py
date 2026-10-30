@@ -14,6 +14,7 @@ CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
 CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
 TRAY_HEADER = (ROOT / "src" / "tray_prefs.h").read_text()
 TRAY_SOURCE = (ROOT / "src" / "tray_prefs.c").read_text()
+VALUES = (ROOT / "src" / "settings_values.c").read_text()
 
 
 class OptionalServiceTests(unittest.TestCase):
@@ -39,8 +40,8 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn('const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};', SETTINGS)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i]))", SOURCE)
         self.assertIn("gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i]))", SOURCE)
-        self.assertIn("snprintf(cfg[FEATURED_MASK_SETTING],512", SOURCE)
-        self.assertIn("snprintf(cfg[TRAY_MASK_SETTING],512", SOURCE)
+        self.assertIn('snprintf(next.values[FEATURED_MASK_SETTING], CONFIG_VALUE_SIZE', VALUES)
+        self.assertIn('snprintf(next.values[TRAY_MASK_SETTING], CONFIG_VALUE_SIZE', VALUES)
         self.assertIn("G_CALLBACK(tray_order_move)", SETTINGS)
         self.assertIn("gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n)", SOURCE)
         self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
@@ -50,6 +51,7 @@ class OptionalServiceTests(unittest.TestCase):
     def test_old_layout_and_config_migrate_safely(self):
         self.assertIn("#define CONFIG_COUNT 17", CONFIG_HEADER)
         self.assertIn("#define FEATURED_MASK_SETTING 15", CONFIG_HEADER)
+        self.assertIn("#define TRAY_MASK_SETTING 13", CONFIG_HEADER)
         self.assertIn("#define NEW_INSTALL_FEATURED_MASK 207u", SOURCE)
         self.assertIn("#define EXISTING_INSTALL_FEATURED_MASK 255u", CONFIG_HEADER)
         self.assertIn("if (!has_featured)", CONFIG_SOURCE)

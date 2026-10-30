@@ -32,6 +32,7 @@
 #include "ui_navigation.h"
 #include "ui_games.h"
 #include "ui_settings.h"
+#include "ui_wizard.h"
 #include "ui_state.h"
 #include "desktop_autostart.h"
 #include "tailscale_async.h"
@@ -2391,10 +2392,7 @@ static void on_settings(void*w,void*p){
 
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
-    GtkWidget *assistant, *server_page, *games_page, *finish_page;
-    GtkWidget *host, *user;
-    GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
-    GtkWidget *find_button, *tailscale_button;
+    NowWizardView view;
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
     guint tailscale_poll_id;
@@ -2409,24 +2407,24 @@ static void wizard_unref(Wizard *wizard)
 }
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
- gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->server_page,ok);
- gtk_label_set_text(GTK_LABEL(c->notice),"");
+ int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->view.host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->view.user)));
+ gtk_assistant_set_page_complete(GTK_ASSISTANT(c->view.assistant),c->view.server_page,ok);
+ gtk_label_set_text(GTK_LABEL(c->view.notice),"");
 }
 static void wizard_save(Wizard*c){
  /* The GTK-free helper retains existing owner/preset values until the
   * user supplies a valid server account and explicit optional preset. */
  int server_valid=now_wizard_merge_connection(
-     cfg,gtk_entry_get_text(GTK_ENTRY(c->host)),
-     gtk_entry_get_text(GTK_ENTRY(c->user)),
+     cfg,gtk_entry_get_text(GTK_ENTRY(c->view.host)),
+     gtk_entry_get_text(GTK_ENTRY(c->view.user)),
      c->staged,c->preset_loaded);
  if(!config_save()){
-  gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"UNABLE TO SAVE SETTINGS");
   say("SETTINGS COULD NOT BE SAVED");
  }else if(!server_valid){
-  gtk_label_set_text(GTK_LABEL(c->notice),"SERVER DETAILS INCOMPLETE");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"SERVER DETAILS INCOMPLETE");
  }else{
-  gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"SAVED");
  }
 }
 static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
@@ -2435,12 +2433,12 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
 static gboolean wizard_tailscale_poll(gpointer data)
 {
     Wizard *wizard = data;
-    if (!wizard->assistant || wizard->closing ||
-        !gtk_widget_get_visible(wizard->assistant)) {
+    if (!wizard->view.assistant || wizard->closing ||
+        !gtk_widget_get_visible(wizard->view.assistant)) {
         return G_SOURCE_CONTINUE;
     }
     if (tailscale_install_inflight) {
-        gtk_label_set_text(GTK_LABEL(wizard->ts_state),
+        gtk_label_set_text(GTK_LABEL(wizard->view.ts_state),
                            "INSTALLING TAILSCALE — APPROVE THE SYSTEM PASSWORD PROMPT");
         return G_SOURCE_CONTINUE;
     }
@@ -2454,13 +2452,13 @@ static gboolean wizard_tailscale_poll(gpointer data)
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;Wizard*c=p;
  /* Finish saves server selection; URL overrides remain optional. */
- if(page==c->finish_page)wizard_save(c);
+ if(page==c->view.finish_page)wizard_save(c);
  wizard_tailscale_poll(c);
- if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
- if(page==c->games_page){
-   if(c->wolf_state)gtk_label_set_text(GTK_LABEL(c->wolf_state),"CHECKING WOLF CONNECTION...");
+ if(c->view.game_state)gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
+ if(page==c->view.games_page){
+   if(c->view.wolf_state)gtk_label_set_text(GTK_LABEL(c->view.wolf_state),"CHECKING WOLF CONNECTION...");
    /* Use the address entered in the wizard without saving partial settings. */
-   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(GTK_ENTRY(c->host)));
+   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(GTK_ENTRY(c->view.host)));
    /* The server may stream even if its pairing page is unavailable; do not block setup. */
    begin_job(8);
  }
@@ -2475,7 +2473,7 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
     /* Nested GTK dialogs may destroy the assistant. Keep Wizard valid
      * until this handler returns, independently from the network job. */
     wizard->references++;
-    if (wizard->closing || !wizard->assistant) {
+    if (wizard->closing || !wizard->view.assistant) {
         wizard_unref(wizard);
         return;
     }
@@ -2499,8 +2497,8 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
             }
             g_free(status);
         }
-        gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
-        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
+        gtk_label_set_text(GTK_LABEL(wizard->view.ts_state), message);
+        gtk_button_set_label(GTK_BUTTON(wizard->view.tailscale_button), action);
         wizard_unref(wizard);
         return;
     }
@@ -2509,11 +2507,11 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         return;
     }
 
-    gtk_widget_set_sensitive(wizard->find_button, TRUE);
-    int current_page = gtk_assistant_get_current_page(GTK_ASSISTANT(wizard->assistant));
+    gtk_widget_set_sensitive(wizard->view.find_button, TRUE);
+    int current_page = gtk_assistant_get_current_page(GTK_ASSISTANT(wizard->view.assistant));
     GtkWidget *current = gtk_assistant_get_nth_page(
-        GTK_ASSISTANT(wizard->assistant), current_page);
-    if (current != wizard->server_page) {
+        GTK_ASSISTANT(wizard->view.assistant), current_page);
+    if (current != wizard->view.server_page) {
         wizard_unref(wizard);
         return;
     }
@@ -2528,14 +2526,14 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
             : (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
                 ? "SERVER SEARCH TIMED OUT — RETRY OR ENTER ADDRESS"
                 : "COULD NOT LIST DEVICES — CHECK TAILSCALE OR ENTER ADDRESS";
-        gtk_label_set_text(GTK_LABEL(wizard->notice), message);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice), message);
         wizard_unref(wizard);
         return;
     }
-    gtk_label_set_text(GTK_LABEL(wizard->notice), "SELECT THE INTENDED HOST");
+    gtk_label_set_text(GTK_LABEL(wizard->view.notice), "SELECT THE INTENDED HOST");
 
     GtkWidget *dialog = gtk_dialog_new_with_buttons(
-        "Choose your server", GTK_WINDOW(wizard->assistant), GTK_DIALOG_MODAL,
+        "Choose your server", GTK_WINDOW(wizard->view.assistant), GTK_DIALOG_MODAL,
         "Cancel", GTK_RESPONSE_CANCEL, NULL);
     GtkWidget *accept = gtk_dialog_add_button(GTK_DIALOG(dialog),
                                               "Use this device", GTK_RESPONSE_OK);
@@ -2559,9 +2557,9 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
     int response = gtk_dialog_run(GTK_DIALOG(dialog));
     int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
     if (response == GTK_RESPONSE_OK && selected >= 0 && selected < count &&
-        wizard->assistant && !wizard->closing) {
-        gtk_entry_set_text(GTK_ENTRY(wizard->host), servers[selected].address);
-        gtk_label_set_text(GTK_LABEL(wizard->notice),
+        wizard->view.assistant && !wizard->closing) {
+        gtk_entry_set_text(GTK_ENTRY(wizard->view.host), servers[selected].address);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice),
             "ADDRESS FILLED. CONFIRM THE SERVER ACCOUNT, THEN CONTINUE.");
     }
     gtk_widget_destroy(dialog);
@@ -2570,35 +2568,35 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
 
 static void find_server(Wizard *wizard)
 {
-    if (wizard->closing || !wizard->assistant ||
+    if (wizard->closing || !wizard->view.assistant ||
         now_wizard_network_busy(wizard->network, NOW_WIZARD_NET_DISCOVERY)) {
         return;
     }
-    gtk_widget_set_sensitive(wizard->find_button, FALSE);
-    gtk_label_set_text(GTK_LABEL(wizard->notice), "FINDING TAILSCALE DEVICES...");
+    gtk_widget_set_sensitive(wizard->view.find_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(wizard->view.notice), "FINDING TAILSCALE DEVICES...");
     if (!now_wizard_network_start(
         wizard->network, NOW_WIZARD_NET_DISCOVERY,
         "/usr/lib/optiplex-now/find-servers.py")) {
-        gtk_widget_set_sensitive(wizard->find_button, TRUE);
-        gtk_label_set_text(GTK_LABEL(wizard->notice), "SERVER SEARCH FAILED TO START");
+        gtk_widget_set_sensitive(wizard->view.find_button, TRUE);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice), "SERVER SEARCH FAILED TO START");
     }
 }
 static void wizard_action(void*w,void*p){
  Wizard*c=p;
  const char*n=gtk_widget_get_name(w);if(!n)n="";
- if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->assistant);return;}
- else if(!strcmp(n,"w_restore")){if(full_backup_ui(c->assistant,1))gtk_widget_destroy(c->assistant);return;}
+ if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->view.assistant);return;}
+ else if(!strcmp(n,"w_restore")){if(full_backup_ui(c->view.assistant,1))gtk_widget_destroy(c->view.assistant);return;}
  if(!strcmp(n,"w_import")){
-    char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->assistant,0))return;
+    char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->view.assistant,0))return;
     char v[CONFIG_COUNT][512];
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,c->staged[i]);
     if(!now_preset_read(path,v,keys)){
-       gtk_label_set_text(GTK_LABEL(c->preset_notice),"INVALID PRESET. NO CHANGES MADE.");return;
+       gtk_label_set_text(GTK_LABEL(c->view.preset_notice),"INVALID PRESET. NO CHANGES MADE.");return;
     }
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
     c->preset_loaded=1;
-    gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
-    gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
+    gtk_entry_set_text(GTK_ENTRY(c->view.host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->view.user),v[1]);
+    gtk_label_set_text(GTK_LABEL(c->view.preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
     return;
  }
  if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
@@ -2612,16 +2610,16 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_owner_approve")){
    /* The wizard's address is not saved until Finish; use its staged values.
     * Opening the separate dialog never installs a host key or grants access. */
-   const char *host=gtk_entry_get_text(GTK_ENTRY(c->host));
-   const char *user=gtk_entry_get_text(GTK_ENTRY(c->user));
+   const char *host=gtk_entry_get_text(GTK_ENTRY(c->view.host));
+   const char *user=gtk_entry_get_text(GTK_ENTRY(c->view.user));
    if(!now_valid_host(host)||!now_valid_user(user)){
-     gtk_label_set_text(GTK_LABEL(c->wolf_state),
+     gtk_label_set_text(GTK_LABEL(c->view.wolf_state),
        "RETURN TO SERVER: ENTER A VALID HOST AND SSH USER.");
    }else open_owner_enrollment_for(host,user);
  }
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
-   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->view.assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
    gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,0);
    add(box,label("NEW SERVER SETUP","modalheading"),0);
@@ -2629,11 +2627,7 @@ static void wizard_action(void*w,void*p){
    gtk_label_set_line_wrap(GTK_LABEL(l),1);add(box,l,0);
    gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  }
- if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
-}
-static GtkWidget*wizard_button(Wizard*c,GtkWidget*page,const char*title,const char*id){
- GtkWidget*b=button(title,"setupaction");gtk_widget_set_name(b,id);gtk_style_context_add_class(GTK_STYLE_CONTEXT(gtk_widget_get_style_context(b)),"setupaction");
- g_signal_connect_data(b,"clicked",(GCallback)wizard_action,c,NULL,0);add(page,b,0);return b;
+ if(c->view.game_state)gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
 }
 static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
 static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();g_idle_add(destroy_wizard_idle,w);}
@@ -2645,7 +2639,7 @@ static void wizard_destroy(void *widget, void *data)
     }
     Wizard *wizard = data;
     wizard->closing = 1;
-    wizard->assistant = NULL;
+    wizard->view.assistant = NULL;
     if (wizard->tailscale_poll_id) {
         g_source_remove(wizard->tailscale_poll_id);
         wizard->tailscale_poll_id = 0;
@@ -2665,82 +2659,19 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->network=now_wizard_network_new(wizard_network_result,c,9000);
  if(!c->network){free(c);return;}
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
- GtkWidget*a=gtk_assistant_new();c->assistant=a;
- active_setup_wizard=a;
- gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
- gtk_window_set_transient_for(GTK_WINDOW(a),GTK_WINDOW(win));gtk_window_set_modal(GTK_WINDOW(a),1);
- /* Page 1: keep existing device setup. No credentials or pairings are reset. */
- GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
- add(one,label("CONNECT THIS DEVICE","modalheading"),0);
- c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- c->tailscale_button=wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
- wizard_button(c,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup");
- add(one,label("Connection status updates automatically after sign-in.","helper"),0);
- wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
- wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
- c->preset_notice=label("","helper");add(one,c->preset_notice,0);
- if(!first_run&&*cfg[0]){
-    add(one,label("EXISTING CONNECTION FOUND","helper"),0);
-    wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
+ GtkWidget *a=now_wizard_view_build(
+     &c->view,GTK_WINDOW(win),cfg,
+     !first_run && *cfg[0],moonlight_mode_name(),
+     G_CALLBACK(wizard_action),G_CALLBACK(wizard_validate),c);
+ if(!a){
+    now_wizard_network_close(c->network);
+    free(c);
+    return;
  }
+ active_setup_wizard=a;
+ wizard_wolf_label=c->view.wolf_state;
+ wizard_validate(NULL,c);
  c->tailscale_poll_id=g_timeout_add_seconds(5,wizard_tailscale_poll,c);
- gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"NOW Setup: Tailscale");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
- /* Page 2: choose your server. All values are prefilled from saved configuration. */
- GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
- add(two,label("FIND YOUR SERVER","modalheading"),0);
- c->find_button=wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
- add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
- c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SERVER LINUX ACCOUNT (OWNER ALPHA)","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"Server Linux username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
- GtkWidget*owner_account_hint=label(
-   "The owner-only alpha currently needs the host's configured Linux "
-   "account to address the restricted service broker. This does not grant "
-   "ordinary SSH or server permissions. Do not share an administrator password.", "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_account_hint),TRUE);
- add(two,owner_account_hint,0);
- g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
- g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
- c->notice=label("","helper");add(two,c->notice,0);
- wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
- gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"NOW Setup: Server");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
- /* Page 3: independent Moonlight identity for this Linux profile. */
- GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
- add(four,label("CONNECT TO GAME HOST","modalheading"),0);
- add(four,label("Connect once during setup, then play from Games.","helper"),0);
- c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
- c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
- c->games_page=four;
- wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
- wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
- wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
- wizard_button(c,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve");
- GtkWidget*owner_access_note=label(
-   "Two separate approvals: first pair Moonlight with Wolf, then request "
-   "NOW owner access for managed Games and Downloads. A configured private "
-   "Tailscale host listener can offer owner-phone QR approval without "
-   "preapproved SSH; otherwise the host owner must enable or review "
-   "enrollment. Requests never authorize themselves.", "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
- add(four,owner_access_note,0);
- 
- gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"NOW Setup: Games");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
- /* Page 4: finish without manual URLs. */
- GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
- add(six,label("NEXT: VERIFY DEVICE ACCESS","modalheading"),0);
- GtkWidget*owner_ready_note=label(
-   "Saving a server address does not prove device authorization. First confirm "
-   "Moonlight/Wolf pairing, then use REQUEST OWNER APPROVAL on the Games setup "
-   "page and VERIFY ACCESS in the approval window. Your owner must independently "
-   "approve this device. The wizard may finish with access still pending; "
-   "do not assume Games or Downloads works until the host verifies it. "
-   "Videos opens Jellyfin in your browser and may require its own login.",
-   "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
- add(six,owner_ready_note,0);
- add(six,label("Saved settings carry over between updates.","helper"),0);
- add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"NOW Setup: Finish");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  g_signal_connect_data(a,"prepare",(GCallback)wizard_prepare,c,NULL,0);
  g_signal_connect_data(a,"apply",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"cancel",(GCallback)wizard_cancel,c,NULL,0);

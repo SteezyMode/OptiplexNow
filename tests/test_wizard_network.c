@@ -137,6 +137,33 @@ int main(void)
     drain_for(&state, 1200);
     EXPECT(state.calls == 1 && state.network == NULL);
 
+    /* A fast status reply can close the wizard while independent discovery
+     * is still running. That cancelled job must never call the old UI,
+     * even if it completes after the nested callback unwinds. */
+    memset(&state, 0, sizeof state);
+    state.expected = 2; /* Do not quit the drain after the first callback. */
+    state.close_on_callback = TRUE;
+    state.network = now_wizard_network_new(completion, &state, 1000);
+    EXPECT(now_wizard_network_start(state.network, NOW_WIZARD_NET_STATUS, fast));
+    EXPECT(now_wizard_network_start(state.network, NOW_WIZARD_NET_DISCOVERY,
+                                    slow));
+    drain_for(&state, 500);
+    EXPECT(state.calls == 1 && state.status_calls == 1);
+    EXPECT(state.discovery_calls == 0 && state.network == NULL);
+    drain_for(&state, 350);
+    EXPECT(state.calls == 1); /* No late discovery callback. */
+
+    /* Closing while both operations are pending must suppress both. */
+    memset(&state, 0, sizeof state);
+    state.network = now_wizard_network_new(completion, &state, 1500);
+    EXPECT(now_wizard_network_start(state.network, NOW_WIZARD_NET_STATUS, slow));
+    EXPECT(now_wizard_network_start(state.network, NOW_WIZARD_NET_DISCOVERY,
+                                    slow));
+    now_wizard_network_close(state.network);
+    state.network = NULL;
+    drain_for(&state, 400);
+    EXPECT(state.calls == 0);
+
     g_remove(fast);
     g_remove(slow);
     g_remove(discovery);

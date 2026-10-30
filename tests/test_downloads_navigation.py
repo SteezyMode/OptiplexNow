@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FLOW = (ROOT / "src/downloads_flow.c").read_text(encoding="utf-8")
 TRAY = (ROOT / "src/tray_actions.c").read_text(encoding="utf-8")
 SHELL = (ROOT / "src/main.c").read_text(encoding="utf-8")
+WIZARD = (ROOT / "src/wizard_services.c").read_text(encoding="utf-8")
+WIZARD_VIEW = (ROOT / "src/ui_wizard.c").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 
 class DownloadsNavigationContract(unittest.TestCase):
     def test_view_reused_when_owner_and_override_unchanged(self):
@@ -53,7 +56,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('start_page="dashboard"', STATE)
         self.assertIn('!strcmp(page,"games")', STATE)
         self.assertNotIn('!strcmp(page,"downloads")', STATE)
-        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SHELL)
+        self.assertNotIn('gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"downloads","Downloads");', SETTINGS)
         self.assertNotIn("startup_downloads_mapped", SHELL)
         self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SHELL)
         self.assertIn('g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);', SHELL)
@@ -106,8 +109,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
 
     def test_wizard_does_not_misrepresent_owner_access_as_game_pairing(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"w_pair"', wizard)
         self.assertIn('"w_owner_approve"', wizard)
         self.assertIn("Two separate approvals: first pair Moonlight with Wolf", wizard)
@@ -115,10 +117,10 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Requests never authorize themselves.", wizard)
         self.assertNotIn("no-SSH client enrollment is not yet implemented.", wizard)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
-        self.assertIn("NEXT: VERIFY DEVICE ACCESS", SHELL)
+        self.assertIn("NEXT: VERIFY DEVICE ACCESS", WIZARD_VIEW)
         self.assertNotIn("CONNECTION SETTINGS SAVED", SHELL)
         self.assertIn("GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS", SHELL)
-        self.assertNotIn('add(six,label("READY","modalheading"),0);', SHELL)
+        self.assertNotIn('add(six,label("READY","modalheading"),0);', WIZARD_VIEW)
 
     def test_unenrolled_games_button_opens_setup_but_no_stop_or_status_side_effect(self):
         # The normal wizard is not a privilege grant. A newly paired
@@ -133,35 +135,34 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", SHELL)
 
     def test_normal_wizard_never_offers_unrestricted_admin_ssh(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"w_pair"', wizard)
         self.assertNotIn('"w_relay"', wizard)
         self.assertNotIn('"AUTHORIZE SSH KEY"', wizard)
         self.assertNotIn('"AUTHORIZE RELAY KEY"', wizard)
         self.assertNotIn('"SECURE ACCESS"', wizard)
-        self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SHELL)
-        self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SHELL)
-        self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SHELL)
-        self.assertIn("c->staged[2],c->staged[3],c->staged[4]", SHELL)
+        self.assertIn("AUTHORIZE OWNER ADMIN SSH KEY", SETTINGS)
+        self.assertIn("AUTHORIZE WAKE RELAY SSH KEY", SETTINGS)
+        self.assertIn("gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);", SETTINGS)
+        self.assertIn("c->staged,c->preset_loaded", SHELL)
+        self.assertIn("host, user, staged[2], staged[3], staged[4]", WIZARD)
         self.assertIn("ADVANCED OWNER ADMINISTRATION ONLY.", SHELL)
 
     def test_normal_wizard_has_no_manual_service_url_page(self):
-        wizard = SHELL.split("static void on_wizard(void*w,void*p)", 1)[1].split(
-            "static gboolean first_setup", 1)[0]
+        wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]
         self.assertNotIn('"SERVICES"', wizard)
         self.assertNotIn('"VIDEOS URL"', wizard)
         self.assertNotIn('"MUSIC URL"', wizard)
         self.assertNotIn('"DOWNLOADS URL"', wizard)
         self.assertNotIn("service_inputs", wizard)
         self.assertNotIn("now_service_probe_start", SHELL)
-        self.assertIn("Videos URL (override)", SHELL)
-        self.assertIn("Music URL (optional)", SHELL)
-        self.assertIn("Downloads URL (override)", SHELL)
-        self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SHELL)
+        self.assertIn("Videos URL (override)", SETTINGS)
+        self.assertIn("Music URL (optional)", SETTINGS)
+        self.assertIn("Downloads URL (override)", SETTINGS)
+        self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SETTINGS)
         # A fresh setup must never wipe old or imported service settings.
-        self.assertIn("if(c->preset_loaded && server_valid)", SHELL)
-        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SHELL)
+        self.assertIn("if (preset_loaded)", WIZARD)
+        self.assertIn('snprintf(config[5 + i], CONFIG_VALUE_SIZE, "%s", urls[i]);', WIZARD)
         self.assertIn("now_media_open_videos();", SHELL)
         self.assertIn("now_downloads_open(cfg[0],cfg[1],cfg[7]);", SHELL)
 

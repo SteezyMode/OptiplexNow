@@ -53,6 +53,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Catch malformed shell test changes before the expensive build/install.
+          for smoke in tests/smoke_installed_package.sh tests/smoke_host_readiness.sh; do
+            bash -n "$smoke"
+          done
           make check-instance-lock
           make check-process
           make check-presets
@@ -60,6 +64,9 @@ jobs:
           make check-wolf-pairing
           make check-wolf-transport
           make check-games-flow
+          make check-ui-settings
+          make check-ui-wizard
+          make check-settings-persistence
           make check-media-endpoint-token
           make check-tailscale
           make check-host-metrics

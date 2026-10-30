@@ -103,7 +103,18 @@ if sudo /usr/lib/optiplex-now/host_install.py --install \
 fi
 
 tmp="$(mktemp -d -t now-host-ui.XXXXXX)"
-trap 'rm -rf "$tmp"' EXIT
+# GVfs can keep its per-test FUSE runtime mount alive briefly after DBus exits.
+# Do not let teardown of an ephemeral CI directory turn a successful host
+# readiness test into a failure, or replace a real GTK failure with rm's code.
+cleanup_host_ui() {
+  local status=$?
+  trap - EXIT
+  if ! rm -rf "$tmp" 2>/dev/null; then
+    echo "CI-only GVfs runtime remained mounted; ephemeral runner will discard it." >&2
+  fi
+  exit "$status"
+}
+trap cleanup_host_ui EXIT
 mkdir -p "$tmp/home" "$tmp/config" "$tmp/runtime"
 chmod 700 "$tmp/runtime"
 export NOW_HOST_SETUP="$helper"

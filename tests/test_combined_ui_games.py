@@ -9,6 +9,8 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 MAKE = (ROOT / "Makefile").read_text(encoding="utf-8")
+SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
+PERSISTENCE = (ROOT / "src/settings_persistence.c").read_text(encoding="utf-8")
 
 
 class CombinedGamesUITests(unittest.TestCase):
@@ -16,7 +18,7 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertIn('GtkWidget*dashboard_tab=button("DASHBOARD","navtab");', SOURCE)
         self.assertIn('now_nav_mark_tab(dashboard_tab,"dashboard");', SOURCE)
         self.assertNotIn('GtkWidget*back=button("‹ DASHBOARD","navback");', SOURCE)
-        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");', SOURCE)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");', SETTINGS)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),software_scroll,"software");', SOURCE)
         self.assertIn('GtkWidget*games_page=now_games_page_new(G_CALLBACK(on_play_steam),', SOURCE)
         self.assertIn('G_CALLBACK(open_games_settings),&games_page_status);', SOURCE)
@@ -37,20 +39,21 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertTrue((ROOT / "server/owner_games_ssh.py").exists())
 
     def test_login_tray_toggle_is_only_a_user_setting(self):
-        self.assertIn('START MINIMIZED IN SYSTEM TRAY AT LOGIN', SOURCE)
-        self.assertIn('now_desktop_autostart_set(', SOURCE)
-        self.assertIn('now_desktop_autostart_get(', SOURCE)
+        self.assertIn('START MINIMIZED IN SYSTEM TRAY AT LOGIN', SETTINGS)
+        self.assertIn('now_desktop_autostart_set(', PERSISTENCE)
+        self.assertIn('now_desktop_autostart_get(', SETTINGS)
         self.assertIn('if(!start_in_tray || first_run)gtk_widget_show_all(win);', SOURCE)
         self.assertIn('g_timeout_add(1800,initial_tray_check,NULL);', SOURCE)
         self.assertIn('src/desktop_autostart.c', MAKE)
         self.assertIn('check-desktop-autostart:', MAKE)
 
     def test_no_extra_settings_dialog_on_navigation(self):
-        section = SOURCE.split("static void on_settings(void*w,void*p){",1)[1].split(
-            "/* Setup assistant.",1)[0]
+        section = SETTINGS.split("GtkWidget *now_settings_build(",1)[1]
         self.assertNotIn('gtk_dialog_new_with_buttons("OptiPlex Now | Settings"',section)
-        self.assertIn('g_signal_connect(save,"clicked",G_CALLBACK(settings_save),form)',section)
-        self.assertIn('g_signal_connect(cancel,"clicked",G_CALLBACK(settings_discard),NULL)',section)
+        self.assertIn('g_signal_connect(save,"clicked",callbacks->on_save,form)',section)
+        self.assertIn('.on_save=G_CALLBACK(settings_save)',SOURCE)
+        self.assertIn('g_signal_connect(cancel,"clicked",callbacks->on_discard,NULL)',section)
+        self.assertIn('.on_discard=G_CALLBACK(settings_discard)',SOURCE)
 
 
 if __name__ == "__main__":

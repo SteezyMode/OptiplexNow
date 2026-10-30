@@ -31,10 +31,13 @@
 #include "downloads_flow.h"
 #include "ui_navigation.h"
 #include "ui_games.h"
+#include "ui_settings.h"
+#include "ui_wizard.h"
 #include "ui_state.h"
 #include "desktop_autostart.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
+#include "wizard_services.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -123,7 +126,6 @@ static GtkWidget *tiles[9],*powers[4],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
-#define TRAY_MASK_SETTING 13
 static const char *current_model(void){
  return *cfg[12] && !strcmp(cfg[11],cfg[0]) ? cfg[12] : "Server";
 }
@@ -2094,7 +2096,6 @@ static void on_window_destroy(void*widget,void*unused){
  gtk_main_quit();
 }
 
-typedef struct { GtkWidget* inputs[8]; int relay; GtkWidget*parent; } PairContext;
 static void on_pair_click(void*w,void*p){
  (void)w; PairContext*c=p;
  for(int i=0;i<5;i++){
@@ -2163,7 +2164,6 @@ static void on_system_info(void*w,void*p){
  begin_job(6);
 }
 
-typedef struct {GtkWidget*parent,*fields[8],*disk;} PresetExportContext;
 static void export_preset(void*w,void*p){
  (void)w;PresetExportContext*c=p;char v[CONFIG_COUNT][512];
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,cfg[i]);
@@ -2320,44 +2320,7 @@ static void restore_full_backup(void*w,void*p){
  if(p && GTK_IS_DIALOG(parent))
   gtk_dialog_response(GTK_DIALOG(parent),GTK_RESPONSE_CANCEL);
 }
-static GtkWidget *settings_page(GtkWidget *stack,const char *name){
- GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);
- gtk_container_set_border_width(GTK_CONTAINER(content),14);
- gtk_container_add(GTK_CONTAINER(scroll),content);
- gtk_stack_add_named(GTK_STACK(stack),scroll,name);
- return content;
-}
-static void settings_link(GtkWidget *container,GtkWidget *stack,const char *caption,const char *page){
- gboolean back=g_str_has_prefix(caption,"‹");
- GtkWidget *b=button(caption,back?"navback":"setupaction");
- if(back)gtk_widget_set_halign(b,GTK_ALIGN_START);
- now_nav_bind_link(b,stack,page);
- add(container,b,0);
-}
-/* XFCE-style list ordering: move the existing row, preserving its checkboxes. */
-static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
- GtkWidget *row=gtk_widget_get_ancestor(button,GTK_TYPE_LIST_BOX_ROW);
- if(!row)return;
- GtkListBox *list=GTK_LIST_BOX(gtk_widget_get_parent(row));
- int from=gtk_list_box_row_get_index(GTK_LIST_BOX_ROW(row));
- int delta=GPOINTER_TO_INT(direction_ptr);
- int to=from+delta;
- if(to<0 || to>=8)return;
- g_object_ref(row);
- gtk_container_remove(GTK_CONTAINER(list),row);
- gtk_list_box_insert(list,row,to);
- g_object_unref(row);
- gtk_widget_show_all(GTK_WIDGET(list));
-}
-typedef struct {
- GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];
- GtkWidget *order_list, *web_url_entry, *desktop_caption_entry, *startup_choice, *login_tray_toggle, *root;
- PairContext server_context, relay_context;
- PresetExportContext export_context;
-} NowSettingsForm;
-
+/* Settings widgets and their per-page form are built in ui_settings.c. */
 /* Cancel discards uncommitted edits; Save commits before discarding the page.
  * All callback contexts are owned by the GTK page, not a stack frame. */
 static void settings_discard(GtkWidget*w,gpointer unused){
@@ -2369,282 +2332,67 @@ static void settings_discard(GtkWidget*w,gpointer unused){
  gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"dashboard");
  gtk_container_remove(GTK_CONTAINER(main_pages),old);
 }
-static void settings_save(GtkWidget*w,gpointer data){
- (void)w;
- NowSettingsForm*form=data;
- GtkWidget **fields=form->fields,*combo=form->combo,*diskentry=form->diskentry,
-  *order_list=form->order_list,*web_url_entry=form->web_url_entry,
-  *desktop_caption_entry=form->desktop_caption_entry;
- GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
+static void settings_save(GtkWidget *widget, gpointer data)
+{
+ (void)widget;
+ NowSettingsDraft draft = {0};
+ now_settings_collect((const NowSettingsForm *)data, &draft);
+ NowSettingsApplyResult applied = now_settings_apply(&draft, cfg);
+ if (applied == NOW_SETTINGS_APPLY_AUTOSTART_FAILED ||
+     applied == NOW_SETTINGS_APPLY_INVALID_DRAFT) {
+   preset_alert(win,"Login startup not changed",
+     "Could not safely update the per-user autostart entry. "
+     "Check ~/.config/autostart/optiplex-now.desktop for a conflicting "
+     "or unwritable file. Other settings were not saved.");
+   return;
+ }
+ if (applied == NOW_SETTINGS_APPLY_INVALID_WEB_URL)
+   say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
 
-   gboolean login_tray_enabled=FALSE;
-   if (!now_desktop_autostart_get(&login_tray_enabled) ||
-       login_tray_enabled != gtk_toggle_button_get_active(
-           GTK_TOGGLE_BUTTON(form->login_tray_toggle)) &&
-       !now_desktop_autostart_set(gtk_toggle_button_get_active(
-           GTK_TOGGLE_BUTTON(form->login_tray_toggle)))) {
-     preset_alert(win,"Login startup not changed",
-       "Could not safely update the per-user autostart entry. "
-       "Check ~/.config/autostart/optiplex-now.desktop for a conflicting "
-       "or unwritable file. Other settings were not saved.");
-     return;
-   }
-   for(int i=0;i<8;i++){const char*v=gtk_entry_get_text(GTK_ENTRY(fields[i]));if(strchr(v,'\n')||strchr(v,'\r'))continue;safe_copy(cfg[i],512,v);}
-   const char*browsers[]={"auto","system","chrome-flatpak","chrome"};int choice=gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
-   const char*disk=gtk_entry_get_text(GTK_ENTRY(diskentry));
-   if(now_host_safe_disk_path(disk)) safe_copy(cfg[10],512,disk);
-   safe_copy(cfg[8],512,browsers[choice>=0&&choice<4?choice:0]);
-        unsigned selected=0,featured=0;
-    for(int i=0;i<8;i++){
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(tray_checks[i])))selected|=1u<<i;
-      if(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(featured_checks[i])))featured|=1u<<i;
-    }
-    snprintf(cfg[TRAY_MASK_SETTING],512,"%u",selected);
-    snprintf(cfg[FEATURED_MASK_SETTING],512,"%u",featured);
-    const char*new_caption=gtk_entry_get_text(GTK_ENTRY(desktop_caption_entry));
-    if(*new_caption && !strchr(new_caption,'\n') && !strchr(new_caption,'\r'))
-      now_tray_desktop_caption_save(new_caption);
-    int ordered[8];
-    for(int n=0;n<8;n++){
-      GtkListBoxRow*row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(order_list),n);
-      ordered[n]=row?GPOINTER_TO_INT(g_object_get_data(G_OBJECT(row),"service-id"))-1:n;
-    }
-    now_tray_order_save(ordered);
-    const char*web_url=gtk_entry_get_text(GTK_ENTRY(web_url_entry));
-    if(now_safe_preset_url(web_url))safe_copy(cfg[16],512,web_url);
-    else say("INVALID WEB GAMING URL; PREVIOUS VALUE RETAINED");
-    const char *start=gtk_combo_box_get_active_id(GTK_COMBO_BOX(form->startup_choice));
-    now_ui_state_set_start_page(start);
-    now_ui_state_save();
-    config_save();/* Never destroy the activating tray menu from its own callback. */
-    g_timeout_add(200,tray_rebuild_after_settings,NULL);
-    last_columns=-1;GtkAllocation dimensions={0};gtk_widget_get_allocation(win,&dimensions);
-    reflow(dimensions.width>0?dimensions.width:660);
-    say("SETTINGS SAVED");refresh();
+ config_save(); /* Never destroy the activating tray menu from its callback. */
+ g_timeout_add(200,tray_rebuild_after_settings,NULL);
+ last_columns=-1;
+ GtkAllocation dimensions={0};
+ gtk_widget_get_allocation(win,&dimensions);
+ reflow(dimensions.width>0?dimensions.width:660);
+ say("SETTINGS SAVED");
+ refresh();
  settings_discard(NULL,NULL);
 }
-static void on_settings(void*w,void*p){(void)w;(void)p;
+static void on_settings(void*w,void*p){
+ (void)w;(void)p;
  if(!main_pages)return;
  if(settings_view){
   gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
   if(!gtk_widget_get_visible(win))tray_show_window();
   return;
  }
- NowSettingsForm *form=g_new0(NowSettingsForm,1);
- GtkWidget*d=win;
- settings_view=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(settings_view),
-  GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- form->root=settings_view;
- g_object_set_data_full(G_OBJECT(settings_view),"now-settings-form",form,g_free);
- GtkWidget*area=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
- gtk_container_add(GTK_CONTAINER(settings_view),area);
- gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");
- GtkWidget*stack=gtk_stack_new();
- g_object_set_data(G_OBJECT(settings_view),"now-settings-stack",stack);
- gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
- gtk_widget_set_vexpand(stack,TRUE);
- add(area,stack,1);
- GtkWidget*home=settings_page(stack,"home");
- settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
- settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
- GtkWidget*other_apps=button("OTHER APPS  ›","setupaction");
- now_nav_bind_link(other_apps,main_pages,"software");
- add(home,other_apps,0);
- GtkWidget*system_info=button("SYSTEM INFO  ›","setupaction");
- g_signal_connect(system_info,"clicked",G_CALLBACK(on_system_info),NULL);
- add(home,system_info,0);
- 
- add(home,label("SETUP & MAINTENANCE","modalheading"),0);
- settings_link(home,stack,"CONNECTIONS & SERVER  ›","connection");
- GtkWidget*connection=settings_page(stack,"connection");
- GtkWidget*gaming=settings_page(stack,"gaming");
- GtkWidget*preferences=settings_page(stack,"preferences");
- GtkWidget*pages[]={connection,gaming,preferences};
- for(int k=0;k<3;k++)settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home");
- GtkWidget*col=connection;
- add(col,label("CONNECTION","modalheading"),0);
- add(col,label("Videos and Downloads use approved host discovery when available. Manual service URLs are optional in Advanced Settings.","helper"),0);
- GtkWidget*guided=button("SETUP WIZARD","setupaction");g_signal_connect_data(guided,"clicked",(GCallback)on_wizard,NULL,NULL,0);add(col,guided,0);
- add(col,label("HOST SETUP (READ-ONLY)","modalheading"),0);
- GtkWidget*host_review=button("CHECK THIS PC FOR SERVER SETUP","setupaction");
- g_signal_connect(host_review,"clicked",G_CALLBACK(on_server_readiness),NULL);
- add(col,host_review,0);
- add(col,label("Checks hardware and installation blockers. Does not install or restart services.","helper"),0);
- tailscale_label=label("CHECKING TAILSCALE","helper");add(col,tailscale_label,0);
- GtkWidget*gt=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(gt),10);gtk_grid_set_row_spacing(GTK_GRID(gt),7);add(col,gt,0);
- GtkWidget*advanced_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(advanced_grid),10);gtk_grid_set_row_spacing(GTK_GRID(advanced_grid),7);
- GtkWidget*advanced=gtk_expander_new("ADVANCED SETTINGS");gtk_container_add(GTK_CONTAINER(advanced),advanced_grid);
- const char*names[]={"Server IP","SSH user","Wake relay IP","Relay SSH user","Wake command","Videos URL (override)","Music URL (optional)","Downloads URL (override)"};
- GtkWidget **fields=form->fields;
- for(int i=0;i<8;i++){
-  GtkWidget*l=label(names[i],NULL);gtk_widget_set_size_request(l,110,-1);
-  GtkWidget*dest=i<2?gt:advanced_grid;int row=i<2?i:i-2;
-  gtk_grid_attach(GTK_GRID(dest),l,0,row,1,1);
-  fields[i]=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(fields[i]),cfg[i]);gtk_widget_set_hexpand(fields[i],1);gtk_grid_attach(GTK_GRID(dest),fields[i],1,row,1,1);
- }
- GtkWidget*disklabel=label("Downloads disk",NULL);
- GtkWidget*diskentry=gtk_entry_new();gtk_entry_set_text(GTK_ENTRY(diskentry),cfg[10]);gtk_widget_set_hexpand(diskentry,1);
- gtk_grid_attach(GTK_GRID(advanced_grid),disklabel,0,7,1,1);gtk_grid_attach(GTK_GRID(advanced_grid),diskentry,1,7,1,1);
- GtkWidget*combo=gtk_combo_box_text_new();const char*opts[]={"Default browser (automatic)","System default","Chrome Flatpak","Chrome native"};
- for(int i=0;i<4;i++)gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(combo),opts[i]);
- int which=!strcmp(cfg[8],"system")?1:!strcmp(cfg[8],"chrome-flatpak")?2:!strcmp(cfg[8],"chrome")?3:0;
- gtk_combo_box_set_active(GTK_COMBO_BOX(combo),which);
- gtk_grid_attach(GTK_GRID(advanced_grid),label("Browser",NULL),0,6,1,1);
- gtk_grid_attach(GTK_GRID(advanced_grid),combo,1,6,1,1);
- GtkWidget*actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- GtkWidget*t=button("TAILSCALE","setupaction");g_signal_connect_data(t,"clicked",(GCallback)on_tail,NULL,NULL,0);add(actions,t,1);
- add(col,actions,0);
- /* Ordinary SSH access stays available to owners under Advanced Settings,
-  * never in the normal client enrollment wizard. */
- PairContext *server_context=&form->server_context,*relay_context=&form->relay_context;
- server_context->relay=0;relay_context->relay=1;
- for(int i=0;i<8;i++){server_context->inputs[i]=fields[i];relay_context->inputs[i]=fields[i];}
- server_context->parent=d;relay_context->parent=d;
- GtkWidget*admin_ssh=button("AUTHORIZE OWNER ADMIN SSH KEY","setupaction");
- g_signal_connect_data(admin_ssh,"clicked",(GCallback)on_pair_click,server_context,NULL,0);
- gtk_grid_attach(GTK_GRID(advanced_grid),admin_ssh,0,8,2,1);
- GtkWidget*relay_ssh=button("AUTHORIZE WAKE RELAY SSH KEY","setupaction");
- g_signal_connect_data(relay_ssh,"clicked",(GCallback)on_pair_click,relay_context,NULL,0);
- gtk_grid_attach(GTK_GRID(advanced_grid),relay_ssh,0,9,2,1);
- GtkWidget*ssh_warning=label(
-   "OWNER ADMIN ONLY. These keys grant ordinary server-account shell access, "
-   "not restricted Games/Downloads authorization. Do not use for client onboarding.",
-   "helper");
- gtk_label_set_line_wrap(GTK_LABEL(ssh_warning),TRUE);
- gtk_grid_attach(GTK_GRID(advanced_grid),ssh_warning,0,10,2,1);
- col=gaming;
- add(col,label("STREAMING","modalheading"),0);
- GtkWidget*games=button("STREAMING SETUP (MOONLIGHT + WOLF)","setupaction");
- g_signal_connect_data(games,"clicked",(GCallback)on_games_setup_from_settings,server_context,NULL,0);add(col,games,0);
- add(col,label("WEB GAMING URL (OPTIONAL)","helper"),0);
- GtkWidget*web_url_entry=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(web_url_entry),"https://your-streaming-host.example");
- gtk_entry_set_text(GTK_ENTRY(web_url_entry),cfg[16]);add(col,web_url_entry,0);
- GtkWidget*websettings=button("WEB GAMING SETTINGS","setupaction");
- g_signal_connect_data(websettings,"clicked",(GCallback)on_web_gaming_settings,NULL,NULL,0);add(col,websettings,0);
- GtkWidget*webadmin=button("WEB GAMING ADMIN","setupaction");
- g_signal_connect_data(webadmin,"clicked",(GCallback)on_web_gaming_admin,NULL,NULL,0);add(col,webadmin,0);
- col=preferences;
- add(col,label("OPEN ON STARTUP","modalheading"),0);
- add(col,label("Open on Dashboard or Games. Downloads remains a normal tab; tray shortcuts are independent. Window size is remembered.","helper"),0);
- GtkWidget*startup_choice=gtk_combo_box_text_new();
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"dashboard","Dashboard");
- gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(startup_choice),"games","Games");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(startup_choice),now_ui_state_start_page());
- form->startup_choice=startup_choice;
- add(col,startup_choice,0);
- gboolean login_enabled=FALSE;
- gboolean login_supported=now_desktop_autostart_get(&login_enabled);
- GtkWidget*login_tray_toggle=gtk_check_button_new_with_label(
-   "START MINIMIZED IN SYSTEM TRAY AT LOGIN");
- gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(login_tray_toggle),login_enabled);
- gtk_widget_set_sensitive(login_tray_toggle,login_supported);
- form->login_tray_toggle=login_tray_toggle;
- add(col,login_tray_toggle,0);
- add(col,label(login_supported?
-   "Runs once at desktop login. First-time setup or a missing system tray opens the window instead.":
-   "An existing autostart entry is not recognized. Preserve or review it manually.",
-   "helper"),0);
- add(col,label("DESKTOP SHORTCUT NAME","modalheading"),0);
- add(col,label("Caption after Desktop | in tray. Does not rename Wolf itself.","helper"),0);
- char desktop_label[128];now_tray_desktop_caption(desktop_label,sizeof desktop_label);
- GtkWidget*desktop_caption_entry=gtk_entry_new();
- gtk_entry_set_max_length(GTK_ENTRY(desktop_caption_entry),48);
- gtk_entry_set_text(GTK_ENTRY(desktop_caption_entry),desktop_label);
- add(col,desktop_caption_entry,0);
- add(col,label("SHORTCUTS","modalheading"),0);
- add(col,label("Featured services appear above; the rest stay in Additional Services. Tray is independent.","helper"),0);
- GtkWidget **featured_checks=form->featured_checks,**tray_checks=form->tray_checks;
- GtkWidget*order_list=gtk_list_box_new();
- gtk_list_box_set_selection_mode(GTK_LIST_BOX(order_list),GTK_SELECTION_NONE);
- gtk_widget_set_name(order_list,"trayorder");
- int current_order[8];now_tray_order_load(current_order);
- GtkWidget*headers=gtk_grid_new();
- gtk_grid_set_column_spacing(GTK_GRID(headers),12);
- const char*head_names[]={"SERVICE","PRIMARY","TRAY","MOVE"};
- int widths[]={128,72,52,84};
- for(int h=0;h<4;h++){
-  GtkWidget*heading=label(head_names[h],"storagehead");
-  gtk_widget_set_size_request(heading,widths[h],-1);
-  gtk_label_set_xalign(GTK_LABEL(heading),h==0?0.0f:0.5f);
-  gtk_grid_attach(GTK_GRID(headers),heading,h,0,1,1);
- }
- add(col,headers,0);
-
- unsigned fm=featured_mask(),tm=tray_button_mask();
- for(int n=0;n<8;n++){
-   int i=current_order[n];
-   GtkWidget*row=gtk_list_box_row_new();
-   g_object_set_data(G_OBJECT(row),"service-id",GINT_TO_POINTER(i+1));
-   GtkWidget*line=gtk_grid_new();
-   gtk_grid_set_column_spacing(GTK_GRID(line),12);
-   gtk_container_add(GTK_CONTAINER(row),line);
-   GtkWidget*name=label(now_tray_service_name(i),NULL);
-   gtk_widget_set_size_request(name,128,-1);
-   gtk_label_set_xalign(GTK_LABEL(name),0);
-   gtk_grid_attach(GTK_GRID(line),name,0,0,1,1);
-   featured_checks[i]=gtk_check_button_new();
-   tray_checks[i]=gtk_check_button_new();
-   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(featured_checks[i]),(fm&(1u<<i))!=0);
-   gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(tray_checks[i]),(tm&(1u<<i))!=0);
-   GtkWidget*primary_box=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
-   GtkWidget*tray_box=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
-   gtk_widget_set_size_request(primary_box,72,-1);
-   gtk_widget_set_size_request(tray_box,52,-1);
-   gtk_box_pack_start(GTK_BOX(primary_box),featured_checks[i],TRUE,FALSE,0);
-   gtk_box_pack_start(GTK_BOX(tray_box),tray_checks[i],TRUE,FALSE,0);
-   gtk_grid_attach(GTK_GRID(line),primary_box,1,0,1,1);
-   gtk_grid_attach(GTK_GRID(line),tray_box,2,0,1,1);
-   GtkWidget*arrows=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
-   gtk_widget_set_size_request(arrows,84,-1);
-   gtk_box_set_homogeneous(GTK_BOX(arrows),TRUE);
-   GtkWidget*up=button("↑","setting"),*down=button("↓","setting");
-   g_signal_connect(up,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(-1));
-   g_signal_connect(down,"clicked",G_CALLBACK(tray_order_move),GINT_TO_POINTER(1));
-   add(arrows,up,0);add(arrows,down,0);
-   gtk_grid_attach(GTK_GRID(line),arrows,3,0,1,1);
-   gtk_list_box_insert(GTK_LIST_BOX(order_list),row,-1);
- }
- add(col,order_list,0);
- col=connection;
- add(col,label("UPDATES & MAINTENANCE","modalheading"),0);
- GtkWidget*webmaint=button("WEB GAMING MAINTENANCE","setupaction");
- g_signal_connect_data(webmaint,"clicked",(GCallback)on_web_gaming_maintenance,NULL,NULL,0);add(col,webmaint,0);
- add(col,advanced,0);
- PresetExportContext *export_context=&form->export_context;
- export_context->parent=d;export_context->disk=diskentry;
- for(int i=0;i<8;i++)export_context->fields[i]=fields[i];
- GtkWidget*export_btn=button("EXPORT MY OPTIPLEX","setupaction");
- g_signal_connect_data(export_btn,"clicked",(GCallback)export_preset,export_context,NULL,0);add(col,export_btn,0);
-  GtkWidget*full_export=button("EXPORT FULL BACKUP","setupaction");
- g_signal_connect_data(full_export,"clicked",(GCallback)export_full_backup,d,NULL,0);add(col,full_export,0);
- GtkWidget*full_import=button("RESTORE FULL BACKUP","setupaction");
- g_signal_connect_data(full_import,"clicked",(GCallback)restore_full_backup,NULL,NULL,0);add(col,full_import,0);
-
- GtkWidget*hint=label("Preset has addresses, never passwords or SSH keys.","helper");add(col,hint,0);
- form->diskentry=diskentry;form->combo=combo;
- form->order_list=order_list;form->web_url_entry=web_url_entry;
- form->desktop_caption_entry=desktop_caption_entry;
- GtkWidget*actions_footer=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- gtk_container_set_border_width(GTK_CONTAINER(actions_footer),10);
- GtkWidget*cancel=button("CANCEL","navtab"),*save=button("SAVE SETTINGS","setupaction");
- gtk_box_pack_end(GTK_BOX(actions_footer),save,FALSE,FALSE,0);
- gtk_box_pack_end(GTK_BOX(actions_footer),cancel,FALSE,FALSE,0);
- g_signal_connect(cancel,"clicked",G_CALLBACK(settings_discard),NULL);
- g_signal_connect(save,"clicked",G_CALLBACK(settings_save),form);
- add(area,actions_footer,0);
- gtk_widget_show_all(settings_view);
- gtk_stack_set_visible_child_name(GTK_STACK(stack),"home");
- gtk_stack_set_visible_child_name(GTK_STACK(main_pages),"settings");
+ const NowSettingsCallbacks actions={
+  .on_system_info=G_CALLBACK(on_system_info),
+  .on_wizard=G_CALLBACK(on_wizard),
+  .on_server_readiness=G_CALLBACK(on_server_readiness),
+  .on_tail=G_CALLBACK(on_tail),
+  .on_pair_click=G_CALLBACK(on_pair_click),
+  .on_games_setup_from_settings=G_CALLBACK(on_games_setup_from_settings),
+  .on_web_gaming_settings=G_CALLBACK(on_web_gaming_settings),
+  .on_web_gaming_admin=G_CALLBACK(on_web_gaming_admin),
+  .on_web_gaming_maintenance=G_CALLBACK(on_web_gaming_maintenance),
+  .on_export_preset=G_CALLBACK(export_preset),
+  .on_export_full_backup=G_CALLBACK(export_full_backup),
+  .on_restore_full_backup=G_CALLBACK(restore_full_backup),
+  .on_discard=G_CALLBACK(settings_discard),
+  .on_save=G_CALLBACK(settings_save)
+ };
+ settings_view=now_settings_build(main_pages,win,&actions,cfg,
+                                  featured_mask(),tray_button_mask(),
+                                  &tailscale_label);
+ if(!settings_view)return;
  if(!gtk_widget_get_visible(win))tray_show_window();
 }
 
 /* Setup assistant. Client pairing is explicit and uses the user's own credentials. */
 typedef struct {
-    GtkWidget *assistant, *server_page, *games_page, *finish_page;
-    GtkWidget *host, *user;
-    GtkWidget *ts_state, *game_state, *wolf_state, *notice, *preset_notice;
-    GtkWidget *find_button, *tailscale_button;
+    NowWizardView view;
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
     guint tailscale_poll_id;
@@ -2659,42 +2407,25 @@ static void wizard_unref(Wizard *wizard)
 }
 static void wizard_validate(void*w,void*p){
  (void)w;Wizard*c=p;
- int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->user)));
- gtk_assistant_set_page_complete(GTK_ASSISTANT(c->assistant),c->server_page,ok);
- gtk_label_set_text(GTK_LABEL(c->notice),"");
+ if(c->closing || !c->view.assistant)return;
+ int ok=now_valid_host(gtk_entry_get_text(GTK_ENTRY(c->view.host)))&&now_valid_user(gtk_entry_get_text(GTK_ENTRY(c->view.user)));
+ gtk_assistant_set_page_complete(GTK_ASSISTANT(c->view.assistant),c->view.server_page,ok);
+ gtk_label_set_text(GTK_LABEL(c->view.notice),"");
 }
 static void wizard_save(Wizard*c){
- /* Advanced wake relay values are not wizard fields. Retain imported settings. */
- const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
-                      c->staged[2],c->staged[3],c->staged[4]};
- int server_valid=now_valid_host(values[0])&&now_valid_user(values[1]);
- for(int i=0;i<5;i++){
-   if(strchr(values[i],'\n')||strchr(values[i],'\r'))server_valid=0;
- }
- if(server_valid){
-   for(int i=0;i<5;i++)safe_copy(cfg[i],512,values[i]);
-   if(c->preset_loaded){
-     safe_copy(cfg[10],512,c->staged[10]);
-     safe_copy(cfg[14],512,c->staged[14]);
-     safe_copy(cfg[16],512,c->staged[16]);
-   }
- }
-
- /* Normal setup never clears old optional service overrides. Explicitly
-  * imported presets retain their validated override URLs. */
- if(c->preset_loaded && server_valid){
-  const char *urls[]={c->staged[5],c->staged[6],c->staged[7]};
-  int valid=1;
-  for(int i=0;i<3;i++)if(!now_safe_preset_url(urls[i]))valid=0;
-  if(valid)for(int i=0;i<3;i++)safe_copy(cfg[5+i],512,urls[i]);
- }
+ /* The GTK-free helper retains existing owner/preset values until the
+  * user supplies a valid server account and explicit optional preset. */
+ int server_valid=now_wizard_merge_connection(
+     cfg,gtk_entry_get_text(GTK_ENTRY(c->view.host)),
+     gtk_entry_get_text(GTK_ENTRY(c->view.user)),
+     c->staged,c->preset_loaded);
  if(!config_save()){
-  gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"UNABLE TO SAVE SETTINGS");
   say("SETTINGS COULD NOT BE SAVED");
  }else if(!server_valid){
-  gtk_label_set_text(GTK_LABEL(c->notice),"SERVER DETAILS INCOMPLETE");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"SERVER DETAILS INCOMPLETE");
  }else{
-  gtk_label_set_text(GTK_LABEL(c->notice),"SAVED");
+  gtk_label_set_text(GTK_LABEL(c->view.notice),"SAVED");
  }
 }
 static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
@@ -2703,12 +2434,12 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
 static gboolean wizard_tailscale_poll(gpointer data)
 {
     Wizard *wizard = data;
-    if (!wizard->assistant || wizard->closing ||
-        !gtk_widget_get_visible(wizard->assistant)) {
+    if (!wizard->view.assistant || wizard->closing ||
+        !gtk_widget_get_visible(wizard->view.assistant)) {
         return G_SOURCE_CONTINUE;
     }
     if (tailscale_install_inflight) {
-        gtk_label_set_text(GTK_LABEL(wizard->ts_state),
+        gtk_label_set_text(GTK_LABEL(wizard->view.ts_state),
                            "INSTALLING TAILSCALE — APPROVE THE SYSTEM PASSWORD PROMPT");
         return G_SOURCE_CONTINUE;
     }
@@ -2721,14 +2452,15 @@ static gboolean wizard_tailscale_poll(gpointer data)
 }
 static void wizard_prepare(void*a,void*page,void*p){
  (void)a;Wizard*c=p;
+ if(c->closing || !c->view.assistant)return;
  /* Finish saves server selection; URL overrides remain optional. */
- if(page==c->finish_page)wizard_save(c);
+ if(page==c->view.finish_page)wizard_save(c);
  wizard_tailscale_poll(c);
- if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
- if(page==c->games_page){
-   if(c->wolf_state)gtk_label_set_text(GTK_LABEL(c->wolf_state),"CHECKING WOLF CONNECTION...");
+ if(c->view.game_state)gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
+ if(page==c->view.games_page){
+   if(c->view.wolf_state)gtk_label_set_text(GTK_LABEL(c->view.wolf_state),"CHECKING WOLF CONNECTION...");
    /* Use the address entered in the wizard without saving partial settings. */
-   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(GTK_ENTRY(c->host)));
+   safe_copy(wolf_probe_host,sizeof wolf_probe_host,gtk_entry_get_text(GTK_ENTRY(c->view.host)));
    /* The server may stream even if its pairing page is unavailable; do not block setup. */
    begin_job(8);
  }
@@ -2743,7 +2475,7 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
     /* Nested GTK dialogs may destroy the assistant. Keep Wizard valid
      * until this handler returns, independently from the network job. */
     wizard->references++;
-    if (wizard->closing || !wizard->assistant) {
+    if (wizard->closing || !wizard->view.assistant) {
         wizard_unref(wizard);
         return;
     }
@@ -2767,8 +2499,8 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
             }
             g_free(status);
         }
-        gtk_label_set_text(GTK_LABEL(wizard->ts_state), message);
-        gtk_button_set_label(GTK_BUTTON(wizard->tailscale_button), action);
+        gtk_label_set_text(GTK_LABEL(wizard->view.ts_state), message);
+        gtk_button_set_label(GTK_BUTTON(wizard->view.tailscale_button), action);
         wizard_unref(wizard);
         return;
     }
@@ -2777,11 +2509,11 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         return;
     }
 
-    gtk_widget_set_sensitive(wizard->find_button, TRUE);
-    int current_page = gtk_assistant_get_current_page(GTK_ASSISTANT(wizard->assistant));
+    gtk_widget_set_sensitive(wizard->view.find_button, TRUE);
+    int current_page = gtk_assistant_get_current_page(GTK_ASSISTANT(wizard->view.assistant));
     GtkWidget *current = gtk_assistant_get_nth_page(
-        GTK_ASSISTANT(wizard->assistant), current_page);
-    if (current != wizard->server_page) {
+        GTK_ASSISTANT(wizard->view.assistant), current_page);
+    if (current != wizard->view.server_page) {
         wizard_unref(wizard);
         return;
     }
@@ -2796,14 +2528,14 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
             : (error && g_error_matches(error, G_IO_ERROR, G_IO_ERROR_TIMED_OUT))
                 ? "SERVER SEARCH TIMED OUT — RETRY OR ENTER ADDRESS"
                 : "COULD NOT LIST DEVICES — CHECK TAILSCALE OR ENTER ADDRESS";
-        gtk_label_set_text(GTK_LABEL(wizard->notice), message);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice), message);
         wizard_unref(wizard);
         return;
     }
-    gtk_label_set_text(GTK_LABEL(wizard->notice), "SELECT THE INTENDED HOST");
+    gtk_label_set_text(GTK_LABEL(wizard->view.notice), "SELECT THE INTENDED HOST");
 
     GtkWidget *dialog = gtk_dialog_new_with_buttons(
-        "Choose your server", GTK_WINDOW(wizard->assistant), GTK_DIALOG_MODAL,
+        "Choose your server", GTK_WINDOW(wizard->view.assistant), GTK_DIALOG_MODAL,
         "Cancel", GTK_RESPONSE_CANCEL, NULL);
     GtkWidget *accept = gtk_dialog_add_button(GTK_DIALOG(dialog),
                                               "Use this device", GTK_RESPONSE_OK);
@@ -2827,9 +2559,9 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
     int response = gtk_dialog_run(GTK_DIALOG(dialog));
     int selected = gtk_combo_box_get_active(GTK_COMBO_BOX(combo));
     if (response == GTK_RESPONSE_OK && selected >= 0 && selected < count &&
-        wizard->assistant && !wizard->closing) {
-        gtk_entry_set_text(GTK_ENTRY(wizard->host), servers[selected].address);
-        gtk_label_set_text(GTK_LABEL(wizard->notice),
+        wizard->view.assistant && !wizard->closing) {
+        gtk_entry_set_text(GTK_ENTRY(wizard->view.host), servers[selected].address);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice),
             "ADDRESS FILLED. CONFIRM THE SERVER ACCOUNT, THEN CONTINUE.");
     }
     gtk_widget_destroy(dialog);
@@ -2838,35 +2570,45 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
 
 static void find_server(Wizard *wizard)
 {
-    if (wizard->closing || !wizard->assistant ||
+    if (wizard->closing || !wizard->view.assistant ||
         now_wizard_network_busy(wizard->network, NOW_WIZARD_NET_DISCOVERY)) {
         return;
     }
-    gtk_widget_set_sensitive(wizard->find_button, FALSE);
-    gtk_label_set_text(GTK_LABEL(wizard->notice), "FINDING TAILSCALE DEVICES...");
+    gtk_widget_set_sensitive(wizard->view.find_button, FALSE);
+    gtk_label_set_text(GTK_LABEL(wizard->view.notice), "FINDING TAILSCALE DEVICES...");
     if (!now_wizard_network_start(
         wizard->network, NOW_WIZARD_NET_DISCOVERY,
         "/usr/lib/optiplex-now/find-servers.py")) {
-        gtk_widget_set_sensitive(wizard->find_button, TRUE);
-        gtk_label_set_text(GTK_LABEL(wizard->notice), "SERVER SEARCH FAILED TO START");
+        gtk_widget_set_sensitive(wizard->view.find_button, TRUE);
+        gtk_label_set_text(GTK_LABEL(wizard->view.notice), "SERVER SEARCH FAILED TO START");
     }
 }
-static void wizard_action(void*w,void*p){
- Wizard*c=p;
+static void wizard_action_body(void*w,Wizard*c){
+ if(c->closing || !c->view.assistant)return;
  const char*n=gtk_widget_get_name(w);if(!n)n="";
- if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->assistant);return;}
- else if(!strcmp(n,"w_restore")){if(full_backup_ui(c->assistant,1))gtk_widget_destroy(c->assistant);return;}
+ if(!strcmp(n,"w_keep")){gtk_widget_destroy(c->view.assistant);return;}
+ else if(!strcmp(n,"w_restore")){
+   gboolean restored=full_backup_ui(c->view.assistant,1);
+   /* The modal backup window can run nested GTK events that destroy this
+    * assistant. Never access a stale assistant after it returns. */
+   if(restored && !c->closing && c->view.assistant)
+     gtk_widget_destroy(c->view.assistant);
+   return;
+ }
  if(!strcmp(n,"w_import")){
-    char path[PATH_MAX];if(!preset_pick(path,sizeof path,c->assistant,0))return;
+    char path[PATH_MAX];
+    if(!preset_pick(path,sizeof path,c->view.assistant,0))return;
+    /* A picker can itself dispatch assistant destroy/cancel callbacks. */
+    if(c->closing || !c->view.assistant)return;
     char v[CONFIG_COUNT][512];
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(v[i],512,c->staged[i]);
     if(!now_preset_read(path,v,keys)){
-       gtk_label_set_text(GTK_LABEL(c->preset_notice),"INVALID PRESET. NO CHANGES MADE.");return;
+       gtk_label_set_text(GTK_LABEL(c->view.preset_notice),"INVALID PRESET. NO CHANGES MADE.");return;
     }
     for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,v[i]);
     c->preset_loaded=1;
-    gtk_entry_set_text(GTK_ENTRY(c->host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->user),v[1]);
-    gtk_label_set_text(GTK_LABEL(c->preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
+    gtk_entry_set_text(GTK_ENTRY(c->view.host),v[0]);gtk_entry_set_text(GTK_ENTRY(c->view.user),v[1]);
+    gtk_label_set_text(GTK_LABEL(c->view.preset_notice),"PRESET LOADED. OPTIONAL SERVICE OVERRIDES APPLY ON FINISH.");
     return;
  }
  if(!strcmp(n,"w_wolf")||!strcmp(n,"w_wolfpin"))wizard_save(c);
@@ -2880,16 +2622,23 @@ static void wizard_action(void*w,void*p){
  else if(!strcmp(n,"w_owner_approve")){
    /* The wizard's address is not saved until Finish; use its staged values.
     * Opening the separate dialog never installs a host key or grants access. */
-   const char *host=gtk_entry_get_text(GTK_ENTRY(c->host));
-   const char *user=gtk_entry_get_text(GTK_ENTRY(c->user));
+   const char *host=gtk_entry_get_text(GTK_ENTRY(c->view.host));
+   const char *user=gtk_entry_get_text(GTK_ENTRY(c->view.user));
    if(!now_valid_host(host)||!now_valid_user(user)){
-     gtk_label_set_text(GTK_LABEL(c->wolf_state),
+     gtk_label_set_text(GTK_LABEL(c->view.wolf_state),
        "RETURN TO SERVER: ENTER A VALID HOST AND SSH USER.");
-   }else open_owner_enrollment_for(host,user);
+   }else{
+     /* Enrollment may display nested GTK UI. Borrowed GtkEntry strings
+      * must remain stable even if the assistant closes during that call. */
+     char *host_copy=g_strdup(host),*user_copy=g_strdup(user);
+     open_owner_enrollment_for(host_copy,user_copy);
+     g_free(host_copy);
+     g_free(user_copy);
+   }
  }
  else if(!strcmp(n,"w_wolfpin"))begin_job(5);
  else if(!strcmp(n,"w_future")){
-   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
+   GtkWidget*d=gtk_dialog_new_with_buttons("New Server",GTK_WINDOW(c->view.assistant),1,"CLOSE",GTK_RESPONSE_CANCEL,NULL);
    GtkWidget*area=gtk_dialog_get_content_area(GTK_DIALOG(d));GtkWidget*box=gtk_box_new(GTK_ORIENTATION_VERTICAL,10);
    gtk_container_set_border_width(GTK_CONTAINER(box),20);add(area,box,0);
    add(box,label("NEW SERVER SETUP","modalheading"),0);
@@ -2897,15 +2646,21 @@ static void wizard_action(void*w,void*p){
    gtk_label_set_line_wrap(GTK_LABEL(l),1);add(box,l,0);
    gtk_widget_show_all(d);gtk_dialog_run(GTK_DIALOG(d));gtk_widget_destroy(d);
  }
- if(c->game_state)gtk_label_set_text(GTK_LABEL(c->game_state),moonlight_mode_name());
+ if(!c->closing && c->view.assistant && c->view.game_state)
+   gtk_label_set_text(GTK_LABEL(c->view.game_state),moonlight_mode_name());
 }
-static GtkWidget*wizard_button(Wizard*c,GtkWidget*page,const char*title,const char*id){
- GtkWidget*b=button(title,"setupaction");gtk_widget_set_name(b,id);gtk_style_context_add_class(GTK_STYLE_CONTEXT(gtk_widget_get_style_context(b)),"setupaction");
- g_signal_connect_data(b,"clicked",(GCallback)wizard_action,c,NULL,0);add(page,b,0);return b;
+
+/* Callbacks can open nested GTK dialogs. Keep Wizard allocated until the
+ * outer action finishes, even if its window is destroyed inside a picker. */
+static void wizard_action(void*w,void*p)
+{
+ Wizard*c=p;
+ c->references++;
+ wizard_action_body(w,c);
+ wizard_unref(c);
 }
-static gboolean destroy_wizard_idle(void*w){gtk_widget_destroy(w);return 0;}
-static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();g_idle_add(destroy_wizard_idle,w);}
-static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;g_idle_add(destroy_wizard_idle,w);}
+static void wizard_end(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;wizard_save(c);refresh();now_wizard_view_defer_destroy(GTK_WIDGET(w));}
+static void wizard_cancel(void*w,void*p){Wizard*c=p;if(c->closing)return;c->closing=1;now_wizard_view_defer_destroy(GTK_WIDGET(w));}
 static void wizard_destroy(void *widget, void *data)
 {
     if (active_setup_wizard == widget) {
@@ -2913,7 +2668,7 @@ static void wizard_destroy(void *widget, void *data)
     }
     Wizard *wizard = data;
     wizard->closing = 1;
-    wizard->assistant = NULL;
+    wizard->view.assistant = NULL;
     if (wizard->tailscale_poll_id) {
         g_source_remove(wizard->tailscale_poll_id);
         wizard->tailscale_poll_id = 0;
@@ -2933,82 +2688,19 @@ static void on_wizard(void*w,void*p){(void)w;(void)p;
  c->network=now_wizard_network_new(wizard_network_result,c,9000);
  if(!c->network){free(c);return;}
  for(int i=0;i<CONFIG_COUNT;i++)safe_copy(c->staged[i],512,cfg[i]);
- GtkWidget*a=gtk_assistant_new();c->assistant=a;
- active_setup_wizard=a;
- gtk_window_set_title(GTK_WINDOW(a),"OptiPlex Now | Setup");gtk_window_set_default_size(GTK_WINDOW(a),710,480);
- gtk_window_set_transient_for(GTK_WINDOW(a),GTK_WINDOW(win));gtk_window_set_modal(GTK_WINDOW(a),1);
- /* Page 1: keep existing device setup. No credentials or pairings are reset. */
- GtkWidget*one=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);gtk_container_set_border_width(GTK_CONTAINER(one),24);
- add(one,label("CONNECT THIS DEVICE","modalheading"),0);
- c->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,c->ts_state,0);
- c->tailscale_button=wizard_button(c,one,"CONNECT TAILSCALE","w_ts");
- wizard_button(c,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup");
- add(one,label("Connection status updates automatically after sign-in.","helper"),0);
- wizard_button(c,one,"IMPORT MY OPTIPLEX","w_import");
- wizard_button(c,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore");
- c->preset_notice=label("","helper");add(one,c->preset_notice,0);
- if(!first_run&&*cfg[0]){
-    add(one,label("EXISTING CONNECTION FOUND","helper"),0);
-    wizard_button(c,one,"KEEP EXISTING SETUP","w_keep");
+ GtkWidget *a=now_wizard_view_build(
+     &c->view,GTK_WINDOW(win),cfg,
+     !first_run && *cfg[0],moonlight_mode_name(),
+     G_CALLBACK(wizard_action),G_CALLBACK(wizard_validate),c);
+ if(!a){
+    now_wizard_network_close(c->network);
+    free(c);
+    return;
  }
+ active_setup_wizard=a;
+ wizard_wolf_label=c->view.wolf_state;
+ wizard_validate(NULL,c);
  c->tailscale_poll_id=g_timeout_add_seconds(5,wizard_tailscale_poll,c);
- gtk_assistant_append_page(GTK_ASSISTANT(a),one);gtk_assistant_set_page_title(GTK_ASSISTANT(a),one,"NOW Setup: Tailscale");gtk_assistant_set_page_type(GTK_ASSISTANT(a),one,1);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),one,1);
- /* Page 2: choose your server. All values are prefilled from saved configuration. */
- GtkWidget*two=gtk_box_new(GTK_ORIENTATION_VERTICAL,13);c->server_page=two;gtk_container_set_border_width(GTK_CONTAINER(two),24);
- add(two,label("FIND YOUR SERVER","modalheading"),0);
- c->find_button=wizard_button(c,two,"FIND SERVER ON TAILSCALE","w_find");
- add(two,label("SERVER ADDRESS — CHOOSE ABOVE OR ENTER MANUALLY","helper"),0);
- c->host=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->host),"Tailscale IP or hostname");gtk_entry_set_text(GTK_ENTRY(c->host),cfg[0]);add(two,c->host,0);
- add(two,label("SERVER LINUX ACCOUNT (OWNER ALPHA)","helper"),0);
- c->user=gtk_entry_new();gtk_entry_set_placeholder_text(GTK_ENTRY(c->user),"Server Linux username");gtk_entry_set_text(GTK_ENTRY(c->user),cfg[1]);add(two,c->user,0);
- GtkWidget*owner_account_hint=label(
-   "The owner-only alpha currently needs the host's configured Linux "
-   "account to address the restricted service broker. This does not grant "
-   "ordinary SSH or server permissions. Do not share an administrator password.", "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_account_hint),TRUE);
- add(two,owner_account_hint,0);
- g_signal_connect_data(c->host,"changed",(GCallback)wizard_validate,c,NULL,0);
- g_signal_connect_data(c->user,"changed",(GCallback)wizard_validate,c,NULL,0);
- c->notice=label("","helper");add(two,c->notice,0);
- wizard_button(c,two,"NEW SERVER SETUP (PLANNED)","w_future");
- gtk_assistant_append_page(GTK_ASSISTANT(a),two);gtk_assistant_set_page_title(GTK_ASSISTANT(a),two,"NOW Setup: Server");gtk_assistant_set_page_type(GTK_ASSISTANT(a),two,0);wizard_validate(NULL,c);
- /* Page 3: independent Moonlight identity for this Linux profile. */
- GtkWidget*four=gtk_box_new(GTK_ORIENTATION_VERTICAL,12);gtk_container_set_border_width(GTK_CONTAINER(four),24);
- add(four,label("CONNECT TO GAME HOST","modalheading"),0);
- add(four,label("Connect once during setup, then play from Games.","helper"),0);
- c->game_state=label(moonlight_mode_name(),"gameshint");add(four,c->game_state,0);
- c->wolf_state=label("CHECKING WOLF...","gameshint");wizard_wolf_label=c->wolf_state;add(four,c->wolf_state,0);
- c->games_page=four;
- wizard_button(c,four,"OPEN / INSTALL MOONLIGHT","w_moonlight");
- wizard_button(c,four,"SELECT APPIMAGE","w_appimage");
- wizard_button(c,four,"CONNECT TO GAME HOST","w_wolf");
- wizard_button(c,four,"REQUEST OWNER APPROVAL (PHONE QR)","w_owner_approve");
- GtkWidget*owner_access_note=label(
-   "Two separate approvals: first pair Moonlight with Wolf, then request "
-   "NOW owner access for managed Games and Downloads. A configured private "
-   "Tailscale host listener can offer owner-phone QR approval without "
-   "preapproved SSH; otherwise the host owner must enable or review "
-   "enrollment. Requests never authorize themselves.", "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_access_note),TRUE);
- add(four,owner_access_note,0);
- 
- gtk_assistant_append_page(GTK_ASSISTANT(a),four);gtk_assistant_set_page_title(GTK_ASSISTANT(a),four,"NOW Setup: Games");gtk_assistant_set_page_type(GTK_ASSISTANT(a),four,0);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),four,1);
- /* Page 4: finish without manual URLs. */
- GtkWidget*six=gtk_box_new(GTK_ORIENTATION_VERTICAL,15);c->finish_page=six;gtk_container_set_border_width(GTK_CONTAINER(six),24);
- add(six,label("NEXT: VERIFY DEVICE ACCESS","modalheading"),0);
- GtkWidget*owner_ready_note=label(
-   "Saving a server address does not prove device authorization. First confirm "
-   "Moonlight/Wolf pairing, then use REQUEST OWNER APPROVAL on the Games setup "
-   "page and VERIFY ACCESS in the approval window. Your owner must independently "
-   "approve this device. The wizard may finish with access still pending; "
-   "do not assume Games or Downloads works until the host verifies it. "
-   "Videos opens Jellyfin in your browser and may require its own login.",
-   "helper");
- gtk_label_set_line_wrap(GTK_LABEL(owner_ready_note),TRUE);
- add(six,owner_ready_note,0);
- add(six,label("Saved settings carry over between updates.","helper"),0);
- add(six,label("Open System Info from the dashboard for live hardware details.","helper"),0);
- gtk_assistant_append_page(GTK_ASSISTANT(a),six);gtk_assistant_set_page_title(GTK_ASSISTANT(a),six,"NOW Setup: Finish");gtk_assistant_set_page_type(GTK_ASSISTANT(a),six,2);gtk_assistant_set_page_complete(GTK_ASSISTANT(a),six,1);
  g_signal_connect_data(a,"prepare",(GCallback)wizard_prepare,c,NULL,0);
  g_signal_connect_data(a,"apply",(GCallback)wizard_end,c,NULL,0);
  g_signal_connect_data(a,"cancel",(GCallback)wizard_cancel,c,NULL,0);

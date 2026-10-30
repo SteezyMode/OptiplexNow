@@ -10,9 +10,18 @@ version="$(dpkg-deb -f "$package" Version)"
 [[ "$(dpkg-deb -f "$package" Package)" = "optiplex-now" ]]
 # A client .deb must not silently install a broker, rewrite host SSH rules,
 # activate udev policy or enable services. All host adoption is owner-initiated.
-# Inspect the *built archive*, not just package.py source.
+# Inspect the built archive, not only the source packaging script.
 if dpkg-deb --ctrl-tarfile "$package" | tar -tf - |
-  grep -E '^\./(preinst|postinst|prerm|postrm)export DEBIAN_FRONTEND=noninteractive
+  grep -E '^\./(preinst|postinst|prerm|postrm)$'; then
+  echo "A package maintainer script requires owner safety review" >&2
+  exit 1
+fi
+if dpkg-deb --fsys-tarfile "$package" | tar -tf - |
+  grep -E '^\./(etc/|run/|var/|usr/lib/systemd/system/)'; then
+  echo "Package must not silently deploy host policy or services" >&2
+  exit 1
+fi
+export DEBIAN_FRONTEND=noninteractive
 sudo apt-get install -y "$package"
 [[ "$(dpkg-query -W -f='${Version}' optiplex-now)" = "$version" ]]
 test -x /usr/bin/optiplex-now

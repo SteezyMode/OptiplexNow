@@ -1,6 +1,6 @@
-## October 30 — Settings persistence extraction (draft #233; not installed/released)
+## October 30 — Settings persistence extraction (merged #233; not installed/released)
 
-Draft [PR #233](https://github.com/SteezyMode/OptiplexNow/pull/233) extracts the GTK form's short-lived snapshot and non-GTK Settings preference application from `src/main.c`. Autostart conflict refusal, legacy config slot indices, tray/caption ordering, invalid Web Gaming URL retention, disk-path validation and startup-page preferences are covered by isolated HOME/XDG writes and sanitizer tests. The app retains the actual `config_save()` call and refresh sequence. **Code/test work only pending exact-head CI, physical Settings testing, and release acceptance.** Official v1.21.9 and the occupied OptiPlex are unchanged.
+Merged [PR #233](https://github.com/SteezyMode/OptiplexNow/pull/233) into `main` as `8e3e539d885cc659593466585d5d6e57c09526f7`, after exact-head [CI #41034499829](https://github.com/SteezyMode/OptiplexNow/actions/runs/41034499829) passed both build/package and native sanitizer jobs. The refactor extracts a borrowed GTK form snapshot into a non-GTK persistence module; existing `config_save()` and UI refresh remain in `main.c`. Isolated HOME/XDG tests preserve foreign-autostart refusal, legacy config slots and tray/caption order, invalid URL/path rejection, and startup-page behavior. **Source/CI/packaging verified; physical client behavior and Private Alpha 1 not yet accepted.** Official v1.21.9 and working reference OptiPlex remain unchanged.
 
 ## October 30 — Settings GTK construction extraction (merged PR #232; not released)
 

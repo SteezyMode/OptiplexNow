@@ -36,6 +36,7 @@
 #include "desktop_autostart.h"
 #include "tailscale_async.h"
 #include "wizard_network.h"
+#include "wizard_services.h"
 #include "tailscale_install.h"
 #include "ssh_authorize.h"
 #include "host_metrics.h"
@@ -2413,30 +2414,12 @@ static void wizard_validate(void*w,void*p){
  gtk_label_set_text(GTK_LABEL(c->notice),"");
 }
 static void wizard_save(Wizard*c){
- /* Advanced wake relay values are not wizard fields. Retain imported settings. */
- const char*values[]={gtk_entry_get_text(GTK_ENTRY(c->host)),gtk_entry_get_text(GTK_ENTRY(c->user)),
-                      c->staged[2],c->staged[3],c->staged[4]};
- int server_valid=now_valid_host(values[0])&&now_valid_user(values[1]);
- for(int i=0;i<5;i++){
-   if(strchr(values[i],'\n')||strchr(values[i],'\r'))server_valid=0;
- }
- if(server_valid){
-   for(int i=0;i<5;i++)safe_copy(cfg[i],512,values[i]);
-   if(c->preset_loaded){
-     safe_copy(cfg[10],512,c->staged[10]);
-     safe_copy(cfg[14],512,c->staged[14]);
-     safe_copy(cfg[16],512,c->staged[16]);
-   }
- }
-
- /* Normal setup never clears old optional service overrides. Explicitly
-  * imported presets retain their validated override URLs. */
- if(c->preset_loaded && server_valid){
-  const char *urls[]={c->staged[5],c->staged[6],c->staged[7]};
-  int valid=1;
-  for(int i=0;i<3;i++)if(!now_safe_preset_url(urls[i]))valid=0;
-  if(valid)for(int i=0;i<3;i++)safe_copy(cfg[5+i],512,urls[i]);
- }
+ /* The GTK-free helper retains existing owner/preset values until the
+  * user supplies a valid server account and explicit optional preset. */
+ int server_valid=now_wizard_merge_connection(
+     cfg,gtk_entry_get_text(GTK_ENTRY(c->host)),
+     gtk_entry_get_text(GTK_ENTRY(c->user)),
+     c->staged,c->preset_loaded);
  if(!config_save()){
   gtk_label_set_text(GTK_LABEL(c->notice),"UNABLE TO SAVE SETTINGS");
   say("SETTINGS COULD NOT BE SAVED");

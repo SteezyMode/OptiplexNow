@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 FLOW = (ROOT / "src/downloads_flow.c").read_text(encoding="utf-8")
 TRAY = (ROOT / "src/tray_actions.c").read_text(encoding="utf-8")
 SHELL = (ROOT / "src/main.c").read_text(encoding="utf-8")
+WIZARD = (ROOT / "src/wizard_services.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 
 class DownloadsNavigationContract(unittest.TestCase):
@@ -161,8 +162,8 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("Downloads URL (override)", SETTINGS)
         self.assertIn("GtkWidget*dest=i<2?gt:advanced_grid;", SETTINGS)
         # A fresh setup must never wipe old or imported service settings.
-        self.assertIn("if(c->preset_loaded && server_valid)", SHELL)
-        self.assertIn("safe_copy(cfg[5+i],512,urls[i]);", SHELL)
+        self.assertIn("if (preset_loaded)", WIZARD)
+        self.assertIn('snprintf(config[5 + i], CONFIG_VALUE_SIZE, "%s", urls[i]);', WIZARD)
         self.assertIn("now_media_open_videos();", SHELL)
         self.assertIn("now_downloads_open(cfg[0],cfg[1],cfg[7]);", SHELL)
 

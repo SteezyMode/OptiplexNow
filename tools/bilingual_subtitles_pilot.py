@@ -19,11 +19,11 @@ services:
       context: ./SubDuet
     restart: unless-stopped
     env_file: ./paircue.env
-    user: "\${PUID:?missing PUID}:\${PGID:?missing PGID}"
+    user: "${PUID:?missing PUID}:${PGID:?missing PGID}"
     ports:
       - "127.0.0.1:9294:9292"
     volumes:
-      - "\${MEDIA_PATH:?missing MEDIA_PATH}:/media:rw"
+      - "${MEDIA_PATH:?missing MEDIA_PATH}:/media:rw"
       - "./state:/state:rw"
     read_only: true
     tmpfs:

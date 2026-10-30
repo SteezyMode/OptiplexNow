@@ -126,7 +126,7 @@ def run():
             store.write(fd, fixture_policy())
 
         auth = root / "authorized_keys"
-        previous_auth = "ssh-ed25519 AAAAexisting-owner admin-only\\n"
+        previous_auth = "ssh-ed25519 AAAAexisting-owner admin-only\n"
         auth.write_text(previous_auth)
         auth.chmod(0o600)
         broker = SERVER / "owner_games_ssh.py"
@@ -137,16 +137,16 @@ def run():
         wolf_conf = root / "wolf.toml"
         wolf_conf.write_text(
             "paired_clients=[{client_cert=" + json.dumps(cert) +
-            ', app_state_folder="disposable-wolf-home"}]\\n')
+            ', app_state_folder="disposable-wolf-home"}]\n')
         wolf_conf.chmod(0o600)
         qt = root / "Moonlight.conf"
-        qt.write_text("[General]\\ncertificate=@ByteArray(" +
-                      cert.replace("\\n", r"\\n") + ")\\nkey=@ByteArray(" +
-                      private.replace("\\n", r"\\n") + ")\\n")
+        qt.write_text("[General]\ncertificate=@ByteArray(" +
+                      cert.replace("\n", r"\n") + ")\nkey=@ByteArray(" +
+                      private.replace("\n", r"\n") + ")\n")
         qt.chmod(0o600)
 
         public = root / "id_ed25519.pub"
-        public.write_text(public_ssh_key() + "\\n")
+        public.write_text(public_ssh_key() + "\n")
 
         class Keys:
             @staticmethod

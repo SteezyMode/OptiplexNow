@@ -79,7 +79,7 @@ class EnrollmentClientTests(unittest.TestCase):
         class Authorized:
             def invoke(self, host, user, action):
                 calls.append((host, user, action))
-                return {"success": True, "status": "idle"}
+                return {"success": True, "status": "needs_wolf_ui"}
 
         with patch.object(mod, "_client_module", return_value=Authorized()), \
              patch.object(mod, "request_tailnet", side_effect=AssertionError("staged a duplicate key")), \
@@ -111,21 +111,47 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertEqual(result["transport"], "tailnet")
 
     def test_only_affirmative_restricted_status_proves_owner_access(self):
-        good = ("needs_wolf_ui", "wolf_ui_connected", "busy", "in_use",
-                "joined", "idle", "running", "finished")
+        good = ("needs_wolf_ui", "wolf_ui_connected", "busy", "in_use")
         for status in good:
             with self.subTest(status=status):
                 self.assertTrue(mod.verified_restricted_access(
                     {"success": True, "status": status}))
         for reply in (None, {}, [], "idle",
-                      {"success": False, "status": "idle"},
-                      {"success": 1, "status": "idle"},
+                      {"success": False, "status": "needs_wolf_ui"},
+                      {"success": 1, "status": "needs_wolf_ui"},
+                      {"success": True, "status": "joined"},
+                      {"success": True, "status": "idle"},
+                      {"success": True, "status": "running"},
+                      {"success": True, "status": "finished"},
                       {"success": True, "status": "pending"},
                       {"success": True, "status": "approved"},
                       {"success": True, "status": "unavailable"},
                       {"success": True, "status": None}):
             with self.subTest(reply=reply):
                 self.assertFalse(mod.verified_restricted_access(reply))
+
+    def test_other_positive_games_actions_cannot_skip_owner_staging(self):
+        from unittest.mock import patch
+
+        class WrongActionResponse:
+            def invoke(self, host, user, action):
+                self.assert_status = (host, user, action)
+                assert action == "status"
+                # These can be valid for start/observe, not status.
+                return {"success": True, "status": "finished"}
+
+        staged = {"success": True, "status": "pending",
+                  "request_id": "e" * 32, "code": "123456",
+                  "fingerprint": "f" * 20,
+                  "phone_approval_available": True}
+        with patch.object(mod, "_client_module",
+                          return_value=WrongActionResponse()), \
+             patch.object(mod, "request_tailnet", return_value=staged) as tailnet:
+            answer = mod.request_using_available_transport(
+                "100.121.156.34", "optiplex", include_transport=True)
+        self.assertEqual(answer["status"], "pending")
+        self.assertEqual(answer["transport"], "tailnet")
+        tailnet.assert_called_once_with("100.121.156.34")
 
     def test_stale_local_key_or_nonaffirmative_reply_never_skips_phone_request(self):
         from unittest.mock import patch

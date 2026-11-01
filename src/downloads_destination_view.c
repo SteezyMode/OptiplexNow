@@ -15,7 +15,8 @@ typedef struct {
  GtkWidget *new_folder,*places_list,*drive_list,*pin_place,*browser_area,*sidebar,*places_toggle;
  GtkListStore *folder_store;
  GtkTreeModelFilter *filtered;
- gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
+ gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder,*host_path;
+ GtkWidget *native_dialog;
  GPtrArray *places,*recents;
  gboolean running,loading_roots,folder_valid,sidebar_compact,sidebar_requested;
  void (*on_added)(gpointer),(*on_cancel)(gpointer);
@@ -40,6 +41,7 @@ static void free_state(gpointer data){
  g_free(s->host);g_free(s->user);g_free(s->helper);
  g_free(s->root);g_free(s->relative);g_free(s->magnet);
  g_free(s->pending_folder);
+ g_free(s->host_path);
  if(s->places)g_ptr_array_unref(s->places);
  if(s->recents)g_ptr_array_unref(s->recents);
  g_clear_object(&s->filtered);
@@ -384,9 +386,9 @@ static gboolean read_response(Picker *s,char action,char *wire){
  if(!wire || !*wire || strlen(wire)>32768 ||
     !g_utf8_validate(wire,-1,NULL))return FALSE;
  if(action=='m')return !strcmp(wire,"CREATED");
- if(action=='a'){
+ if(action=='a' || action=='h'){
    if(strcmp(wire,"SUBMITTED"))return FALSE;
-   record_recent_place(s);
+   if(action=='a')record_recent_place(s);
    gtk_label_set_text(GTK_LABEL(s->status),"Torrent submitted to selected folder.");
    g_clear_pointer(&s->magnet,g_free);
    s->folder_valid=FALSE;
@@ -554,12 +556,13 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
  g_free(job);
 }
 static void start(Picker *s,char action){
- if(s->running || !s->helper || !s->host || !s->user)return;
+ if(s->running || !s->helper || !s->host || !s->user ||
+    (action=='h' && (!s->host_path || !s->magnet)))return;
  const char *operation=action=='r'?"roots":action=='b'?"browse":
-                       action=='m'?"mkdir":"add";
+                       action=='m'?"mkdir":action=='h'?"addpath":"add";
  const char *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,operation,
-                    action=='r'?NULL:s->root,
-                    action=='r'?NULL:s->relative,
+                    action=='r'?NULL:action=='h'?s->host_path:s->root,
+                    action=='r'?NULL:action=='h'?s->magnet:s->relative,
                     action=='a'?s->magnet:
                     action=='m'?s->pending_folder:NULL,NULL};
  GError *err=NULL;
@@ -577,7 +580,7 @@ static void start(Picker *s,char action){
  job->action=action;
  s->running=TRUE;s->folder_valid=FALSE;
  button_states(s);
- gtk_label_set_text(GTK_LABEL(s->status),action=='a'?
+ gtk_label_set_text(GTK_LABEL(s->status),(action=='a' || action=='h')?
     "Submitting to selected folder..." : action=='m'?
     "Creating approved download folder..." : "Reading approved folders...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,finished,job);

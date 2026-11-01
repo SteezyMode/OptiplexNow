@@ -56,14 +56,50 @@ class GpuPowerTests(unittest.TestCase):
             if name in ("set_gpu_config", "confirm_pending_config"):
                 return None
             self.fail("Unexpected RPC method")
-        result = gpu.set_cap(65, probe=lambda:gpu.parse_gpu(SAMPLE), call=call)
+        readings = iter((55.0, 65.0))
+        def probe():
+            data = gpu.parse_gpu(SAMPLE)
+            data["limit_w"] = next(readings)
+            return data
+        result = gpu.set_cap(65, probe=probe, call=call)
         self.assertEqual(result["status"], "confirmed")
+        self.assertEqual(result["applied_w"], 65.0)
         self.assertEqual([item[0] for item in requests],
                          ["list_devices", "get_gpu_config",
                           "set_gpu_config", "confirm_pending_config"])
         payload = requests[2][1]["config"]
         self.assertEqual(payload["power_cap"], 65.0)
         self.assertEqual(payload["fan_control_settings"], {"mode": "curve"})
+
+    def test_lact_confirmation_without_nvidia_readback_is_not_success(self):
+        """A successful LACT reply can still fail to apply the NVIDIA cap."""
+        calls = []
+        def call(name, args=None):
+            calls.append(name)
+            if name == "list_devices":
+                return [{"id": "10DE:25FA-0000:0000-0000:01:00.0"}]
+            if name == "get_gpu_config":
+                return {"power_cap": 55.0}
+            return None
+        with self.assertRaisesRegex(gpu.GpuPowerError, "NVIDIA did not report"):
+            gpu.set_cap(65, probe=lambda:gpu.parse_gpu(SAMPLE), call=call)
+        self.assertEqual(calls, ["list_devices", "get_gpu_config",
+                                 "set_gpu_config", "confirm_pending_config"])
+
+    def test_driver_readback_allows_nvidia_rounding_within_one_watt(self):
+        readings = iter((55.0, 64.5))
+        def probe():
+            data = gpu.parse_gpu(SAMPLE)
+            data["limit_w"] = next(readings)
+            return data
+        def call(name, args=None):
+            if name == "list_devices":
+                return [{"id": "10DE:25FA-0000:0000-0000:01:00.0"}]
+            if name == "get_gpu_config":
+                return {"power_cap": 55.0}
+            return None
+        result = gpu.set_cap(65, probe=probe, call=call)
+        self.assertEqual(result["applied_w"], 64.5)
 
     def test_mutation_failure_never_confirms_or_retries(self):
         seen = []

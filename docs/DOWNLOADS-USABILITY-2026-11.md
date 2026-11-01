@@ -1,72 +1,83 @@
-# Downloads UI and owner storage access (PR #242)
+# Downloads: native file chooser and existing-host storage
 
-This is an unreleased test build. Development and CI never modify the live
-OptiPlex media folders, qBittorrent container, SSH keys or running clients.
+PR #242, unreleased. No live host mounts, Steam/Wolf sessions, media files,
+Jellyfin libraries or authorized SSH keys are changed by these commits.
 
-## Interface
+## File picker
 
-- Transfers are compact summaries (name, progress, state, speed, ETA, seeds).
-  Right click a row, or press Shift+F10 when focused, for native Pause/Resume,
-  Reannounce, Recheck, View Files, Remove (keep files) and Delete Files.
-  Destructive deletion requires explicit confirmation and a verified exact
-  torrent hash. No permanent ACTIONS rows or nested action panels.
-- Search results retain sortable titles, sizes, seeders, leechers, dates and
-  streamed additional result pages. Selecting a magnet enters the destination
-  step in the same Downloads tab, without losing search results.
-- The destination picker resembles a conventional file dialog: storage drives
-  plus saved Favorites/Recents on the left, directory browsing and path on the
-  right, Cancel and Add Torrent together at the bottom. A Locations toggle
-  substitutes for the sidebar at narrow widths.
-- No default or automatically remembered destination. Add submits only when
-  the owner explicitly confirms. Cancel clears the pending magnet.
-  Favoriting is opt-in; Recents are recorded after successful Add.
-- Entire Downloads page scrolls. Advanced VueTorrent retains its own view.
+Selecting a torrent opens **GtkFileChooserDialog** with
+`GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER`, using the same native GTK/Thunar-like
+folder selector used by normal Linux desktop applications. It replaces the
+previous proprietary directory-list interface. The OS chooser handles folders,
+Places, bookmarks/favorites, file manager shortcuts, and creating folders;
+no duplicate custom favorites sidebar or hidden qBittorrent mount dropdown
+is involved in the user-facing flow.
 
-## Existing owner storage
+The application runs on other machines as well as on the OptiPlex. Its normal
+client-local chooser cannot see server drives, so GTK/GIO uses a remote SFTP
+location (`sftp://<owner>@<host>/`). Users browse all folders that account can
+see on the actual OptiPlex host, including its /media, /mnt and home folders,
+subject to ordinary Unix permissions. This connection uses the user's normal
+SSH/SFTP credentials. The restricted NOW owner-device command key **cannot**
+serve SFTP. A normal SSH/SFTP login must be configured separately if not
+already present. `gvfs-backends` is a package dependency. Bookmarks are the
+native chooser's GTK/GVfs bookmarks, not application-proprietary favorites.
 
-The host auto-discovers writable Docker *bind mounts of its verified VPN-bound
-qBittorrent container*, instead of requiring the /library/<slug> naming
-convention. Existing /library/<slug> IDs remain stable for previously saved
-shortcuts. Other bind mounts get deterministic opaque IDs (derived from the
-container mount destination), and readable display labels. Both old and new
-mounts use their *actual container destination path* when adding a torrent.
-The browser does not rename, reorganize, remount or move existing media.
+Cancel returns directly to existing search results. Accept submits only after
+explicit user action. Local file:// URIs, SFTP locations on other machines,
+traversal segments and malformed paths are rejected before submission.
 
-The app does not gain arbitrary root/host filesystem access: qBittorrent can
-only download into directories exposed to that container and writable by its
-actual user. System paths and configuration mounts are not selectable.
-Symlink traversal and .. remain prohibited, regardless of owner status.
+## Downloading is separate from browsing
 
-An owner-created folder is opened relative to its real host bind path with
-no-follow directory fds, then verified writable in the downloader container.
-No Docker restart or mount modification is performed. Up to 24 mount entries
-are recognized. A drive with no writable qBittorrent bind mount cannot be used
-until exposed through Docker configuration.
+A native SFTP chooser can display all mounted host drives. qBittorrent,
+however, runs inside Docker and may only write folders exposed through its
+writable bind mounts. The owner broker maps the selected *host* path back to
+its longest matching verified qBittorrent source bind, converts that to the
+real container destination, checks the target's directory chain without
+following symlinks, verifies the downloader user can write, and submits the
+selected magnet explicitly. An unmounted drive **can be browsed** via SFTP
+but cannot be downloaded to until an authorized administrator makes it
+available to the existing qBittorrent container. This code does not
+silently restart Docker or auto-mount the server's OS filesystem. The older
+'torrent-downloads' mount is not a special/default drive in the native chooser.
 
-## Deployment: both sides needed
+The host implementation is accessed only via the enrolled owner-device
+restricted SSH broker (`downloads_add_path`). No arbitrary shell command,
+client-supplied Docker mount, root privilege or raw qBittorrent endpoint is
+added. Existing library paths, permissions and files are preserved.
 
-The .deb includes the GTK client and the packaged restricted host broker.
-Installing only on the Mac mini/MacBook does not update an older OptiPlex
-forced-command SSH handler. Install the *same verified .deb* on the host, then
-run as the host owner account:
+## Other Downloads functionality
+
+- Search pagination continues beyond qBittorrent's first batch where the
+  updated host broker and plugins support it.
+- Transfers rows use compact summaries and native right-click action menus,
+  including separate Remove (keep files) and confirmed Delete Files.
+- The latter can only delete data from a verified writable qBittorrent mount
+  for one exact torrent hash; it cannot select arbitrary host files.
+
+## Install both ends
+
+The `.deb` carries both the GTK client and the package-owned host broker.
+Installing it only on the Mac mini/MacBook will **not** activate the new
+`downloads_add_path` host capability. Install the same package on the
+OptiPlex. If the restricted handler is still using the legacy per-user code,
+review with
 
     python3 /usr/lib/optiplex-now/owner-host-upgrade.py --check
 
-If the result is `ready`, the owner can explicitly activate the package
-broker with rollback backup:
+Then, only if the status is `ready`, activate with an SSH-key backup:
 
     python3 /usr/lib/optiplex-now/owner-host-upgrade.py --activate --confirm-owner-upgrade
 
-If `up_to_date`, no activation is needed. If `blocked` or
-`not_configured`, do not force replacement of SSH keys. This change does
-not restart qBittorrent, Wolf, Jellyfin or the VPN.
+For `up_to_date`, no activation is needed. For `blocked` or
+`not_configured`, do not force it. An opt-in host SFTP account / client
+connection is independent of owner-device enrollment.
 
-## Verification
+## Acceptance
 
-CI runs Python negative tests for the downloader, path authorization and owner
-transport, native GTK tests at 430, 1024×768, 1366×768, 1280×800 and
-1920×1080, package smoke tests, and memory/UB diagnostics.
-
-Real OptiPlex acceptance still needs owner confirmation of mount labels,
->25 search results, writable destination behavior, and explicit Delete
-only against disposable test data.
+Automated tests cover URI validation, SFTP host identity, host path escape
+denial, root/mount mapping, downloader permission checks and package smoke
+tests. Manual acceptance must verify normal GTK SFTP authentication on the
+actual Mac mini, that all four mounted OptiPlex drives can be browsed, that
+an existing *writable qBittorrent mount* accepts Add Torrent, and that an
+unmounted host drive fails to submit without modifying files.

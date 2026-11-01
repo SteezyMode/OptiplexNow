@@ -30,6 +30,7 @@ typedef struct {
 
 typedef struct {
     GCallback on_system_info;
+    GCallback on_gpu_power;
     GCallback on_wizard;
     GCallback on_server_readiness;
     GCallback on_tail;

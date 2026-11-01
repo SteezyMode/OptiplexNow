@@ -28,6 +28,10 @@ typedef struct {
 static Picker *state(GtkWidget *view){
  return view?g_object_get_data(G_OBJECT(view),"now-destination-state"):NULL;
 }
+static void free_place(gpointer data){
+ SavedPlace *p=data;
+ if(p){g_free(p->root);g_free(p->relative);g_free(p);}
+}
 static void free_state(gpointer data){
  Picker *s=data;
  g_free(s->host);g_free(s->user);g_free(s->helper);
@@ -93,6 +97,88 @@ static gboolean safe_relative(const char *value){
    if(i>=12 || !safe_name(parts[i])){ok=FALSE;break;}
  g_strfreev(parts);
  return ok;
+}
+/* Saved places are bookmarks scoped to this client's approved root IDs and
+ * relative folders, never raw host paths. Every use re-runs owner browse. */
+#define MAX_SAVED_PLACES 24
+static gchar *places_path(void){
+ return g_build_filename(g_get_user_config_dir(),"optiplex-now",
+                         "download-places.ini",NULL);
+}
+static void refresh_place_choices(Picker *s){
+ s->loading_places=TRUE;
+ gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->places_combo));
+ gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(s->places_combo),
+                                "SAVED LOCATIONS");
+ for(guint i=0;i<s->places->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->places,i);
+   gchar *label=g_strdup_printf("%s / %s",p->root,
+                                *p->relative?p->relative:"(root)");
+   gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(s->places_combo),label);
+   g_free(label);
+ }
+ gtk_combo_box_set_active(GTK_COMBO_BOX(s->places_combo),0);
+ s->loading_places=FALSE;
+}
+static gboolean store_places(Picker *s){
+ gchar *file=places_path();
+ gchar *directory=g_path_get_dirname(file);
+ gboolean ok=FALSE;
+ if(g_mkdir_with_parents(directory,0700)==0){
+   GKeyFile *data=g_key_file_new();
+   for(guint i=0;i<s->places->len;i++){
+     SavedPlace *p=g_ptr_array_index(s->places,i);
+     gchar *group=g_strdup_printf("place%u",i);
+     g_key_file_set_string(data,group,"root",p->root);
+     g_key_file_set_string(data,group,"relative",p->relative);
+     g_free(group);
+   }
+   gsize size=0;
+   gchar *raw=g_key_file_to_data(data,&size,NULL);
+   if(raw && size<=32768)
+     ok=g_file_set_contents(file,raw,size,NULL);
+   g_free(raw);g_key_file_unref(data);
+ }
+ g_free(directory);g_free(file);
+ return ok;
+}
+static void load_places(Picker *s){
+ gchar *file=places_path(),*raw=NULL;
+ gsize size=0;
+ if(g_file_get_contents(file,&raw,&size,NULL) && size<=32768){
+   GKeyFile *data=g_key_file_new();
+   if(g_key_file_load_from_data(data,raw,size,G_KEY_FILE_NONE,NULL)){
+     for(guint i=0;i<MAX_SAVED_PLACES;i++){
+       gchar *group=g_strdup_printf("place%u",i);
+       gchar *root=g_key_file_get_string(data,group,"root",NULL);
+       gchar *relative=g_key_file_get_string(data,group,"relative",NULL);
+       if(safe_root(root) && safe_relative(relative)){
+         SavedPlace *p=g_new0(SavedPlace,1);
+         p->root=g_strdup(root);p->relative=g_strdup(relative);
+         g_ptr_array_add(s->places,p);
+       }
+       g_free(root);g_free(relative);g_free(group);
+     }
+   }
+   g_key_file_unref(data);
+ }
+ g_free(raw);g_free(file);
+ refresh_place_choices(s);
+}
+static gboolean remember_current_place(Picker *s){
+ if(!s || !s->folder_valid || !safe_root(s->root) ||
+    !safe_relative(s->relative))return FALSE;
+ for(guint i=0;i<s->places->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->places,i);
+   if(!strcmp(p->root,s->root) && !strcmp(p->relative,s->relative))
+     return TRUE;
+ }
+ if(s->places->len>=MAX_SAVED_PLACES)return FALSE;
+ SavedPlace *p=g_new0(SavedPlace,1);
+ p->root=g_strdup(s->root);p->relative=g_strdup(s->relative);
+ g_ptr_array_add(s->places,p);
+ refresh_place_choices(s);
+ return store_places(s);
 }
 static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->add,!s->running && s->folder_valid &&
@@ -293,7 +379,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_widget_set_no_show_all(view,TRUE);
  Picker *s=g_new0(Picker,1);
  s->view=view;
- s->places=g_ptr_array_new_with_free_func((GDestroyNotify)g_free);
+  s->places=g_ptr_array_new_with_free_func(free_place);
  g_object_set_data_full(G_OBJECT(view),"now-destination-state",s,free_state);
  GtkWidget *title=gtk_label_new("SAVE SELECTED TORRENT TO");
  gtk_label_set_xalign(GTK_LABEL(title),0);

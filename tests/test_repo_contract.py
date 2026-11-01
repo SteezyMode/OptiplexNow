@@ -40,7 +40,10 @@ class WorkflowSafetyTests(unittest.TestCase):
         data = (WORKFLOWS / "release.yml").read_text()
         package = (ROOT / "package.py").read_text()
         release_version = re.search(
-            r'^DEFAULT_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"
+            r'^DEFAULT_VERSION = "([0-9]+\\.[0-9]+\\.[0-9]+)"$',
+            package, re.MULTILINE)
+        self.assertIsNotNone(release_version, "A tagged release needs a version")
+        version = release_version.group(1)
         # Routine releases still require an explicit immutable version tag.
         self.assertRegex(data, r"(?m)^\s+tags:\s*$")
         self.assertIn("- 'v*'", data)

@@ -1130,6 +1130,8 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
    managed_games_abort_owned_stream();
   managed_games_finish(managed_games.stopping?
     "STEAM STOP UNCONFIRMED. CHECK HOST STATUS BEFORE RETRY":
+    strcmp(action,"reconcile")==0?
+    "PREVIOUS STEAM SESSION NOT SAFE TO RECOVER. REVIEW GAMES SETTINGS":
     "GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS; NO STEAM FALLBACK");
   return;
  }
@@ -1353,6 +1355,60 @@ static void on_managed_games_stop(void *widget,void *data){
 static void on_managed_games_check(void *widget,void *data){
  (void)widget;(void)data;
  managed_games_begin(FALSE,TRUE);
+}
+/* Explicit owner recovery for an interrupted Steam transaction. The host
+ * archives an old lease ONLY after zero runtime sessions/lobbies or verified
+ * joined-session exit, plus an independent Steam-writer census. No Stop POST. */
+static void managed_games_recovery_done(GObject *source,GAsyncResult *result,gpointer unused){
+ (void)source;(void)unused;
+ NowGamesReply answer=NOW_GAMES_BUSY;
+ GError *error=NULL;
+ gboolean ok=now_games_request_finish(result,&answer,&error);
+ g_clear_error(&error);
+ if(!managed_games.running)return;
+ if(ok && answer==NOW_GAMES_IDLE){
+  managed_games.finished_observed=FALSE;
+  managed_games.reconciled_once=FALSE;
+  managed_games_finish("IDLE GAMES SESSION RECOVERED. YOU CAN PLAY AGAIN");
+ }else
+  managed_games_finish("RECOVERY NOT SAFE OR UNAVAILABLE. SESSION PRESERVED");
+}
+static void on_managed_games_recover(void *widget,void *data){
+ (void)widget;(void)data;
+ if(managed_games.running||managed_games.observing||managed_games.playing||
+    managed_games.stream_process||managed_games.reconcile_id){
+  managed_games_message("CLOSE YOUR ACTIVE STREAM BEFORE GAMES RECOVERY");
+  return;
+ }
+ if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+  managed_games_message("SET SERVER AND SSH USER IN SETTINGS");
+  return;
+ }
+ char *helper=managed_games_helper();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  managed_games_message("MANAGED GAMES HELPER MISSING FROM THIS PACKAGE");
+  g_free(helper);
+  return;
+ }
+ char *key=g_build_filename(g_get_home_dir(),".local","share",
+   "optiplex-now","games-client","id_ed25519",NULL);
+ gboolean has_key=g_file_test(key,G_FILE_TEST_IS_REGULAR);
+ g_free(key);
+ if(!has_key){
+  managed_games_message("RESTRICTED OWNER GAMES ACCESS REQUIRED");
+  g_free(helper);
+  return;
+ }
+ managed_games.running=TRUE;
+ managed_games.stopping=FALSE;
+ managed_games.status_only=TRUE;
+ managed_games.cancel=g_cancellable_new();
+ g_strlcpy(managed_games.host,cfg[0],sizeof managed_games.host);
+ g_strlcpy(managed_games.user,cfg[1],sizeof managed_games.user);
+ managed_games_message("CHECKING WOLF AND STEAM BEFORE IDLE SESSION RECOVERY...");
+ now_games_request_async(helper,"reconcile",managed_games.host,
+  managed_games.user,managed_games.cancel,managed_games_recovery_done,NULL);
+ g_free(helper);
 }
 static void launch_steam(void){managed_games_begin(FALSE,FALSE);}
 static void on_play_steam(GtkWidget*w,gpointer data){(void)w;(void)data;launch_steam();}
@@ -1923,6 +1979,10 @@ static void on_games_setup(void*w,void*p){(void)w;
  g_signal_connect_data(restart,"clicked",(GCallback)on_restart_streaming,d,NULL,0);add(col,restart,0);
  GtkWidget*check=button("CHECK OWNER GAMES ACCESS","setupaction");
  g_signal_connect_data(check,"clicked",(GCallback)on_managed_games_check,NULL,NULL,0);add(col,check,0);
+ GtkWidget*recover=button("RECOVER IDLE GAMES SESSION","setupaction");
+ g_signal_connect_data(recover,"clicked",(GCallback)on_managed_games_recover,NULL,NULL,0);add(col,recover,0);
+ GtkWidget*recover_hint=label("If a failed launch is stuck, verify Wolf and Steam are idle and safely archive its session record. Refuses while a game or unknown stream is active.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(recover_hint),TRUE);add(col,recover_hint,0);
  GtkWidget*stop=button("STOP OWNER STEAM (CONFIRM)","setupaction");
  g_signal_connect_data(stop,"clicked",(GCallback)on_managed_games_stop,NULL,NULL,0);add(col,stop,0);
  games_notice=label("","gameshint");add(col,games_notice,0);

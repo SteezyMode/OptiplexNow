@@ -1,5 +1,6 @@
 """Owner Games host request gate: offline tests, no network or real Docker."""
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -627,31 +628,86 @@ class TrustedGamesGateTests(unittest.TestCase):
         with self.store.locked() as fd:
             self.assertIsNotNone(read_lease(fd))
 
-    def test_reconcile_cannot_clear_foreign_revoked_uncertain_or_unapproved_lease(self):
+    def test_reconcile_abandoned_launch_requires_empty_runtime_and_archives_evidence(self):
+        # Interrupted Create/Join can leave a blocking transaction after a Wolf
+        # restart. The authenticated owner can recover only after proving idle.
+        for state in ("creating", "created", "uncertain"):
+            with self.subTest(state=state):
+                self.call("start", approved=True)
+                with self.store.locked() as fd:
+                    lease = read_lease(fd)
+                    lease["state"] = state
+                    write_lease(fd, lease)
+                self.api.lobby = None
+                self.api.data[4]["sessions"] = []
+                before_posts = [p for m, p, _ in self.api.calls if m == "POST"]
+                result = self.call("reconcile", approved=True)
+                self.assertEqual(result, {
+                    "success": True, "status": "idle", "lease_archived": True})
+                self.assertEqual(before_posts,
+                                 [p for m, p, _ in self.api.calls if m == "POST"])
+                with self.store.locked() as fd:
+                    self.assertIsNone(read_lease(fd))
+                archive = Path(self.store.directory) / (
+                    "owner-steam-lease.closed-" + lease["id"] + ".json")
+                self.assertEqual(json.loads(archive.read_text())["state"],
+                                 state)
+                # A subsequent managed Start can proceed after Wolf UI returns.
+                self.api.data[4]["sessions"] = copy.deepcopy(fixtures()[4]["sessions"])
+
+    def test_uncertain_recovery_refuses_live_wolf_session_lobby_and_steam_writer(self):
+        self.call("start", approved=True)
+        with self.store.locked() as fd:
+            lease = read_lease(fd)
+            lease["state"] = "uncertain"
+            write_lease(fd, lease)
+
+        # Even a same-owner Wolf UI is too ambiguous for UNCERTAIN.
+        self.api.lobby = None
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        self.api.data[4]["sessions"] = []
+        self.api.lobby = {"id": "active", "name": "Steam"}
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True)
+        self.api.lobby = None
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True, writer_check=lambda: False)
+        def private_error():
+            raise RuntimeError("PRIVATE SECRET")
+        with self.assertRaises(PolicyError) as err:
+            self.call("reconcile", approved=True, writer_check=private_error)
+        self.assertNotIn("PRIVATE", str(err.exception))
+
+        # Detect activity beginning between first Wolf query and writer census.
+        def race():
+            self.api.lobby = {"id": "new", "name": "Steam"}
+            return True
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=True, writer_check=race)
+        with self.store.locked() as fd:
+            self.assertEqual(read_lease(fd)["state"], "uncertain")
+
+    def test_reconcile_cannot_clear_foreign_revoked_or_unapproved_lease(self):
         self.call("start", approved=True)
         self.api.lobby = None
         self.api.data[4]["sessions"] = []
-        with self.assertRaises(PolicyError):
-            self.call("reconcile", client="2002", approved=True)
-        with self.assertRaises(PolicyError):
-            self.call("reconcile", approved=False)
         with self.store.locked() as fd:
             lease = read_lease(fd)
             lease["state"] = "uncertain"
             write_lease(fd, lease)
         with self.assertRaises(PolicyError):
-            self.call("reconcile", approved=True)
+            self.call("reconcile", client="2002", approved=True)
+        with self.assertRaises(PolicyError):
+            self.call("reconcile", approved=False)
         with self.store.locked() as fd:
-            lease = read_lease(fd)
-            lease["state"] = "joined"
-            write_lease(fd, lease)
             policy = self.store.read(fd)
             policy["devices"][0]["revoked"] = True
             self.store.write(fd, policy)
         with self.assertRaises(PolicyError):
             self.call("reconcile", approved=True)
         with self.store.locked() as fd:
-            self.assertIsNotNone(read_lease(fd))
+            self.assertEqual(read_lease(fd)["state"], "uncertain")
 
     def test_no_request_can_stop_unrelated_lease(self):
         self.call("start", approved=True)

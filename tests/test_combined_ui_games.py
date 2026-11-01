@@ -31,6 +31,16 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertIn('static void managed_games_observed(', SOURCE)
         self.assertIn('managed_games_reconcile_after_exit', SOURCE)
 
+    def test_owner_session_recovery_is_explicit_async_and_has_no_steam_fallback(self):
+        self.assertIn('button("RECOVER IDLE GAMES SESSION","setupaction")', SOURCE)
+        self.assertIn('(GCallback)on_managed_games_recover', SOURCE)
+        self.assertIn('now_games_request_async(helper,"reconcile",managed_games.host,', SOURCE)
+        self.assertIn('managed_games_recovery_done', SOURCE)
+        self.assertIn('SESSION PRESERVED', SOURCE)
+        self.assertIn('PREVIOUS STEAM SESSION NOT SAFE TO RECOVER.', SOURCE)
+        self.assertIn('strcmp(action,"reconcile")==0?', SOURCE)
+        self.assertNotIn('launch_wolf_app("Steam")', SOURCE)
+
     def test_restricted_transport_compiled_and_tested(self):
         self.assertIn('src/games_flow.c', MAKE)
         self.assertIn('check-games-flow:', MAKE)

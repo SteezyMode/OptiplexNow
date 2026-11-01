@@ -575,8 +575,13 @@ static void on_transfer_action(const char *operation,const char *torrent_hash,
  * Selecting a torrent brings the dedicated folder step into view. */
 static gboolean reveal_destination(gpointer data){
  GtkWidget *picker=GTK_WIDGET(data);
- GtkWidget *area=search_workspace?search_workspace:picker;
- if(!downloads_scroll || !downloads_content ||
+ if(!downloads_scroll || !downloads_content)return G_SOURCE_REMOVE;
+ /* Resolve the containing workflow through the live widget tree, not a
+  * static raw pointer that could outlive a closed window's GTK children. */
+ GtkWidget *area=picker;
+ while(area && area!=downloads_content && !GTK_IS_STACK(area))
+   area=gtk_widget_get_parent(area);
+ if(!area || area==downloads_content ||
     !gtk_widget_get_mapped(area))return G_SOURCE_REMOVE;
  gint x=0,y=0;
  if(!gtk_widget_translate_coordinates(area,downloads_content,0,0,&x,&y))

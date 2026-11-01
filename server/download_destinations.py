@@ -119,6 +119,67 @@ def browse(root,relative="",*,runner=subprocess.run):
     return {"root":root,"relative":relative,
             "folders":sorted(folders,key=str.casefold)}
 
+def checked_folder_name(value):
+    """A single new child in a verified existing library directory."""
+    if (not isinstance(value, str) or not 1 <= len(value) <= MAX_NAME or
+            value in (".", "..") or "/" in value or "\\\\" in value or
+            any(ord(c) < 32 or ord(c) == 127 for c in value)):
+        raise DestinationError("Invalid new folder name")
+    return value
+
+
+def create_folder(root, relative, name, *, runner=subprocess.run):
+    """Create one directory inside a verified qBittorrent writable bind mount.
+
+    Never accept host paths, create a new Docker mount, follow symlinks,
+    or run a shell with caller-controlled input. This operation is only
+    reachable through the independently authenticated restricted owner gate.
+    """
+    if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
+        raise DestinationError("Invalid library root")
+    child = checked_folder_name(name)
+    parts = _relative(relative)
+    qbit, _gateway, _port, mounts = _mounts(runner=runner)
+    if root not in mounts:
+        raise DestinationError("Library root not configured")
+    parent = mounts[root]["target"]
+    if parts:
+        parent += "/" + "/".join(parts)
+    fd = None
+    try:
+        fd = _open_folder(mounts[root]["source"], parts)
+        # The actual downloader user must have write access, not just the
+        # host operator executing the restricted command.
+        check = ["docker", "exec", "-u", "abc", qbit,
+                 "sh", "-c", 'test -w "$1"', "now", parent]
+        permission = runner(check, capture_output=True, timeout=6, check=False)
+        if permission.returncode != 0:
+            raise DestinationError("Downloader cannot write parent folder")
+        try:
+            os.mkdir(child, mode=0o775, dir_fd=fd)
+        except FileExistsError as exc:
+            raise DestinationError("Folder already exists") from exc
+        # Verify newly created path is also writable by qBittorrent; avoid
+        # advertising a location it cannot actually download into.
+        new_path = parent + "/" + child
+        permission = runner(["docker", "exec", "-u", "abc", qbit,
+                             "sh", "-c", 'test -w "$1"', "now", new_path],
+                            capture_output=True, timeout=6, check=False)
+        if permission.returncode != 0:
+            # Only roll back the empty directory created by this request.
+            try:
+                os.rmdir(child, dir_fd=fd)
+            except OSError:
+                pass
+            raise DestinationError("Downloader cannot write new folder")
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DestinationError("Unable to create approved folder") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+    return {"status": "created"}
+
+
 def add_magnet(root,relative,magnet,*,runner=subprocess.run):
     if not isinstance(root,str) or not ROOT_ID.fullmatch(root):
         raise DestinationError("Unknown library root")

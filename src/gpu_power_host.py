@@ -139,7 +139,13 @@ def set_cap(watts, *, probe=probe_gpu, call=rpc):
     # LACT rolls unconfirmed edits back after ~5 seconds. Confirm immediately;
     # do not retry an ambiguous state-changing command.
     call("confirm_pending_config", {"command": "confirm"})
-    return {"success": True, "status": "confirmed", "requested_w": watts}
+    # A successful LACT reply is not proof that the driver accepted the cap.
+    # Do one read-only NVIDIA query, never repeat an ambiguous write.
+    actual = probe()["limit_w"]
+    if abs(actual - watts) > 1.0:
+        raise GpuPowerError("NVIDIA did not report the requested power limit")
+    return {"success": True, "status": "confirmed",
+            "requested_w": watts, "applied_w": actual}
 
 
 def handle(argv, *, probe=probe_gpu, call=rpc):

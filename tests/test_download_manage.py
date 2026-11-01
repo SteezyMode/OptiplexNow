@@ -73,7 +73,7 @@ class ManageTests(unittest.TestCase):
         unsafe=(
             dict(valid,save_path="/etc",content_path="/etc/passwd"),
             dict(valid,save_path="/library/bigdisk",
-                 content_path="/library/bigdisk/Movies/Horror/Film"),
+                 content_path="/library/bigdisk"),
             dict(valid,save_path="/library/bigdisk/Movies/../",
                  content_path="/library/bigdisk/Movies/../secret"),
             dict(valid,save_path="/library/bigdisk/Movies/Horror",

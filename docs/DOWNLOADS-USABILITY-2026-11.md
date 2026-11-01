@@ -81,3 +81,24 @@ that the confirmation button remains visible after a long folder list.
   needed for the search-drain and NEW FOLDER features; updating only a client
   will not replace a stale host broker. Keep the host update atomic with an
   independently reviewed rollback plan.
+
+## Simplified picker and Transfers (curated server workflow)
+
+- **There is intentionally no default download location**, no automatic
+  last-used location preselection and no automatic torrent submission. Every
+  Add still requires a visible current folder and explicit final confirmation.
+- A compact **Favorites / Recent Locations** chooser sits above the normal
+  folder list. Favorites can be toggled with a single star button, and Recents
+  are recorded **only after qBittorrent acknowledges a successful Add**, up
+  to eight per client. Saved places remain scoped to the owning server/user,
+  store only mount IDs and relative paths, and are revalidated before use.
+- Folder rows have normal folder icons and flat list styling; removable
+  "Save" / "Remove Saved" toolbar clutter has been replaced by one star toggle.
+- Transfers show compact filename/progress/speed rows with a keyboard-
+  accessible collapsed **Actions** expander. Open state is restored after
+  a queue refresh for the same torrent hash; data removal still requires
+  the original separate confirmation.
+- The remaining 25-result bug requires the updated **live host broker**. A
+  newer client .deb alone cannot upgrade a legacy host's server/download_search.py.
+  Before claiming this fixed on the actual machine, inspect owner-host-upgrade
+  status and verify the host's real search stream returns more than 25 results.

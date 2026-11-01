@@ -39,6 +39,8 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_START)', SETTINGS)
         self.assertIn('!strcmp(id,"setupaction")', SETTINGS)
         self.assertIn('!strcmp(id,"navback")', SETTINGS)
+        self.assertIn('gtk_label_set_line_wrap(GTK_LABEL(l),TRUE)', SETTINGS)
+        self.assertIn('gtk_label_set_max_width_chars(GTK_LABEL(l),48)', SETTINGS)
 
 
 if __name__ == "__main__":

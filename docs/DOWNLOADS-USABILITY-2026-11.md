@@ -54,3 +54,30 @@ adding a modal dialog, extra window, or more deeply nested scroll regions.
 Manual acceptance includes checking that the Back button preserves the last
 search results, that the picker can reach Horror without micro-scrolling, and
 that the confirmation button remains visible after a long folder list.
+
+## Additional download locations and search pagination
+
+- The owner can select any existing subfolder within qBittorrent's approved
+  writable `/library/<slug>` mounts; folders are not restricted to Movies/TV.
+  **NEW FOLDER** creates one checked child directory (e.g. `Games`) inside
+  the selected, already mounted drive. This request uses the same verified owner
+  device identity, parent directory file descriptor without symlink traversal,
+  and qBittorrent's actual user write check. Existing files are never moved.
+- **SAVE LOCATION** remembers a validated root ID and relative folder on the
+  current client (up to 24). **SAVED LOCATIONS** jump directly to Games,
+  Movies/Horror, etc.; the host revalidates each saved folder on every visit.
+  **REMOVE SAVED** only deletes a local bookmark, never host media.
+  New folders are saved automatically once a subsequent host browse succeeds.
+- New *physical drives* are not auto-mounted by the client: the host must first
+  expose a writable Docker bind under `/library/<slug>`. No unrestricted
+  file chooser, arbitrary host path, SSH shell, or Docker restart is introduced.
+- Streaming search now **drains paginated results after qBittorrent reports
+  Stopped** when the advertised total exceeds retrieved rows. This directly
+  addresses APIs returning only an initial 25-row page. An inaccurate upstream
+  total is retried a bounded number of times and reported as incomplete rather
+  than fabricated. Search plugin results remain external-source dependent.
+- A host broker update (including `server/download_search.py`,
+  `server/download_destinations.py`, `server/owner_games_request.py`) is
+  needed for the search-drain and NEW FOLDER features; updating only a client
+  will not replace a stale host broker. Keep the host update atomic with an
+  independently reviewed rollback plan.

@@ -10,6 +10,7 @@
 static int window_width = 640;
 static int window_height = 500;
 static const char *start_page = "dashboard";
+static gboolean gpu_power_enabled = FALSE;
 
 static gboolean allowed_page(const char *page) {
  /* Beta: defer Downloads as a first page. Old saved downloads preference
@@ -22,7 +23,7 @@ static char *state_path(void) {
 }
 
 void now_ui_state_load(void) {
- window_width=640;window_height=500;start_page="dashboard";
+ window_width=640;window_height=500;start_page="dashboard";gpu_power_enabled=FALSE;
  char *path=state_path();
  GKeyFile *key=g_key_file_new();
  if(g_key_file_load_from_file(key,path,G_KEY_FILE_NONE,NULL)) {
@@ -38,11 +39,14 @@ void now_ui_state_load(void) {
    if(!strcmp(page,"games"))start_page="games";
   }
   g_free(page);
+  gpu_power_enabled=g_key_file_get_boolean(key,"gpu_power","enabled",NULL);
  }
  g_key_file_unref(key);
  g_free(path);
 }
 
+gboolean now_ui_state_gpu_power_enabled(void) {return gpu_power_enabled;}
+void now_ui_state_set_gpu_power_enabled(gboolean enabled) {gpu_power_enabled=!!enabled;}
 void now_ui_state_window_size(int *width,int *height) {
  if(width)*width=window_width;
  if(height)*height=window_height;
@@ -69,6 +73,7 @@ gboolean now_ui_state_save(void) {
  g_key_file_set_integer(key,"window","width",window_width);
  g_key_file_set_integer(key,"window","height",window_height);
  g_key_file_set_string(key,"window","start_page",start_page);
+ g_key_file_set_boolean(key,"gpu_power","enabled",gpu_power_enabled);
  gsize length=0;
  char *data=g_key_file_to_data(key,&length,NULL);
  GError *err=NULL;

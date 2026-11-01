@@ -17,6 +17,10 @@ static GtkWidget *label(const char *text,const char *id){
 static GtkWidget *button(const char *text,const char *id){
  GtkWidget *b=gtk_button_new_with_label(text);
  if(id)gtk_widget_set_name(b,id);
+ /* Settings actions should use natural label width, not stretch across the
+  * entire scrolled page. GTK retains their existing touch-target padding. */
+ if(id && (!strcmp(id,"setupaction") || !strcmp(id,"navback")))
+  gtk_widget_set_halign(b,GTK_ALIGN_START);
  return b;
 }
 static void add(GtkWidget *box,GtkWidget *child,int expand){

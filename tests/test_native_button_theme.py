@@ -60,7 +60,7 @@ class NativeActionThemeTests(unittest.TestCase):
         self.assertIn(
             'gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");',
             destination)
-        self.assertIn('gtk_image_new_from_icon_name("folder"', destination)
+        self.assertIn('g_object_set(folder_icon,"icon-name","folder"', destination)
         search = (SRC / "downloads_search_view.c").read_text()
         self.assertIn(
             'gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-sort");',

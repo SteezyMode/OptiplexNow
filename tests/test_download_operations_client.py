@@ -121,6 +121,31 @@ class OwnerOperationsTests(unittest.TestCase):
                     mod.fetch("100.121.156.34","optiplex","files","all",
                               runner=lambda *a,**kw:self.fail("Must reject before SSH"))
 
+    def test_owner_can_create_games_folder_only_inside_approved_mount(self):
+        result={"success":True,"status":"created"}
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            observed=[]
+            def runner(cmd,**kwargs):
+                request=json.loads(kwargs["input"])
+                observed.append(request)
+                self.assertIn("StrictHostKeyChecking=yes",cmd)
+                return subprocess.CompletedProcess(cmd,0,
+                           json.dumps(result).encode(),b"")
+            with patch.object(mod,"KEY",key):
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex",
+                    "mkdir","bigdisk","","Games",runner=runner),"CREATED")
+                self.assertEqual(observed,[{"version":1,
+                    "action":"downloads_mkdir","root":"bigdisk",
+                    "relative":"","name":"Games"}])
+                for name in ("/etc","../Games","Games/Other","bad\\nline",""):
+                    with self.subTest(name=name),self.assertRaises(ValueError):
+                        mod.fetch("100.121.156.34","optiplex",
+                           "mkdir","bigdisk","",name,
+                           runner=lambda *a,**kw:self.fail("Unsafe SSH operation"))
+        with self.assertRaises(ValueError):
+            mod.present("mkdir",{"success":True,"status":"submitted"})
+
     def test_add_only_explicit_client_request(self):
         self.assertEqual(self.call("add","bigdisk","Movies/Horror",MAGNET),
                          "SUBMITTED")

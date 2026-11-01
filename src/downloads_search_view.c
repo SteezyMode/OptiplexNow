@@ -394,7 +394,9 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_widget_set_name(s->results,"nowsearchresults");
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->results),
                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_widget_set_size_request(s->results,-1,150);
+ /* Search Results now owns the entire work area rather than sharing a
+  * 150px strip with a permanently stacked folder picker. */
+ gtk_widget_set_size_request(s->results,-1,420);
  gtk_widget_set_vexpand(s->results,TRUE);
  gtk_widget_set_no_show_all(s->results,TRUE);
  s->list=gtk_list_box_new();

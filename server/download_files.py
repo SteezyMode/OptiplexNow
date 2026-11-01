@@ -43,7 +43,7 @@ def inspect_torrent_files(torrent_hash, *, runner=subprocess.run):
         name, size, progress, priority = (item.get("name"), item.get("size"),
                                           item.get("progress"), item.get("priority"))
         if (not isinstance(name, str) or not 1 <= len(name) <= 220 or
-                name.startswith("/") or "\\\\" in name or
+                name.startswith("/") or "\\" in name or
                 any(part in ("", ".", "..") for part in name.split("/")) or
                 any(ord(c) < 32 or ord(c) == 127 for c in name) or
                 type(size) is not int or not 0 <= size <= 2**63-1 or

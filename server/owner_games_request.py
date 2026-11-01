@@ -20,10 +20,11 @@ from download_files import inspect_torrent_files
 from download_manage import manage_torrent, checked_hash, OPERATIONS
 from download_search import search_once, stream_search, checked_query, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
-                                   add_magnet as enqueue_download, _relative, ROOT_ID)
+                                   add_magnet as enqueue_download, create_folder as new_download_folder,
+                                    checked_folder_name, _relative, ROOT_ID)
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_manage"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_mkdir", "downloads_manage"))
 
 
 def _validated_request(request):
@@ -44,6 +45,8 @@ def _validated_request(request):
         fields.add("torrent_hash")
     elif action == "downloads_browse":
         fields.update(("root", "relative"))
+    elif action == "downloads_mkdir":
+        fields.update(("root", "relative", "name"))
     elif action == "downloads_add":
         fields.update(("root", "relative", "magnet"))
     if (set(request) != fields
@@ -65,13 +68,15 @@ def _validated_request(request):
             checked_hash(request["torrent_hash"])
         elif action == "downloads_files":
             checked_hash(request["torrent_hash"])
-        elif action in ("downloads_browse", "downloads_add"):
+        elif action in ("downloads_browse", "downloads_add", "downloads_mkdir"):
             root = request["root"]
             if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
                 raise PolicyError("Invalid download library root")
             _relative(request["relative"])
             if action == "downloads_add" and checked_magnet(request["magnet"]) is None:
                 raise PolicyError("Invalid magnet URI")
+            if action == "downloads_mkdir":
+                checked_folder_name(request["name"])
     except InventoryError:
         raise PolicyError("Invalid download operation") from None
     return action
@@ -122,6 +127,13 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                     **browse_downloads(request["root"], request["relative"])}
         except InventoryError:
             return {"success": False, "status": "folder_unavailable"}
+
+    if action == "downloads_mkdir":
+        try:
+            return {"success": True, **new_download_folder(
+                request["root"], request["relative"], request["name"])}
+        except InventoryError:
+            return {"success": False, "status": "folder_create_unavailable"}
 
     if action == "downloads_add":
         try:

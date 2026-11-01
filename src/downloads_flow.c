@@ -604,6 +604,8 @@ static void on_search_back(GtkButton *button,gpointer unused){
  (void)button;(void)unused;
  if(!search_workspace)return;
  gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
+ gtk_widget_queue_resize(search_workspace);
+ gtk_widget_queue_draw(search_workspace);
  if(search_view)
    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
                    g_object_ref(search_view),g_object_unref);
@@ -613,14 +615,18 @@ static void on_search_result(const char *magnet,gpointer unused){
  if(!destination_view || !search_workspace)return;
  if(!now_downloads_destination_view_select(destination_view,magnet))return;
  gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination");
+ gtk_widget_queue_resize(search_workspace);
+ gtk_widget_queue_draw(search_workspace);
  picker_scroll_pending=TRUE;
  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
                  g_object_ref(destination_view),g_object_unref);
 }
 static void on_download_submitted(gpointer unused){
  (void)unused;
- if(search_workspace)
+ if(search_workspace){
    gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
+   gtk_widget_queue_resize(search_workspace);
+ }
  if(last_host && last_user)
    now_downloads_refresh(last_host,last_user);
 }

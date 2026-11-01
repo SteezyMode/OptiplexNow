@@ -93,6 +93,8 @@ static void test_projector_picker_filters_and_confirm_above_browser(void){
 }
 static void test_saved_game_location_remains_scoped_to_approved_root(void){
  GtkWidget *view=now_downloads_destination_view_new();
+ now_downloads_destination_view_configure(view,"100.121.156.34","optiplex",
+                                          "/test/owner-helper");
  Picker *s=state(view);
  g_assert_nonnull(s->new_folder);
  g_assert_nonnull(s->places_combo);
@@ -106,6 +108,8 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  g_assert_true(remember_current_place(s));
  g_assert_cmpuint(s->places->len,==,1);
  SavedPlace *p=g_ptr_array_index(s->places,0);
+ g_assert_cmpstr(p->host,==,"100.121.156.34");
+ g_assert_cmpstr(p->user,==,"optiplex");
  g_assert_cmpstr(p->root,==,"bigdisk");
  g_assert_cmpstr(p->relative,==,"Games");
  gchar *file=places_path();
@@ -117,6 +121,13 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  GtkWidget *another=now_downloads_destination_view_new();
  Picker *again=state(another);
  g_assert_cmpuint(again->places->len,==,1);
+ now_downloads_destination_view_configure(another,"other.example","optiplex",
+                                          "/test/owner-helper");
+ GtkTreeModel *model=gtk_combo_box_get_model(GTK_COMBO_BOX(again->places_combo));
+ g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,1);
+ now_downloads_destination_view_configure(another,"100.121.156.34","optiplex",
+                                          "/test/owner-helper");
+ g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,2);
  SavedPlace *loaded=g_ptr_array_index(again->places,0);
  g_assert_cmpstr(loaded->relative,==,"Games");
  /* Select only a local saved-place entry for removal; no host request. */

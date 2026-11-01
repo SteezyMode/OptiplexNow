@@ -16,17 +16,21 @@ int main(void){
  g_assert_cmpint(w,==,640);
  g_assert_cmpint(h,==,500);
  g_assert_cmpstr(now_ui_state_start_page(),==,"dashboard");
+ g_assert_false(now_ui_state_gpu_power_enabled());
 
  now_ui_state_remember_size(880,540);
  now_ui_state_set_start_page("games");
+ now_ui_state_set_gpu_power_enabled(TRUE);
  g_assert_true(now_ui_state_save());
  now_ui_state_set_start_page("dashboard");
+ now_ui_state_set_gpu_power_enabled(FALSE);
  now_ui_state_remember_size(640,500);
  now_ui_state_load();
  now_ui_state_window_size(&w,&h);
  g_assert_cmpint(w,==,880);
  g_assert_cmpint(h,==,540);
  g_assert_cmpstr(now_ui_state_start_page(),==,"games");
+ g_assert_true(now_ui_state_gpu_power_enabled());
 
  now_ui_state_set_start_page("arbitrary-ssh-page");
  g_assert_cmpstr(now_ui_state_start_page(),==,"games");

@@ -10,23 +10,6 @@ typedef struct {
 static GtkWidget *list_for(GtkWidget *view){
  return view ? g_object_get_data(G_OBJECT(view),"now-download-list") : NULL;
 }
-/* Keep explicitly opened action drawers open across read-only queue refresh. */
-static GHashTable *expanded_torrents(GtkWidget *list){
- GHashTable *expanded=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
- GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
- for(GList *p=rows;p;p=p->next){
-   GtkWidget *row=GTK_WIDGET(p->data);
-   /* GtkListBox automatically wraps each item in GtkListBoxRow. */
-   GtkWidget *content=GTK_IS_BIN(row)?gtk_bin_get_child(GTK_BIN(row)):row;
-   if(!content)continue;
-   GtkWidget *toggle=g_object_get_data(G_OBJECT(content),"now-actions-toggle");
-   const gchar *hash=g_object_get_data(G_OBJECT(content),"now-torrent-hash");
-   if(toggle && hash && gtk_expander_get_expanded(GTK_EXPANDER(toggle)))
-     g_hash_table_add(expanded,g_strdup(hash));
- }
- g_list_free(rows);
- return expanded;
-}
 static void clear_list(GtkWidget *list){
  if(!list)return;
  GList *children=gtk_container_get_children(GTK_CONTAINER(list));
@@ -68,7 +51,7 @@ static gboolean number(const char *value,gint64 min,gint64 max,gint64 *out){
  if(out)*out=n;
  return TRUE;
 }
-static void perform_action(GtkButton *button,gpointer data){
+static void perform_action(GtkWidget *button,gpointer data){
  GtkWidget *view=data;
  QueueContext *ctx=g_object_get_data(G_OBJECT(view),"now-queue-context");
  const char *action=g_object_get_data(G_OBJECT(button),"now-action");
@@ -106,27 +89,54 @@ static void perform_action(GtkButton *button,gpointer data){
 done:
  g_free(operation_copy);g_free(hash_copy);g_free(name_copy);
 }
-static GtkWidget *action_button(GtkWidget *view,const char *label,
-                                const char *action,const char *hash,
-                                const char *name){
- GtkWidget *button=gtk_button_new_with_label(label);
- gtk_widget_set_name(button,!strcmp(action,"remove_delete") ?
-                            "danger" : "downloadoperation");
- gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
- g_object_set_data_full(G_OBJECT(button),"now-action",g_strdup(action),g_free);
- g_object_set_data_full(G_OBJECT(button),"now-hash",g_strdup(hash),g_free);
- g_object_set_data_full(G_OBJECT(button),"now-name",g_strdup(name),g_free);
- g_signal_connect(button,"clicked",G_CALLBACK(perform_action),view);
- return button;
+/* Standard native right-click menu. No persistent action rows. */
+static void show_transfer_menu(GtkWidget *view,const char *hash,
+                               const char *name,const char *state,
+                               GdkEvent *event){
+ GtkWidget *menu=gtk_menu_new();
+ const char *toggle=(!strcmp(state,"pausedDL") || !strcmp(state,"pausedUP") ||
+                     !strcmp(state,"stoppedDL") || !strcmp(state,"stoppedUP"))
+                     ? "resume" : "pause";
+ const char *actions[]={toggle,"reannounce","recheck","files",
+                        "remove","remove_delete"};
+ const char *labels[]={!strcmp(toggle,"pause")?"Pause":"Resume",
+                       "Reannounce","Force recheck","View files",
+                       "Remove torrent (keep files)","Delete torrent and files"};
+ for(guint j=0;j<G_N_ELEMENTS(actions);j++){
+   if(j==4)gtk_menu_shell_append(GTK_MENU_SHELL(menu),
+                                 gtk_separator_menu_item_new());
+   GtkWidget *item=gtk_menu_item_new_with_label(labels[j]);
+   g_object_set_data_full(G_OBJECT(item),"now-action",g_strdup(actions[j]),g_free);
+   g_object_set_data_full(G_OBJECT(item),"now-hash",g_strdup(hash),g_free);
+   g_object_set_data_full(G_OBJECT(item),"now-name",g_strdup(name),g_free);
+   g_signal_connect(item,"activate",G_CALLBACK(perform_action),view);
+   gtk_menu_shell_append(GTK_MENU_SHELL(menu),item);
+ }
+ g_signal_connect_swapped(menu,"selection-done",G_CALLBACK(gtk_widget_destroy),menu);
+ gtk_widget_show_all(menu);
+ gtk_menu_popup_at_pointer(GTK_MENU(menu),event);
 }
-/* Wrap six operations into compact rows; narrow laptop windows get two
- * columns and the 4:3 projector fits three. No horizontal overflow. */
-static void reflow_operations(GtkWidget *flow,GtkAllocation *allocation,
-                              gpointer unused){
- (void)unused;
- guint cols=allocation->width<480?2u:3u;
- if(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(flow))!=cols)
-   gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(flow),cols);
+static gboolean transfer_button_press(GtkWidget *widget,GdkEventButton *event,
+                                      gpointer data){
+ if(event->type!=GDK_BUTTON_PRESS || event->button!=3)return FALSE;
+ const char *hash=g_object_get_data(G_OBJECT(widget),"now-torrent-hash");
+ const char *name=g_object_get_data(G_OBJECT(widget),"now-torrent-name");
+ const char *state=g_object_get_data(G_OBJECT(widget),"now-torrent-state");
+ if(hash && name && state)
+   show_transfer_menu(GTK_WIDGET(data),hash,name,state,(GdkEvent *)event);
+ return TRUE;
+}
+static gboolean transfer_key_press(GtkWidget *widget,GdkEventKey *event,
+                                   gpointer data){
+ if(event->keyval!=GDK_KEY_Menu &&
+    !(event->keyval==GDK_KEY_F10 && (event->state&GDK_SHIFT_MASK)))
+   return FALSE;
+ const char *hash=g_object_get_data(G_OBJECT(widget),"now-torrent-hash");
+ const char *name=g_object_get_data(G_OBJECT(widget),"now-torrent-name");
+ const char *state=g_object_get_data(G_OBJECT(widget),"now-torrent-state");
+ if(hash && name && state)
+   show_transfer_menu(GTK_WIDGET(data),hash,name,state,NULL);
+ return TRUE;
 }
 void now_downloads_queue_view_on_action(GtkWidget *view,
                                        NowDownloadQueueAction callback,
@@ -182,7 +192,6 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
    }
  }
  if(!valid){g_strfreev(lines);return FALSE;}
- GHashTable *expanded=expanded_torrents(list);
  clear_list(list);
  if(empty){
    show_message(list,"No downloads in queue.");
@@ -220,49 +229,26 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
      gtk_box_pack_start(GTK_BOX(row),title,FALSE,FALSE,0);
      gtk_box_pack_start(GTK_BOX(row),bar,FALSE,FALSE,0);
      gtk_box_pack_start(GTK_BOX(row),meta,FALSE,FALSE,0);
-     GtkWidget *buttons=gtk_flow_box_new();
-     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(buttons),GTK_SELECTION_NONE);
-     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(buttons),3);
-     gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(buttons),1);
-     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(buttons),5);
-     gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(buttons),5);
-     g_signal_connect(buttons,"size-allocate",
-                      G_CALLBACK(reflow_operations),NULL);
-     const char *toggle=(!strcmp(parts[2],"pausedDL") ||
-                          !strcmp(parts[2],"pausedUP") ||
-                          !strcmp(parts[2],"stoppedDL") ||
-                          !strcmp(parts[2],"stoppedUP")) ? "resume" : "pause";
-     const char *actions[]={toggle,"reannounce","recheck","files",
-                            "remove","remove_delete"};
-     const char *labels[]={!strcmp(toggle,"pause")?"PAUSE":"RESUME",
-                           "REANNOUNCE","RECHECK","FILES",
-                           "REMOVE","DELETE FILES"};
-     for(guint j=0;j<6;j++){
-       GtkWidget *action=action_button(view,labels[j],actions[j],
-                                      parts[4],parts[3]);
-       gtk_widget_set_hexpand(action,TRUE);
-       gtk_widget_set_halign(action,GTK_ALIGN_FILL);
-       gtk_flow_box_insert(GTK_FLOW_BOX(buttons),action,-1);
-     }
-     /* Keep title, progress and speed scannable, expanding torrent
-      * management only on demand. Native GtkExpander is keyboard operable. */
-     GtkWidget *actions_toggle=gtk_expander_new("ACTIONS");
-     gtk_expander_set_spacing(GTK_EXPANDER(actions_toggle),6);
-     gtk_widget_set_tooltip_text(actions_toggle,
-         "Show or hide Files, Pause and torrent management");
-     gtk_container_add(GTK_CONTAINER(actions_toggle),buttons);
-     gtk_expander_set_expanded(GTK_EXPANDER(actions_toggle),
-                               g_hash_table_contains(expanded,parts[4]));
-     gtk_box_pack_start(GTK_BOX(row),actions_toggle,FALSE,FALSE,0);
-     g_object_set_data(G_OBJECT(row),"now-actions-toggle",actions_toggle);
-     g_object_set_data_full(G_OBJECT(row),"now-torrent-hash",
-                             g_strdup(parts[4]),g_free);
-     gtk_container_add(GTK_CONTAINER(list),row);
+     GtkWidget *event_box=gtk_event_box_new();
+     gtk_widget_set_can_focus(event_box,TRUE);
+     gtk_widget_set_tooltip_text(event_box,
+          "Right-click for torrent actions; Shift+F10 for keyboard.");
+     g_object_set_data_full(G_OBJECT(event_box),"now-torrent-hash",
+                            g_strdup(parts[4]),g_free);
+     g_object_set_data_full(G_OBJECT(event_box),"now-torrent-name",
+                            g_strdup(parts[3]),g_free);
+     g_object_set_data_full(G_OBJECT(event_box),"now-torrent-state",
+                            g_strdup(parts[2]),g_free);
+     gtk_container_add(GTK_CONTAINER(event_box),row);
+     g_signal_connect(event_box,"button-press-event",
+                      G_CALLBACK(transfer_button_press),view);
+     g_signal_connect(event_box,"key-press-event",
+                      G_CALLBACK(transfer_key_press),view);
+     gtk_container_add(GTK_CONTAINER(list),event_box);
      g_strfreev(parts);
    }
    gtk_widget_show_all(list);
  }
- g_hash_table_unref(expanded);
  g_strfreev(lines);
  return TRUE;
 }

@@ -50,6 +50,15 @@ static void settings_link(GtkWidget *container,GtkWidget *stack,const char *capt
 }
 /* Settings home is a responsive 2-up menu, not a stack of tiny left-aligned
  * actions. GtkFlowBox drops to one full-width column on narrow displays. */
+static void settings_menu_reflow(GtkWidget *menu,GtkAllocation *allocation,
+                                 gpointer unused){
+ (void)unused;
+ /* GTK can fit two short captions into a 430px surface. Prefer one wide
+  * card per row there; avoid compressed, uneven-looking navigation. */
+ guint columns=allocation->width<540?1u:2u;
+ if(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(menu))!=columns)
+  gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(menu),columns);
+}
 static GtkWidget *settings_home_menu_new(void){
  GtkWidget *menu=gtk_flow_box_new();
  gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(menu),GTK_SELECTION_NONE);
@@ -61,6 +70,7 @@ static GtkWidget *settings_home_menu_new(void){
  gtk_widget_set_hexpand(menu,TRUE);
  gtk_widget_set_halign(menu,GTK_ALIGN_FILL);
  gtk_widget_set_name(menu,"settings-menu");
+ g_signal_connect(menu,"size-allocate",G_CALLBACK(settings_menu_reflow),NULL);
  return menu;
 }
 static GtkWidget *settings_menu_button(GtkWidget *menu,const char *caption){

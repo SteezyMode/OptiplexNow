@@ -48,6 +48,34 @@ static void settings_link(GtkWidget *container,GtkWidget *stack,const char *capt
  now_nav_bind_link(b,stack,page);
  add(container,b,0);
 }
+/* Settings home is a responsive 2-up menu, not a stack of tiny left-aligned
+ * actions. GtkFlowBox drops to one full-width column on narrow displays. */
+static GtkWidget *settings_home_menu_new(void){
+ GtkWidget *menu=gtk_flow_box_new();
+ gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(menu),GTK_SELECTION_NONE);
+ gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(menu),TRUE);
+ gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(menu),1);
+ gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(menu),2);
+ gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(menu),10);
+ gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(menu),10);
+ gtk_widget_set_hexpand(menu,TRUE);
+ gtk_widget_set_halign(menu,GTK_ALIGN_FILL);
+ gtk_widget_set_name(menu,"settings-menu");
+ return menu;
+}
+static GtkWidget *settings_menu_button(GtkWidget *menu,const char *caption){
+ GtkWidget *b=button(caption,"settingscard");
+ gtk_widget_set_hexpand(b,TRUE);
+ gtk_widget_set_halign(b,GTK_ALIGN_FILL);
+ gtk_widget_set_size_request(b,-1,50);
+ gtk_container_add(GTK_CONTAINER(menu),b);
+ return b;
+}
+static void settings_menu_link(GtkWidget *menu,GtkWidget *stack,
+                               const char *caption,const char *page){
+ GtkWidget *b=settings_menu_button(menu,caption);
+ now_nav_bind_link(b,stack,page);
+}
 /* XFCE-style list ordering: move the existing row, preserving its checkboxes. */
 static void tray_order_move(GtkWidget *button,gpointer direction_ptr){
  GtkWidget *row=gtk_widget_get_ancestor(button,GTK_TYPE_LIST_BOX_ROW);
@@ -125,18 +153,18 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  gtk_widget_set_vexpand(stack,TRUE);
  add(area,stack,1);
  GtkWidget*home=settings_page(stack,"home");
- settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
-  settings_link(home,stack,"HOST GPU  ›","gpu");
- settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
- GtkWidget*other_apps=button("OTHER APPS  ›","setupaction");
+ add(home,label("SETTINGS","modalheading"),0);
+ add(home,label("Choose a section to configure this client or its approved server.","helper"),0);
+ GtkWidget*home_menu=settings_home_menu_new();
+ add(home,home_menu,0);
+ settings_menu_link(home_menu,stack,"GAMING & STREAMING  ›","gaming");
+ settings_menu_link(home_menu,stack,"HOST GPU  ›","gpu");
+ settings_menu_link(home_menu,stack,"APPEARANCE & TRAY  ›","preferences");
+ settings_menu_link(home_menu,stack,"CONNECTIONS & SERVER  ›","connection");
+ GtkWidget*other_apps=settings_menu_button(home_menu,"OTHER APPS  ›");
  now_nav_bind_link(other_apps,main_pages,"software");
- add(home,other_apps,0);
- GtkWidget*system_info=button("SYSTEM INFO  ›","setupaction");
+ GtkWidget*system_info=settings_menu_button(home_menu,"SYSTEM INFO  ›");
  g_signal_connect(system_info,"clicked",callbacks->on_system_info,NULL);
- add(home,system_info,0);
- 
- add(home,label("SETUP & MAINTENANCE","modalheading"),0);
- settings_link(home,stack,"CONNECTIONS & SERVER  ›","connection");
  GtkWidget*connection=settings_page(stack,"connection");
  GtkWidget*gaming=settings_page(stack,"gaming");
  GtkWidget*preferences=settings_page(stack,"preferences");

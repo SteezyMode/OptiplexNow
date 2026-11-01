@@ -38,6 +38,8 @@ class CompactUiTests(unittest.TestCase):
     def test_settings_home_uses_balanced_responsive_navigation_tiles(self):
         self.assertIn('gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(menu),1)', SETTINGS)
         self.assertIn('gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(menu),2)', SETTINGS)
+        self.assertIn('guint columns=allocation->width<540?1u:2u;', SETTINGS)
+        self.assertIn('g_signal_connect(menu,"size-allocate",G_CALLBACK(settings_menu_reflow),NULL)', SETTINGS)
         self.assertIn('gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(menu),TRUE)', SETTINGS)
         self.assertIn('settings_menu_button(home_menu,"OTHER APPS  ›")', SETTINGS)
         self.assertIn('settings_menu_button(home_menu,"SYSTEM INFO  ›")', SETTINGS)

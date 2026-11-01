@@ -63,8 +63,8 @@ that the confirmation button remains visible after a long folder list.
   the selected, already mounted drive. This request uses the same verified owner
   device identity, parent directory file descriptor without symlink traversal,
   and qBittorrent's actual user write check. Existing files are never moved.
-- **SAVE LOCATION** remembers a validated root ID and relative folder on the
-  current client (up to 24). **SAVED LOCATIONS** jump directly to Games,
+- **SAVE LOCATION** remembers the originating verified host and SSH user plus
+  a validated root ID and relative folder on the current client (up to 24). **SAVED LOCATIONS** jump directly to Games,
   Movies/Horror, etc.; the host revalidates each saved folder on every visit.
   **REMOVE SAVED** only deletes a local bookmark, never host media.
   New folders are saved automatically once a subsequent host browse succeeds.

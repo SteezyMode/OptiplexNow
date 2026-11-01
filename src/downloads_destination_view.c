@@ -585,8 +585,15 @@ static void on_drive_clicked(GtkButton *button,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running)return;
  const gchar *id=g_object_get_data(G_OBJECT(button),"drive-id");
- if(safe_root(id))
+ if(!safe_root(id))return;
+ const gchar *active=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+ if(g_strcmp0(active,id)==0){
+   /* Clicking a drive while inside a subdirectory returns to that drive's root. */
+   g_free(s->relative);s->relative=g_strdup("");
+   start(s,'b');
+ }else{
    gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),id);
+ }
 }
 static void on_up(GtkButton *unused,gpointer data){
  (void)unused;

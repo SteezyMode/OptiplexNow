@@ -44,6 +44,15 @@ class VisualCoherenceTests(unittest.TestCase):
         self.assertIn("#modalheading {font-size:16px", MAIN)
         self.assertIn("font-size:11px", THEME)
 
+    def test_gpu_power_window_uses_same_dark_theme_as_other_dialogs(self):
+        power = (ROOT / "src/gpu-power-ui.py").read_text(encoding="utf-8")
+        approvals = (ROOT / "src/owner-approvals-ui.py").read_text(encoding="utf-8")
+        for source in (power, approvals):
+            self.assertIn("from now_theme import install as install_theme", source)
+            self.assertIn("install_theme()", source)
+        self.assertIn("Gtk.init([])", power)
+        self.assertIn("PowerWindow(*argv)", power)
+
     def test_existing_primary_tiles_and_no_new_host_actions(self):
         self.assertIn('gtk_widget_set_name(play,"tile");', GAMES)
         self.assertIn('video_browser=button("OPEN VIDEO LIBRARY  ↗","tile")', MAIN)

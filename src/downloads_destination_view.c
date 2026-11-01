@@ -830,13 +830,21 @@ static gchar *native_uri_host_path(Picker *s,const gchar *uri){
  const gchar *scheme=g_uri_get_scheme(parsed);
  const gchar *host=g_uri_get_host(parsed);
  const gchar *user=g_uri_get_userinfo(parsed);
- const gchar *raw=g_uri_get_path(parsed);
  gint port=g_uri_get_port(parsed);
  gchar *folder=NULL;
  if(g_strcmp0(scheme,"sftp")==0 && g_strcmp0(host,s->host)==0 &&
     g_strcmp0(user,s->user)==0 && (port==-1 || port==22) &&
-    !g_uri_get_query(parsed) && !g_uri_get_fragment(parsed) && raw){
-   folder=g_uri_unescape_string(raw,NULL);
+    !g_uri_get_query(parsed) && !g_uri_get_fragment(parsed)){
+   /* Keep the raw path: URI parsers may normalize /../ before callers
+    * inspect it. This remote selector must never silently reinterpret a
+    * path picked by the user. */
+   const gchar *delimiter=strstr(uri,"://");
+   const gchar *slash=delimiter?strchr(delimiter+3,'/'):NULL;
+   if(slash){
+     gchar *encoded=g_strndup(slash,strcspn(slash,"?#"));
+     folder=g_uri_unescape_string(encoded,NULL);
+     g_free(encoded);
+   }
    if(!folder || strlen(folder)<2 || strlen(folder)>1024 ||
       !g_path_is_absolute(folder) || g_str_has_prefix(folder,"//") ||
       g_str_has_suffix(folder,"/") || strstr(folder,"//") ||

@@ -87,6 +87,10 @@ def present(action,data):
         if len(result.encode("utf-8"))>32768:
             raise ValueError("File listing too long")
         return result
+    if action=="mkdir":
+        if data.get("status")!="created":
+            raise ValueError("Host did not create the selected folder")
+        return "CREATED"
     if action=="add":
         if data.get("status")!="submitted":
             raise ValueError("Downloader did not accept the torrent")
@@ -125,7 +129,7 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
-        "add":"downloads_add","manage":"downloads_manage",
+        "add":"downloads_add","mkdir":"downloads_mkdir","manage":"downloads_manage",
         "files":"downloads_files","vpn":"downloads_status"}.get(action)}
     if request["action"] is None:
         raise ValueError("Invalid download action")
@@ -144,6 +148,12 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         if not isinstance(root,str) or not ROOT.fullmatch(root):
             raise ValueError("Invalid library root")
         request.update(root=root,relative=relative(path))
+        if action=="mkdir":
+            if (not isinstance(magnet,str) or not 1<=len(magnet)<=160 or
+                    magnet in (".","..") or "/" in magnet or "\\\\" in magnet or
+                    any(ord(c)<32 or ord(c)==127 for c in magnet)):
+                raise ValueError("Invalid folder name")
+            request["name"]=magnet
         if action=="add":
             if (not isinstance(magnet,str) or not 10<=len(magnet)<=1024 or
                 not magnet.startswith("magnet:?xt=urn:bt") or
@@ -170,10 +180,11 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
 if __name__=="__main__":
     try:
         args=sys.argv[1:]
-        if len(args)<3 or args[2] not in ("roots","browse","add","manage","files","vpn") or (
+        if len(args)<3 or args[2] not in ("roots","browse","add","mkdir","manage","files","vpn") or (
             (args[2] in ("roots","vpn") and len(args)!=3) or
             (args[2]=="browse" and len(args)!=5) or
             (args[2]=="add" and len(args)!=6) or
+            (args[2]=="mkdir" and len(args)!=6) or
             (args[2]=="manage" and len(args)!=5) or
             (args[2]=="files" and len(args)!=4)):
             raise ValueError("Expected owner host, action and checked selection")

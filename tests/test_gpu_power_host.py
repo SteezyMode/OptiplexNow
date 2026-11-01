@@ -24,10 +24,15 @@ class GpuPowerTests(unittest.TestCase):
 
     def test_gpu_probe_rejects_ambiguous_or_invalid_hardware(self):
         for output in ("", "N/A\n", SAMPLE + SAMPLE,
-                       SAMPLE.replace("70.0", "N/A"),
                        SAMPLE.replace("55.0", "-1")):
             with self.subTest(output=output), self.assertRaises(gpu.GpuPowerError):
                 gpu.parse_gpu(output)
+
+    def test_gpu_monitoring_remains_read_only_when_maximum_unavailable(self):
+        details = gpu.parse_gpu(SAMPLE.replace("70.0", "N/A"))
+        self.assertEqual(details["limit_w"], 55.0)
+        self.assertIsNone(details["max_w"])
+        self.assertIsNone(details["min_w"])
 
     def test_power_limits_reject_invalid_requests_before_lact(self):
         requested = []

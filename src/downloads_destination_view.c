@@ -15,7 +15,7 @@ typedef struct {
  GtkWidget *new_folder,*places_list,*pin_place,*browser_area,*sidebar,*places_toggle;
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
  GPtrArray *places,*recents;
- gboolean running,loading_roots,folder_valid,auto_pin_created,sidebar_compact,sidebar_requested;
+ gboolean running,loading_roots,folder_valid,sidebar_compact,sidebar_requested;
  void (*on_added)(gpointer);
  gpointer added_data;
 } Picker;
@@ -459,12 +459,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
      gtk_label_set_text(GTK_LABEL(s->status),
        "Open a folder or choose a Favorite / Recent location, then Add Torrent.");
      s->folder_valid=TRUE;
-     if(s->auto_pin_created){
-       s->auto_pin_created=FALSE;
-       if(remember_current_place(s))
-         gtk_label_set_text(GTK_LABEL(s->status),
-           "New download folder created and saved as a location.");
-     }
+
    }
  }else ok=FALSE;
  g_strfreev(lines);

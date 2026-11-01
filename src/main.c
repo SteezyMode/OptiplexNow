@@ -749,7 +749,7 @@ static void *worker(void*arg){
       "printf 'RAM_USED='; awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if(t>0)printf \"%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; "
       "printf 'GPU_LOAD='; nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | awk 'NF {print $1\"%\"}'; "
       "printf 'VRAM_USED='; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | awk -F, 'NF>=2 {printf \"%.1f / %.1f GiB\\n\",$1/1024,$2/1024}'; "
-       "printf 'GPU_CAP='; if [ -S /run/lactd.sock ] && python3 -c 'import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(0.4); s.connect(\"/run/lactd.sock\"); s.close()' 2>/dev/null; then nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader,nounits 2>/dev/null | head -1 | "
+       "printf 'GPU_CAP='; if [ \"$NOW_GPU_POWER\" = 1 ] && [ -S /run/lactd.sock ] && python3 -c 'import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(0.4); s.connect(\"/run/lactd.sock\"); s.close()' 2>/dev/null; then nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader,nounits 2>/dev/null | head -1 | "
        "awk -F, 'NF>=2 {a=$1+0;b=$2+0;if(a>0 && b>=a)printf \"%.0f/%.0f W\",a,b}'; fi; printf '\\n'; "
       "printf 'VPN_STATUS='; if command -v docker >/dev/null 2>&1; then "
       "vpn_id=$(docker ps -a --format '{{.ID}}|{{.Image}}' 2>/dev/null | awk -F'|' '$2 ~ /(^|\\/)gluetun(:|@|$)/ {print $1; exit}'); "
@@ -766,7 +766,13 @@ static void *worker(void*arg){
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
       "printf 'DRIVES_END\n'";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,cmd,NULL};
+     /* Disabled clients never probe LACT; original telemetry stays intact. */
+     char remote_cmd[8192];
+     if(snprintf(remote_cmd,sizeof remote_cmd,"NOW_GPU_POWER=%d; %s",
+                 r->gpu_power_opt_in,cmd)>=(int)sizeof remote_cmd){
+       r->success=0;strcpy(r->message,"SERVER QUERY TOO LARGE");goto done;
+     }
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,remote_cmd,NULL};
      int code=now_run(argv,stats,sizeof stats,9);
      if(code==0&&strstr(stats,"READY")){
        r->success=1;strcpy(r->message,"SERVER REACHABLE");

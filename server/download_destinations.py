@@ -17,10 +17,10 @@ from download_queue import locate_verified_downloader
 from download_search import checked_magnet
 
 ROOT_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
-MAX_RELATIVE = 512
-MAX_DEPTH = 12
+MAX_RELATIVE = 1024
+MAX_DEPTH = 64
 MAX_DIRS = 100
-MAX_NAME = 160
+MAX_NAME = 255
 
 class DestinationError(InventoryError):
     pass

@@ -102,49 +102,26 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('"View files"',transfers)
         self.assertIn("DELETE TORRENT AND FILES",transfers)
 
-    def test_projector_search_and_destination_use_full_height_drilldown(self):
-        search_view=(ROOT/"src/downloads_search_view.c").read_text()
-        destination=(ROOT/"src/downloads_destination_view.c").read_text()
-        destination_header=(ROOT/"src/downloads_destination_view.h").read_text()
-        self.assertIn("search_workspace=gtk_stack_new()",FLOW)
-        self.assertIn('gtk_stack_add_named(GTK_STACK(search_workspace),search_view,"results")',FLOW)
-        self.assertIn('gtk_stack_add_named(GTK_STACK(search_workspace),folder_page,"destination")',FLOW)
-        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination")',FLOW)
-        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results")',FLOW)
-        self.assertIn('gtk_button_new_with_label("BACK TO RESULTS")',FLOW)
-        self.assertIn('G_CALLBACK(on_search_back)',FLOW)
-        self.assertIn('if(!now_downloads_destination_view_select(destination_view,magnet))return;',FLOW)
-        self.assertIn("gtk_widget_set_size_request(s->results,-1,420)",search_view)
-        self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,275)",destination)
-        self.assertIn("gtk_tree_view_new_with_model(filtered)",destination)
-        self.assertIn("gboolean now_downloads_destination_view_select",destination_header)
-        self.assertNotIn('gtk_box_pack_start(GTK_BOX(search),destination_view',FLOW)
-        # Switching between two views must not run a torrent mutation.
-        back=FLOW.split("static void on_search_back(",1)[1].split(
-             "static void on_search_result(",1)[0]
-        self.assertNotIn("now_downloads_refresh",back)
-        self.assertNotIn("g_subprocess_newv",back)
-
-    def test_downloads_lets_owner_create_and_save_additional_game_locations(self):
+    def test_standard_gtk_remote_folder_chooser_replaces_custom_picker_flow(self):
         picker=(ROOT/"src/downloads_destination_view.c").read_text()
-        ops=(ROOT/"src/download-operations-client.py").read_text()
         host=(ROOT/"server/download_destinations.py").read_text()
+        ops=(ROOT/"src/download-operations-client.py").read_text()
         request=(ROOT/"server/owner_games_request.py").read_text()
-        self.assertIn('gtk_button_new_with_label("New Folder")',picker)
-        self.assertIn('gtk_button_new_with_label("☆ Favorite")',picker)
-        self.assertIn('kind==0?"FAVORITES":"RECENT"',picker)
-        self.assertIn('record_recent_place(s)',picker)
-        self.assertNotIn('gtk_button_new_with_label("REMOVE SAVED")',picker)
-        self.assertIn('"download-places.ini"',picker)
-        self.assertIn('gtk_combo_box_text_new()',picker)
-        self.assertIn("remember_current_place(s)",picker)
-        self.assertIn('action==\'m\'?"mkdir":"add"',picker)
-        self.assertIn('"mkdir":"downloads_mkdir"',ops)
-        self.assertIn('def create_folder(root, relative, name,',host)
-        self.assertIn('os.mkdir(child, mode=0o775, dir_fd=fd)',host)
-        self.assertIn('new_download_folder(',request)
-        self.assertNotIn('docker run',picker)
-        self.assertNotIn('docker restart',picker)
+        self.assertIn("gtk_file_chooser_dialog_new(",picker)
+        self.assertIn("GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER",picker)
+        self.assertIn("gtk_file_chooser_set_local_only",picker)
+        self.assertIn("sftp://%s@%s/",picker)
+        self.assertIn("gtk_file_chooser_get_uri",picker)
+        self.assertIn("native_uri_host_path(",picker)
+        self.assertIn("gtk_file_chooser_set_create_folders",picker)
+        self.assertIn('"addpath":"downloads_add_path"',ops)
+        self.assertIn("def add_magnet_host_path(",host)
+        self.assertIn("add_magnet_host_path(request",request)
+        self.assertIn("now_downloads_destination_view_select(destination_view,magnet);",FLOW)
+        callback=FLOW.split("static void on_search_result(",1)[1].split(
+                         "static void on_download_submitted(",1)[0]
+        self.assertNotIn('gtk_stack_set_visible_child_name(',callback)
+        self.assertNotIn('gtk_widget_queue_resize(',callback)
 
     def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
         self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)

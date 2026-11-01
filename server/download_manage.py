@@ -1,4 +1,4 @@
-"""Owner-bound, single-torrent qBittorrent management with no file deletion.
+"""Owner-bound, exact-hash qBittorrent actions with guarded optional data deletion.
 
 The restricted SSH broker must authenticate the device before calling this.
 Only a verified local VPN-bound qBittorrent endpoint may receive operations.
@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 from urllib.parse import urlencode
+from download_destinations import _mounts
 from download_inventory import InventoryError
 from download_queue import locate_verified_downloader
 
@@ -16,6 +17,7 @@ OPERATIONS = {
     "reannounce": "reannounce",
     "recheck": "recheck",
     "remove": "delete",
+    "remove_delete": "delete",  # Explicit owner confirmation and scoped path checks.
 }
 HASH = re.compile(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?\Z")
 
@@ -52,8 +54,36 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
             torrents[0]["hash"].lower() != torrent_hash):
         raise InventoryError("Torrent no longer exists")
     fields = {"hashes": torrent_hash}
-    if operation == "remove":
-        fields["deleteFiles"] = "false"  # Never delete user media from NOW.
+    if operation in ("remove", "remove_delete"):
+        fields["deleteFiles"] = "true" if operation == "remove_delete" else "false"
+    if operation == "remove_delete":
+        # qBittorrent can delete downloaded content from arbitrary locations.
+        # Only permit this dangerous option for a verified writable media
+        # destination beneath a configured /library/<slug> bind mount. Missing
+        # path metadata, out-of-library torrents and root-level targets fail
+        # closed. We still require explicit UI confirmation and exact hash.
+        _, verified_gateway, verified_port, mounts = _mounts(runner=runner)
+        if (verified_gateway, verified_port) != (gateway, port):
+            raise InventoryError("Downloader binding changed")
+        info = torrents[0]
+        save_path, content_path = info.get("save_path"), info.get("content_path")
+        if not isinstance(save_path,str) or not isinstance(content_path,str):
+            raise InventoryError("Cannot verify torrent data location")
+        def clean(path):
+            return (path.startswith("/") and
+                    all(part not in (".","..") for part in path.split("/")[1:]) and
+                    "//" not in path and "\\\\" not in path)
+        if not clean(save_path) or not clean(content_path):
+            raise InventoryError("Untrusted torrent data location")
+        approved = False
+        for slug in mounts:
+            base = "/library/" + slug
+            if (save_path.startswith(base + "/") and
+                    content_path.startswith(save_path.rstrip("/") + "/")):
+                approved = True
+                break
+        if not approved:
+            raise InventoryError("Torrent data is outside an approved subfolder")
     action = OPERATIONS[operation]
     argv = ["docker", "exec", gateway, "wget", "-q", "-T", "5", "-O", "-",
             "--header", f"Referer: http://127.0.0.1:{port}/",

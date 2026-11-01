@@ -615,15 +615,6 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_style_context_add_class(gtk_widget_get_style_context(s->pin_place),"now-action");
  gtk_box_pack_start(GTK_BOX(places_row),s->pin_place,FALSE,FALSE,0);
  g_signal_connect(s->pin_place,"clicked",G_CALLBACK(on_save_place),view);
- /* The confirm action is ABOVE the long folder list, so it never gets
-  * pushed off the bottom of a 4:3 display by the list's contents. */
- s->add=gtk_button_new_with_label("ADD TORRENT HERE");
- gtk_widget_set_halign(s->add,GTK_ALIGN_END);
- gtk_widget_set_name(s->add,"downloadconfirm");
- gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-action");
- gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
- g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
- gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
  s->status=gtk_label_new("Choose a folder before adding.");
  gtk_label_set_xalign(GTK_LABEL(s->status),0);
  gtk_label_set_line_wrap(GTK_LABEL(s->status),TRUE);
@@ -648,6 +639,15 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
  gtk_box_pack_start(GTK_BOX(view),s->folder_scroll,TRUE,TRUE,0);
+ /* Confirmation stays under the scrollable directory browser. */
+ GtkWidget *confirm_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
+ s->add=gtk_button_new_with_label("ADD TORRENT");
+ gtk_widget_set_name(s->add,"downloadconfirm");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
+ g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
+ gtk_box_pack_end(GTK_BOX(confirm_row),s->add,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view),confirm_row,FALSE,FALSE,0);
  load_places(s);
  button_states(s);
  return view;

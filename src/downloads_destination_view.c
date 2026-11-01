@@ -224,8 +224,11 @@ static void on_place_selected(GtkComboBox *combo,gpointer data){
    button_states(s);return;
  }
  SavedPlace *place=g_ptr_array_index(s->places,(guint)selected-1);
- if(!safe_root(place->root) || !safe_relative(place->relative) ||
-    !gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),place->root)){
+ if(!safe_root(place->root) || !safe_relative(place->relative))return;
+ s->loading_roots=TRUE;
+ gboolean available=gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),place->root);
+ s->loading_roots=FALSE;
+ if(!available){
    gtk_label_set_text(GTK_LABEL(s->status),
       "Saved drive is not currently mounted for downloads.");
    button_states(s);return;
@@ -508,11 +511,34 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_style_context_add_class(gtk_widget_get_style_context(s->up),"now-action");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
+ s->new_folder=gtk_button_new_with_label("NEW FOLDER");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->new_folder),
+                             "now-action");
+ gtk_widget_set_tooltip_text(s->new_folder,
+   "Create a Games, Books or other folder within the approved download drive");
+ gtk_box_pack_start(GTK_BOX(bar),s->new_folder,FALSE,FALSE,0);
+ g_signal_connect(s->new_folder,"clicked",G_CALLBACK(on_new_folder),view);
 
- s->path=gtk_label_new("Select a media drive.");
+ s->path=gtk_label_new("Select an approved download drive.");
  gtk_label_set_xalign(GTK_LABEL(s->path),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view),s->path,FALSE,FALSE,0);
+ GtkWidget *places_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+ gtk_box_pack_start(GTK_BOX(view),places_row,FALSE,FALSE,0);
+ s->places_combo=gtk_combo_box_text_new();
+ gtk_widget_set_tooltip_text(s->places_combo,
+    "Jump to saved locations, such as Games or Movies/Horror");
+ gtk_box_pack_start(GTK_BOX(places_row),s->places_combo,TRUE,TRUE,0);
+ g_signal_connect(s->places_combo,"changed",G_CALLBACK(on_place_selected),view);
+ s->pin_place=gtk_button_new_with_label("SAVE LOCATION");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->pin_place),"now-action");
+ gtk_box_pack_start(GTK_BOX(places_row),s->pin_place,FALSE,FALSE,0);
+ g_signal_connect(s->pin_place,"clicked",G_CALLBACK(on_save_place),view);
+ s->unpin_place=gtk_button_new_with_label("REMOVE SAVED");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->unpin_place),
+                             "now-action");
+ gtk_box_pack_start(GTK_BOX(places_row),s->unpin_place,FALSE,FALSE,0);
+ g_signal_connect(s->unpin_place,"clicked",G_CALLBACK(on_remove_place),view);
  /* The confirm action is ABOVE the long folder list, so it never gets
   * pushed off the bottom of a 4:3 display by the list's contents. */
  s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
@@ -546,6 +572,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
  gtk_box_pack_start(GTK_BOX(view),s->folder_scroll,TRUE,TRUE,0);
+ load_places(s);
  button_states(s);
  return view;
 }

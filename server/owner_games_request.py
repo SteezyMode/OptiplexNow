@@ -21,10 +21,10 @@ from download_manage import manage_torrent, checked_hash, OPERATIONS
 from download_search import search_once, stream_search, checked_query, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
                                    add_magnet as enqueue_download, create_folder as new_download_folder,
-                                    checked_folder_name, _relative, ROOT_ID)
+                                    checked_folder_name, checked_host_path, add_magnet_host_path, _relative, ROOT_ID)
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_mkdir", "downloads_manage"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_add_path", "downloads_mkdir", "downloads_manage"))
 
 
 def _validated_request(request):
@@ -49,6 +49,8 @@ def _validated_request(request):
         fields.update(("root", "relative", "name"))
     elif action == "downloads_add":
         fields.update(("root", "relative", "magnet"))
+    elif action == "downloads_add_path":
+        fields.update(("path", "magnet"))
     if (set(request) != fields
             or type(request.get("version")) is not int or request["version"] != VERSION
             or not isinstance(action, str) or action not in ACTIONS):
@@ -68,6 +70,10 @@ def _validated_request(request):
             checked_hash(request["torrent_hash"])
         elif action == "downloads_files":
             checked_hash(request["torrent_hash"])
+        elif action == "downloads_add_path":
+            checked_host_path(request["path"])
+            if checked_magnet(request["magnet"]) is None:
+                raise PolicyError("Invalid magnet URI")
         elif action in ("downloads_browse", "downloads_add", "downloads_mkdir"):
             root = request["root"]
             if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
@@ -139,6 +145,13 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         try:
             return {"success": True,
                     **enqueue_download(request["root"],request["relative"],request["magnet"])}
+        except InventoryError:
+            return {"success": False, "status": "add_unavailable"}
+
+    if action == "downloads_add_path":
+        try:
+            return {"success": True,
+                    **add_magnet_host_path(request["path"],request["magnet"])}
         except InventoryError:
             return {"success": False, "status": "add_unavailable"}
 

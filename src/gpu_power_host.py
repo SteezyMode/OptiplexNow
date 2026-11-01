@@ -132,8 +132,6 @@ def set_cap(watts, *, probe=probe_gpu, call=rpc):
     config = call("get_gpu_config", {"id": identifier})
     if not isinstance(config, dict) or "power_cap" not in config:
         raise GpuPowerError("LACT power control unavailable")
-    if number(config["power_cap"]) is None:
-        raise GpuPowerError("LACT power configuration invalid")
     updated = dict(config)
     updated["power_cap"] = float(watts)
     # Keep every other LACT setting intact, including fan and clock settings.

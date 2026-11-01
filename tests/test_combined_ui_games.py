@@ -37,6 +37,8 @@ class CombinedGamesUITests(unittest.TestCase):
         self.assertIn('now_games_request_async(helper,"reconcile",managed_games.host,', SOURCE)
         self.assertIn('managed_games_recovery_done', SOURCE)
         self.assertIn('SESSION PRESERVED', SOURCE)
+        self.assertIn('PREVIOUS STEAM SESSION NOT SAFE TO RECOVER.', SOURCE)
+        self.assertIn('strcmp(action,"reconcile")==0?', SOURCE)
         self.assertNotIn('launch_wolf_app("Steam")', SOURCE)
 
     def test_restricted_transport_compiled_and_tested(self):

@@ -156,6 +156,9 @@ class PowerWindow:
         if self.closed:
             return False
         if error:
+            # Never leave stale power ranges active after a failed read or an
+            # ambiguous write: reopening rechecks the actual driver limit.
+            self.bounds = None
             self.status.set_text(error)
             self.set_busy(False)
             return False

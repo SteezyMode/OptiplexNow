@@ -10,6 +10,20 @@ typedef struct {
 static GtkWidget *list_for(GtkWidget *view){
  return view ? g_object_get_data(G_OBJECT(view),"now-download-list") : NULL;
 }
+/* Keep explicitly opened action drawers open across read-only queue refresh. */
+static GHashTable *expanded_torrents(GtkWidget *list){
+ GHashTable *expanded=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
+ GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
+ for(GList *p=rows;p;p=p->next){
+   GtkWidget *row=GTK_WIDGET(p->data);
+   GtkWidget *toggle=g_object_get_data(G_OBJECT(row),"now-actions-toggle");
+   const gchar *hash=g_object_get_data(G_OBJECT(row),"now-torrent-hash");
+   if(toggle && hash && gtk_expander_get_expanded(GTK_EXPANDER(toggle)))
+     g_hash_table_add(expanded,g_strdup(hash));
+ }
+ g_list_free(rows);
+ return expanded;
+}
 static void clear_list(GtkWidget *list){
  if(!list)return;
  GList *children=gtk_container_get_children(GTK_CONTAINER(list));
@@ -165,6 +179,7 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
    }
  }
  if(!valid){g_strfreev(lines);return FALSE;}
+ GHashTable *expanded=expanded_torrents(list);
  clear_list(list);
  if(empty){
    show_message(list,"No downloads in queue.");
@@ -226,12 +241,25 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
        gtk_widget_set_halign(action,GTK_ALIGN_FILL);
        gtk_flow_box_insert(GTK_FLOW_BOX(buttons),action,-1);
      }
-     gtk_box_pack_start(GTK_BOX(row),buttons,FALSE,FALSE,0);
+     /* Keep title, progress and speed scannable, expanding torrent
+      * management only on demand. Native GtkExpander is keyboard operable. */
+     GtkWidget *toggle=gtk_expander_new("ACTIONS");
+     gtk_expander_set_spacing(GTK_EXPANDER(toggle),6);
+     gtk_widget_set_tooltip_text(toggle,
+         "Show or hide Files, Pause and torrent management");
+     gtk_container_add(GTK_CONTAINER(toggle),buttons);
+     gtk_expander_set_expanded(GTK_EXPANDER(toggle),
+                               g_hash_table_contains(expanded,parts[4]));
+     gtk_box_pack_start(GTK_BOX(row),toggle,FALSE,FALSE,0);
+     g_object_set_data(G_OBJECT(row),"now-actions-toggle",toggle);
+     g_object_set_data_full(G_OBJECT(row),"now-torrent-hash",
+                             g_strdup(parts[4]),g_free);
      gtk_container_add(GTK_CONTAINER(list),row);
      g_strfreev(parts);
    }
    gtk_widget_show_all(list);
  }
+ g_hash_table_unref(expanded);
  g_strfreev(lines);
  return TRUE;
 }

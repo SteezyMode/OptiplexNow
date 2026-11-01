@@ -63,6 +63,7 @@ int main(void)
     draft.web_gaming_url = "https://wolf.example";
     draft.startup_page = "games";
     draft.login_tray_enabled = 1;
+    draft.gpu_power_enabled = 1;
 
     /* Foreign/autostart-conflicting files block ALL Settings changes, and
      * remain unmodified, before tray, UI state or config is written. */
@@ -96,6 +97,7 @@ int main(void)
     g_assert_cmpstr(values[FEATURED_MASK_SETTING], ==, "170");
     g_assert_cmpstr(values[16], ==, "https://wolf.example");
     g_assert_cmpstr(now_ui_state_start_page(), ==, "games");
+    g_assert_true(now_ui_state_gpu_power_enabled());
 
     gboolean enabled = FALSE;
     g_assert_true(now_desktop_autostart_get(&enabled));

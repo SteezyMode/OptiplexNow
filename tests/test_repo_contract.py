@@ -3,6 +3,7 @@
 Deliberately standard-library-only so normal unittest discovery checks this.
 """
 from pathlib import Path
+import re
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,8 +36,56 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertNotIn("/var/run/docker.sock", data)
         self.assertIn("@sha256:", data)
 
-    def test_release_requires_tag_or_exact_one_time_v1219_merge(self):
+    def test_release_requires_tag_or_exact_one_time_current_version_merge(self):
         data = (WORKFLOWS / "release.yml").read_text()
+        package = (ROOT / "package.py").read_text()
+        release_version = re.search(
+            r'^DEFAULT_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)"
+        # Routine releases still require an explicit immutable version tag.
+        self.assertRegex(data, r"(?m)^\s+tags:\s*$")
+        self.assertIn("- 'v*'", data)
+        self.assertNotIn("workflow_dispatch:", data)
+        self.assertNotIn("--clobber", data)
+        self.assertIn("GITHUB_REF_NAME", data)
+        self.assertIn('dpkg-deb -f "$package" Version', data)
+        self.assertIn('gh release view "$tag"', data)
+        self.assertIn("--verify-tag", data)
+
+        # Explicit owner-requested one-time publication of the current version: changing
+        # any ordinary main file or pushing a PR cannot publish. Only the
+        # curated notes path plus exact squash-merge instruction can do so.
+        self.assertIn("    branches:\n      - main", data)
+        self.assertIn(f"    paths:\n      - 'docs/releases/v{version}.md'", data)
+        self.assertIn("github.ref == 'refs/heads/main'", data)
+        self.assertIn(f"contains(github.event.head_commit.message, '[publish-v{version}]')", data)
+        self.assertIn(f'version="{version}"', data)
+        self.assertIn('test "$(sed -nE', data)
+        self.assertIn('package.py)" = "$version"', data)
+        self.assertIn('gh api -X POST "repos/$GH_REPO/git/refs"', data)
+        self.assertIn('-f ref="refs/tags/$tag" -f sha="$GITHUB_SHA"', data)
+        # This explicitly chosen existing-host build is the official download.
+        self.assertIn("--latest", data)
+        self.assertNotIn("--latest=false", data)
+        self.assertNotIn("--prerelease", data)
+
+    def test_binary_release_assets_not_stored_in_source(self):
+        self.assertFalse((ROOT / "downloads").exists(),
+                         "Historic .deb files belong in GitHub Releases, not source control.")
+
+    def test_ci_cannot_publish(self):
+        data = (WORKFLOWS / "ci.yml").read_text()
+        self.assertIn("contents: read", data)
+        self.assertIn("pull_request:", data)
+        self.assertNotIn("gh release", data)
+        self.assertNotIn("--clobber", data)
+
+
+if __name__ == "__main__":
+    unittest.main()
+,
+            package, re.MULTILINE)
+        self.assertIsNotNone(release_version, "A tagged release needs a version")
+        version = release_version.group(1)
         # Routine releases still require an explicit immutable version tag.
         self.assertRegex(data, r"(?m)^\s+tags:\s*$")
         self.assertIn("- 'v*'", data)

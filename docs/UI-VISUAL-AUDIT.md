@@ -43,8 +43,8 @@ Use one coherent accent family. **Do not use teal as a second generic hover colo
 | Dashboard | Functional state-first hierarchy; four metrics, GPU shortcut, qualified VPN | Check crowded host name + two status pills at 430–560 px; verify CPU/GPU label ellipsis and 2×2 power controls |
 | Games | PLAY STEAM is a clear action with a single distinct CTA | Compare help/status spacing against Videos on small screen |
 | Videos | Matches Games launcher tile in v1.21.11 | Confirm browser handoff status remains readable and no dead embedded-player affordances |
-| Downloads | Native transfers, incremental search, sortable columns and explicit confirmations | Many dense 10–11px result controls; visually test keyboard selection and narrow columns before changing layout |
-| Settings | Natural-width action buttons, nested tabs, opt-in Host GPU | Confirm long explanatory copy wraps and Save/Cancel remains reachable at 430 px |
+| Downloads | Native transfers, incremental search, sortable columns and explicit confirmations | Header VPN badge now has its own row above REFRESH / Advanced Vuetorrent to prevent overlap; verify popover and narrow result columns |
+| Settings | Six equal navigation tiles in a responsive two-column FlowBox, nested tabs, opt-in Host GPU | Confirm two columns at normal width, one full-width column at 430 px, and reachable Save/Cancel |
 | Onboarding / dialogs | Shared theme CSS covers the native/Python windows | Python modal palettes use the shared fallback, not every main-window selector; inspect independent visual QA before broadening styling |
 
 ## Pass 1 (this PR)
@@ -63,3 +63,9 @@ Use one coherent accent family. **Do not use teal as a second generic hover colo
 4. After the commercial name is selected, design a small brand mark/icon and replace the development codename, **without** implying Dell affiliation.
 
 The existing `releases/latest/download/OptiPlex-Now_amd64.deb` flow remains unchanged. **Do not publish this pass merely because CI is green; approve its visual direction first.**
+
+## Owner device review, following PR #241 trial
+
+The first PR #241 installer was reported functional and nearly visually correct, but the Settings home looked poorly arranged: every entry was a short, left-aligned button in a vertical stack. At the 430 px minimum width, the Downloads VPN status also collided with the Advanced Vuetorrent action. Both observations are tracked as real-device regressions, not treated as minor cosmetic preferences.
+
+The revised PR uses six equal-sized, centered Settings cards in an adaptive two-column GTK FlowBox, and separates Downloads' title/VPN row from its action row. This retains the Settings callbacks, VPN popover and VueTorrent handoff and does not change remote operations. Physical acceptance of both layouts after reinstalling the new PR artifact remains open.

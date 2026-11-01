@@ -16,8 +16,8 @@ typedef struct {
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
  GPtrArray *places,*recents;
  gboolean running,loading_roots,folder_valid,sidebar_compact,sidebar_requested;
- void (*on_added)(gpointer);
- gpointer added_data;
+ void (*on_added)(gpointer),(*on_cancel)(gpointer);
+ gpointer added_data,cancel_data;
 } Picker;
 typedef struct {
  GtkWidget *view;
@@ -566,6 +566,15 @@ static void on_up(GtkButton *unused,gpointer data){
  else *s->relative=0;
  start(s,'b');
 }
+static void on_cancel(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ g_clear_pointer(&s->magnet,g_free);
+ s->folder_valid=FALSE;
+ gtk_widget_hide(s->view);
+ if(s->on_cancel)s->on_cancel(s->cancel_data);
+}
 static void on_add(GtkButton *unused,gpointer data){
  (void)unused;
  Picker *s=state(GTK_WIDGET(data));
@@ -674,6 +683,9 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
  g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
  gtk_box_pack_end(GTK_BOX(footer),s->add,FALSE,FALSE,0);
+ GtkWidget *cancel=gtk_button_new_with_label("Cancel");
+ g_signal_connect(cancel,"clicked",G_CALLBACK(on_cancel),view);
+ gtk_box_pack_end(GTK_BOX(footer),cancel,FALSE,FALSE,0);
  load_places(s);
  button_states(s);
  return view;
@@ -707,6 +719,11 @@ gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magne
  gtk_widget_set_no_show_all(view,TRUE);
  start(s,'r');
  return TRUE;
+}
+void now_downloads_destination_view_on_cancel(GtkWidget *view,
+                                             void (*callback)(gpointer),gpointer data){
+ Picker *s=state(view);
+ if(s){s->on_cancel=callback;s->cancel_data=data;}
 }
 void now_downloads_destination_view_on_added(GtkWidget *view,
                                              void (*callback)(gpointer),gpointer data){

@@ -60,14 +60,16 @@ static void test_reject_untrusted_host_folder_reply(void){
  }
  gtk_widget_destroy(view);
 }
-static void test_projector_picker_filters_and_confirm_above_browser(void){
+static void test_projector_picker_filters_and_confirm_below_browser(void){
  GtkWidget *view=now_downloads_destination_view_new();
  Picker *s=state(view);
  gint width=0,height=0;
  gtk_widget_get_size_request(s->folder_scroll,&width,&height);
  g_assert_cmpint(height,>=,280);
  GList *parts=gtk_container_get_children(GTK_CONTAINER(view));
- g_assert_cmpint(g_list_index(parts,s->add),<,
+ /* Add sits in the footer after the browsable folder list. */
+ GtkWidget *footer=gtk_widget_get_parent(s->add);
+ g_assert_cmpint(g_list_index(parts,footer),>,
                  g_list_index(parts,s->folder_scroll));
  g_list_free(parts);
  g_free(s->root);s->root=g_strdup("bigdisk");

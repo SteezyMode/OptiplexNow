@@ -177,6 +177,24 @@ static void test_recents_only_after_successful_download(void){
  g_list_free(shortcuts);
  gtk_widget_destroy(view);
 }
+static guint cancels_seen=0;
+static void canceled(gpointer unused){
+ (void)unused;
+ cancels_seen++;
+}
+static void test_cancel_does_not_submit(void){
+ GtkWidget *view=now_downloads_destination_view_new();
+ Picker *s=state(view);
+ now_downloads_destination_view_on_cancel(view,canceled,NULL);
+ g_free(s->magnet);s->magnet=g_strdup("magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+ s->folder_valid=TRUE;
+ guint before=cancels_seen;
+ on_cancel(NULL,view);
+ g_assert_cmpuint(cancels_seen,==,before+1);
+ g_assert_null(s->magnet);
+ g_assert_false(s->folder_valid);
+ gtk_widget_destroy(view);
+}
 static void flush_gtk_events(void){
  /* GTK's allocation/draw frame clock can run after the idle queue empties.
   * Exercise several real virtual-display frames, without manual resize. */
@@ -259,6 +277,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_above_browser);
  g_test_add_func("/destination/saved-games",test_saved_game_location_remains_scoped_to_approved_root);
  g_test_add_func("/destination/recent-only-on-add",test_recents_only_after_successful_download);
+ g_test_add_func("/destination/cancel-keeps-torrent-unsubmitted",test_cancel_does_not_submit);
  g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

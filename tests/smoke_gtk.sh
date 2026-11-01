@@ -61,7 +61,7 @@ xvfb-run -a dbus-run-session -- bash -c '
     if xwininfo -root -tree 2>/dev/null | grep -F "NOW Setup: Tailscale" >/dev/null; then
       echo "NOW first-run setup wizard opened inside an isolated profile."
       # GTK/X11 min-width hints catch future unshrinkable Dashboard
-      # regressions without connecting to the owner's actual host.
+      # regressions without connecting to any real host.
       hints="$(xprop -name "OptiPlex Now" WM_NORMAL_HINTS 2>/dev/null || true)"
       min_width="$(printf "%s\n" "$hints" | sed -nE "s/.*minimum size: ([0-9]+) by [0-9]+.*/\\1/p" | head -1)"
       if [[ -n "$min_width" ]]; then

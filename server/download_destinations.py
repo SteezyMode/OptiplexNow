@@ -1,10 +1,11 @@
 """Owner-only download library destinations and explicit magnet enqueue.
 
-Host-local adapter; the existing restricted owner device command MUST authorize
-before calling any function. Only already-mounted writable Docker bind volumes
-at /library/<slug> can be picked. No arbitrary host paths or shell commands
-arrive from clients, and no media files are moved or reorganized.
+Host-local adapter; the restricted owner broker authorizes each request.
+Writable storage mounts are discovered from the verified qBittorrent container.
+Never expose host root or service configuration mounts as download targets.
+Existing host directories and mounts are never modified by browsing.
 """
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -38,29 +39,45 @@ def _mounts(*, runner=subprocess.run):
         raise DestinationError("No unique bound downloader")
     qbit=candidates[0]
     roots={}
+    excluded=("/config", "/etc", "/dev", "/proc", "/sys", "/run",
+              "/root", "/usr", "/var", "/boot", "/opt")
+    forbidden_sources=("/etc", "/root", "/usr", "/var", "/dev",
+                       "/sys", "/proc", "/run", "/boot", "/opt")
     for entry in qbit.get("Mounts",[]):
-        if not isinstance(entry,dict) or entry.get("Type")!="bind" or entry.get("RW") is not True:
+        if (not isinstance(entry,dict) or entry.get("Type")!="bind"
+                or entry.get("RW") is not True):
             continue
-        container_path=entry.get("Destination")
-        source=entry.get("Source")
-        if not isinstance(container_path,str) or not isinstance(source,str):
+        target,source=entry.get("Destination"),entry.get("Source")
+        if not isinstance(target,str) or not isinstance(source,str):
             continue
-        found=re.fullmatch(r"/library/([a-z][a-z0-9_-]{0,31})",container_path)
-        if not found or not os.path.isabs(source) or source=="/" or not os.path.isdir(source):
+        if (not target.startswith("/") or target=="/"
+                or os.path.normpath(target)!=target
+                or any(target==p or target.startswith(p+"/") for p in excluded)):
             continue
-        # A bind mount is administrator-owned configuration. Reject symlinked
-        # root aliases and the main OS/system directories, not just / itself.
+        if (not os.path.isabs(source) or source=="/"
+                or not os.path.isdir(source)):
+            continue
         resolved=os.path.realpath(source)
         if (resolved!=source or os.path.islink(source)
-                or resolved in ("/etc","/root","/home","/usr","/var",
-                                "/dev","/sys","/proc","/run","/boot")):
+                or any(resolved==p or resolved.startswith(p+"/")
+                       for p in forbidden_sources)
+                or resolved=="/home"):
             continue
-        slug=found.group(1)
+        match=re.fullmatch(r"/library/([a-z][a-z0-9_-]{0,31})",target)
+        if match:
+            slug=match.group(1)
+            label=slug.replace("_"," ").title()
+        else:
+            # Stable, opaque mount ID: no untrusted host path in requests.
+            # Preserve existing /library/<slug> IDs and saved bookmarks.
+            slug="mount_"+hashlib.sha256(target.encode("utf-8")).hexdigest()[:16]
+            label=os.path.basename(resolved.rstrip("/")) or target.strip("/")
+            label=label[:MAX_NAME]
         if slug in roots:
-            raise DestinationError("Duplicate library destination root")
-        roots[slug]={"source":source,"target":container_path}
-    if not roots or len(roots)>12:
-        raise DestinationError("No approved writable media library mounts")
+            raise DestinationError("Ambiguous downloader mount")
+        roots[slug]={"source":source,"target":target,"label":label}
+    if not roots or len(roots)>24:
+        raise DestinationError("No usable writable downloader storage mounts")
     return qbit["Id"],gateway,port,roots
 
 def _relative(value):
@@ -90,8 +107,9 @@ def _open_folder(source,parts):
 
 def roots(*,runner=subprocess.run):
     _,_,_,mounts=_mounts(runner=runner)
-    return {"roots":[{"id":name,"label":name.replace("_"," ").title()}
-                     for name in sorted(mounts)]}
+    return {"roots":[{"id":name,"label":entry["label"]}
+                     for name,entry in sorted(mounts.items(),
+                                            key=lambda item:item[1]["label"].casefold())]}
 
 def browse(root,relative="",*,runner=subprocess.run):
     if not isinstance(root,str) or not ROOT_ID.fullmatch(root):

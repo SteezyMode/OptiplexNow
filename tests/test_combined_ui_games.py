@@ -33,7 +33,7 @@ class CombinedGamesUITests(unittest.TestCase):
 
     def test_owner_session_recovery_is_explicit_async_and_has_no_steam_fallback(self):
         self.assertIn('button("RECOVER IDLE GAMES SESSION","setupaction")', SOURCE)
-        self.assertIn('G_CALLBACK(on_managed_games_recover)', SOURCE)
+        self.assertIn('(GCallback)on_managed_games_recover', SOURCE)
         self.assertIn('now_games_request_async(helper,"reconcile",managed_games.host,', SOURCE)
         self.assertIn('managed_games_recovery_done', SOURCE)
         self.assertIn('SESSION PRESERVED', SOURCE)

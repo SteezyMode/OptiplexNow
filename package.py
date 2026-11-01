@@ -52,6 +52,11 @@ shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-
 # Restricted per-device Games SSH transport. This is NOT a host admin key. Host enrollment and authorization
 # remain explicit owner actions.
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
+# Client-side owner GPU power window, with host-local LACT bridge streamed over
+# existing owner-admin SSH. Installing the .deb makes no changes to the host.
+for name in ('gpu-power-ui.py', 'gpu_power_host.py'):
+ shutil.copy2(root/'src'/name, pkg/'usr/lib/optiplex-now'/name)
+ (pkg/'usr/lib/optiplex-now'/name).chmod(0o755)
 # Owner-only alpha enrollment: client stage request, local host approval.
 # Never install a new host authorized_keys line or grant access on package setup.
 for name in ('owner-enroll-client.py', 'owner-enroll-ui.py', 'owner-approvals-ui.py', 'owner-qr.py', 'moonlight-identity-proof.py'):

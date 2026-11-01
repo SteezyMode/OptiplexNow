@@ -106,6 +106,7 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  add(area,stack,1);
  GtkWidget*home=settings_page(stack,"home");
  settings_link(home,stack,"GAMING & STREAMING  ›","gaming");
+  settings_link(home,stack,"HOST GPU  ›","gpu");
  settings_link(home,stack,"APPEARANCE & TRAY  ›","preferences");
  GtkWidget*other_apps=button("OTHER APPS  ›","setupaction");
  now_nav_bind_link(other_apps,main_pages,"software");
@@ -119,6 +120,14 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  GtkWidget*connection=settings_page(stack,"connection");
  GtkWidget*gaming=settings_page(stack,"gaming");
  GtkWidget*preferences=settings_page(stack,"preferences");
+  GtkWidget*gpu=settings_page(stack,"gpu");
+  settings_link(gpu,stack,"‹ BACK TO SETTINGS","home");
+  add(gpu,label("GPU POWER","modalheading"),0);
+  add(gpu,label("The Dashboard shows the active power cap and GPU maximum. Open detailed host controls to adjust the cap.","helper"),0);
+  GtkWidget*gpu_open=button("OPEN GPU POWER CONTROLS","setupaction");
+  g_signal_connect(gpu_open,"clicked",callbacks->on_gpu_power,NULL);
+  add(gpu,gpu_open,0);
+  add(gpu,label("Uses your existing LACT daemon and owner-admin SSH. No new network listener.","helper"),0);
  GtkWidget*pages[]={connection,gaming,preferences};
  for(int k=0;k<3;k++)settings_link(pages[k],stack,"‹ BACK TO SETTINGS","home");
  GtkWidget*col=connection;

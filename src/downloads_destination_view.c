@@ -223,9 +223,42 @@ static gboolean remember_current_place(Picker *s){
  refresh_place_choices(s);
  return store_places(s);
 }
+static gint current_favorite(Picker *s){
+ if(!s || !s->root || !s->relative)return -1;
+ for(guint i=0;i<s->places->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->places,i);
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative))return (gint)i;
+ }
+ return -1;
+}
+static gboolean record_recent_place(Picker *s){
+ /* Only a successfully submitted torrent becomes Recent. No default. */
+ if(!s || !valid_bookmark_host(s->host) || !valid_bookmark_user(s->user) ||
+    !safe_root(s->root) || !safe_relative(s->relative))return FALSE;
+ for(guint i=0;i<s->recents->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->recents,i);
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative)){
+     g_ptr_array_remove_index(s->recents,i);
+     break;
+   }
+ }
+ SavedPlace *p=g_new0(SavedPlace,1);
+ p->host=g_strdup(s->host);p->user=g_strdup(s->user);
+ p->root=g_strdup(s->root);p->relative=g_strdup(s->relative);
+ g_ptr_array_insert(s->recents,0,p);
+ while(s->recents->len>MAX_RECENT_PLACES)
+   g_ptr_array_remove_index(s->recents,s->recents->len-1);
+ refresh_place_choices(s);
+ return store_places(s);
+}
 static gboolean has_places_for_host(Picker *s){
- for(guint i=0;i<s->places->len;i++)
-   if(same_server(s,g_ptr_array_index(s->places,i)))return TRUE;
+ for(guint kind=0;kind<2;kind++){
+   GPtrArray *items=kind==0?s->places:s->recents;
+   for(guint i=0;i<items->len;i++)
+     if(same_server(s,g_ptr_array_index(items,i)))return TRUE;
+ }
  return FALSE;
 }
 static void button_states(Picker *s){
@@ -235,19 +268,25 @@ static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->roots,!s->running);
  gtk_widget_set_sensitive(s->new_folder,!s->running && s->folder_valid);
  gtk_widget_set_sensitive(s->pin_place,!s->running && s->folder_valid);
+ gtk_button_set_label(GTK_BUTTON(s->pin_place),
+                      current_favorite(s)>=0?"★ Favorited":"☆ Favorite");
  gtk_widget_set_sensitive(s->places_combo,!s->running && has_places_for_host(s));
- gtk_widget_set_sensitive(s->unpin_place,!s->running && 
-   gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo))>0);
 }
 static void start(Picker *s,char action);
 static void on_save_place(GtkButton *unused,gpointer data){
  (void)unused;
  Picker *s=state(GTK_WIDGET(data));
- if(!s || s->running)return;
- gboolean ok=remember_current_place(s);
+ if(!s || s->running || !s->folder_valid)return;
+ gint old=current_favorite(s);
+ gboolean ok=FALSE;
+ if(old>=0){
+   g_ptr_array_remove_index(s->places,(guint)old);
+   refresh_place_choices(s);
+   ok=store_places(s);
+ }else ok=remember_current_place(s);
  gtk_label_set_text(GTK_LABEL(s->status),ok ?
-   "Location saved on this device. Use SAVED LOCATIONS next time." :
-   "Unable to save location. Choose an approved folder (24 saved maximum).");
+   (old>=0?"Favorite removed.":"Location saved to Favorites.") :
+   "Unable to change Favorites. Check local permissions or limit.");
  button_states(s);
 }
 static void on_remove_place(GtkButton *unused,gpointer data){
@@ -255,29 +294,29 @@ static void on_remove_place(GtkButton *unused,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running)return;
  const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->places_combo));
- if(!id || !*id)return;
+ if(!id || id[0]!='f')return;
  gchar *end=NULL;
- guint64 selected=g_ascii_strtoull(id,&end,10);
+ guint64 selected=g_ascii_strtoull(id+1,&end,10);
  if(!end || *end || selected>=s->places->len)return;
  SavedPlace *place=g_ptr_array_index(s->places,(guint)selected);
  if(!same_server(s,place))return;
  g_ptr_array_remove_index(s->places,(guint)selected);
  refresh_place_choices(s);
  if(store_places(s))
-   gtk_label_set_text(GTK_LABEL(s->status),"Saved location removed.");
- else
-   gtk_label_set_text(GTK_LABEL(s->status),"Unable to update saved locations.");
+   gtk_label_set_text(GTK_LABEL(s->status),"Favorite removed.");
+ else gtk_label_set_text(GTK_LABEL(s->status),"Unable to remove Favorite.");
  button_states(s);
 }
 static void on_place_selected(GtkComboBox *combo,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->loading_places || s->running)return;
  const gchar *id=gtk_combo_box_get_active_id(combo);
- if(!id || !*id){button_states(s);return;}
+ if(!id || (id[0]!='f' && id[0]!='r')){button_states(s);return;}
+ GPtrArray *items=id[0]=='f'?s->places:s->recents;
  gchar *end=NULL;
- guint64 selected=g_ascii_strtoull(id,&end,10);
- if(!end || *end || selected>=s->places->len)return;
- SavedPlace *place=g_ptr_array_index(s->places,(guint)selected);
+ guint64 index=g_ascii_strtoull(id+1,&end,10);
+ if(!end || *end || index>=items->len)return;
+ SavedPlace *place=g_ptr_array_index(items,(guint)index);
  if(!same_server(s,place) || !safe_root(place->root) ||
     !safe_relative(place->relative))return;
  s->loading_roots=TRUE;
@@ -285,13 +324,12 @@ static void on_place_selected(GtkComboBox *combo,gpointer data){
  s->loading_roots=FALSE;
  if(!available){
    gtk_label_set_text(GTK_LABEL(s->status),
-      "Saved drive is not currently mounted for downloads.");
+      "Saved drive is no longer approved for downloads.");
    button_states(s);return;
  }
- /* Root selection itself must not start a competing browse. */
  g_free(s->root);s->root=g_strdup(place->root);
  g_free(s->relative);s->relative=g_strdup(place->relative);
- start(s,'b'); /* Host revalidates the saved path before allowing Add. */
+ start(s,'b'); /* Always revalidate through owner broker. */
 }
 static void on_new_folder(GtkButton *unused,gpointer data){
  (void)unused;
@@ -348,6 +386,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
  if(action=='m')return !strcmp(wire,"CREATED");
  if(action=='a'){
    if(strcmp(wire,"SUBMITTED"))return FALSE;
+   record_recent_place(s);
    gtk_label_set_text(GTK_LABEL(s->status),"Torrent submitted to selected folder.");
    g_clear_pointer(&s->magnet,g_free);
    s->folder_valid=FALSE;
@@ -553,6 +592,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  Picker *s=g_new0(Picker,1);
  s->view=view;
   s->places=g_ptr_array_new_with_free_func(free_place);
+ s->recents=g_ptr_array_new_with_free_func(free_place);
  g_object_set_data_full(G_OBJECT(view),"now-destination-state",s,free_state);
  GtkWidget *title=gtk_label_new("SAVE SELECTED TORRENT TO");
  gtk_label_set_xalign(GTK_LABEL(title),0);

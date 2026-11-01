@@ -672,7 +672,7 @@ GtkWidget *now_downloads_destination_view_new(void){
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_scrolled_window_set_overlay_scrolling(
       GTK_SCROLLED_WINDOW(s->folder_scroll),FALSE);
- gtk_widget_set_size_request(s->folder_scroll,-1,380);
+ gtk_widget_set_size_request(s->folder_scroll,-1,420);
  gtk_widget_set_vexpand(s->folder_scroll,TRUE);
  s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);

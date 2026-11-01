@@ -249,6 +249,47 @@ class DownloadSearchTests(unittest.TestCase):
         self.assertTrue(urls[-2].endswith("/stop"))
         self.assertTrue(urls[-1].endswith("/delete"))
 
+    def test_stopped_search_drains_25_item_pages_until_reported_total(self):
+        # Search engines can stop before the client has paged past 25 rows.
+        # A completed plugin job is not the same as pagination being complete.
+        entries=[{"fileName":f"Game ISO {i:03d}","fileSize":1024+i,
+                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(85)]
+        fake=FakeAPI(result={"status":"Stopped","total":85,"results":entries})
+        base=fake.__call__
+        offsets=[]
+        def runner(command,**kwargs):
+            if "/api/v2/search/results?" in command[-1]:
+                offsets.append(int(parse_qs(urlsplit(command[-1]).query)["offset"][0]))
+                # Simulate upstream 25-row response cap despite limit=100.
+                original_result=fake.result
+                fake.result={**original_result,
+                             "results":entries[:offsets[-1]+25]}
+                result=base(command,**kwargs)
+                fake.result=original_result
+                return result
+            return base(command,**kwargs)
+        frames=[]
+        outcome=stream_search("Ubuntu ISO",frames.append,runner=runner,
+                              sleeper=lambda _:None)
+        self.assertEqual(outcome["received"],85)
+        self.assertEqual(offsets,[0,25,50,75])
+        self.assertEqual([len(f["results"]) for f in frames],[25,25,25,10])
+        self.assertTrue(frames[-1]["append"])
+        self.assertFalse(frames[-1]["partial"])
+        self.assertTrue(fake.commands[-1][-1].endswith("/delete"))
+
+    def test_stopped_with_inaccurate_total_bounds_retries_and_marks_partial(self):
+        entries=[{"fileName":f"Game ISO {i:03d}","fileSize":1024+i,
+                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+        fake=FakeAPI(result={"status":"Stopped","total":70,"results":entries})
+        frames=[]
+        outcome=stream_search("Ubuntu ISO",frames.append,runner=fake,
+                              sleeper=lambda _:None)
+        self.assertEqual(outcome["received"],25)
+        self.assertEqual([len(f["results"]) for f in frames],[25,0])
+        self.assertTrue(frames[-1]["partial"])
+        self.assertEqual(len([x for x in fake.commands if "/api/v2/search/results?" in x[-1]]),4)
+
     def test_stream_no_more_results_is_bounded_and_does_not_fabricate(self):
         initial=[{"fileName":f"Ubuntu seed {i}","fileSize":1024+i,
                   "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]

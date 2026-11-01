@@ -1130,6 +1130,8 @@ static void managed_games_reply(GObject *source,GAsyncResult *result,gpointer da
    managed_games_abort_owned_stream();
   managed_games_finish(managed_games.stopping?
     "STEAM STOP UNCONFIRMED. CHECK HOST STATUS BEFORE RETRY":
+    strcmp(action,"reconcile")==0?
+    "PREVIOUS STEAM SESSION NOT SAFE TO RECOVER. REVIEW GAMES SETTINGS":
     "GAMES ACCESS UNVERIFIED. CHECK OWNER DEVICE APPROVAL OR HOST STATUS; NO STEAM FALLBACK");
   return;
  }

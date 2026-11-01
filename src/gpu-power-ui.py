@@ -54,11 +54,14 @@ def invoke(host, user, action, value=None, *, runner=subprocess.run, source=SCRI
             "-o", "ClearAllForwardings=yes", "-T", "-l", user, host, remote]
     try:
         result = runner(argv, input=program, stdout=subprocess.PIPE,
-                        stderr=subprocess.DEVNULL, check=False, timeout=12)
+                        stderr=subprocess.DEVNULL, check=False,
+                        timeout=25 if action == "set" else 15)
     except (OSError, subprocess.TimeoutExpired):
         raise RuntimeError("Owner-admin SSH unavailable") from None
     if (result.returncode != 0 or not isinstance(result.stdout, bytes)
             or len(result.stdout) > MAX_REPLY):
+        if action == "set":
+            raise RuntimeError("Power change not verified. Check NOW/LACT power limit before retrying.")
         raise RuntimeError("GPU control unavailable: check owner SSH and LACT socket permissions")
     try:
         data = json.loads(result.stdout)

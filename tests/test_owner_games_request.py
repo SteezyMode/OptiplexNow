@@ -174,6 +174,31 @@ class TrustedGamesGateTests(unittest.TestCase):
             run.assert_not_called()
             self.assertEqual(self.api.calls,[])
 
+    def test_downloads_files_is_read_only_exact_hash_and_owner_only(self):
+        from unittest.mock import patch
+        record={"service":"qbittorrent","torrent_hash":"a"*40,"files":[],
+                "truncated":False}
+        request={"version":1,"action":"downloads_files","torrent_hash":"a"*40}
+        with patch("owner_games_request.inspect_torrent_files",
+                   return_value=record) as inspect:
+            result=handle_owner_games_request(
+                request,verified_client_id="1001",store=self.store,
+                wolf_api=self.api)
+            self.assertEqual(result,{"success":True,**record})
+            inspect.assert_called_once_with("a"*40)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(
+                    request,verified_client_id="99999999",store=self.store,
+                    wolf_api=self.api)
+            self.assertEqual(inspect.call_count,1)
+        for extra in ({"torrent_hash":"all"}, {"root":"/etc"},
+                      {"operation":"remove_delete"}):
+            bad=dict(request,**extra)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(
+                    bad,verified_client_id="1001",store=self.store,
+                    wolf_api=self.api)
+
     def test_downloads_queue_owner_only_and_no_private_fields(self):
         from unittest.mock import patch
         queue = {"service": "qbittorrent", "queue": [

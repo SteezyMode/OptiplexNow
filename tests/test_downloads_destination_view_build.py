@@ -17,7 +17,8 @@ class DestinationViewTests(unittest.TestCase):
                  "-Werror=implicit-function-declaration","-Isrc",
                  "tests/test_downloads_destination_view.c",
                  "-o",exe,*flags],cwd=ROOT,check=True,capture_output=True)
-            result=subprocess.run(["xvfb-run","-a",exe],cwd=ROOT,
+            result=subprocess.run(["xvfb-run","-a","-s",
+                                   "-screen 0 1920x1080x24",exe],cwd=ROOT,
                                   capture_output=True,text=True,
                                   timeout=25,check=False)
             self.assertEqual(result.returncode,0,

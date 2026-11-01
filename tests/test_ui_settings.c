@@ -116,10 +116,24 @@ int main(int argc, char **argv)
     }
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "home");
+    GtkWidget *menu = g_object_get_data(G_OBJECT(root),"now-settings-menu");
+    g_assert_true(GTK_IS_FLOW_BOX(menu));
+    g_assert_true(gtk_flow_box_get_homogeneous(GTK_FLOW_BOX(menu)));
+    g_assert_cmpuint(gtk_flow_box_get_min_children_per_line(GTK_FLOW_BOX(menu)), ==, 1);
+    g_assert_cmpuint(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(menu)), ==, 2);
+    for (int i=0;i<6;i++){
+        GtkFlowBoxChild *item=gtk_flow_box_get_child_at_index(GTK_FLOW_BOX(menu),i);
+        g_assert_nonnull(item);
+        GtkWidget *tile=gtk_bin_get_child(GTK_BIN(item));
+        g_assert_true(GTK_IS_BUTTON(tile));
+        g_assert_cmpstr(gtk_widget_get_name(tile),==,"settingscard");
+        g_assert_cmpint(gtk_widget_get_halign(tile),==,GTK_ALIGN_FILL);
+    }
+    g_assert_null(gtk_flow_box_get_child_at_index(GTK_FLOW_BOX(menu),6));
 
     GtkWidget *gpu_link = button_named(root, "HOST GPU  ›");
     g_assert_nonnull(gpu_link);
-    g_assert_cmpint(gtk_widget_get_halign(gpu_link), ==, GTK_ALIGN_START);
+    g_assert_cmpint(gtk_widget_get_halign(gpu_link), ==, GTK_ALIGN_FILL);
     gtk_button_clicked(GTK_BUTTON(gpu_link));
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "gpu");
@@ -143,7 +157,7 @@ int main(int argc, char **argv)
 
     GtkWidget *gaming = button_named(root, "GAMING & STREAMING  ›");
     g_assert_nonnull(gaming);
-    g_assert_cmpint(gtk_widget_get_halign(gaming), ==, GTK_ALIGN_START);
+    g_assert_cmpint(gtk_widget_get_halign(gaming), ==, GTK_ALIGN_FILL);
     gtk_button_clicked(GTK_BUTTON(gaming));
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "gaming");

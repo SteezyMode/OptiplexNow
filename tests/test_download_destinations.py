@@ -21,6 +21,7 @@ class FakeDocker:
         self.commands=[]
         self.media=media
         self.can_write=writable
+        self.expected_savepath="/library/bigdisk/Movies/Horror"
         self.records=[
           {"Id":VPN,"Name":"/music-vpn",
            "Config":{"Image":"qmcgaw/gluetun:v3.41","Env":[]},
@@ -55,7 +56,7 @@ class FakeDocker:
             self_result=0 if self.can_write else 1
             assert cmd[4]==QBIT and cmd[5:8]==["sh","-c",'test -w "$1"']
             assert cmd[-2].startswith("now")
-            assert self_check.startswith("/library/bigdisk")
+            assert self_check.startswith(("/library/bigdisk","/downloads"))
             return subprocess.CompletedProcess(cmd,self_result,b"",b"")
         assert cmd[:3]==["docker","exec",VPN]
         assert cmd[-1]=="http://127.0.0.1:8085/api/v2/torrents/add"
@@ -65,7 +66,7 @@ class FakeDocker:
         assert len(data)==1
         fields=parse_qs(data[0].partition("=")[2])
         assert fields["autoTMM"]==["false"]
-        assert fields["savepath"]==["/library/bigdisk/Movies/Horror"]
+        assert fields["savepath"]==[self.expected_savepath]
         assert fields["urls"]==[MAGNET]
         return subprocess.CompletedProcess(cmd,0,b"Ok.",b"")
 
@@ -84,6 +85,35 @@ class DestinationTests(unittest.TestCase):
     def test_roots_only_approved_media_bind_not_config_system_or_readonly(self):
         self.assertEqual(roots(runner=self.fake),{
             "roots":[{"id":"bigdisk","label":"Bigdisk"}]})
+
+    def test_other_writable_mounts_appear_without_manual_registration(self):
+        other=Path(self.temp.name)/"UnsortedData"
+        (other/"Games").mkdir(parents=True)
+        self.fake.records[1]["Mounts"].extend([
+            {"Source":str(other),"Destination":"/downloads",
+             "Type":"bind","RW":True},
+            {"Source":str(other),"Destination":"/config/secret",
+             "Type":"bind","RW":True},
+            {"Source":"/etc","Destination":"/anything",
+             "Type":"bind","RW":True},
+            {"Source":str(other),"Destination":"/run/hidden",
+             "Type":"bind","RW":True},
+        ])
+        found=roots(runner=self.fake)["roots"]
+        self.assertEqual(len(found),2)
+        dynamic=next(record for record in found if record["id"]!="bigdisk")
+        self.assertEqual(dynamic["label"],"UnsortedData")
+        self.assertTrue(dynamic["id"].startswith("mount_"))
+        self.assertEqual(roots(runner=self.fake)["roots"],found)
+        self.assertIn("Games",browse(dynamic["id"],"",runner=self.fake)["folders"])
+        self.fake.expected_savepath="/downloads/Games"
+        self.assertEqual(add_magnet(dynamic["id"],"Games",MAGNET,runner=self.fake),
+                         {"status":"submitted"})
+        self.assertEqual(create_folder(dynamic["id"],"Games","Indie",
+                                       runner=self.fake),{"status":"created"})
+        self.assertTrue((other/"Games"/"Indie").is_dir())
+        with self.assertRaises(DestinationError):
+            browse(dynamic["id"],"../",runner=self.fake)
 
     def test_browse_preserves_trailing_space_genre_and_ignores_symlinks(self):
         result=browse("bigdisk","Movies",runner=self.fake)

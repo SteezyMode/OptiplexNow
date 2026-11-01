@@ -19,6 +19,7 @@ typedef struct {
     const char *web_gaming_url;
     const char *startup_page;
     int login_tray_enabled;
+    int gpu_power_enabled;
 } NowSettingsDraft;
 
 typedef enum {

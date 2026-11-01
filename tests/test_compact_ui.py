@@ -53,9 +53,13 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6)', flow)
         self.assertIn('gtk_box_pack_end(GTK_BOX(status_row),vpn_button,FALSE,FALSE,0)', flow)
         self.assertIn('gtk_box_pack_start(GTK_BOX(status_row),title,TRUE,TRUE,0)', flow)
-        for action in ("refresh", "advanced_button", "back_button"):
+        for action in ("refresh", "advanced_button"):
             self.assertIn(f'gtk_box_pack_start(GTK_BOX(actions_row),{action},FALSE,FALSE,0)',flow)
             self.assertNotIn(f'gtk_box_pack_start(GTK_BOX(toolbar),{action},FALSE,FALSE,0)',flow)
+        # Advanced VueTorrent now has a separate full-height page and
+        # its Back button stays there, clear of native Downloads controls.
+        self.assertIn('gtk_box_pack_start(GTK_BOX(web_header),back_button,FALSE,FALSE,0)',flow)
+        self.assertNotIn('gtk_box_pack_start(GTK_BOX(actions_row),back_button',flow)
         self.assertIn('g_signal_connect(vpn_button,"clicked",G_CALLBACK(on_vpn_clicked),NULL)',flow)
         self.assertIn('g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL)',flow)
         self.assertIn('g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL)',flow)

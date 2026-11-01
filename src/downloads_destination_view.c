@@ -129,6 +129,7 @@ static gchar *places_path(void){
                          "download-places.ini",NULL);
 }
 static void on_place_shortcut(GtkButton *button,gpointer data);
+static void on_drive_clicked(GtkButton *button,gpointer data);
 static void refresh_place_choices(Picker *s){
  if(!s->places_list)return;
  GList *old=gtk_container_get_children(GTK_CONTAINER(s->places_list));
@@ -279,6 +280,7 @@ static void button_states(Picker *s){
                           s->magnet && s->root);
  gtk_widget_set_sensitive(s->up,!s->running && s->relative && *s->relative);
  gtk_widget_set_sensitive(s->roots,!s->running);
+ if(s->drive_list)gtk_widget_set_sensitive(s->drive_list,!s->running);
  gtk_widget_set_sensitive(s->new_folder,!s->running && s->folder_valid);
  gtk_widget_set_sensitive(s->pin_place,!s->running && s->folder_valid);
  gtk_button_set_label(GTK_BUTTON(s->pin_place),
@@ -407,13 +409,36 @@ static gboolean read_response(Picker *s,char action,char *wire){
    if(ok){
      s->loading_roots=TRUE;
      gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->roots));
+     GList *old=gtk_container_get_children(GTK_CONTAINER(s->drive_list));
+     for(GList *it=old;it;it=it->next)
+       gtk_widget_destroy(GTK_WIDGET(it->data));
+     g_list_free(old);
      for(guint i=1;lines[i];i++){
        gchar **fields=g_strsplit(lines[i],"\t",-1);
        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->roots),
                                  fields[1],fields[2]);
+       GtkWidget *button=gtk_button_new_with_label(fields[2]);
+       gtk_button_set_relief(GTK_BUTTON(button),GTK_RELIEF_NONE);
+       gtk_widget_set_halign(button,GTK_ALIGN_FILL);
+       GtkWidget *drive_icon=gtk_image_new_from_icon_name("drive-harddisk",
+                                                          GTK_ICON_SIZE_MENU);
+       gtk_button_set_image(GTK_BUTTON(button),drive_icon);
+       gtk_button_set_always_show_image(GTK_BUTTON(button),TRUE);
+       gtk_widget_set_tooltip_text(button,fields[2]);
+       g_object_set_data_full(G_OBJECT(button),"drive-id",
+                              g_strdup(fields[1]),g_free);
+       g_signal_connect(button,"clicked",G_CALLBACK(on_drive_clicked),s->view);
+       gtk_box_pack_start(GTK_BOX(s->drive_list),button,FALSE,FALSE,1);
        g_strfreev(fields);
      }
-     gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),0);
+     gtk_widget_show_all(s->drive_list);
+     gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),-1);
+     g_clear_pointer(&s->root,g_free);
+     g_clear_pointer(&s->relative,g_free);
+     clear_folder_buttons(s);
+     gtk_label_set_text(GTK_LABEL(s->path),"Choose a drive");
+     gtk_label_set_text(GTK_LABEL(s->status),
+            "Choose one of the server's available storage locations.");
      s->loading_roots=FALSE;
    }
  }else if(action=='b'){
@@ -502,15 +527,8 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
      g_clear_pointer(&s->pending_folder,g_free);
      g_free(next);
    }
-   if(ok && job->action=='r'){
-     const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
-     if(safe_root(id)){
-       g_free(s->root);s->root=g_strdup(id);
-       g_free(s->relative);s->relative=g_strdup("");
-       start(s,'b');
-     }else{ok=FALSE;}
-   }
-   if(!ok){
+   /* No automatic download destination: choose a drive explicitly. */
+    if(!ok){
      if(job->action=='m')
        gtk_label_set_text(GTK_LABEL(s->status),
          "Cannot create folder. It may exist or the approved drive is not writable.");
@@ -562,6 +580,13 @@ static void on_root(GtkComboBox *combo,gpointer data){
  g_free(s->root);s->root=g_strdup(id);
  g_free(s->relative);s->relative=g_strdup("");
  start(s,'b');
+}
+static void on_drive_clicked(GtkButton *button,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running)return;
+ const gchar *id=g_object_get_data(G_OBJECT(button),"drive-id");
+ if(safe_root(id))
+   gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),id);
 }
 static void on_up(GtkButton *unused,gpointer data){
  (void)unused;
@@ -625,7 +650,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_label_set_xalign(GTK_LABEL(title),0);
  gtk_box_pack_start(GTK_BOX(view),title,FALSE,FALSE,4);
  GtkWidget *main_area=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- gtk_box_pack_start(GTK_BOX(view),main_area,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(view),main_area,FALSE,FALSE,0);
  g_signal_connect(main_area,"size-allocate",G_CALLBACK(adapt_picker_width),view);
  s->sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
  /* Child visibility is controlled by the responsive layout, not show_all. */
@@ -636,15 +661,24 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_label_set_xalign(GTK_LABEL(locations),0);
  gtk_box_pack_start(GTK_BOX(s->sidebar),locations,FALSE,FALSE,3);
  s->roots=gtk_combo_box_text_new();
+ /* Internal ID selector; drives are visible as separate sidebar rows. */
+ gtk_widget_set_no_show_all(s->roots,TRUE);
+ s->drive_list=gtk_box_new(GTK_ORIENTATION_VERTICAL,1);
+ GtkWidget *drives_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(drives_scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_size_request(drives_scroll,-1,138);
+ gtk_container_add(GTK_CONTAINER(drives_scroll),s->drive_list);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),drives_scroll,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(s->sidebar),s->roots,FALSE,FALSE,0);
  g_signal_connect(s->roots,"changed",G_CALLBACK(on_root),view);
  GtkWidget *places_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(places_scroll),
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_widget_set_vexpand(places_scroll,TRUE);
+ gtk_widget_set_size_request(places_scroll,-1,160);
  s->places_list=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_container_add(GTK_CONTAINER(places_scroll),s->places_list);
- gtk_box_pack_start(GTK_BOX(s->sidebar),places_scroll,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),places_scroll,FALSE,FALSE,0);
  s->browser_area=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_box_pack_start(GTK_BOX(main_area),s->browser_area,TRUE,TRUE,0);
  GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
@@ -680,14 +714,33 @@ GtkWidget *now_downloads_destination_view_new(void){
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_scrolled_window_set_overlay_scrolling(
       GTK_SCROLLED_WINDOW(s->folder_scroll),FALSE);
- gtk_widget_set_size_request(s->folder_scroll,-1,420);
- gtk_widget_set_vexpand(s->folder_scroll,TRUE);
- s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ /* The action footer immediately follows a normal-size directory viewport. */
+ gtk_widget_set_size_request(s->folder_scroll,-1,275);
+ s->folder_store=gtk_list_store_new(1,G_TYPE_STRING);
+ GtkTreeModel *filtered=gtk_tree_model_filter_new(
+                                  GTK_TREE_MODEL(s->folder_store),NULL);
+ s->filtered=GTK_TREE_MODEL_FILTER(filtered);
+ gtk_tree_model_filter_set_visible_func(s->filtered,filter_folder_row,s,NULL);
+ s->folders=gtk_tree_view_new_with_model(filtered);
+ gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(s->folders),TRUE);
+ GtkTreeViewColumn *column=gtk_tree_view_column_new();
+ gtk_tree_view_column_set_title(column,"Name");
+ GtkCellRenderer *folder_icon=gtk_cell_renderer_pixbuf_new();
+ g_object_set(folder_icon,"icon-name","folder",NULL);
+ gtk_tree_view_column_pack_start(column,folder_icon,FALSE);
+ GtkCellRenderer *folder_text=gtk_cell_renderer_text_new();
+ g_object_set(folder_text,"ellipsize",PANGO_ELLIPSIZE_END,NULL);
+ gtk_tree_view_column_pack_start(column,folder_text,TRUE);
+ gtk_tree_view_column_add_attribute(column,folder_text,"text",0);
+ gtk_tree_view_append_column(GTK_TREE_VIEW(s->folders),column);
+ g_signal_connect(s->folders,"row-activated",
+                  G_CALLBACK(on_folder_activated),view);
  gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
- gtk_box_pack_start(GTK_BOX(s->browser_area),s->folder_scroll,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(s->browser_area),s->folder_scroll,FALSE,FALSE,0);
  GtkWidget *footer=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
  gtk_box_pack_start(GTK_BOX(view),footer,FALSE,FALSE,4);
  s->status=gtk_label_new("Choose a destination folder.");
+ gtk_label_set_max_width_chars(GTK_LABEL(s->status),45);
  gtk_label_set_xalign(GTK_LABEL(s->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(footer),s->status,TRUE,TRUE,0);

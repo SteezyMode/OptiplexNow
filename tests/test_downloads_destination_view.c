@@ -91,6 +91,43 @@ static void test_projector_picker_filters_and_confirm_above_browser(void){
  g_list_free(buttons);
  gtk_widget_destroy(view);
 }
+static void test_saved_game_location_remains_scoped_to_approved_root(void){
+ GtkWidget *view=now_downloads_destination_view_new();
+ Picker *s=state(view);
+ g_assert_nonnull(s->new_folder);
+ g_assert_nonnull(s->places_combo);
+ g_assert_nonnull(s->pin_place);
+ g_assert_nonnull(s->unpin_place);
+ g_assert_true(read_response(s,'m',"CREATED"));
+ g_assert_false(read_response(s,'m',"SUBMITTED"));
+ g_free(s->root);s->root=g_strdup("bigdisk");
+ g_free(s->relative);s->relative=g_strdup("Games");
+ g_assert_true(read_response(s,'b',"FOLDERS\tbigdisk\tGames"));
+ g_assert_true(remember_current_place(s));
+ g_assert_cmpuint(s->places->len,==,1);
+ SavedPlace *p=g_ptr_array_index(s->places,0);
+ g_assert_cmpstr(p->root,==,"bigdisk");
+ g_assert_cmpstr(p->relative,==,"Games");
+ gchar *file=places_path();
+ gchar *raw=NULL;
+ g_assert_true(g_file_get_contents(file,&raw,NULL,NULL));
+ g_assert_null(strstr(raw,"/media/"));
+ g_assert_null(strstr(raw,"/etc/"));
+ g_free(raw);g_free(file);
+ GtkWidget *another=now_downloads_destination_view_new();
+ Picker *again=state(another);
+ g_assert_cmpuint(again->places->len,==,1);
+ SavedPlace *loaded=g_ptr_array_index(again->places,0);
+ g_assert_cmpstr(loaded->relative,==,"Games");
+ /* Select only a local saved-place entry for removal; no host request. */
+ again->loading_places=TRUE;
+ gtk_combo_box_set_active(GTK_COMBO_BOX(again->places_combo),1);
+ again->loading_places=FALSE;
+ on_remove_place(NULL,another);
+ g_assert_cmpuint(again->places->len,==,0);
+ gtk_widget_destroy(another);
+ gtk_widget_destroy(view);
+}
 static void flush_gtk_events(void){
  /* GTK's allocation/draw frame clock can run after the idle queue empties.
   * Exercise several real virtual-display frames, without manual resize. */
@@ -171,6 +208,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/borrowed-combo-id",test_borrowed_combo_id_is_never_freed);
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);
  g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_above_browser);
+ g_test_add_func("/destination/saved-games",test_saved_game_location_remains_scoped_to_approved_root);
  g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

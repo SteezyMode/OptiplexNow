@@ -220,7 +220,14 @@ static const char *CSS =
 "#statusmetric {font-size:13px;font-weight:700;color:#c5c7c1;padding:2px 5px;}"
 "#statusmetric.good {color:#84d9a7;}"
 "#statusmetric.bad {color:#eca29d;}"
-"#setupaction, .setupaction {background:#2c322d;color:#ece8e0;border:1px solid #5b665d;border-radius:2px;padding:8px 12px;font-size:11px;font-weight:700;}"
+/* Settings home is a balanced grid of equal-sized quiet navigation tiles,
+ * with muted copper edge, not a column of uneven action pills. */
+ "#settings-menu {background:transparent;}"
+ "#settingscard {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-bottom:2px solid #c47d65;border-radius:3px;padding:8px 12px;min-height:42px;font-size:11px;font-weight:800;}"
+ "#settingscard label {color:#ece8e0;}"
+ "#settingscard:hover,#settingscard:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"
+ "#settingscard:hover label,#settingscard:focus label {color:#ece8e0;}"
+ "#setupaction, .setupaction {background:#2c322d;color:#ece8e0;border:1px solid #5b665d;border-radius:2px;padding:8px 12px;font-size:11px;font-weight:700;}"
 "#setupaction:hover, .setupaction:hover {background:#39302c;color:#ece8e0;border-color:#c47d65;}"
 "#setupaction label, .setupaction label {color:#ece8e0;font-weight:800;}"
 "#setupaction:hover label, .setupaction:hover label {color:#ece8e0;}"

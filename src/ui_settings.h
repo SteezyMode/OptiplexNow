@@ -23,7 +23,7 @@ typedef struct {
 typedef struct {
     GtkWidget *fields[8], *diskentry, *combo, *featured_checks[8], *tray_checks[8];
     GtkWidget *order_list, *web_url_entry, *desktop_caption_entry;
-    GtkWidget *startup_choice, *login_tray_toggle, *root;
+    GtkWidget *startup_choice, *login_tray_toggle, *gpu_power_toggle, *root;
     PairContext server_context, relay_context;
     PresetExportContext export_context;
 } NowSettingsForm;

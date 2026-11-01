@@ -23,8 +23,14 @@ class DashboardGpuShortcutTests(unittest.TestCase):
 
     def test_gpu_cap_label_is_explicit_and_consumption_is_not_on_dashboard(self):
         source = self.source
-        self.assertIn('?"  ·  CAP ":""', source)
-        self.assertIn('r->gpu_cap', source)
+        self.assertIn("  ·  CAP %s", source)
+        self.assertIn("size='smaller'", source)
+        self.assertIn("foreground='#b1b5ad'", source)
+        self.assertIn("rise='700'", source)
+        self.assertIn('g_markup_escape_text(val,-1)', source)
+        self.assertIn('g_markup_escape_text(r->gpu_cap,-1)', source)
+        self.assertIn('gtk_label_set_markup(GTK_LABEL(metric_gpu),markup)', source)
+        self.assertIn('gtk_label_set_text(GTK_LABEL(metric_gpu),val)', source)
         self.assertNotIn("GPU_DRAW=", source)
 
     def test_click_routes_without_changing_owner_only_control_boundary(self):

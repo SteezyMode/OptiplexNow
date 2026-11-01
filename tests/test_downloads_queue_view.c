@@ -20,6 +20,35 @@ static void test_queue_items(void){
  g_list_free(rows);
  gtk_widget_destroy(view);
 }
+static GtkWidget *first_actions_toggle(GtkWidget *view){
+ GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
+ GtkListBoxRow *listrow=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);
+ if(!listrow)return NULL;
+ GtkWidget *content=gtk_bin_get_child(GTK_BIN(listrow));
+ return content?g_object_get_data(G_OBJECT(content),"now-actions-toggle"):NULL;
+}
+static void test_actions_collapsed_until_clicked(void){
+ GtkWidget *view=now_downloads_queue_view_new();
+ const char *wire=
+   "ITEM\t21.2\tdownloading\tExample Movie\t" HASH_A "\t150\t180\t7\n"
+   "ITEM\t90.0\tdownloading\tExample Game\t" HASH_B "\t200\t60\t4";
+ g_assert_true(now_downloads_queue_view_update(view,wire));
+ GtkWidget *first=first_actions_toggle(view);
+ g_assert_nonnull(first);
+ g_assert_false(gtk_expander_get_expanded(GTK_EXPANDER(first)));
+ gtk_expander_set_expanded(GTK_EXPANDER(first),TRUE);
+ g_assert_true(gtk_expander_get_expanded(GTK_EXPANDER(first)));
+ /* Background queue refresh must not close a panel the user intentionally opened. */
+ g_assert_true(now_downloads_queue_view_update(view,wire));
+ first=first_actions_toggle(view);
+ g_assert_nonnull(first);
+ g_assert_true(gtk_expander_get_expanded(GTK_EXPANDER(first)));
+ gtk_expander_set_expanded(GTK_EXPANDER(first),FALSE);
+ g_assert_true(now_downloads_queue_view_update(view,wire));
+ first=first_actions_toggle(view);
+ g_assert_false(gtk_expander_get_expanded(GTK_EXPANDER(first)));
+ gtk_widget_destroy(view);
+}
 static void test_malformed_refused(void){
  GtkWidget *view=now_downloads_queue_view_new();
  const char *bad[]={
@@ -113,6 +142,7 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/native-downloads/items",test_queue_items);
+ g_test_add_func("/native-downloads/collapsible-actions",test_actions_collapsed_until_clicked);
  g_test_add_func("/native-downloads/malformed",test_malformed_refused);
  g_test_add_func("/native-downloads/actions",test_files_and_delete_controls);
  g_test_add_func("/native-downloads/files",test_files_dialog_wire_validation);

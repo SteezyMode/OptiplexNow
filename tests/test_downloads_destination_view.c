@@ -89,9 +89,9 @@ static void test_native_directory_and_visible_drive_shortcuts(void){
  g_assert_false(s->folder_valid);
  g_assert_false(gtk_widget_get_sensitive(s->add));
  g_list_free(drives);
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),"bigdisk");
  g_free(s->root);s->root=g_strdup("bigdisk");
  g_free(s->relative);s->relative=g_strdup("Movies");
- gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),"bigdisk");
  g_assert_true(read_response(s,'b',
     "FOLDERS\tbigdisk\tMovies\nFOLDER\tAction \nFOLDER\tHorror\nFOLDER\tComedy"));
  GtkTreeModel *model=GTK_TREE_MODEL(s->folder_store);

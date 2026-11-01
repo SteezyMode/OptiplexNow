@@ -2385,6 +2385,24 @@ static void on_gpu_power_settings(GtkWidget *widget, gpointer data){
     g_clear_error(&error);
   }
  }
+ static gboolean on_dashboard_gpu_pressed(GtkWidget *widget, GdkEventButton *event,
+                                         gpointer unused){
+  (void)widget;(void)unused;
+  if(!event || event->type!=GDK_BUTTON_PRESS || event->button!=GDK_BUTTON_PRIMARY)
+    return FALSE;
+  if(now_ui_state_gpu_power_enabled()){
+    on_gpu_power_settings(NULL,NULL);
+  }else{
+    /* Fresh clients land on the opt-in page; no LACT error or host action. */
+    on_settings(NULL,NULL);
+    if(settings_view){
+      GtkWidget *stack=g_object_get_data(G_OBJECT(settings_view),"now-settings-stack");
+      if(GTK_IS_STACK(stack))
+        gtk_stack_set_visible_child_name(GTK_STACK(stack),"gpu");
+    }
+  }
+  return TRUE;
+ }
  static void on_settings(void*w,void*p){
  (void)w;(void)p;
  if(!main_pages)return;
@@ -3071,7 +3089,16 @@ int main(int argc,char**argv) {
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
  GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
  metric_cpu=label("CPU   --","metric");metric_gpu=label("GPU   --","metric");
- gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);
+ /* Transparent hit target: preserve the exact label styling and geometry.
+  * Only the primary click navigates; the label remains the live readout. */
+ GtkWidget *gpu_hitbox=gtk_event_box_new();
+ gtk_event_box_set_visible_window(GTK_EVENT_BOX(gpu_hitbox),FALSE);
+ gtk_widget_add_events(gpu_hitbox,GDK_BUTTON_PRESS_MASK);
+ gtk_container_add(GTK_CONTAINER(gpu_hitbox),metric_gpu);
+ g_signal_connect(gpu_hitbox,"button-press-event",
+                  G_CALLBACK(on_dashboard_gpu_pressed),NULL);
+ gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);
+ gtk_grid_attach(GTK_GRID(metrics),gpu_hitbox,1,0,1,1);
   metric_ram=label("RAM   --","metric");metric_vram=label("VRAM   --","metric");
   gtk_grid_attach(GTK_GRID(metrics),metric_ram,0,1,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_vram,1,1,1,1);
  GtkWidget*diskbox=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);gtk_widget_set_name(diskbox,"drivemetric");

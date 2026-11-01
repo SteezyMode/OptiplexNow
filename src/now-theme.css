@@ -50,3 +50,24 @@ scrollbar slider {background:#424d45; border-radius:3px;}
 scrollbar slider:hover {background:#5b665d;}
 separator {background:#414743;}
 textview text selection, entry selection {background-color:#75534b; color:#ffffff;}
+
+/* File selector: use familiar flat file-manager locations rather than
+ * the prominent primary-action styling applied to ordinary app buttons. */
+.now-native-file-dialog button.now-places-item {
+  background:transparent;
+  border:none;
+  border-radius:2px;
+  box-shadow:none;
+  padding:5px 8px;
+  min-height:26px;
+  font-size:12px;
+  font-weight:400;
+}
+.now-native-file-dialog button.now-places-item:hover,
+.now-native-file-dialog button.now-places-item:focus {
+  background:#303831;
+  border:none;
+}
+.now-native-file-dialog treeview.view {
+  font-size:12px;
+}

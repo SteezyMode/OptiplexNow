@@ -39,9 +39,11 @@ static void test_first_downloads_paint(void){
  GtkWidget *queue=gtk_label_new("Current downloads");
  gtk_stack_add_named(GTK_STACK(nested),web,"web");
  gtk_stack_add_named(GTK_STACK(nested),queue,"queue");
- gtk_stack_set_visible_child_name(GTK_STACK(nested),"queue");
  gtk_box_pack_start(GTK_BOX(downloads),nested,TRUE,TRUE,0);
  gtk_stack_add_named(GTK_STACK(pages),downloads,"downloads");
+ /* The same visibility-before-selection contract as now_downloads_page(). */
+ gtk_widget_show_all(downloads);
+ gtk_stack_set_visible_child_name(GTK_STACK(nested),"queue");
  unsigned paints=0;
  g_signal_connect(queue,"draw",G_CALLBACK(count_draw),&paints);
  gtk_stack_set_visible_child_name(GTK_STACK(pages),"dashboard");
@@ -59,7 +61,7 @@ static void test_first_downloads_paint(void){
  now_nav_relayout_page(downloads);
  gtk_widget_destroy(window);
  drain_gtk();
- g_print("GTK Downloads first-paint allocation passed without window resize.\\n");
+ g_print("GTK Downloads first-paint allocation passed without window resize.\n");
 }
 
 int main(int argc, char **argv) {

@@ -148,6 +148,7 @@ int main(int argc, char **argv)
     gtk_widget_get_allocation(GTK_WIDGET(first),&first_box);
     gtk_widget_get_allocation(GTK_WIDGET(second),&second_box);
     g_assert_cmpint(second_box.y,>,first_box.y);
+    g_assert_cmpuint(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(menu)),==,1);
 
     GtkWidget *gpu_link = button_named(root, "HOST GPU  ›");
     g_assert_nonnull(gpu_link);

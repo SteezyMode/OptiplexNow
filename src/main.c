@@ -650,7 +650,24 @@ static gboolean finish_on_main(void *arg) {
    gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),r->success==1?"online":r->success==2?"pair":"offline");
    gtk_label_set_text(GTK_LABEL(status_detail),r->success==1?"":r->message);
    if(metric_cpu){char val[110];snprintf(val,sizeof val,"CPU   %s  %s",*r->cpu_load?r->cpu_load:"--",*r->cpu?r->cpu:"");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
-   if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s%s%s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"",(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled() && *r->gpu_cap)?"  ·  CAP ":"",(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled())?r->gpu_cap:"");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
+   if(metric_gpu){
+     char val[110];
+     snprintf(val,sizeof val,"GPU   %s  %s",
+              *r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"");
+     if(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled() && *r->gpu_cap){
+       /* The cap is secondary metadata, not instantaneous wattage.
+        * Escape host-supplied strings before applying Pango markup. */
+       gchar *base=g_markup_escape_text(val,-1);
+       gchar *cap=g_markup_escape_text(r->gpu_cap,-1);
+       gchar *markup=g_strdup_printf(
+         "%s<span size='smaller' foreground='#b1b5ad' rise='700'>  ·  CAP %s</span>",
+         base,cap);
+       gtk_label_set_markup(GTK_LABEL(metric_gpu),markup);
+       g_free(markup);g_free(cap);g_free(base);
+     }else{
+       gtk_label_set_text(GTK_LABEL(metric_gpu),val);
+     }
+   }
    if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
    if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
    if(metric_network){gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  connected":"TAILSCALE  disconnected");

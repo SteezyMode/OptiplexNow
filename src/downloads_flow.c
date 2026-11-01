@@ -523,16 +523,22 @@ static void on_refresh_clicked(GtkButton *button,gpointer unused){
 GtkWidget *now_downloads_page(void){
  GtkWidget *root=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  gtk_container_set_border_width(GTK_CONTAINER(root),8);
- GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ /* A dedicated VPN/status row prevents long Advanced actions from
+  * colliding with the right-anchored VPN badge at minimum window width. */
+ GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
  gtk_box_pack_start(GTK_BOX(root),toolbar,FALSE,FALSE,0);
+ GtkWidget *status_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ GtkWidget *actions_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(toolbar),status_row,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(toolbar),actions_row,FALSE,FALSE,0);
  GtkWidget *title=gtk_label_new("DOWNLOADS");
  gtk_label_set_xalign(GTK_LABEL(title),0);
- gtk_box_pack_start(GTK_BOX(toolbar),title,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(status_row),title,TRUE,TRUE,0);
  vpn_button=gtk_button_new_with_label("VPN: UNKNOWN");
  gtk_widget_set_name(vpn_button,"vpnstatus");
  gtk_widget_set_tooltip_text(vpn_button,
      "Gluetun health on the approved download host; click for details");
- gtk_box_pack_end(GTK_BOX(toolbar),vpn_button,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(status_row),vpn_button,FALSE,FALSE,0);
  GtkWidget *popover=gtk_popover_new(vpn_button);
  GtkWidget *panel=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
  gtk_container_set_border_width(GTK_CONTAINER(panel),12);
@@ -556,17 +562,17 @@ GtkWidget *now_downloads_page(void){
  g_timeout_add_seconds(60,vpn_poll,NULL);
  GtkWidget *refresh=gtk_button_new_with_label("REFRESH");
  gtk_style_context_add_class(gtk_widget_get_style_context(refresh),"now-action");
- gtk_box_pack_start(GTK_BOX(toolbar),refresh,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(actions_row),refresh,FALSE,FALSE,0);
  /* Refresh uses only the already-paired host and SSH user. */
  g_signal_connect(refresh,"clicked",G_CALLBACK(on_refresh_clicked),NULL);
  advanced_button=gtk_button_new_with_label("ADVANCED · VUETORRENT");
  gtk_style_context_add_class(gtk_widget_get_style_context(advanced_button),"now-action");
  gtk_widget_set_sensitive(advanced_button,FALSE);
- gtk_box_pack_start(GTK_BOX(toolbar),advanced_button,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(actions_row),advanced_button,FALSE,FALSE,0);
  g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL);
  back_button=gtk_button_new_with_label("BACK TO QUEUE");
  gtk_style_context_add_class(gtk_widget_get_style_context(back_button),"now-action");
- gtk_box_pack_start(GTK_BOX(toolbar),back_button,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(actions_row),back_button,FALSE,FALSE,0);
  g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL);
  gtk_widget_set_no_show_all(back_button,TRUE);
  gtk_widget_hide(back_button);
@@ -617,10 +623,14 @@ GtkWidget *now_downloads_page(void){
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);
  now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
- gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
- update_download_tab_buttons();
  gtk_stack_add_named(GTK_STACK(queue_stack),body,"queue");
+ /* GtkStack only selects a child that is visible. Finish showing the entire
+  * page before selecting the nested queue and transfers views; otherwise the
+  * first visit can show an empty placeholder until an external resize. */
+ gtk_widget_show_all(root);
+ gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
+ update_download_tab_buttons();
  g_timeout_add_seconds(3,refresh_visible_transfers,NULL);
  return root;
 }

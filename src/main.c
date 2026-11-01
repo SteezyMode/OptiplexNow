@@ -139,11 +139,16 @@ static const char *CSS =
 "#shell {background:#101111;}"
 "#setting {background:#1d201f; border:1px solid #414743;color:#ece8e0;padding:5px 11px;font-size:10px;font-weight:700;min-height:24px;border-radius:2px;}"
 "#setting:hover {background:#c47d65;color:#101111;border-color:#c47d65;}"
+ "#setting:hover label {color:#101111;}"
 "#mainnav {background:#181b19;border-bottom:1px solid #414743;padding:6px 10px;}"
 "#navback,#navtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:4px 9px;min-height:25px;font-size:11px;font-weight:700;}"
 "#navback:hover,#navtab:hover {background:#c47d65;color:#101111;}"
 "#navtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
 "#navtab.active:hover {background:#d39579;color:#101111;}"
+ /* GTK labels have their own color; explicitly preserve contrast on
+  * colored tabs and tiles rather than relying on inherited button text. */
+ "#navtab.active label,#navtab.active:hover label,#navback:hover label,#navtab:hover label {color:#101111;}"
+ "#navback:focus,#navtab:focus,#tile:focus,#setupaction:focus,#power:focus,#danger:focus {border-color:#d39579;}"
 /* Unified NOW dark controls: never use the platform's white GTK defaults
  * for ordinary Videos/Downloads buttons. No functional changes. */
 "button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
@@ -166,9 +171,11 @@ static const char *CSS =
 "button.now-action.now-sort:hover label,button.now-action.now-sort:focus label {color:#ece8e0;}"
 "#downloadsubtab {background:#222724;color:#ece8e0;border:1px solid #4b544d;padding:6px 12px;font-weight:700;}"
 "#downloadsubtab.active {background:#c47d65;color:#101111;border-color:#c47d65;}"
+ "#downloadsubtab.active label {color:#101111;}"
 "#downloadconfirm {background:#c47d65;color:#101111;border-radius:2px;padding:9px 12px;font-weight:800;}"
+ "#downloadconfirm label {color:#101111;}"
 "#vpnstatus {background:#1c2925;color:#b3e4cd;border:1px solid #497a61;border-radius:3px;padding:4px 10px;font-size:10px;font-weight:800;}"
-"#title {font-family:'Inter',sans-serif;font-size:32px;font-weight:900;letter-spacing:-1.4px;color:#ece8e0;}"
+"#title {font-family:'Inter',sans-serif;font-size:28px;font-weight:900;letter-spacing:-1.1px;color:#ece8e0;}"
 "#state {color:#bcb8af;background:#202523;border:1px solid #515b56;padding:7px 10px;font-size:10px;font-weight:800;letter-spacing:.7px;}"
 "#state.online {color:#e8c28f;border-color:#c47d65;} #state.offline {color:#e7aca7;border-color:#986967;} #state.pair {color:#e8ce90;border-color:#9b8354;}"
 "#state.vpn-ok {color:#b3e4cd;border-color:#497a61;} #state.vpn-warn {color:#e8ce90;border-color:#9b8354;}"
@@ -195,31 +202,41 @@ static const char *CSS =
 "#trayorder checkbutton, #trayorder checkbutton check {color:#ece8e0;}"
 "#tile {background:#1e211f;color:#ece8e0;border:1px solid #554840;border-radius:2px;padding:6px 8px;font-weight:800;font-size:12px;min-height:43px;border-bottom:2px solid #c47d65;}"
 "#tile:hover {background:#b96b5e;color:#101111;} #tile:active {background:#e6aa77;}"
+ "#tile:hover label,#tile:active label {color:#101111;}"
 "#power {background:#171918;color:#ece8e0;border:1px solid #59615c;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
 "#power:hover {background:#c47d65;color:#101111;}"
+ "#power:hover label {color:#101111;}"
 "#danger {background:#171918;color:#ddaba5;border:1px solid #9c6b69;border-radius:2px;padding:6px 6px;font-weight:800;font-size:10px;min-height:30px;}"
 "#danger:hover {background:#9d3543;color:#fafaf8;}"
+ "#danger:hover label {color:#fafaf8;}"
 "#footer {font-size:11px;color:#b8b4ac;}"
 "dialog {background:#151716;} dialog label {color:#ece8e0;font-size:12px;}"
 "entry {background:#252a27;color:#ece8e0;border:1px solid #69716a;border-radius:2px;padding:8px;font-size:12px;min-height:25px;}"
 "combobox button {background:#222623;color:#ece8e0;border:1px solid #777f77;border-radius:2px;}"
-"menu,menuitem {background:#222623;color:#ece8e0;} menuitem:hover {background:#2a9d8f;color:#101111;}"
-"#modalheading {font-size:17px;font-weight:800;color:#ece8e0;}"
+"menu,menuitem {background:#222623;color:#ece8e0;} menuitem:hover {background:#39302c;color:#ece8e0;}"
+"#modalheading {font-size:16px;font-weight:800;color:#ece8e0;}"
 "#helper {font-size:11px;color:#b8b4ac;}"
 "#gameshint {font-size:12px;color:#ece8e0;}"
 "#statusmetric {font-size:13px;font-weight:700;color:#c5c7c1;padding:2px 5px;}"
 "#statusmetric.good {color:#84d9a7;}"
 "#statusmetric.bad {color:#eca29d;}"
-"#setupaction, .setupaction {background:#2c322d;color:#ece8e0;border:1px solid #5b665d;border-radius:2px;padding:8px 12px;font-size:11px;font-weight:700;}"
-"#setupaction:hover, .setupaction:hover {background:#2a9d8f;color:#101111;}"
+/* Settings home is a balanced grid of equal-sized quiet navigation tiles,
+ * with muted copper edge, not a column of uneven action pills. */
+ "#settings-menu {background:transparent;}"
+ "#settingscard {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-bottom:2px solid #c47d65;border-radius:3px;padding:8px 12px;min-height:42px;font-size:11px;font-weight:800;}"
+ "#settingscard label {color:#ece8e0;}"
+ "#settingscard:hover,#settingscard:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"
+ "#settingscard:hover label,#settingscard:focus label {color:#ece8e0;}"
+ "#setupaction, .setupaction {background:#2c322d;color:#ece8e0;border:1px solid #5b665d;border-radius:2px;padding:8px 12px;font-size:11px;font-weight:700;}"
+"#setupaction:hover, .setupaction:hover {background:#39302c;color:#ece8e0;border-color:#c47d65;}"
 "#setupaction label, .setupaction label {color:#ece8e0;font-weight:800;}"
-"#setupaction:hover label, .setupaction:hover label {color:#101111;}"
+"#setupaction:hover label, .setupaction:hover label {color:#ece8e0;}"
 "#note {color:#b8b4ac;font-size:11px;}"
 "assistant .sidebar, assistant .sidebar label {background:#1e211f;color:#ece8e0;}"
 "assistant button {background:#252a27;color:#ece8e0;}"
-"assistant button:hover {background:#2a9d8f;color:#101111;}"
+"assistant button:hover {background:#39302c;color:#ece8e0;border-color:#c47d65;}"
 "dialog .dialog-action-area button {background:#252a27;color:#ece8e0;border:1px solid #59615c;padding:8px 14px;}"
-"dialog .dialog-action-area button:hover {background:#2a9d8f;color:#101111;}"
+"dialog .dialog-action-area button:hover {background:#39302c;color:#ece8e0;border-color:#c47d65;}"
 "#specname {font-size:11px;color:#b8b4ac;}"
 "#specvalue {font-size:12px;color:#ece8e0;font-weight:700;}";
 static void safe_copy(char *dest, size_t cap, const char *src) { snprintf(dest,cap,"%s",src?src:""); }
@@ -1996,6 +2013,8 @@ static void on_bruiser_admin(void*w,void*p){
 static void open_downloads_page(void){
  now_nav_show_page(main_pages,"downloads");
  now_downloads_open(cfg[0],cfg[1],cfg[7]);
+ /* New nested Downloads stacks must be allocated before their first paint. */
+ now_nav_relayout_page(gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads"));
 }
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;
@@ -3034,7 +3053,9 @@ int main(int argc,char**argv) {
  main_pages=gtk_stack_new();
  /* A hidden Settings/Downloads page must not define the minimum window width. */
  gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);
- gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+ /* Top navigation is tab-like: avoid a sliding offscreen surface during
+  * the first allocation of the nested Downloads GTK stacks. */
+ gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE);
  gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
  gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);

@@ -35,6 +35,50 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('g_object_unref(storage)', MAIN)
         self.assertIn('gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1)', MAIN)
 
+    def test_settings_home_uses_balanced_responsive_navigation_tiles(self):
+        self.assertIn('gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(menu),1)', SETTINGS)
+        self.assertIn('gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(menu),2)', SETTINGS)
+        self.assertIn('guint columns=allocation->width<540?1u:2u;', SETTINGS)
+        self.assertIn('g_signal_connect(menu,"size-allocate",G_CALLBACK(settings_menu_reflow),NULL)', SETTINGS)
+        self.assertIn('gtk_flow_box_set_homogeneous(GTK_FLOW_BOX(menu),TRUE)', SETTINGS)
+        self.assertIn('settings_menu_button(home_menu,"OTHER APPS  ›")', SETTINGS)
+        self.assertIn('settings_menu_button(home_menu,"SYSTEM INFO  ›")', SETTINGS)
+        self.assertIn('settings_menu_link(home_menu,stack,"HOST GPU  ›","gpu")', SETTINGS)
+        self.assertIn('settings_menu_link(home_menu,stack,"CONNECTIONS & SERVER  ›","connection")', SETTINGS)
+        self.assertIn('"#settingscard {background:#222724', MAIN)
+        self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_FILL)', SETTINGS)
+
+    def test_downloads_vpn_is_on_own_row_at_minimum_width(self):
+        flow = (ROOT / "src" / "downloads_flow.c").read_text(encoding="utf-8")
+        self.assertIn('GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6)', flow)
+        self.assertIn('gtk_box_pack_end(GTK_BOX(status_row),vpn_button,FALSE,FALSE,0)', flow)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(status_row),title,TRUE,TRUE,0)', flow)
+        for action in ("refresh", "advanced_button", "back_button"):
+            self.assertIn(f'gtk_box_pack_start(GTK_BOX(actions_row),{action},FALSE,FALSE,0)',flow)
+            self.assertNotIn(f'gtk_box_pack_start(GTK_BOX(toolbar),{action},FALSE,FALSE,0)',flow)
+        self.assertIn('g_signal_connect(vpn_button,"clicked",G_CALLBACK(on_vpn_clicked),NULL)',flow)
+        self.assertIn('g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL)',flow)
+        self.assertIn('g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL)',flow)
+
+    def test_downloads_first_open_is_allocated_without_user_resizing(self):
+        navigation = (ROOT / "src" / "ui_navigation.c").read_text(encoding="utf-8")
+        main = MAIN
+        self.assertIn('gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE)', main)
+        self.assertIn('now_nav_show_page(main_pages,"downloads");', main)
+        self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', main)
+        self.assertIn('now_nav_relayout_page(gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads"))', main)
+        flow = (ROOT / "src" / "downloads_flow.c").read_text(encoding="utf-8")
+        init = flow.split("GtkWidget *now_downloads_page(void){", 1)[1]
+        self.assertLess(init.index("gtk_widget_show_all(root);"),
+                        init.index('gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers")'))
+        self.assertLess(init.index("gtk_widget_show_all(root);"),
+                        init.index('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")'))
+        self.assertIn('gtk_widget_queue_resize(page)', navigation)
+        self.assertIn('gtk_widget_queue_draw(page)', navigation)
+        self.assertIn('gtk_widget_get_mapped(page)', navigation)
+        self.assertIn('g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,relayout_page_idle,', navigation)
+        self.assertNotIn('g_timeout_add_seconds(1,downloads', main)
+
     def test_settings_actions_use_natural_width(self):
         self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_START)', SETTINGS)
         self.assertIn('!strcmp(id,"setupaction")', SETTINGS)

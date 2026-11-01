@@ -37,6 +37,23 @@ void now_nav_update_tabs(GObject *stack,GParamSpec *param,gpointer navigation_ba
  }
  g_list_free(children);
 }
+/* Apply a resize/redraw after a newly selected page is mapped. GTK3 can
+ * otherwise retain a stale empty allocation for a nested GtkStack until the
+ * user manually changes the top-level window size. This never reopens data. */
+static gboolean relayout_page_idle(gpointer data){
+ GtkWidget *page=GTK_WIDGET(data);
+ if(gtk_widget_get_mapped(page)){
+   gtk_widget_queue_resize(page);
+   gtk_widget_queue_draw(page);
+ }
+ return G_SOURCE_REMOVE;
+}
+void now_nav_relayout_page(GtkWidget *page){
+ if(!GTK_IS_WIDGET(page))return;
+ /* Hold a reference across the idle to handle rapid navigation/close. */
+ g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,relayout_page_idle,
+                 g_object_ref(page),g_object_unref);
+}
 void now_nav_show_page(GtkWidget *stack,const char *page){
  if(!stack || !GTK_IS_STACK(stack) || !page)return;
  if(gtk_stack_get_child_by_name(GTK_STACK(stack),page))

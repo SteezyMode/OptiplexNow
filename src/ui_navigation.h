@@ -6,4 +6,6 @@ void now_nav_bind_link(GtkWidget *button, GtkWidget *stack, const char *page);
 void now_nav_mark_tab(GtkWidget *button, const char *page);
 void now_nav_update_tabs(GObject *stack, GParamSpec *param, gpointer navigation_bar);
 void now_nav_show_page(GtkWidget *stack, const char *page);
+/* Schedule a GTK resize/draw once a newly mapped page can be allocated. */
+void now_nav_relayout_page(GtkWidget *page);
 #endif

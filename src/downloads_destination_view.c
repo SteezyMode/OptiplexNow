@@ -12,7 +12,9 @@ typedef struct {
 } SavedPlace;
 typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
- GtkWidget *new_folder,*places_list,*pin_place,*browser_area,*sidebar,*places_toggle;
+ GtkWidget *new_folder,*places_list,*drive_list,*pin_place,*browser_area,*sidebar,*places_toggle;
+ GtkListStore *folder_store;
+ GtkTreeModelFilter *filtered;
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
  GPtrArray *places,*recents;
  gboolean running,loading_roots,folder_valid,sidebar_compact,sidebar_requested;
@@ -40,29 +42,29 @@ static void free_state(gpointer data){
  g_free(s->pending_folder);
  if(s->places)g_ptr_array_unref(s->places);
  if(s->recents)g_ptr_array_unref(s->recents);
+ g_clear_object(&s->filtered);
+ g_clear_object(&s->folder_store);
  g_free(s);
 }
+/* Native GTK directory list, not buttons. Filter stays on the client. */
 static void clear_folder_buttons(Picker *s){
- GList *children=gtk_container_get_children(GTK_CONTAINER(s->folders));
- for(GList *at=children;at;at=at->next)
-   gtk_widget_destroy(GTK_WIDGET(at->data));
- g_list_free(children);
+ if(s && s->folder_store)gtk_list_store_clear(s->folder_store);
 }
-/* Filter only already-authorized folder names; nothing typed here is sent
- * to the server, and a match is still revalidated on the host when opened. */
-static void filter_folder_buttons(Picker *s){
- if(!s || !s->filter || !s->folders)return;
- const char *query=gtk_entry_get_text(GTK_ENTRY(s->filter));
+static gboolean filter_folder_row(GtkTreeModel *model,GtkTreeIter *iter,
+                                  gpointer data){
+ Picker *s=data;
+ const gchar *query=gtk_entry_get_text(GTK_ENTRY(s->filter));
+ if(!query || !*query)return TRUE;
+ gchar *name=NULL;
+ gtk_tree_model_get(model,iter,0,&name,-1);
  gchar *needle=g_utf8_casefold(query,-1);
- GList *buttons=gtk_container_get_children(GTK_CONTAINER(s->folders));
- for(GList *it=buttons;it;it=it->next){
-   GtkWidget *button=GTK_WIDGET(it->data);
-   const char *name=gtk_button_get_label(GTK_BUTTON(button));
-   gchar *folded=g_utf8_casefold(name?name:"",-1);
-   gtk_widget_set_visible(button,!*needle || strstr(folded,needle)!=NULL);
-   g_free(folded);
- }
- g_list_free(buttons);g_free(needle);
+ gchar *haystack=g_utf8_casefold(name?name:"",-1);
+ gboolean visible=(strstr(haystack,needle)!=NULL);
+ g_free(haystack);g_free(needle);g_free(name);
+ return visible;
+}
+static void filter_folder_buttons(Picker *s){
+ if(s && s->filtered)gtk_tree_model_filter_refilter(s->filtered);
 }
 static void on_filter_changed(GtkEditable *entry,gpointer data){
  (void)entry;
@@ -357,13 +359,21 @@ static void on_new_folder(GtkButton *unused,gpointer data){
  g_free(s->pending_folder);s->pending_folder=name;
  start(s,'m');
 }
-static void on_folder_clicked(GtkButton *button,gpointer data){
+static void on_folder_activated(GtkTreeView *tree,GtkTreePath *path,
+                                GtkTreeViewColumn *column,gpointer data){
+ (void)column;
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running || !s->root)return;
- const char *folder=gtk_button_get_label(button);
- if(!safe_name(folder))return;
- gchar *next=(*s->relative) ? g_strconcat(s->relative,"/",folder,NULL) :
-                             g_strdup(folder);
+ GtkTreeIter iter;
+ GtkTreeModel *model=gtk_tree_view_get_model(tree);
+ if(!gtk_tree_model_get_iter(model,&iter,path))return;
+ gchar *folder=NULL;
+ gtk_tree_model_get(model,&iter,0,&folder,-1);
+ if(!safe_name(folder)){g_free(folder);return;}
+ gchar *next=(s->relative && *s->relative) ?
+         g_strconcat(s->relative,"/",folder,NULL):g_strdup(folder);
+ g_free(folder);
+ if(!safe_relative(next)){g_free(next);return;}
  g_free(s->relative);s->relative=next;
  start(s,'b');
 }
@@ -423,33 +433,29 @@ static gboolean read_response(Picker *s,char action,char *wire){
      clear_folder_buttons(s);
      for(guint i=1;lines[i];i++){
        gchar **part=g_strsplit(lines[i],"\t",-1);
-       GtkWidget *button=gtk_button_new_with_label(part[1]);
-       gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");
-       gtk_widget_set_tooltip_text(button,part[1]);
-       GtkWidget *folder_icon=gtk_image_new_from_icon_name("folder",
-                                                          GTK_ICON_SIZE_MENU);
-       gtk_button_set_image(GTK_BUTTON(button),folder_icon);
-       gtk_button_set_always_show_image(GTK_BUTTON(button),TRUE);
-       gtk_widget_set_halign(button,GTK_ALIGN_FILL);
-       g_signal_connect(button,"clicked",G_CALLBACK(on_folder_clicked),s->view);
-       gtk_box_pack_start(GTK_BOX(s->folders),button,FALSE,FALSE,1);
+       GtkTreeIter row;
+       gtk_list_store_append(s->folder_store,&row);
+       gtk_list_store_set(s->folder_store,&row,0,part[1],-1);
        g_strfreev(part);
      }
      /* Every folder change starts with the full directory. A search for
       * "Horror" in Movies must not silently hide folders inside Horror. */
      gtk_entry_set_text(GTK_ENTRY(s->filter),"");
-     gtk_widget_show_all(s->folders);
      if(s->folder_scroll){
        GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
                              GTK_SCROLLED_WINDOW(s->folder_scroll));
        if(adj)gtk_adjustment_set_value(adj,gtk_adjustment_get_lower(adj));
      }
-     gchar *title=g_strdup_printf("%s / %s",s->root,s->relative && *s->relative ?
-                                    s->relative : "(root)");
+     gchar *drive=gtk_combo_box_text_get_active_text(
+                     GTK_COMBO_BOX_TEXT(s->roots));
+     gchar *title=g_strdup_printf("%s%s%s",
+          drive?drive:s->root,
+          (s->relative && *s->relative)?"/":"",
+          (s->relative && *s->relative)?s->relative:"");
      gtk_label_set_text(GTK_LABEL(s->path),title);
-     g_free(title);
+     g_free(title);g_free(drive);
      gtk_label_set_text(GTK_LABEL(s->status),
-       "Open a folder or choose a Favorite / Recent location, then Add Torrent.");
+       "Double-click a folder to open it. Add Torrent saves to the folder shown above.");
      s->folder_valid=TRUE;
 
    }

@@ -235,3 +235,112 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
  g_strfreev(lines);
  return TRUE;
 }
+
+/* A per-torrent file inspection dialog, not a filesystem browser.
+ * The owner broker returns bounded relative names, sizes and progress only.
+ * No arbitrary path or delete capability is exposed here. */
+gboolean now_downloads_queue_view_files_dialog(GtkWidget *view,
+       const char *wire,const char *expected_hash,const char *torrent_name){
+ if(!view || !GTK_IS_WIDGET(view) || !valid_hash(expected_hash) ||
+    !wire || !g_utf8_validate(wire,-1,NULL) ||
+    !*wire || strlen(wire)>32768 || wire[strlen(wire)-1]=='\n')
+   return FALSE;
+ gchar **lines=g_strsplit(wire,"\n",-1);
+ gchar **header=g_strsplit(lines[0],"\t",-1);
+ gint64 truncated=0,total=0;
+ gboolean valid=g_strv_length(header)==4 && !strcmp(header[0],"FILES") &&
+       !g_ascii_strcasecmp(header[1],expected_hash) &&
+       number(header[2],0,1,&truncated) &&
+       number(header[3],0,120,&total) &&
+       g_strv_length(lines)==(guint)total+1;
+ g_strfreev(header);
+ for(guint i=1;valid && lines[i];i++){
+   gchar **fields=g_strsplit(lines[i],"\t",-1);
+   gint64 bytes=0,priority=0;
+   gchar *end=NULL;
+   double progress=0;
+   if(g_strv_length(fields)!=5 ||
+      strcmp(fields[0],"FILE") ||
+      !number(fields[1],0,G_MAXINT64,&bytes) ||
+      !number(fields[3],0,7,&priority) ||
+      !*fields[2]){
+     valid=FALSE;
+   }else{
+     progress=g_ascii_strtod(fields[2],&end);
+     const char *name=fields[4];
+     valid=end && !*end && isfinite(progress) && progress>=0 &&
+           progress<=100 && name && *name &&
+           g_utf8_strlen(name,-1)<=220 && name[0]!='/' &&
+           !strchr(name,'\\');
+     if(valid){
+       gchar **pieces=g_strsplit(name,"/",-1);
+       for(guint j=0;pieces[j];j++)
+         if(!*pieces[j] || !strcmp(pieces[j],".") ||
+            !strcmp(pieces[j],".."))valid=FALSE;
+       g_strfreev(pieces);
+     }
+   }
+   g_strfreev(fields);
+ }
+ if(!valid){g_strfreev(lines);return FALSE;}
+ GtkWidget *toplevel=gtk_widget_get_toplevel(view);
+ GtkWidget *dialog=gtk_dialog_new_with_buttons("TORRENT FILES",
+     GTK_IS_WINDOW(toplevel)?GTK_WINDOW(toplevel):NULL,
+     GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+     "CLOSE",GTK_RESPONSE_CLOSE,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),650,430);
+ GtkWidget *area=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+ gtk_container_set_border_width(GTK_CONTAINER(area),12);
+ GtkWidget *heading=gtk_label_new(torrent_name?torrent_name:"Torrent files");
+ gtk_label_set_xalign(GTK_LABEL(heading),0);
+ gtk_label_set_ellipsize(GTK_LABEL(heading),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_tooltip_text(heading,torrent_name?torrent_name:"Torrent files");
+ gtk_box_pack_start(GTK_BOX(area),heading,FALSE,FALSE,4);
+ GtkWidget *summary=gtk_label_new(truncated ?
+      "First 120 files shown; open Advanced VueTorrent for the complete list." :
+      "Read-only torrent contents. No downloaded files are opened or modified.");
+ gtk_label_set_xalign(GTK_LABEL(summary),0);
+ gtk_label_set_line_wrap(GTK_LABEL(summary),TRUE);
+ gtk_box_pack_start(GTK_BOX(area),summary,FALSE,FALSE,4);
+ GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_vexpand(scroll,TRUE);
+ GtkWidget *list=gtk_list_box_new();
+ gtk_list_box_set_selection_mode(GTK_LIST_BOX(list),GTK_SELECTION_NONE);
+ gtk_container_add(GTK_CONTAINER(scroll),list);
+ gtk_box_pack_start(GTK_BOX(area),scroll,TRUE,TRUE,4);
+ for(guint i=1;lines[i];i++){
+   gchar **fields=g_strsplit(lines[i],"\t",-1);
+   gint64 bytes=g_ascii_strtoll(fields[1],NULL,10);
+   const gchar *progress=fields[2];
+   gint priority=(gint)g_ascii_strtoll(fields[3],NULL,10);
+   GtkWidget *row=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+   gtk_widget_set_margin_start(row,8);
+   gtk_widget_set_margin_end(row,8);
+   gtk_widget_set_margin_top(row,6);
+   gtk_widget_set_margin_bottom(row,6);
+   GtkWidget *name=gtk_label_new(fields[4]);
+   gtk_label_set_xalign(GTK_LABEL(name),0);
+   gtk_label_set_ellipsize(GTK_LABEL(name),PANGO_ELLIPSIZE_MIDDLE);
+   gtk_widget_set_tooltip_text(name,fields[4]);
+   gchar *size=g_format_size((guint64)bytes);
+   gchar *meta=g_strdup_printf("%s · %s%% downloaded · %s",size,progress,
+                                priority==0?"Skipped":"Included");
+   GtkWidget *detail=gtk_label_new(meta);
+   gtk_label_set_xalign(GTK_LABEL(detail),0);
+   gtk_box_pack_start(GTK_BOX(row),name,FALSE,FALSE,0);
+   gtk_box_pack_start(GTK_BOX(row),detail,FALSE,FALSE,0);
+   gtk_container_add(GTK_CONTAINER(list),row);
+   g_free(meta);g_free(size);g_strfreev(fields);
+ }
+ if(total==0){
+   GtkWidget *empty=gtk_label_new("No file metadata available yet.");
+   gtk_container_add(GTK_CONTAINER(list),empty);
+ }
+ gtk_widget_show_all(dialog);
+ gtk_dialog_run(GTK_DIALOG(dialog));
+ gtk_widget_destroy(dialog);
+ g_strfreev(lines);
+ return TRUE;
+}

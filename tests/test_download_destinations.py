@@ -148,7 +148,7 @@ class DestinationTests(unittest.TestCase):
             ("bigdisk","Movies/outside-link","Game"),
             ("bigdisk","","../Games"),
             ("bigdisk","","a/b"),
-            ("bigdisk","","a\\\\b"),
+            ("bigdisk","","a\\b"),
             ("bigdisk","",""),
             ("bigdisk","",".."),
             ("bigdisk","","Games\nOther"),

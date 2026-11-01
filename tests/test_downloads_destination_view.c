@@ -99,7 +99,7 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  g_assert_nonnull(s->new_folder);
  g_assert_nonnull(s->places_combo);
  g_assert_nonnull(s->pin_place);
- g_assert_nonnull(s->unpin_place);
+ g_assert_cmpstr(gtk_button_get_label(GTK_BUTTON(s->pin_place)),==,"☆ Favorite");
  g_assert_true(read_response(s,'m',"CREATED"));
  g_assert_false(read_response(s,'m',"SUBMITTED"));
  g_free(s->root);s->root=g_strdup("bigdisk");
@@ -107,6 +107,8 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  g_assert_true(read_response(s,'b',"FOLDERS\tbigdisk\tGames"));
  g_assert_true(remember_current_place(s));
  g_assert_cmpuint(s->places->len,==,1);
+ /* A merely saved Favorite is not a Recent download. */
+ g_assert_cmpuint(s->recents->len,==,0);
  SavedPlace *p=g_ptr_array_index(s->places,0);
  g_assert_cmpstr(p->host,==,"100.121.156.34");
  g_assert_cmpstr(p->user,==,"optiplex");
@@ -130,13 +132,38 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,2);
  SavedPlace *loaded=g_ptr_array_index(again->places,0);
  g_assert_cmpstr(loaded->relative,==,"Games");
- /* Select only a local saved-place entry for removal; no host request. */
- again->loading_places=TRUE;
- gtk_combo_box_set_active(GTK_COMBO_BOX(again->places_combo),1);
- again->loading_places=FALSE;
- on_remove_place(NULL,another);
+ /* Star is a reversible Favorite toggle; it never submits a torrent. */
+ g_free(again->root);again->root=g_strdup("bigdisk");
+ g_free(again->relative);again->relative=g_strdup("Games");
+ again->folder_valid=TRUE;
+ on_save_place(NULL,another);
  g_assert_cmpuint(again->places->len,==,0);
+ g_assert_cmpuint(again->recents->len,==,0);
  gtk_widget_destroy(another);
+ gtk_widget_destroy(view);
+}
+static void test_recents_only_after_successful_download(void){
+ GtkWidget *view=now_downloads_destination_view_new();
+ now_downloads_destination_view_configure(view,"100.121.156.34","optiplex",
+                                          "/test/owner-helper");
+ Picker *s=state(view);
+ g_free(s->root);s->root=g_strdup("bigdisk");
+ g_free(s->relative);s->relative=g_strdup("Games");
+ s->folder_valid=TRUE;
+ /* Browsing or favoriting is not a download and cannot select a default. */
+ g_assert_cmpuint(s->recents->len,==,0);
+ g_assert_true(remember_current_place(s));
+ g_assert_cmpuint(s->recents->len,==,0);
+ g_assert_true(read_response(s,'a',"SUBMITTED"));
+ g_assert_cmpuint(s->recents->len,==,1);
+ SavedPlace *recent=g_ptr_array_index(s->recents,0);
+ g_assert_cmpstr(recent->relative,==,"Games");
+ GtkTreeModel *model=gtk_combo_box_get_model(GTK_COMBO_BOX(s->places_combo));
+ g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,3);
+ /* Changing the configured server hides both Favorites and Recents. */
+ now_downloads_destination_view_configure(view,"other.example","optiplex",
+                                          "/test/owner-helper");
+ g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,1);
  gtk_widget_destroy(view);
 }
 static void flush_gtk_events(void){
@@ -220,6 +247,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);
  g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_above_browser);
  g_test_add_func("/destination/saved-games",test_saved_game_location_remains_scoped_to_approved_root);
+ g_test_add_func("/destination/recent-only-on-add",test_recents_only_after_successful_download);
  g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

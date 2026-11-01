@@ -150,7 +150,7 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         request.update(root=root,relative=relative(path))
         if action=="mkdir":
             if (not isinstance(magnet,str) or not 1<=len(magnet)<=160 or
-                    magnet in (".","..") or "/" in magnet or "\\\\" in magnet or
+                    magnet in (".","..") or "/" in magnet or "\\" in magnet or
                     any(ord(c)<32 or ord(c)==127 for c in magnet)):
                 raise ValueError("Invalid folder name")
             request["name"]=magnet

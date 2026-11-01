@@ -29,9 +29,15 @@ No host deployment, host file deletion, qBittorrent configuration or running-con
 
 ## Acceptance
 
-- CI: Python backend/client negative tests, native GTK folder picker and queue tests, installed .deb smoke/sanitizer suite.
+- CI: Python backend/client negative tests, native GTK folder picker and queue tests, installed .deb smoke/sanitizer suite. The focused-view GTK regression exercises a **16:9 1920×1080 desktop**, a **16:9 1366×768 laptop**, a **16:10 1280×800 laptop**, a **1024×768 4:3 legacy projector**, and the **430px minimum-width window**. It must demonstrate that the file browser grows when desktop space is available, rather than staying at 420px everywhere.
 - Device acceptance: use projector at 1024×768 4:3; choose a magnet, filter Movies → Horror, verify Add remains reachable without resizing. Test a torrent with many files. Confirm REMOVE keeps files. Test DELETE FILES only on disposable test data with verified backups and host-side authorization.
 - Longer-term: per-file priorities, per-torrent filters, sorting, tracker details and better transfer statistics can be separate follow-up features; this PR does not claim qBittorrent UI parity.
+
+## Default presentation vs. compatibility
+
+**The product is not designed around the projector.** Desktop/laptop 16:9 and 16:10 screens are the primary layouts, with taller and wider workspaces when the app window grows. The 1024×768 projector and narrow 430px minimum-width window are **regression cases** for graceful compression and scrolling, not reference dimensions or reasons to add cramped fixed-height controls.
+
+No 4:3-only UI mode, aspect-ratio detection, device-specific workaround, fullscreen requirement, or new user settings are introduced. The same focused Search → Destination flow is used consistently across supported displays.
 
 ## GTK3 design pattern
 

@@ -16,13 +16,14 @@ from owner_host_pilot import inspect_candidate
 from media_endpoint import inspect_local_jellyfin
 from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
+from download_files import inspect_torrent_files
 from download_manage import manage_torrent, checked_hash, OPERATIONS
 from download_search import search_once, stream_search, checked_query, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
                                    add_magnet as enqueue_download, _relative, ROOT_ID)
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_manage"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_manage"))
 
 
 def _validated_request(request):
@@ -39,6 +40,8 @@ def _validated_request(request):
             fields.add("stream")
     elif action == "downloads_manage":
         fields.update(("operation", "torrent_hash"))
+    elif action == "downloads_files":
+        fields.add("torrent_hash")
     elif action == "downloads_browse":
         fields.update(("root", "relative"))
     elif action == "downloads_add":
@@ -59,6 +62,8 @@ def _validated_request(request):
             if (not isinstance(request["operation"], str) or
                     request["operation"] not in OPERATIONS):
                 raise PolicyError("Unsupported download operation")
+            checked_hash(request["torrent_hash"])
+        elif action == "downloads_files":
             checked_hash(request["torrent_hash"])
         elif action in ("downloads_browse", "downloads_add"):
             root = request["root"]
@@ -149,6 +154,12 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                     **manage_torrent(request["operation"],request["torrent_hash"])}
         except InventoryError:
             return {"success": False, "status": "manage_unavailable"}
+
+    if action == "downloads_files":
+        try:
+            return {"success": True, **inspect_torrent_files(request["torrent_hash"])}
+        except InventoryError:
+            return {"success": False, "status": "files_unavailable"}
 
     if action == "downloads_queue":
         try:

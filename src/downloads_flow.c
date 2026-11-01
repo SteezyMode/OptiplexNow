@@ -615,6 +615,10 @@ static void on_search_back(GtkButton *button,gpointer unused){
    g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
                    g_object_ref(search_view),g_object_unref);
 }
+static void on_destination_cancel(gpointer unused){
+ (void)unused;
+ on_search_back(NULL,NULL);
+}
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
  if(!destination_view || !search_workspace)return;
@@ -795,6 +799,7 @@ GtkWidget *now_downloads_page(void){
  gtk_stack_add_named(GTK_STACK(search_workspace),folder_page,"destination");
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);
  now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
+ now_downloads_destination_view_on_cancel(destination_view,on_destination_cancel,NULL);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
  /* GtkStack only selects a child that is visible. Finish showing the entire
   * page before selecting the nested queue and transfers views; otherwise the

@@ -185,15 +185,14 @@ def _require_no_other_wolf_activity(wolf_api, expected_client_id):
 def reconcile_finished_owner_steam(wolf_api, *, store,
                                    expected_client_id,
                                    host_writer_check):
-    """Archive a previously JOINED owner lease only after observed full exit.
+    """Archive a finished owner lease only after independently verifying idle.
 
-    This is a bounded, non-Wolf-mutating operation for an authenticated owner
-    device. It does not stop Wolf, stop Steam, kill a stream, or take over another
-    client's lease. If the user has not actually exited, refuse and retain the
-    blocker. The check is deliberately stricter than a disappearing Moonlight
-    window: zero Wolf lobbies, no Steam writers, and no session other than the\n    verified owner's Wolf UI.
-    Concurrency isolation against separately privileged Wolf UI/direct users
-    must be established independently before enabling Games writes.
+    A confirmed JOINED lease may retain this owner's residual Wolf UI.
+    Interrupted CREATING / CREATED / UNCERTAIN transactions require an
+    entirely empty Wolf runtime: no sessions, no lobbies, and no Steam writers.
+    This operation never stops Wolf or Steam, and the original lease is
+    privately archived rather than deleted or rewritten. Any uncertainty
+    leaves the blocker in place.
     """
     if not _valid_client_id(expected_client_id) or not callable(wolf_api):
         raise PolicyError("Trusted finished-owner Steam authority required")
@@ -203,8 +202,10 @@ def reconcile_finished_owner_steam(wolf_api, *, store,
         lease = read_lease(fd)
         if lease is None:
             return {"success": True, "status": "idle", "lease_archived": False}
-        if lease["version"] != LEASE_VERSION or lease["state"] != "joined":
-            raise PolicyError("Uncertain/legacy Steam lease needs operator review")
+        if lease["version"] != LEASE_VERSION:
+            raise PolicyError("Legacy Steam lease needs operator review")
+        if lease["state"] not in ("joined", "creating", "created", "uncertain"):
+            raise PolicyError("Unsupported Steam lease state")
         if lease["client_id"] != expected_client_id:
             raise PolicyError("Steam lease belongs to a different owner device")
         policy = store.read(fd)
@@ -214,18 +215,24 @@ def reconcile_finished_owner_steam(wolf_api, *, store,
                      if dev["client_id"] == expected_client_id
                      and not dev["revoked"]]) != 1):
             raise PolicyError("Owner Steam grant or workspace changed")
-        # A disconnected Moonlight client is not proof of Steam shutdown.
-        # GET checks MUST succeed; incomplete or unexpected Wolf state blocks.
-        _require_no_other_wolf_activity(wolf_api, expected_client_id)
+        # "Joined" allows only this owner's residual Wolf UI. An interrupted
+        # transaction has unknown effects: require *zero* runtime activity.
+        # Repeat the check after the Steam process census to catch changes.
+        def require_idle():
+            if lease["state"] == "joined":
+                _require_no_other_wolf_activity(wolf_api, expected_client_id)
+            else:
+                _require_idle_wolf(wolf_api)
+
+        require_idle()
         try:
             clear = host_writer_check()
         except Exception:
             raise PolicyError("Cannot verify Steam writers after exit") from None
         if clear is not True:
             raise PolicyError("Steam still has another writer")
-        # Narrow the gap between writer snapshot and final archive; not an
-        # atomic exclusion barrier, hence separate Wolf admission is required.
-        _require_no_other_wolf_activity(wolf_api, expected_client_id)
+        # This is still not an atomic exclusion against external Wolf users.
+        require_idle()
         _archive_lease(fd, lease)
     return {"success": True, "status": "idle", "lease_archived": True}
 
@@ -367,8 +374,9 @@ def launch_owner_steam(trusted_client_id, wolf_api, *,
     trusted_client_id must come from a verified authenticated local host broker.
     wolf_api is a host-local, bounded callable (method, path[, json_body]).
     All other games sessions or lobbies trigger a refusal in owner_lobby.py.
-    A lease always remains after any attempted create, until an explicit,
-    future checked recovery routine is implemented. No automatic retry/stop.
+    A lease blocks duplicate starts after an attempted create. A subsequent
+    owner-triggered reconcile may archive it only after proving runtime idle.
+    Never automatically retry a create or issue a blind Stop.
     """
     if not execution_approved:
         raise PolicyError("Live Wolf lobby execution is disabled by default")

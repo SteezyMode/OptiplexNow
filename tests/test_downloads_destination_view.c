@@ -92,8 +92,12 @@ static void test_projector_picker_filters_and_confirm_above_browser(void){
  gtk_widget_destroy(view);
 }
 static void flush_gtk_events(void){
- for(guint i=0;i<20;i++)
+ /* GTK's allocation/draw frame clock can run after the idle queue empties.
+  * Exercise several real virtual-display frames, without manual resize. */
+ for(guint i=0;i<20;i++){
    while(gtk_events_pending())gtk_main_iteration();
+   g_usleep(10000);
+ }
 }
 static void test_1024x768_focused_step_mapping(void){
  GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -122,6 +126,8 @@ static void test_1024x768_focused_step_mapping(void){
  gtk_widget_show_all(picker);
  gtk_widget_set_no_show_all(picker,TRUE);
  gtk_stack_set_visible_child_name(GTK_STACK(workspace),"destination");
+ gtk_widget_queue_resize(workspace);
+ gtk_widget_queue_draw(workspace);
  flush_gtk_events();
  Picker *s=state(picker);
  g_assert_nonnull(s);

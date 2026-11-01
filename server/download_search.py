@@ -223,6 +223,7 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
     job_id=started["id"]
     received=0
     last=None
+    sent_initial=False
     stopped_empty_polls=0
     deadline=time.monotonic()+150
     try:
@@ -235,12 +236,14 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
                                  "offset":received},session=session)
             last=_results(reply)
             rows=last["results"]
-            # The first packet always resets the client list; later packets
-            # only append new results, so sorting and scroll stay intact.
-            if rows or received==0 or last["status"]=="Stopped":
+            # First frame resets the GTK list; subsequent frames append
+            # only actual new rows. Avoid spamming empty Stopped frames while
+            # draining delayed pages (or waiting on slower plugins).
+            if rows or not sent_initial:
                 frame={**last,"partial":last["status"]=="Running",
-                       "append":received>0}
+                       "append":sent_initial}
                 emit(frame)
+                sent_initial=True
             received+=len(rows)
             if received>=1000:
                 break
@@ -263,7 +266,7 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
             # page for success; preserve rows already rendered and make the
             # discrepancy explicit in the client status.
             emit({"status":last["status"],"total":last["total"],"results":[],
-                  "partial":True,"append":received>0})
+                  "partial":True,"append":sent_initial})
         return {"status":last["status"],"total":last["total"],
                 "received":received}
     finally:

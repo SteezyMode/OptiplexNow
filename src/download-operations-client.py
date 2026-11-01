@@ -91,7 +91,7 @@ def present(action,data):
         if data.get("status")!="created":
             raise ValueError("Host did not create the selected folder")
         return "CREATED"
-    if action=="add":
+    if action in ("add","addpath"):
         if data.get("status")!="submitted":
             raise ValueError("Downloader did not accept the torrent")
         return "SUBMITTED"
@@ -129,7 +129,8 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
-        "add":"downloads_add","mkdir":"downloads_mkdir","manage":"downloads_manage",
+        "add":"downloads_add","addpath":"downloads_add_path",
+        "mkdir":"downloads_mkdir","manage":"downloads_manage",
         "files":"downloads_files","vpn":"downloads_status"}.get(action)}
     if request["action"] is None:
         raise ValueError("Invalid download action")
@@ -144,6 +145,20 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
                 r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",root):
             raise ValueError("Invalid torrent hash")
         request["torrent_hash"]=root.lower()
+    elif action=="addpath":
+        from posixpath import normpath
+        host_path=root
+        if (not isinstance(host_path,str) or not 2<=len(host_path)<=1024
+                or not host_path.startswith("/") or host_path.startswith("//")
+                or normpath(host_path)!=host_path
+                or any(ord(ch)<32 or ord(ch)==127 for ch in host_path)
+                or any(part in (".","..") for part in host_path.split("/")[1:])):
+            raise ValueError("Invalid OptiPlex folder")
+        if (not isinstance(path,str) or not 10<=len(path)<=1024
+                or not path.startswith("magnet:?xt=urn:bt")
+                or any(ord(ch)<33 or ord(ch)>126 for ch in path)):
+            raise ValueError("Invalid magnet URI")
+        request.update(path=host_path,magnet=path)
     elif action not in ("roots","vpn"):
         if not isinstance(root,str) or not ROOT.fullmatch(root):
             raise ValueError("Invalid library root")
@@ -180,10 +195,11 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
 if __name__=="__main__":
     try:
         args=sys.argv[1:]
-        if len(args)<3 or args[2] not in ("roots","browse","add","mkdir","manage","files","vpn") or (
+        if len(args)<3 or args[2] not in ("roots","browse","add","addpath","mkdir","manage","files","vpn") or (
             (args[2] in ("roots","vpn") and len(args)!=3) or
             (args[2]=="browse" and len(args)!=5) or
             (args[2]=="add" and len(args)!=6) or
+            (args[2]=="addpath" and len(args)!=5) or
             (args[2]=="mkdir" and len(args)!=6) or
             (args[2]=="manage" and len(args)!=5) or
             (args[2]=="files" and len(args)!=4)):

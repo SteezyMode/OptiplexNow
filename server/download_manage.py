@@ -57,11 +57,9 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
     if operation in ("remove", "remove_delete"):
         fields["deleteFiles"] = "true" if operation == "remove_delete" else "false"
     if operation == "remove_delete":
-        # qBittorrent can delete downloaded content from arbitrary locations.
-        # Only permit this dangerous option for a verified writable media
-        # destination beneath a configured /library/<slug> bind mount. Missing
-        # path metadata, out-of-library torrents and root-level targets fail
-        # closed. We still require explicit UI confirmation and exact hash.
+        # Delete only inside a currently verified writable qBittorrent
+        # storage mount. Never delete a mount root or a service/config path.
+        # Filesystem mounts are discovered, not supplied by the client.
         _, verified_gateway, verified_port, mounts = _mounts(runner=runner)
         if (verified_gateway, verified_port) != (gateway, port):
             raise InventoryError("Downloader binding changed")
@@ -76,14 +74,16 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
         if not clean(save_path) or not clean(content_path):
             raise InventoryError("Untrusted torrent data location")
         approved = False
-        for slug in mounts:
-            mount_root = "/library/" + slug
-            if (save_path.startswith(mount_root + "/") and
-                    content_path.startswith(save_path.rstrip("/") + "/")):
+        for mount in mounts.values():
+            mount_root = mount["target"].rstrip("/")
+            if ((save_path == mount_root or
+                 save_path.startswith(mount_root + "/")) and
+                    content_path.startswith(save_path.rstrip("/") + "/") and
+                    content_path.startswith(mount_root + "/")):
                 approved = True
                 break
         if not approved:
-            raise InventoryError("Torrent data is outside an approved subfolder")
+            raise InventoryError("Torrent data is outside writable downloader storage")
     action = OPERATIONS[operation]
     argv = ["docker", "exec", gateway, "wget", "-q", "-T", "5", "-O", "-",
             "--header", f"Referer: http://127.0.0.1:{port}/",

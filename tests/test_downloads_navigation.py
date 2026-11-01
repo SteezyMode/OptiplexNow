@@ -124,6 +124,25 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertNotIn("now_downloads_refresh",back)
         self.assertNotIn("g_subprocess_newv",back)
 
+    def test_downloads_lets_owner_create_and_save_additional_game_locations(self):
+        picker=(ROOT/"src/downloads_destination_view.c").read_text()
+        ops=(ROOT/"src/download-operations-client.py").read_text()
+        host=(ROOT/"server/download_destinations.py").read_text()
+        request=(ROOT/"server/owner_games_request.py").read_text()
+        self.assertIn('gtk_button_new_with_label("NEW FOLDER")',picker)
+        self.assertIn('gtk_button_new_with_label("SAVE LOCATION")',picker)
+        self.assertIn('gtk_button_new_with_label("REMOVE SAVED")',picker)
+        self.assertIn('"download-places.ini"',picker)
+        self.assertIn('gtk_combo_box_text_new()',picker)
+        self.assertIn("remember_current_place(s)",picker)
+        self.assertIn('action==\'m\'?"mkdir":"add"',picker)
+        self.assertIn('"mkdir":"downloads_mkdir"',ops)
+        self.assertIn('def create_folder(root, relative, name,',host)
+        self.assertIn('os.mkdir(child, mode=0o775, dir_fd=fd)',host)
+        self.assertIn('new_download_folder(',request)
+        self.assertNotIn('docker run',picker)
+        self.assertNotIn('docker restart',picker)
+
     def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
         self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)
         self.assertIn("g_timeout_add_seconds(4,reconnect_once,NULL)", FLOW)

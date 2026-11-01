@@ -9,7 +9,9 @@ from urllib.parse import parse_qs
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"server"))
-from download_destinations import DestinationError, roots, browse, add_magnet, create_folder
+from download_destinations import (DestinationError, roots, browse, add_magnet,
+                                   add_magnet_host_path, checked_host_path,
+                                   create_folder)
 from download_inventory import InventoryError
 
 VPN="a"*64
@@ -119,6 +121,27 @@ class DestinationTests(unittest.TestCase):
         result=browse("bigdisk","Movies",runner=self.fake)
         self.assertEqual(result["folders"],["Action ","Horror"])
         self.assertEqual(result["relative"],"Movies")
+
+    def test_native_chooser_host_path_maps_to_existing_docker_mount(self):
+        host_path=str(self.media/"Movies"/"Horror")
+        self.assertEqual(add_magnet_host_path(host_path,MAGNET,runner=self.fake),
+                         {"status":"submitted"})
+        self.assertEqual(self.fake.commands[-1][-1],
+                         "http://127.0.0.1:8085/api/v2/torrents/add")
+        for invalid in ("/", "/etc", "/etc/passwd",
+                        str(self.media)+"/../elsewhere",
+                        "/tmp/other-drive/Movie", "//server/share",
+                        str(self.media)+"/Movies//Horror"):
+            with self.subTest(path=invalid), self.assertRaises(DestinationError):
+                add_magnet_host_path(invalid,MAGNET,runner=self.fake)
+        for invalid in (None, "relative/path", "/tmp/../etc", "/tmp//folder",
+                        "/tmp/foo\nbar"):
+            with self.subTest(invalid=invalid), self.assertRaises(DestinationError):
+                checked_host_path(invalid)
+        # Host symlinks must not let the native chooser escape the mounted root.
+        with self.assertRaises(DestinationError):
+            add_magnet_host_path(str(self.media/"Movies"/"outside-link"),
+                                 MAGNET,runner=self.fake)
 
     def test_add_magnet_explicit_target_and_not_default_downloads(self):
         result=add_magnet("bigdisk","Movies/Horror",MAGNET,runner=self.fake)

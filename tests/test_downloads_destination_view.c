@@ -99,47 +99,71 @@ static void flush_gtk_events(void){
    g_usleep(10000);
  }
 }
-static void test_1024x768_focused_step_mapping(void){
- GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
- gtk_window_set_default_size(GTK_WINDOW(window),1024,768);
- GtkWidget *workspace=gtk_stack_new();
- gtk_stack_set_hhomogeneous(GTK_STACK(workspace),FALSE);
- gtk_stack_set_vhomogeneous(GTK_STACK(workspace),FALSE);
- gtk_stack_set_transition_type(GTK_STACK(workspace),
-                               GTK_STACK_TRANSITION_TYPE_NONE);
- gtk_container_add(GTK_CONTAINER(window),workspace);
- GtkWidget *results=gtk_label_new("Search results");
- gtk_stack_add_named(GTK_STACK(workspace),results,"results");
- GtkWidget *folder_page=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
- GtkWidget *back=gtk_button_new_with_label("BACK TO RESULTS");
- gtk_box_pack_start(GTK_BOX(folder_page),back,FALSE,FALSE,0);
- GtkWidget *picker=now_downloads_destination_view_new();
- gtk_box_pack_start(GTK_BOX(folder_page),picker,TRUE,TRUE,0);
- gtk_stack_add_named(GTK_STACK(workspace),folder_page,"destination");
- gtk_widget_show_all(window);
- flush_gtk_events();
- g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(workspace)),==,
-                 "results");
- /* As in the real application, a valid torrent selection reveals the
-  * previously hidden chooser, then switches to its focused step. */
- gtk_widget_set_no_show_all(picker,FALSE);
- gtk_widget_show_all(picker);
- gtk_widget_set_no_show_all(picker,TRUE);
- gtk_stack_set_visible_child_name(GTK_STACK(workspace),"destination");
- gtk_widget_queue_resize(workspace);
- gtk_widget_queue_draw(workspace);
- flush_gtk_events();
- Picker *s=state(picker);
- g_assert_nonnull(s);
- g_assert_true(gtk_widget_get_mapped(s->folder_scroll));
- g_assert_cmpint(gtk_widget_get_allocated_height(s->folder_scroll),>=,420);
- g_assert_true(gtk_widget_get_mapped(s->add));
- gtk_stack_set_visible_child_name(GTK_STACK(workspace),"results");
- flush_gtk_events();
- g_assert_true(gtk_widget_get_mapped(results));
- gtk_widget_destroy(window);
- flush_gtk_events();
+/* Primary baseline: conventional desktop aspect ratios. Keep the 4:3
+ * projector and narrow window as compatibility cases, not product defaults.
+ * GtkScrolledWindow must grow with available space instead of acting like
+ * a fixed-height tiny viewport. */
+static void test_responsive_focused_step_mapping(void){
+ const struct {int width,height;} cases[]={
+   {430,700},   /* supported minimum-width window */
+   {1024,768},  /* legacy 4:3 projector */
+   {1366,768},  /* common widescreen laptop */
+   {1280,800},  /* 16:10 laptop */
+   {1920,1080}, /* mainstream 16:9 desktop */
+ };
+ gint viewport_heights[G_N_ELEMENTS(cases)]={0};
+ gint viewport_widths[G_N_ELEMENTS(cases)]={0};
+ for(guint i=0;i<G_N_ELEMENTS(cases);i++){
+   GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+   gtk_window_set_default_size(GTK_WINDOW(window),
+                               cases[i].width,cases[i].height);
+   GtkWidget *workspace=gtk_stack_new();
+   gtk_stack_set_hhomogeneous(GTK_STACK(workspace),FALSE);
+   gtk_stack_set_vhomogeneous(GTK_STACK(workspace),FALSE);
+   gtk_stack_set_transition_type(GTK_STACK(workspace),
+                                 GTK_STACK_TRANSITION_TYPE_NONE);
+   gtk_container_add(GTK_CONTAINER(window),workspace);
+   GtkWidget *results=gtk_label_new("Search results");
+   gtk_stack_add_named(GTK_STACK(workspace),results,"results");
+   GtkWidget *folder_page=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+   GtkWidget *back=gtk_button_new_with_label("BACK TO RESULTS");
+   gtk_box_pack_start(GTK_BOX(folder_page),back,FALSE,FALSE,0);
+   GtkWidget *picker=now_downloads_destination_view_new();
+   gtk_box_pack_start(GTK_BOX(folder_page),picker,TRUE,TRUE,0);
+   gtk_stack_add_named(GTK_STACK(workspace),folder_page,"destination");
+   gtk_widget_show_all(window);
+   flush_gtk_events();
+   g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(workspace)),
+                   ==,"results");
+   /* Hidden picker becomes visible only when a torrent is selected. */
+   gtk_widget_set_no_show_all(picker,FALSE);
+   gtk_widget_show_all(picker);
+   gtk_widget_set_no_show_all(picker,TRUE);
+   gtk_stack_set_visible_child_name(GTK_STACK(workspace),"destination");
+   gtk_widget_queue_resize(workspace);
+   gtk_widget_queue_draw(workspace);
+   flush_gtk_events();
+   Picker *state_ptr=state(picker);
+   g_assert_nonnull(state_ptr);
+   g_assert_true(gtk_widget_get_mapped(state_ptr->folder_scroll));
+   g_assert_true(gtk_widget_get_mapped(state_ptr->add));
+   viewport_heights[i]=gtk_widget_get_allocated_height(state_ptr->folder_scroll);
+   viewport_widths[i]=gtk_widget_get_allocated_width(state_ptr->folder_scroll);
+   g_assert_cmpint(viewport_heights[i],>=,420);
+   g_assert_cmpint(viewport_widths[i],>=,330);
+   gtk_stack_set_visible_child_name(GTK_STACK(workspace),"results");
+   flush_gtk_events();
+   g_assert_true(gtk_widget_get_mapped(results));
+   gtk_widget_destroy(window);
+   flush_gtk_events();
+ }
+ /* The large desktop really gets a larger work area, not merely an
+  * oversized frame containing the same 420px internal viewport. */
+ g_assert_cmpint(viewport_heights[4],>,viewport_heights[1]+100);
+ g_assert_cmpint(viewport_widths[4],>,viewport_widths[1]+400);
+ g_print("Responsive focused Downloads viewport: 430px, 4:3, 16:9, 16:10 passed.\\n");
 }
+
 int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
@@ -147,6 +171,6 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/borrowed-combo-id",test_borrowed_combo_id_is_never_freed);
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);
  g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_above_browser);
- g_test_add_func("/destination/projector-drilldown",test_1024x768_focused_step_mapping);
+ g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

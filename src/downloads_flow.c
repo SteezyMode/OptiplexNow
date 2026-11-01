@@ -623,10 +623,14 @@ GtkWidget *now_downloads_page(void){
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);
  now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
- gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
- update_download_tab_buttons();
  gtk_stack_add_named(GTK_STACK(queue_stack),body,"queue");
+ /* GtkStack only selects a child that is visible. Finish showing the entire
+  * page before selecting the nested queue and transfers views; otherwise the
+  * first visit can show an empty placeholder until an external resize. */
+ gtk_widget_show_all(root);
+ gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
+ update_download_tab_buttons();
  g_timeout_add_seconds(3,refresh_visible_transfers,NULL);
  return root;
 }

@@ -593,11 +593,17 @@ static void adapt_picker_width(GtkWidget *unused,GtkAllocation *size,
  Picker *s=state(GTK_WIDGET(data));
  if(!s)return;
  gboolean compact=size->width<650;
- if(s->sidebar_compact==compact)return;
- s->sidebar_compact=compact;
- s->sidebar_requested=!compact;
- gtk_widget_set_visible(s->sidebar,!compact);
- gtk_widget_set_visible(s->places_toggle,compact);
+ if(s->sidebar_compact!=compact){
+   s->sidebar_compact=compact;
+   s->sidebar_requested=!compact;
+ }
+ /* GTK show_all can re-show a child after an early allocation. Enforce
+  * compact visibility on every layout pass, not only at mode transitions. */
+ gboolean sidebar_visible=!compact || s->sidebar_requested;
+ if(gtk_widget_get_visible(s->sidebar)!=sidebar_visible)
+   gtk_widget_set_visible(s->sidebar,sidebar_visible);
+ if(gtk_widget_get_visible(s->places_toggle)!=compact)
+   gtk_widget_set_visible(s->places_toggle,compact);
 }
 GtkWidget *now_downloads_destination_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);

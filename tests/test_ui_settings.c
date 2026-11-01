@@ -144,9 +144,20 @@ int main(int argc, char **argv)
     g_assert_cmpint(first_box.y,==,second_box.y);
     g_assert_cmpint(second_box.x,>,first_box.x);
     gtk_window_resize(GTK_WINDOW(window),430,650);
-    while (gtk_events_pending()) gtk_main_iteration();
+    for(int i=0;i<50;i++){
+        while(gtk_events_pending())gtk_main_iteration();
+        g_usleep(10000);
+    }
     gtk_widget_get_allocation(GTK_WIDGET(first),&first_box);
     gtk_widget_get_allocation(GTK_WIDGET(second),&second_box);
+    gint actual_window_width=0,actual_height=0;
+    gtk_window_get_size(GTK_WINDOW(window),&actual_window_width,&actual_height);
+    g_print("Settings layout after resize: window=%d, menu=%d, columns=%u, "
+            "tile0=[%d,%d,%d], tile1=[%d,%d,%d]\n",
+            actual_window_width,gtk_widget_get_allocated_width(menu),
+            gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(menu)),
+            first_box.x,first_box.y,first_box.width,
+            second_box.x,second_box.y,second_box.width);
     g_assert_cmpint(second_box.y,>,first_box.y);
     g_assert_cmpuint(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(menu)),==,1);
 

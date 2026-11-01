@@ -82,7 +82,7 @@ class OwnerOperationsTests(unittest.TestCase):
                  {"name":"Movie/Horror.mkv","size":1024,
                   "progress_percent":40.0,"priority":1}]}
         self.assertEqual(mod.present("files",files),
-            "FILES\\t"+"a"*40+"\\t0\\t1\\nFILE\\t1024\\t40.0\\t1\\tMovie/Horror.mkv")
+            "FILES\t"+"a"*40+"\t0\t1\nFILE\t1024\t40.0\t1\tMovie/Horror.mkv")
         with self.assertRaises(ValueError):
             mod.present("files",dict(files,files=[
                          {"name":"../escape","size":1,

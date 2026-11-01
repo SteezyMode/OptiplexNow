@@ -78,8 +78,16 @@ void now_settings_collect(const NowSettingsForm *form, NowSettingsDraft *draft)
         GTK_COMBO_BOX(form->startup_choice));
     draft->login_tray_enabled = gtk_toggle_button_get_active(
         GTK_TOGGLE_BUTTON(form->login_tray_toggle));
+    draft->gpu_power_enabled = gtk_toggle_button_get_active(
+        GTK_TOGGLE_BUTTON(form->gpu_power_toggle));
 }
 
+/* Enable the detailed control only after the user explicitly opts in. */
+static void gpu_power_toggle_changed(GtkToggleButton *toggle, gpointer control)
+{
+ gtk_widget_set_sensitive(GTK_WIDGET(control),
+                          gtk_toggle_button_get_active(toggle));
+}
 /* The view never saves preferences or performs owner/host actions. */
 GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
                               const NowSettingsCallbacks *callbacks,
@@ -123,8 +131,16 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
   GtkWidget*gpu=settings_page(stack,"gpu");
   settings_link(gpu,stack,"‹ BACK TO SETTINGS","home");
   add(gpu,label("GPU POWER","modalheading"),0);
+  GtkWidget*gpu_enable=gtk_check_button_new_with_label("ENABLE OPTIONAL LACT GPU POWER CONTROLS");
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(gpu_enable),
+                               now_ui_state_gpu_power_enabled());
+  form->gpu_power_toggle=gpu_enable;
+  add(gpu,gpu_enable,0);
+  add(gpu,label("Optional on this device. Save Settings to keep the Dashboard cap/max readout enabled. No LACT installation or host changes are made automatically.","helper"),0);
   add(gpu,label("The Dashboard shows the active power cap and GPU maximum. Open detailed host controls to adjust the cap.","helper"),0);
   GtkWidget*gpu_open=button("OPEN GPU POWER CONTROLS","setupaction");
+  gtk_widget_set_sensitive(gpu_open,now_ui_state_gpu_power_enabled());
+  g_signal_connect(gpu_enable,"toggled",G_CALLBACK(gpu_power_toggle_changed),gpu_open);
   g_signal_connect(gpu_open,"clicked",callbacks->on_gpu_power,NULL);
   add(gpu,gpu_open,0);
   add(gpu,label("Uses your existing LACT daemon and owner-admin SSH. No new network listener.","helper"),0);

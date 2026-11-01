@@ -60,6 +60,19 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL)',flow)
         self.assertIn('g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL)',flow)
 
+    def test_downloads_first_open_is_allocated_without_user_resizing(self):
+        navigation = (ROOT / "src" / "ui_navigation.c").read_text(encoding="utf-8")
+        main = MAIN
+        self.assertIn('gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE)', main)
+        self.assertIn('now_nav_show_page(main_pages,"downloads");', main)
+        self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', main)
+        self.assertIn('now_nav_relayout_page(gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads"))', main)
+        self.assertIn('gtk_widget_queue_resize(page)', navigation)
+        self.assertIn('gtk_widget_queue_draw(page)', navigation)
+        self.assertIn('gtk_widget_get_mapped(page)', navigation)
+        self.assertIn('g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,relayout_page_idle,', navigation)
+        self.assertNotIn('g_timeout_add_seconds(1,downloads', main)
+
     def test_settings_actions_use_natural_width(self):
         self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_START)', SETTINGS)
         self.assertIn('!strcmp(id,"setupaction")', SETTINGS)

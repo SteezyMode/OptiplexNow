@@ -23,8 +23,8 @@ static void test_queue_items(void){
 static void test_compact_context_menu_rows(void){
  GtkWidget *view=now_downloads_queue_view_new();
  const char *wire=
-  "ITEM\\t21.2\\tdownloading\\tExample Movie\\t" HASH_A "\\t150\\t180\\t7\\n"
-  "ITEM\\t90.0\\tdownloading\\tExample Game\\t" HASH_B "\\t200\\t60\\t4";
+  "ITEM\t21.2\tdownloading\tExample Movie\t" HASH_A "\t150\t180\t7\n"
+  "ITEM\t90.0\tdownloading\tExample Game\t" HASH_B "\t200\t60\t4";
  g_assert_true(now_downloads_queue_view_update(view,wire));
  GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
  GtkListBoxRow *row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);

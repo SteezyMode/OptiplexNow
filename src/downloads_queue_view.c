@@ -71,7 +71,7 @@ static void perform_action(GtkButton *button,gpointer data){
        "Permanently delete the downloaded torrent files?" :
        "Remove torrent from Transfers?");
    gchar *warning=!strcmp(operation_copy,"remove_delete") ?
-     g_strdup_printf("Torrent: %s\\n\\nDELETE DATA on the server for this torrent. "
+     g_strdup_printf("Torrent: %s\n\nDELETE DATA on the server for this torrent. "
                      "This cannot be undone. Only approved media subfolders "
                      "can be deleted through NOW.",name) :
      g_strdup("Downloaded files will be kept. Remove this torrent from qBittorrent's queue?");

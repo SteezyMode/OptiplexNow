@@ -16,8 +16,11 @@ static GHashTable *expanded_torrents(GtkWidget *list){
  GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
  for(GList *p=rows;p;p=p->next){
    GtkWidget *row=GTK_WIDGET(p->data);
-   GtkWidget *toggle=g_object_get_data(G_OBJECT(row),"now-actions-toggle");
-   const gchar *hash=g_object_get_data(G_OBJECT(row),"now-torrent-hash");
+   /* GtkListBox automatically wraps each item in GtkListBoxRow. */
+   GtkWidget *content=GTK_IS_BIN(row)?gtk_bin_get_child(GTK_BIN(row)):row;
+   if(!content)continue;
+   GtkWidget *toggle=g_object_get_data(G_OBJECT(content),"now-actions-toggle");
+   const gchar *hash=g_object_get_data(G_OBJECT(content),"now-torrent-hash");
    if(toggle && hash && gtk_expander_get_expanded(GTK_EXPANDER(toggle)))
      g_hash_table_add(expanded,g_strdup(hash));
  }

@@ -130,6 +130,24 @@ int main(int argc, char **argv)
         g_assert_cmpint(gtk_widget_get_halign(tile),==,GTK_ALIGN_FILL);
     }
     g_assert_null(gtk_flow_box_get_child_at_index(GTK_FLOW_BOX(menu),6));
+    /* Exercise the actual GTK layout, not only FlowBox configuration.
+     * At normal width the first pair is side by side; at compact width
+     * the second card moves beneath the first with no horizontal overlap. */
+    GtkFlowBoxChild *first=gtk_flow_box_get_child_at_index(GTK_FLOW_BOX(menu),0);
+    GtkFlowBoxChild *second=gtk_flow_box_get_child_at_index(GTK_FLOW_BOX(menu),1);
+    GtkAllocation first_box,second_box;
+    gtk_window_set_default_size(GTK_WINDOW(window),760,650);
+    gtk_widget_show_all(window);
+    while (gtk_events_pending()) gtk_main_iteration();
+    gtk_widget_get_allocation(GTK_WIDGET(first),&first_box);
+    gtk_widget_get_allocation(GTK_WIDGET(second),&second_box);
+    g_assert_cmpint(first_box.y,==,second_box.y);
+    g_assert_cmpint(second_box.x,>,first_box.x);
+    gtk_window_resize(GTK_WINDOW(window),430,650);
+    while (gtk_events_pending()) gtk_main_iteration();
+    gtk_widget_get_allocation(GTK_WIDGET(first),&first_box);
+    gtk_widget_get_allocation(GTK_WIDGET(second),&second_box);
+    g_assert_cmpint(second_box.y,>,first_box.y);
 
     GtkWidget *gpu_link = button_named(root, "HOST GPU  ›");
     g_assert_nonnull(gpu_link);

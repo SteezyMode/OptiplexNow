@@ -62,16 +62,25 @@ static void perform_action(GtkButton *button,gpointer data){
  gchar *operation_copy=g_strdup(action);
  gchar *hash_copy=g_strdup(hash);
  gchar *name_copy=g_strdup(name);
- if(!strcmp(operation_copy,"remove")){
+ if(!strcmp(operation_copy,"remove") || !strcmp(operation_copy,"remove_delete")){
    GtkWidget *parent=gtk_widget_get_toplevel(view);
    GtkWidget *dialog=gtk_message_dialog_new(
      GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,GTK_DIALOG_MODAL,
      GTK_MESSAGE_WARNING,GTK_BUTTONS_NONE,
-     "Remove torrent from Transfers?");
-   gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),
-     "Downloaded files will be kept. Remove this torrent from qBittorrent's queue?");
+     !strcmp(operation_copy,"remove_delete") ?
+       "Permanently delete the downloaded torrent files?" :
+       "Remove torrent from Transfers?");
+   gchar *warning=!strcmp(operation_copy,"remove_delete") ?
+     g_strdup_printf("Torrent: %s\\n\\nDELETE DATA on the server for this torrent. "
+                     "This cannot be undone. Only approved media subfolders "
+                     "can be deleted through NOW.",name) :
+     g_strdup("Downloaded files will be kept. Remove this torrent from qBittorrent's queue?");
+   gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(dialog),"%s",warning);
+   g_free(warning);
    gtk_dialog_add_buttons(GTK_DIALOG(dialog),"CANCEL",GTK_RESPONSE_CANCEL,
-                          "REMOVE TORRENT",GTK_RESPONSE_ACCEPT,NULL);
+       !strcmp(operation_copy,"remove_delete") ?
+         "DELETE TORRENT AND FILES" : "REMOVE TORRENT",GTK_RESPONSE_ACCEPT,NULL);
+   gtk_dialog_set_default_response(GTK_DIALOG(dialog),GTK_RESPONSE_CANCEL);
    gint result=gtk_dialog_run(GTK_DIALOG(dialog));
    gtk_widget_destroy(dialog);
    if(result!=GTK_RESPONSE_ACCEPT)goto done;
@@ -84,13 +93,23 @@ static GtkWidget *action_button(GtkWidget *view,const char *label,
                                 const char *action,const char *hash,
                                 const char *name){
  GtkWidget *button=gtk_button_new_with_label(label);
- gtk_widget_set_name(button,"downloadoperation");
+ gtk_widget_set_name(button,!strcmp(action,"remove_delete") ?
+                            "danger" : "downloadoperation");
  gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
  g_object_set_data_full(G_OBJECT(button),"now-action",g_strdup(action),g_free);
  g_object_set_data_full(G_OBJECT(button),"now-hash",g_strdup(hash),g_free);
  g_object_set_data_full(G_OBJECT(button),"now-name",g_strdup(name),g_free);
  g_signal_connect(button,"clicked",G_CALLBACK(perform_action),view);
  return button;
+}
+/* Wrap six operations into compact rows; narrow laptop windows get two
+ * columns and the 4:3 projector fits three. No horizontal overflow. */
+static void reflow_operations(GtkWidget *flow,GtkAllocation *allocation,
+                              gpointer unused){
+ (void)unused;
+ guint cols=allocation->width<480?2u:3u;
+ if(gtk_flow_box_get_max_children_per_line(GTK_FLOW_BOX(flow))!=cols)
+   gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(flow),cols);
 }
 void now_downloads_queue_view_on_action(GtkWidget *view,
                                        NowDownloadQueueAction callback,
@@ -101,9 +120,9 @@ void now_downloads_queue_view_on_action(GtkWidget *view,
  g_object_set_data_full(G_OBJECT(view),"now-queue-context",ctx,g_free);
 }
 GtkWidget *now_downloads_queue_view_new(void){
- GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
-                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ /* The parent Downloads page owns vertical scrolling. A nested Transfers
+  * scroller trapped the wheel and stranded toolbar/picker controls. */
+ GtkWidget *scroll=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  GtkWidget *list=gtk_list_box_new();
  gtk_widget_set_name(list,"nowqueuelist");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(list),GTK_SELECTION_NONE);
@@ -183,17 +202,30 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
      gtk_box_pack_start(GTK_BOX(row),title,FALSE,FALSE,0);
      gtk_box_pack_start(GTK_BOX(row),bar,FALSE,FALSE,0);
      gtk_box_pack_start(GTK_BOX(row),meta,FALSE,FALSE,0);
-     GtkWidget *buttons=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+     GtkWidget *buttons=gtk_flow_box_new();
+     gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(buttons),GTK_SELECTION_NONE);
+     gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(buttons),3);
+     gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(buttons),1);
+     gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(buttons),5);
+     gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(buttons),5);
+     g_signal_connect(buttons,"size-allocate",
+                      G_CALLBACK(reflow_operations),NULL);
      const char *toggle=(!strcmp(parts[2],"pausedDL") ||
                           !strcmp(parts[2],"pausedUP") ||
                           !strcmp(parts[2],"stoppedDL") ||
                           !strcmp(parts[2],"stoppedUP")) ? "resume" : "pause";
-     const char *actions[]={toggle,"reannounce","recheck","remove"};
+     const char *actions[]={toggle,"reannounce","recheck","files",
+                            "remove","remove_delete"};
      const char *labels[]={!strcmp(toggle,"pause")?"PAUSE":"RESUME",
-                           "REANNOUNCE","RECHECK","REMOVE"};
-     for(guint j=0;j<4;j++)
-       gtk_box_pack_start(GTK_BOX(buttons),
-          action_button(view,labels[j],actions[j],parts[4],parts[3]),FALSE,FALSE,0);
+                           "REANNOUNCE","RECHECK","FILES",
+                           "REMOVE","DELETE FILES"};
+     for(guint j=0;j<6;j++){
+       GtkWidget *action=action_button(view,labels[j],actions[j],
+                                      parts[4],parts[3]);
+       gtk_widget_set_hexpand(action,TRUE);
+       gtk_widget_set_halign(action,GTK_ALIGN_FILL);
+       gtk_flow_box_insert(GTK_FLOW_BOX(buttons),action,-1);
+     }
      gtk_box_pack_start(GTK_BOX(row),buttons,FALSE,FALSE,0);
      gtk_container_add(GTK_CONTAINER(list),row);
      g_strfreev(parts);

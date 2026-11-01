@@ -87,6 +87,28 @@ class ManageTests(unittest.TestCase):
             with self.subTest(info=info),self.assertRaises(InventoryError):
                 exercise(info)
 
+    def test_delete_files_in_automatically_detected_download_mount(self):
+        record={"hash":HASH,"save_path":"/downloads/Movies",
+                "content_path":"/downloads/Movies/Film.mkv"}
+        posts=[]
+        def runner(argv,**kwargs):
+            if "torrents/info?" in argv[-1]:
+                return subprocess.CompletedProcess(argv,0,
+                         __import__("json").dumps([record]).encode(),b"")
+            posts.append(argv)
+            return subprocess.CompletedProcess(argv,0,b"Ok.",b"")
+        mounts={"mount_123":{"source":"/media/old-library","target":"/downloads"}}
+        with patch.object(mod,"locate_verified_downloader",
+                          return_value=(GATEWAY,8085)), patch.object(
+                          mod,"_mounts",return_value=("qbit",GATEWAY,8085,mounts)):
+            self.assertEqual(mod.manage_torrent("remove_delete",HASH,runner=runner),
+                            {"status":"submitted","operation":"remove_delete"})
+            self.assertEqual(len(posts),1)
+            record["content_path"]="/downloads"
+            with self.assertRaises(InventoryError):
+                mod.manage_torrent("remove_delete",HASH,runner=runner)
+        self.assertEqual(len(posts),1)
+
     def test_delete_data_rejects_gateway_binding_change(self):
         with patch.object(mod,"locate_verified_downloader",
                           return_value=(GATEWAY,8085)),patch.object(

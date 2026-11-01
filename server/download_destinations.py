@@ -73,6 +73,17 @@ def _mounts(*, runner=subprocess.run):
             slug="mount_"+hashlib.sha256(target.encode("utf-8")).hexdigest()[:16]
             label=os.path.basename(resolved.rstrip("/")) or target.strip("/")
             label=label[:MAX_NAME]
+        # Use familiar physical drive names for existing personal libraries.
+        # e.g. /mnt/2TB/Plex Expansion -> "2TB · Plex Expansion".
+        mounted_drive=re.match(r"^/(?:mnt|media)/([^/]+)(?:/|$)",resolved)
+        if mounted_drive:
+            drive_name=mounted_drive.group(1)
+            folder_name=os.path.basename(resolved.rstrip("/"))
+            label=(drive_name if folder_name==drive_name
+                   else drive_name+" · "+folder_name)
+        # The client transports labels in one tab-delimited line.
+        label="".join(char if ord(char)>=32 and ord(char)!=127 else " "
+                      for char in label)[:MAX_NAME]
         if slug in roots:
             raise DestinationError("Ambiguous downloader mount")
         roots[slug]={"source":source,"target":target,"label":label}

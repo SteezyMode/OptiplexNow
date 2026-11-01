@@ -107,6 +107,7 @@ int main(int argc, char **argv)
     GtkWidget *pages = g_object_get_data(G_OBJECT(root),
                                          "now-settings-stack");
     g_assert_true(GTK_IS_STACK(pages));
+    g_assert_false(gtk_stack_get_hhomogeneous(GTK_STACK(pages)));
     for (size_t i = 0; i < 5; ++i) {
         const char *name[] = {"home", "connection", "gaming",
                               "preferences", "gpu"};
@@ -118,10 +119,13 @@ int main(int argc, char **argv)
 
     GtkWidget *gpu_link = button_named(root, "HOST GPU  ›");
     g_assert_nonnull(gpu_link);
+    g_assert_cmpint(gtk_widget_get_halign(gpu_link), ==, GTK_ALIGN_START);
     gtk_button_clicked(GTK_BUTTON(gpu_link));
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "gpu");
     GtkWidget *gpu_button = button_named(root, "OPEN GPU POWER CONTROLS");
+    g_assert_nonnull(gpu_button);
+    g_assert_cmpint(gtk_widget_get_halign(gpu_button), ==, GTK_ALIGN_START);
     g_assert_false(gtk_widget_get_sensitive(gpu_button));
     gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(form->gpu_power_toggle), TRUE);
     g_assert_true(gtk_widget_get_sensitive(gpu_button));
@@ -139,6 +143,7 @@ int main(int argc, char **argv)
 
     GtkWidget *gaming = button_named(root, "GAMING & STREAMING  ›");
     g_assert_nonnull(gaming);
+    g_assert_cmpint(gtk_widget_get_halign(gaming), ==, GTK_ALIGN_START);
     gtk_button_clicked(GTK_BUTTON(gaming));
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "gaming");

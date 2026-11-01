@@ -11,7 +11,7 @@ PACKAGE = (ROOT / "package.py").read_text()
 
 class AlphaPolishTests(unittest.TestCase):
     def test_browser_first_video_has_no_dead_embedded_action(self):
-        self.assertIn('"OPEN VIDEO LIBRARY  ↗","videos-open-library"', SOURCE)
+        self.assertIn('"OPEN VIDEO LIBRARY  ↗","tile"', SOURCE)
         self.assertIn('now_media_bind(videos_status_message,browser_open,NULL)', SOURCE)
         self.assertIn('GtkWidget*video_advanced=gtk_expander_new("VIDEO SETTINGS")', SOURCE)
         self.assertIn('if(index==1){now_media_open_videos();return;}', SOURCE)

@@ -33,7 +33,7 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('now_media_open_videos();', SOURCE)
         self.assertIn('now_media_bind(videos_status_message,browser_open,NULL);', SOURCE)
         self.assertIn('now_media_open_videos();', SOURCE)
-        self.assertIn('"OPEN VIDEO LIBRARY  ↗","videos-open-library"', SOURCE)
+        self.assertIn('"OPEN VIDEO LIBRARY  ↗","tile"', SOURCE)
         self.assertIn('now_nav_show_page(main_pages,"videos");', SOURCE)
         self.assertNotIn('now_media_open_videos_in_app();', SOURCE)
         self.assertNotIn('videos-tray-target', SOURCE)

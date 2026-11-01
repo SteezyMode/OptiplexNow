@@ -23,7 +23,7 @@ class DashboardGpuShortcutTests(unittest.TestCase):
 
     def test_gpu_cap_label_is_explicit_and_consumption_is_not_on_dashboard(self):
         source = self.source
-        self.assertIn("  ·  CAP %s", source)
+        self.assertIn("  ·  cap %s", source)
         self.assertIn("size='smaller'", source)
         self.assertIn("foreground='#b1b5ad'", source)
         self.assertIn("rise='700'", source)

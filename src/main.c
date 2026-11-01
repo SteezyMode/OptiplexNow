@@ -660,7 +660,7 @@ static gboolean finish_on_main(void *arg) {
        gchar *base=g_markup_escape_text(val,-1);
        gchar *cap=g_markup_escape_text(r->gpu_cap,-1);
        gchar *markup=g_strdup_printf(
-         "%s<span size='smaller' foreground='#b1b5ad' rise='700'>  ·  CAP %s</span>",
+         "%s<span size='smaller' foreground='#b1b5ad' rise='700'>  ·  cap %s</span>",
          base,cap);
        gtk_label_set_markup(GTK_LABEL(metric_gpu),markup);
        g_free(markup);g_free(cap);g_free(base);
@@ -2015,9 +2015,30 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  
 }
 static void reflow(int width) {
+ static int last_metric_columns=0;
  int cols=width>=600?4:2;
  int pcols=width>=560?4:2;
- if(cols==last_columns && pcols==last_power_columns)return;
+ /* Two core-metric columns and full-width storage below 720px. The
+  * existing power controls still switch to a 2×2 grid below 560px. */
+ int metric_cols=width>=720?3:2;
+ if(cols==last_columns && pcols==last_power_columns &&
+    metric_cols==last_metric_columns)return;
+ if(metric_cols!=last_metric_columns && main_pages){
+   GtkWidget *metrics=g_object_get_data(G_OBJECT(main_pages),"now-dashboard-metrics");
+   GtkWidget *storage=g_object_get_data(G_OBJECT(main_pages),"now-dashboard-storage");
+   if(GTK_IS_GRID(metrics) && GTK_IS_WIDGET(storage)){
+     g_object_ref(storage);
+     if(gtk_widget_get_parent(storage))
+       gtk_container_remove(GTK_CONTAINER(metrics),storage);
+     if(metric_cols==3)
+       gtk_grid_attach(GTK_GRID(metrics),storage,2,0,1,2);
+     else
+       gtk_grid_attach(GTK_GRID(metrics),storage,0,2,2,1);
+     g_object_unref(storage);
+     gtk_widget_show_all(metrics);
+     last_metric_columns=metric_cols;
+   }
+ }
  if(cols!=last_columns){
    last_columns=cols;
    /* Move each action to exactly one section without destroying its widget. */
@@ -3011,6 +3032,8 @@ int main(int argc,char**argv) {
  GtkWidget*nav=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  gtk_widget_set_name(nav,"mainnav");add(window_root,nav,0);
  main_pages=gtk_stack_new();
+ /* A hidden Settings/Downloads page must not define the minimum window width. */
+ gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
@@ -3065,9 +3088,9 @@ int main(int argc,char**argv) {
  videos_status=label("Open the library in your default browser.","helper");
  gtk_label_set_line_wrap(GTK_LABEL(videos_status),TRUE);
  add(videos_home,videos_status,0);
- GtkWidget*video_browser=button("OPEN VIDEO LIBRARY  ↗","videos-open-library");
- gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-action");
- gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary");
+ /* Match PLAY STEAM: dark tile with the orange bottom accent. */
+ GtkWidget*video_browser=button("OPEN VIDEO LIBRARY  ↗","tile");
+ gtk_widget_set_size_request(video_browser,-1,56);
  g_signal_connect(video_browser,"clicked",G_CALLBACK(videos_open_browser),NULL);
  add(videos_home,video_browser,0);
  GtkWidget*video_advanced=gtk_expander_new("VIDEO SETTINGS");
@@ -3105,7 +3128,11 @@ int main(int argc,char**argv) {
  status_detail=label("","detail");add(right,status_detail,0);
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
  GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
+ /* Storage may move below CPU/GPU/RAM/VRAM in narrow windows. */
+ g_object_set_data(G_OBJECT(main_pages),"now-dashboard-metrics",metrics);
  metric_cpu=label("CPU   --","metric");metric_gpu=label("GPU   --","metric");
+ /* Optional cap telemetry must not force a wide minimum when enabled. */
+ gtk_label_set_ellipsize(GTK_LABEL(metric_gpu),PANGO_ELLIPSIZE_END);
  /* Transparent hit target: preserve the exact label styling and geometry.
   * Only the primary click navigates; the label remains the live readout. */
  GtkWidget *gpu_hitbox=gtk_event_box_new();
@@ -3125,6 +3152,7 @@ int main(int argc,char**argv) {
  g_signal_connect_data(drive_combo,"changed",(GCallback)on_drive_changed,NULL,NULL,0);add(diskbox,drive_combo,0);
  metric_free=label("FREE  --","drivefree");add(diskbox,metric_free,0);
  gtk_grid_attach(GTK_GRID(metrics),diskbox,2,0,1,2);
+ g_object_set_data(G_OBJECT(main_pages),"now-dashboard-storage",diskbox);
   metric_network=label("TAILSCALE  --","statusmetric");add(body,metric_network,0);
   metric_wolf=label("WOLF SERVICE  --","statusmetric");add(body,metric_wolf,0);
   metric_wolf_sessions=label("WOLF DESKTOPS  --","statusmetric");add(body,metric_wolf_sessions,0);

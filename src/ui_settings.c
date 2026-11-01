@@ -12,11 +12,21 @@ static GtkWidget *label(const char *text,const char *id){
  GtkWidget *l=gtk_label_new(text);
  gtk_label_set_xalign(GTK_LABEL(l),0);
  if(id)gtk_widget_set_name(l,id);
+ if(id && !strcmp(id,"helper")){
+  /* Optional/advanced Settings text must wrap instead of enlarging the
+   * minimum window width, including when Host GPU is the visible page. */
+  gtk_label_set_line_wrap(GTK_LABEL(l),TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(l),48);
+ }
  return l;
 }
 static GtkWidget *button(const char *text,const char *id){
  GtkWidget *b=gtk_button_new_with_label(text);
  if(id)gtk_widget_set_name(b,id);
+ /* Settings actions should use natural label width, not stretch across the
+  * entire scrolled page. GTK retains their existing touch-target padding. */
+ if(id && (!strcmp(id,"setupaction") || !strcmp(id,"navback")))
+  gtk_widget_set_halign(b,GTK_ALIGN_START);
  return b;
 }
 static void add(GtkWidget *box,GtkWidget *child,int expand){
@@ -108,6 +118,8 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  gtk_container_add(GTK_CONTAINER(settings_view),area);
  gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");
  GtkWidget*stack=gtk_stack_new();
+ /* Long hidden advanced pages must not impose a fixed window width. */
+ gtk_stack_set_hhomogeneous(GTK_STACK(stack),FALSE);
  g_object_set_data(G_OBJECT(settings_view),"now-settings-stack",stack);
  gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(stack,TRUE);

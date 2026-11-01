@@ -26,16 +26,16 @@ class NativeActionThemeTests(unittest.TestCase):
         ):
             self.assertIn(selector, css)
 
-    def test_video_buttons_keep_explicit_theme(self):
+    def test_video_launch_matches_steam_dark_tile(self):
         src = (SRC / "main.c").read_text()
-        for button in ("video_browser",):
-            self.assertIn(
-                'gtk_style_context_add_class(gtk_widget_get_style_context('
-                + button + '),"now-action");',
-                src)
-        self.assertIn(
-            'gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary");',
-            src)
+        games = (SRC / "ui_games.c").read_text()
+        self.assertIn('video_browser=button("OPEN VIDEO LIBRARY  ↗","tile")', src)
+        self.assertIn('gtk_widget_set_size_request(video_browser,-1,56)', src)
+        self.assertIn('gtk_widget_set_name(play,"tile")', games)
+        self.assertIn('gtk_widget_set_size_request(play,-1,56)', games)
+        self.assertIn('"#tile {background:#1e211f', src)
+        self.assertIn('"#tile:hover {background:#b96b5e', src)
+        self.assertNotIn('gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary")', src)
 
     def test_downloads_toolbar_search_and_queue(self):
         checks = {

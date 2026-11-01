@@ -156,6 +156,7 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  add(home,label("SETTINGS","modalheading"),0);
  add(home,label("Choose a section to configure this client or its approved server.","helper"),0);
  GtkWidget*home_menu=settings_home_menu_new();
+ g_object_set_data(G_OBJECT(settings_view),"now-settings-menu",home_menu);
  add(home,home_menu,0);
  settings_menu_link(home_menu,stack,"GAMING & STREAMING  ›","gaming");
  settings_menu_link(home_menu,stack,"HOST GPU  ›","gpu");

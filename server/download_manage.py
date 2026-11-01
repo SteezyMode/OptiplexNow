@@ -77,8 +77,8 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
             raise InventoryError("Untrusted torrent data location")
         approved = False
         for slug in mounts:
-            base = "/library/" + slug
-            if (save_path.startswith(base + "/") and
+            mount_root = "/library/" + slug
+            if (save_path.startswith(mount_root + "/") and
                     content_path.startswith(save_path.rstrip("/") + "/")):
                 approved = True
                 break

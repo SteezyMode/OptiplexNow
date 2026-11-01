@@ -500,6 +500,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
  g_strfreev(lines);
  return ok;
 }
+static void open_native_chooser(Picker *s);
 static void finished(GObject *source,GAsyncResult *res,gpointer data){
  (void)source;
  Job *job=data;
@@ -524,6 +525,21 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        "Folder operation failed. Check owner approval and library mounts.");
    }
    s->running=FALSE;
+   if(!ok && job->action=='h'){
+     GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+     GtkWidget *message=gtk_message_dialog_new(
+        GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+        GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_ERROR,GTK_BUTTONS_CLOSE,
+        "Unable to download to this folder");
+     gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(message),
+        "The selected OptiPlex folder may not be mounted or writable "
+        "inside qBittorrent, or its owner connection is unavailable. "
+        "No torrent was submitted.");
+     gtk_dialog_run(GTK_DIALOG(message));
+     gtk_widget_destroy(message);
+     if(s->magnet)open_native_chooser(s);
+   }
    if(ok && job->action=='m'){
      gchar *next=s->relative && *s->relative ?
          g_strconcat(s->relative,"/",s->pending_folder,NULL) :
@@ -802,18 +818,111 @@ void now_downloads_destination_view_configure(GtkWidget *view,const char *host,
  refresh_place_choices(s);
  button_states(s);
 }
+/* The real GTK folder chooser is GIO-backed. GVfs provides server SFTP,
+ * familiar folder navigation, and bookmarks. The Mac's local paths cannot
+ * be mistaken for OptiPlex paths; host checks remain in the owner broker.
+ */
+static gchar *native_uri_host_path(Picker *s,const gchar *uri){
+ if(!s || !uri)return NULL;
+ GError *error=NULL;
+ GUri *parsed=g_uri_parse(uri,G_URI_FLAGS_ENCODED_PATH,&error);
+ if(!parsed){g_clear_error(&error);return NULL;}
+ const gchar *scheme=g_uri_get_scheme(parsed);
+ const gchar *host=g_uri_get_host(parsed);
+ const gchar *user=g_uri_get_userinfo(parsed);
+ const gchar *raw=g_uri_get_path(parsed);
+ gint port=g_uri_get_port(parsed);
+ gchar *folder=NULL;
+ if(g_strcmp0(scheme,"sftp")==0 && g_strcmp0(host,s->host)==0 &&
+    g_strcmp0(user,s->user)==0 && (port==-1 || port==22) &&
+    !g_uri_get_query(parsed) && !g_uri_get_fragment(parsed) && raw){
+   folder=g_uri_unescape_string(raw,NULL);
+   if(!folder || strlen(folder)<2 || strlen(folder)>1024 ||
+      !g_path_is_absolute(folder) || g_str_has_prefix(folder,"//") ||
+      g_str_has_suffix(folder,"/") || strstr(folder,"//") ||
+      !g_utf8_validate(folder,-1,NULL)){
+     g_clear_pointer(&folder,g_free);
+   }else{
+     gchar **parts=g_strsplit(folder,"/",-1);
+     for(guint i=1;parts[i];i++){
+       if(!strcmp(parts[i],".") || !strcmp(parts[i],"..")){
+         g_clear_pointer(&folder,g_free);break;
+       }
+       for(const guchar *p=(const guchar *)parts[i];folder && *p;p++)
+         if(*p<32 || *p==127){g_clear_pointer(&folder,g_free);break;}
+     }
+     g_strfreev(parts);
+   }
+ }
+ g_uri_unref(parsed);
+ return folder;
+}
+static void native_response(GtkDialog *dialog,gint response,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ if(response!=GTK_RESPONSE_ACCEPT){
+   s->native_dialog=NULL;
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   on_cancel(NULL,s->view);
+   return;
+ }
+ gchar *uri=gtk_file_chooser_get_uri(GTK_FILE_CHOOSER(dialog));
+ gchar *path=native_uri_host_path(s,uri);
+ g_free(uri);
+ if(!path){
+   GtkWidget *msg=gtk_message_dialog_new(GTK_WINDOW(dialog),
+      GTK_DIALOG_MODAL,GTK_MESSAGE_WARNING,GTK_BUTTONS_CLOSE,
+      "Choose an OptiPlex folder");
+   gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(msg),
+      "Select the OptiPlex SFTP location in the file chooser. "
+      "Local folders belong to this client computer, not the server.");
+   gtk_dialog_run(GTK_DIALOG(msg));
+   gtk_widget_destroy(msg);
+   return;
+ }
+ g_free(s->host_path);s->host_path=path;
+ s->native_dialog=NULL;
+ gtk_widget_destroy(GTK_WIDGET(dialog));
+ start(s,'h');
+}
+static void open_native_chooser(Picker *s){
+ if(!s || s->native_dialog || s->running || !s->host || !s->user ||
+    !valid_bookmark_host(s->host) || !valid_bookmark_user(s->user))return;
+ GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+ GtkWidget *dialog=gtk_file_chooser_dialog_new(
+      "Choose a folder on OptiPlex",
+      GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+      GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+      "Cancel",GTK_RESPONSE_CANCEL,
+      "Add Torrent",GTK_RESPONSE_ACCEPT,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),900,600);
+ gtk_file_chooser_set_local_only(GTK_FILE_CHOOSER(dialog),FALSE);
+ gtk_file_chooser_set_create_folders(GTK_FILE_CHOOSER(dialog),TRUE);
+ gchar *base=g_strdup_printf("sftp://%s@%s/",s->user,s->host);
+ /* GVfs uses the normal system SSH/SFTP login; the restricted owner key
+  * is not an SFTP credential and is never modified here. */
+ if(s->host_path){
+   gchar *escaped=g_uri_escape_string(s->host_path,"/",FALSE);
+   gchar *previous=g_strconcat(base,escaped+1,NULL);
+   gtk_file_chooser_set_current_folder_uri(GTK_FILE_CHOOSER(dialog),previous);
+   g_free(previous);g_free(escaped);
+ }else{
+   gtk_file_chooser_set_current_folder_uri(GTK_FILE_CHOOSER(dialog),base);
+ }
+ g_free(base);
+ s->native_dialog=dialog;
+ g_signal_connect(dialog,"response",G_CALLBACK(native_response),s->view);
+ gtk_widget_show(dialog);
+}
 gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
  Picker *s=state(view);
- if(!s || !s->host || !s->helper || !magnet ||
+ if(!s || !s->host || !s->user || !s->helper || !magnet ||
     !g_str_has_prefix(magnet,"magnet:?xt=urn:bt") ||
-    strlen(magnet)>1024 || s->running)return FALSE;
+    strlen(magnet)>1024 || s->running || s->native_dialog)return FALSE;
  g_free(s->magnet);s->magnet=g_strdup(magnet);
  s->folder_valid=FALSE;
- gtk_widget_set_no_show_all(view,FALSE);
- gtk_widget_show_all(view);
- gtk_widget_set_no_show_all(view,TRUE);
- start(s,'r');
- return TRUE;
+ open_native_chooser(s);
+ return s->native_dialog!=NULL;
 }
 void now_downloads_destination_view_on_cancel(GtkWidget *view,
                                              void (*callback)(gpointer),gpointer data){

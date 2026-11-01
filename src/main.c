@@ -2010,9 +2010,23 @@ static void on_bruiser_admin(void*w,void*p){
  browser_open(url);
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
+/* Reallocate the Downloads page after it is mapped into the GTK stack.
+ * No host or queue work is performed by the idle callback. */
+static gboolean downloads_post_show_layout(gpointer data){
+ GtkWidget *page=GTK_WIDGET(data);
+ if(gtk_widget_get_mapped(page)){
+   gtk_widget_queue_resize(page);
+   gtk_widget_queue_draw(page);
+ }
+ return G_SOURCE_REMOVE;
+}
 static void open_downloads_page(void){
  now_nav_show_page(main_pages,"downloads");
  now_downloads_open(cfg[0],cfg[1],cfg[7]);
+ GtkWidget *page=gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads");
+ if(page)
+   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,downloads_post_show_layout,
+                   g_object_ref(page),g_object_unref);
 }
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;
@@ -3051,7 +3065,9 @@ int main(int argc,char**argv) {
  main_pages=gtk_stack_new();
  /* A hidden Settings/Downloads page must not define the minimum window width. */
  gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);
- gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
+ /* Top navigation is tab-like: avoid a sliding offscreen surface during
+  * the first allocation of the nested Downloads GTK stacks. */
+ gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE);
  gtk_widget_set_vexpand(main_pages,TRUE);add(window_root,main_pages,1);
  GtkWidget*nav_space=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,0);
  gtk_widget_set_hexpand(nav_space,TRUE);add(nav,nav_space,1);

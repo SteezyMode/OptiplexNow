@@ -928,6 +928,8 @@ gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magne
     !g_str_has_prefix(magnet,"magnet:?xt=urn:bt") ||
     strlen(magnet)>1024 || s->running || s->native_dialog)return FALSE;
  g_free(s->magnet);s->magnet=g_strdup(magnet);
+ /* Do not force the previously used folder as a default for a new torrent. */
+ g_clear_pointer(&s->host_path,g_free);
  s->folder_valid=FALSE;
  open_native_chooser(s);
  return s->native_dialog!=NULL;

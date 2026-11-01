@@ -69,8 +69,9 @@ static void test_projector_picker_filters_and_confirm_below_browser(void){
  GList *parts=gtk_container_get_children(GTK_CONTAINER(view));
  /* Add sits in the footer after the browsable folder list. */
  GtkWidget *footer=gtk_widget_get_parent(s->add);
+ GtkWidget *main_area=gtk_widget_get_parent(s->sidebar);
  g_assert_cmpint(g_list_index(parts,footer),>,
-                 g_list_index(parts,s->folder_scroll));
+                 g_list_index(parts,main_area));
  g_list_free(parts);
  g_free(s->root);s->root=g_strdup("bigdisk");
  g_free(s->relative);s->relative=g_strdup("Movies");
@@ -99,7 +100,9 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
                                           "/test/owner-helper");
  Picker *s=state(view);
  g_assert_nonnull(s->new_folder);
- g_assert_nonnull(s->places_combo);
+ g_assert_nonnull(s->places_list);
+ g_assert_nonnull(s->sidebar);
+ g_assert_nonnull(s->places_toggle);
  g_assert_nonnull(s->pin_place);
  g_assert_cmpstr(gtk_button_get_label(GTK_BUTTON(s->pin_place)),==,"☆ Favorite");
  g_assert_true(read_response(s,'m',"CREATED"));
@@ -127,11 +130,14 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  g_assert_cmpuint(again->places->len,==,1);
  now_downloads_destination_view_configure(another,"other.example","optiplex",
                                           "/test/owner-helper");
- GtkTreeModel *model=gtk_combo_box_get_model(GTK_COMBO_BOX(again->places_combo));
- g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,1);
+ GList *shortcuts=gtk_container_get_children(GTK_CONTAINER(again->places_list));
+ g_assert_cmpint(g_list_length(shortcuts),==,4);
+ g_list_free(shortcuts);
  now_downloads_destination_view_configure(another,"100.121.156.34","optiplex",
                                           "/test/owner-helper");
- g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,2);
+ shortcuts=gtk_container_get_children(GTK_CONTAINER(again->places_list));
+ g_assert_cmpint(g_list_length(shortcuts),==,4+1);
+ g_list_free(shortcuts);
  SavedPlace *loaded=g_ptr_array_index(again->places,0);
  g_assert_cmpstr(loaded->relative,==,"Games");
  /* Star is a reversible Favorite toggle; it never submits a torrent. */
@@ -160,12 +166,15 @@ static void test_recents_only_after_successful_download(void){
  g_assert_cmpuint(s->recents->len,==,1);
  SavedPlace *recent=g_ptr_array_index(s->recents,0);
  g_assert_cmpstr(recent->relative,==,"Games");
- GtkTreeModel *model=gtk_combo_box_get_model(GTK_COMBO_BOX(s->places_combo));
- g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,3);
+ GList *shortcuts=gtk_container_get_children(GTK_CONTAINER(s->places_list));
+ g_assert_cmpint(g_list_length(shortcuts),==,6);
+ g_list_free(shortcuts);
  /* Changing the configured server hides both Favorites and Recents. */
  now_downloads_destination_view_configure(view,"other.example","optiplex",
                                           "/test/owner-helper");
- g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,1);
+ shortcuts=gtk_container_get_children(GTK_CONTAINER(s->places_list));
+ g_assert_cmpint(g_list_length(shortcuts),==,4);
+ g_list_free(shortcuts);
  gtk_widget_destroy(view);
 }
 static void flush_gtk_events(void){

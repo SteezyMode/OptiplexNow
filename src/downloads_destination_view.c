@@ -439,6 +439,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
      g_clear_pointer(&s->root,g_free);
      g_clear_pointer(&s->relative,g_free);
      clear_folder_buttons(s);
+     gtk_widget_set_size_request(s->folder_scroll,-1,120);
      gtk_label_set_text(GTK_LABEL(s->path),"Choose a drive");
      gchar *found=g_strdup_printf("%u storage location%s available. Choose a drive.",
                                    count,count==1?"":"s");
@@ -468,6 +469,10 @@ static gboolean read_response(Picker *s,char action,char *wire){
        gtk_list_store_set(s->folder_store,&row,0,part[1],-1);
        g_strfreev(part);
      }
+     /* Sparse directories should not push Add Torrent below blank space.
+      * Larger directories stay bounded and scroll like a file chooser. */
+     gtk_widget_set_size_request(s->folder_scroll,-1,
+                                 CLAMP(42+(gint)count*28,120,290));
      /* Every folder change starts with the full directory. A search for
       * "Horror" in Movies must not silently hide folders inside Horror. */
      gtk_entry_set_text(GTK_ENTRY(s->filter),"");

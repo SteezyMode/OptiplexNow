@@ -72,7 +72,7 @@ def manage_torrent(operation, torrent_hash, *, runner=subprocess.run):
         def clean(path):
             return (path.startswith("/") and
                     all(part not in (".","..") for part in path.split("/")[1:]) and
-                    "//" not in path and "\\\\" not in path)
+                    "//" not in path and "\\" not in path)
         if not clean(save_path) or not clean(content_path):
             raise InventoryError("Untrusted torrent data location")
         approved = False

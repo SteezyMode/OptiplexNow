@@ -112,6 +112,8 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  gtk_container_add(GTK_CONTAINER(settings_view),area);
  gtk_stack_add_named(GTK_STACK(main_pages),settings_view,"settings");
  GtkWidget*stack=gtk_stack_new();
+ /* Long hidden advanced pages must not impose a fixed window width. */
+ gtk_stack_set_hhomogeneous(GTK_STACK(stack),FALSE);
  g_object_set_data(G_OBJECT(settings_view),"now-settings-stack",stack);
  gtk_stack_set_transition_type(GTK_STACK(stack),GTK_STACK_TRANSITION_TYPE_SLIDE_LEFT_RIGHT);
  gtk_widget_set_vexpand(stack,TRUE);

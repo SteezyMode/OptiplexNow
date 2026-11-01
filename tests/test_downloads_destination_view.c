@@ -193,6 +193,35 @@ static void test_recents_only_after_successful_download(void){
  g_list_free(shortcuts);
  gtk_widget_destroy(view);
 }
+static void test_real_gtk_chooser_remote_uri_boundary(void){
+ GtkWidget *view=now_downloads_destination_view_new();
+ Picker *s=state(view);
+ now_downloads_destination_view_configure(view,"100.121.156.34",
+                                         "optiplex","/test/owner-helper");
+ const gchar *valid[]={
+   "sftp://optiplex@100.121.156.34/media/BigDisk/Movies/Horror",
+   "sftp://optiplex@100.121.156.34/media/BigDisk/Movies/Some%20Film",
+   NULL
+ };
+ const gchar *expect[]={"/media/BigDisk/Movies/Horror",
+                         "/media/BigDisk/Movies/Some Film"};
+ for(guint i=0;valid[i];i++){
+   gchar *path=native_uri_host_path(s,valid[i]);
+   g_assert_cmpstr(path,==,expect[i]);g_free(path);
+ }
+ const gchar *invalid[]={
+   "file:///media/BigDisk/Movies",
+   "sftp://optiplex@another-machine/media/BigDisk",
+   "sftp://someone@100.121.156.34/media/BigDisk",
+   "sftp://optiplex@100.121.156.34/etc/../passwd",
+   "sftp://optiplex@100.121.156.34/",
+   "sftp://optiplex@100.121.156.34/media//BigDisk",
+   NULL
+ };
+ for(guint i=0;invalid[i];i++)
+   g_assert_null(native_uri_host_path(s,invalid[i]));
+ gtk_widget_destroy(view);
+}
 static guint cancels_seen=0;
 static void canceled(gpointer unused){
  (void)unused;
@@ -305,6 +334,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/saved-games",test_saved_game_location_remains_scoped_to_approved_root);
  g_test_add_func("/destination/recent-only-on-add",test_recents_only_after_successful_download);
  g_test_add_func("/destination/cancel-keeps-torrent-unsubmitted",test_cancel_does_not_submit);
+ g_test_add_func("/destination/native-sftp-uri-validation",test_real_gtk_chooser_remote_uri_boundary);
  g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

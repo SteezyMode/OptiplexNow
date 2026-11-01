@@ -7,6 +7,7 @@ user (no sudo escalation). A restricted Games credential cannot run it.
 import importlib.util
 import ipaddress
 import json
+import math
 from pathlib import Path
 import re
 import subprocess
@@ -214,5 +215,4 @@ def main(argv=None):
 
 
 if __name__ == "__main__":
-    import math
     sys.exit(main())

@@ -75,7 +75,7 @@ def present(action,data):
             progress=entry.get("progress_percent")
             priority=entry.get("priority")
             if (not isinstance(name,str) or not 1<=len(name)<=220 or
-                    name.startswith("/") or "\\\\" in name or
+                    name.startswith("/") or "\\" in name or
                     any(p in ("",".","..") for p in name.split("/")) or
                     any(ord(c)<32 or ord(c)==127 for c in name) or
                     type(size) is not int or not 0<=size<=2**63-1 or

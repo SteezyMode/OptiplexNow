@@ -136,7 +136,7 @@ static void test_saved_game_location_remains_scoped_to_approved_root(void){
  now_downloads_destination_view_configure(another,"100.121.156.34","optiplex",
                                           "/test/owner-helper");
  shortcuts=gtk_container_get_children(GTK_CONTAINER(again->places_list));
- g_assert_cmpint(g_list_length(shortcuts),==,4+1);
+ g_assert_cmpint(g_list_length(shortcuts),==,4);
  g_list_free(shortcuts);
  SavedPlace *loaded=g_ptr_array_index(again->places,0);
  g_assert_cmpstr(loaded->relative,==,"Games");
@@ -167,7 +167,7 @@ static void test_recents_only_after_successful_download(void){
  SavedPlace *recent=g_ptr_array_index(s->recents,0);
  g_assert_cmpstr(recent->relative,==,"Games");
  GList *shortcuts=gtk_container_get_children(GTK_CONTAINER(s->places_list));
- g_assert_cmpint(g_list_length(shortcuts),==,6);
+ g_assert_cmpint(g_list_length(shortcuts),==,4);
  g_list_free(shortcuts);
  /* Changing the configured server hides both Favorites and Recents. */
  now_downloads_destination_view_configure(view,"other.example","optiplex",

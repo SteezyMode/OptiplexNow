@@ -8,7 +8,7 @@
 #include <string.h>
 
 typedef struct {
- gchar *root,*relative;
+ gchar *host,*user,*root,*relative;
 } SavedPlace;
 typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
@@ -30,7 +30,8 @@ static Picker *state(GtkWidget *view){
 }
 static void free_place(gpointer data){
  SavedPlace *p=data;
- if(p){g_free(p->root);g_free(p->relative);g_free(p);}
+ if(p){g_free(p->host);g_free(p->user);
+       g_free(p->root);g_free(p->relative);g_free(p);}
 }
 static void free_state(gpointer data){
  Picker *s=data;
@@ -101,6 +102,24 @@ static gboolean safe_relative(const char *value){
 /* Saved places are bookmarks scoped to this client's approved root IDs and
  * relative folders, never raw host paths. Every use re-runs owner browse. */
 #define MAX_SAVED_PLACES 24
+static gboolean valid_bookmark_host(const gchar *host){
+ if(!host || !*host || strlen(host)>253 || host[0]=='-')return FALSE;
+ for(const gchar *p=host;*p;p++)
+   if(!g_ascii_isalnum(*p) && *p!='.' && *p!=':' && *p!='-')
+     return FALSE;
+ return TRUE;
+}
+static gboolean valid_bookmark_user(const gchar *user){
+ if(!user || !*user || strlen(user)>32 ||
+    !(g_ascii_isalpha(user[0]) || user[0]=='_'))return FALSE;
+ for(const gchar *p=user;*p;p++)
+   if(!g_ascii_isalnum(*p) && *p!='_' && *p!='-')return FALSE;
+ return TRUE;
+}
+static gboolean same_server(Picker *s,SavedPlace *p){
+ return p && !g_strcmp0(s->host,p->host) &&
+             !g_strcmp0(s->user,p->user);
+}
 static gchar *places_path(void){
  return g_build_filename(g_get_user_config_dir(),"optiplex-now",
                          "download-places.ini",NULL);
@@ -108,14 +127,16 @@ static gchar *places_path(void){
 static void refresh_place_choices(Picker *s){
  s->loading_places=TRUE;
  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->places_combo));
- gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(s->places_combo),
-                                "SAVED LOCATIONS");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),"",
+                           "SAVED LOCATIONS");
  for(guint i=0;i<s->places->len;i++){
    SavedPlace *p=g_ptr_array_index(s->places,i);
+   if(!same_server(s,p))continue;
    gchar *label=g_strdup_printf("%s / %s",p->root,
                                 *p->relative?p->relative:"(root)");
-   gtk_combo_box_text_append_text(GTK_COMBO_BOX_TEXT(s->places_combo),label);
-   g_free(label);
+   gchar *id=g_strdup_printf("%u",i);
+   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),id,label);
+   g_free(id);g_free(label);
  }
  gtk_combo_box_set_active(GTK_COMBO_BOX(s->places_combo),0);
  s->loading_places=FALSE;
@@ -129,6 +150,8 @@ static gboolean store_places(Picker *s){
    for(guint i=0;i<s->places->len;i++){
      SavedPlace *p=g_ptr_array_index(s->places,i);
      gchar *group=g_strdup_printf("place%u",i);
+     g_key_file_set_string(data,group,"host",p->host);
+     g_key_file_set_string(data,group,"user",p->user);
      g_key_file_set_string(data,group,"root",p->root);
      g_key_file_set_string(data,group,"relative",p->relative);
      g_free(group);
@@ -150,14 +173,18 @@ static void load_places(Picker *s){
    if(g_key_file_load_from_data(data,raw,size,G_KEY_FILE_NONE,NULL)){
      for(guint i=0;i<MAX_SAVED_PLACES;i++){
        gchar *group=g_strdup_printf("place%u",i);
+       gchar *host=g_key_file_get_string(data,group,"host",NULL);
+       gchar *user=g_key_file_get_string(data,group,"user",NULL);
        gchar *root=g_key_file_get_string(data,group,"root",NULL);
        gchar *relative=g_key_file_get_string(data,group,"relative",NULL);
-       if(safe_root(root) && safe_relative(relative)){
+       if(valid_bookmark_host(host) && valid_bookmark_user(user) &&
+          safe_root(root) && safe_relative(relative)){
          SavedPlace *p=g_new0(SavedPlace,1);
+         p->host=g_strdup(host);p->user=g_strdup(user);
          p->root=g_strdup(root);p->relative=g_strdup(relative);
          g_ptr_array_add(s->places,p);
        }
-       g_free(root);g_free(relative);g_free(group);
+       g_free(host);g_free(user);g_free(root);g_free(relative);g_free(group);
      }
    }
    g_key_file_unref(data);
@@ -166,15 +193,18 @@ static void load_places(Picker *s){
  refresh_place_choices(s);
 }
 static gboolean remember_current_place(Picker *s){
- if(!s || !s->folder_valid || !safe_root(s->root) ||
+ if(!s || !s->folder_valid || !valid_bookmark_host(s->host) ||
+    !valid_bookmark_user(s->user) || !safe_root(s->root) ||
     !safe_relative(s->relative))return FALSE;
  for(guint i=0;i<s->places->len;i++){
    SavedPlace *p=g_ptr_array_index(s->places,i);
-   if(!strcmp(p->root,s->root) && !strcmp(p->relative,s->relative))
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative))
      return TRUE;
  }
  if(s->places->len>=MAX_SAVED_PLACES)return FALSE;
  SavedPlace *p=g_new0(SavedPlace,1);
+ p->host=g_strdup(s->host);p->user=g_strdup(s->user);
  p->root=g_strdup(s->root);p->relative=g_strdup(s->relative);
  g_ptr_array_add(s->places,p);
  refresh_place_choices(s);

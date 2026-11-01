@@ -254,7 +254,7 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
      gtk_expander_set_expanded(GTK_EXPANDER(actions_toggle),
                                g_hash_table_contains(expanded,parts[4]));
      gtk_box_pack_start(GTK_BOX(row),actions_toggle,FALSE,FALSE,0);
-     g_object_set_data(G_OBJECT(row),"now-actions-actions_toggle",actions_toggle);
+     g_object_set_data(G_OBJECT(row),"now-actions-toggle",actions_toggle);
      g_object_set_data_full(G_OBJECT(row),"now-torrent-hash",
                              g_strdup(parts[4]),g_free);
      gtk_container_add(GTK_CONTAINER(list),row);

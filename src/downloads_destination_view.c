@@ -322,12 +322,14 @@ GtkWidget *now_downloads_destination_view_new(void){
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_scrolled_window_set_overlay_scrolling(
    GTK_SCROLLED_WINDOW(s->folder_scroll),FALSE);
- /* Previously 110px (~3 folders). Give the folder chooser a useful
-  * viewport (~10 folders); the entire native Downloads page also scrolls. */
- gtk_widget_set_size_request(s->folder_scroll,-1,300);
+ /* Focused destination step: the folder list no longer shares its viewport
+  * with Search Results. Allow a generous visible section on short projectors;
+  * the entire native Downloads page remains scrollable if needed. */
+ gtk_widget_set_size_request(s->folder_scroll,-1,420);
+ gtk_widget_set_vexpand(s->folder_scroll,TRUE);
  s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
- gtk_box_pack_start(GTK_BOX(view),s->folder_scroll,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view),s->folder_scroll,TRUE,TRUE,0);
  button_states(s);
  return view;
 }
@@ -347,17 +349,18 @@ void now_downloads_destination_view_configure(GtkWidget *view,const char *host,
  g_free(s->helper);s->helper=g_strdup(helper);
  button_states(s);
 }
-void now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
+gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
  Picker *s=state(view);
  if(!s || !s->host || !s->helper || !magnet ||
     !g_str_has_prefix(magnet,"magnet:?xt=urn:bt") ||
-    strlen(magnet)>1024 || s->running)return;
+    strlen(magnet)>1024 || s->running)return FALSE;
  g_free(s->magnet);s->magnet=g_strdup(magnet);
  s->folder_valid=FALSE;
  gtk_widget_set_no_show_all(view,FALSE);
  gtk_widget_show_all(view);
  gtk_widget_set_no_show_all(view,TRUE);
  start(s,'r');
+ return TRUE;
 }
 void now_downloads_destination_view_on_added(GtkWidget *view,
                                              void (*callback)(gpointer),gpointer data){

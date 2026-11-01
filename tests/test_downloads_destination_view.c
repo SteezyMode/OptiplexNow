@@ -274,7 +274,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/genres",test_folder_navigation_and_preserve_trailing_space);
  g_test_add_func("/destination/borrowed-combo-id",test_borrowed_combo_id_is_never_freed);
  g_test_add_func("/destination/reject",test_reject_untrusted_host_folder_reply);
- g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_above_browser);
+ g_test_add_func("/destination/projector-picker",test_projector_picker_filters_and_confirm_below_browser);
  g_test_add_func("/destination/saved-games",test_saved_game_location_remains_scoped_to_approved_root);
  g_test_add_func("/destination/recent-only-on-add",test_recents_only_after_successful_download);
  g_test_add_func("/destination/cancel-keeps-torrent-unsubmitted",test_cancel_does_not_submit);

@@ -76,6 +76,7 @@ for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
 for name in ('owner_games_ssh.py', 'owner_games_request.py',
              'owner_games_enroll.py', 'download_inventory.py',
              'download_queue.py', 'download_search.py', 'download_manage.py',
+             'download_files.py',
              'download_destinations.py', 'media_endpoint.py'):
  shutil.copy2(root/'server'/name, bridge/'server'/name)
 shutil.copy2(root/'src/owner-host-upgrade.py', pkg/'usr/lib/optiplex-now/owner-host-upgrade.py')

@@ -93,12 +93,13 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,420)",picker)
         self.assertIn("gtk_search_entry_new()",picker)
         self.assertIn("filter_folder_buttons",picker)
-        self.assertIn('gtk_button_new_with_label("ADD TORRENT HERE")',picker)
-        self.assertLess(picker.index("gtk_box_pack_start(GTK_BOX(view),s->add"),
-                        picker.index("gtk_box_pack_start(GTK_BOX(view),s->folder_scroll"))
-        self.assertIn("gtk_flow_box_set_max_children_per_line",transfers)
+        self.assertIn('gtk_button_new_with_label("Add Torrent")',picker)
+        self.assertLess(picker.index("gtk_box_pack_start(GTK_BOX(s->browser_area),s->folder_scroll"),
+                        picker.index("gtk_box_pack_end(GTK_BOX(footer),s->add"))
+        self.assertIn("gtk_menu_popup_at_pointer",transfers)
+        self.assertNotIn("gtk_expander_new",transfers)
         self.assertIn('"remove","remove_delete"',transfers)
-        self.assertIn('"FILES"',transfers)
+        self.assertIn('"View files"',transfers)
         self.assertIn("DELETE TORRENT AND FILES",transfers)
 
     def test_projector_search_and_destination_use_full_height_drilldown(self):
@@ -129,9 +130,9 @@ class DownloadsNavigationContract(unittest.TestCase):
         ops=(ROOT/"src/download-operations-client.py").read_text()
         host=(ROOT/"server/download_destinations.py").read_text()
         request=(ROOT/"server/owner_games_request.py").read_text()
-        self.assertIn('gtk_button_new_with_label("+ NEW FOLDER")',picker)
+        self.assertIn('gtk_button_new_with_label("New Folder")',picker)
         self.assertIn('gtk_button_new_with_label("☆ Favorite")',picker)
-        self.assertIn('"★ FAVORITES / ↺ RECENT LOCATIONS"',picker)
+        self.assertIn('kind==0?"FAVORITES":"RECENT"',picker)
         self.assertIn('record_recent_place(s)',picker)
         self.assertNotIn('gtk_button_new_with_label("REMOVE SAVED")',picker)
         self.assertIn('"download-places.ini"',picker)

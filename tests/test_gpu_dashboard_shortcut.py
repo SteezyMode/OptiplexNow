@@ -21,6 +21,12 @@ class DashboardGpuShortcutTests(unittest.TestCase):
         self.assertNotIn('gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);', source)
         self.assertIn('"#metric {background:', source)
 
+    def test_gpu_cap_label_is_explicit_and_consumption_is_not_on_dashboard(self):
+        source = self.source
+        self.assertIn('?"  ·  CAP ":""', source)
+        self.assertIn('r->gpu_cap', source)
+        self.assertNotIn("GPU_DRAW=", source)
+
     def test_click_routes_without_changing_owner_only_control_boundary(self):
         source = self.source
         callback = re.search(

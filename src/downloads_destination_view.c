@@ -753,6 +753,12 @@ GtkWidget *now_downloads_destination_view_new(void){
  GtkWidget *cancel=gtk_button_new_with_label("Cancel");
  g_signal_connect(cancel,"clicked",G_CALLBACK(on_cancel),view);
  gtk_box_pack_end(GTK_BOX(footer),cancel,FALSE,FALSE,0);
+ /* Realize every child of the locations sidebar once. Thereafter only the
+  * complete sidebar is shown/hidden at narrow widths: no empty side panel. */
+ gtk_widget_set_no_show_all(s->sidebar,FALSE);
+ gtk_widget_show_all(s->sidebar);
+ gtk_widget_set_no_show_all(s->sidebar,TRUE);
+ gtk_widget_hide(s->sidebar);
  load_places(s);
  button_states(s);
  return view;

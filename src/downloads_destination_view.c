@@ -14,7 +14,7 @@ typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
  GtkWidget *new_folder,*places_combo,*pin_place,*unpin_place;
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
- GPtrArray *places;
+ GPtrArray *places,*recents;
  gboolean running,loading_roots,loading_places,folder_valid,auto_pin_created;
  void (*on_added)(gpointer);
  gpointer added_data;
@@ -39,6 +39,7 @@ static void free_state(gpointer data){
  g_free(s->root);g_free(s->relative);g_free(s->magnet);
  g_free(s->pending_folder);
  if(s->places)g_ptr_array_unref(s->places);
+ if(s->recents)g_ptr_array_unref(s->recents);
  g_free(s);
 }
 static void clear_folder_buttons(Picker *s){
@@ -102,6 +103,7 @@ static gboolean safe_relative(const char *value){
 /* Saved places are bookmarks scoped to this client's approved root IDs and
  * relative folders, never raw host paths. Every use re-runs owner browse. */
 #define MAX_SAVED_PLACES 24
+#define MAX_RECENT_PLACES 8
 static gboolean valid_bookmark_host(const gchar *host){
  if(!host || !*host || strlen(host)>253 || host[0]=='-')return FALSE;
  for(const gchar *p=host;*p;p++)
@@ -129,14 +131,18 @@ static void refresh_place_choices(Picker *s){
  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->places_combo));
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),"",
                            "SAVED LOCATIONS");
- for(guint i=0;i<s->places->len;i++){
-   SavedPlace *p=g_ptr_array_index(s->places,i);
-   if(!same_server(s,p))continue;
-   gchar *label=g_strdup_printf("%s / %s",p->root,
-                                *p->relative?p->relative:"(root)");
-   gchar *id=g_strdup_printf("%u",i);
-   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),id,label);
-   g_free(id);g_free(label);
+ for(guint kind=0;kind<2;kind++){
+   GPtrArray *items=kind==0?s->places:s->recents;
+   for(guint i=0;i<items->len;i++){
+     SavedPlace *p=g_ptr_array_index(items,i);
+     if(!same_server(s,p))continue;
+     gchar *label=g_strdup_printf("%s  %s / %s",
+          kind==0?"★ Favorite":"↺ Recent",p->root,
+          *p->relative?p->relative:"(root)");
+     gchar *id=g_strdup_printf("%c%u",kind==0?'f':'r',i);
+     gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),id,label);
+     g_free(id);g_free(label);
+   }
  }
  gtk_combo_box_set_active(GTK_COMBO_BOX(s->places_combo),0);
  s->loading_places=FALSE;
@@ -147,14 +153,17 @@ static gboolean store_places(Picker *s){
  gboolean ok=FALSE;
  if(g_mkdir_with_parents(directory,0700)==0){
    GKeyFile *data=g_key_file_new();
-   for(guint i=0;i<s->places->len;i++){
-     SavedPlace *p=g_ptr_array_index(s->places,i);
-     gchar *group=g_strdup_printf("place%u",i);
-     g_key_file_set_string(data,group,"host",p->host);
-     g_key_file_set_string(data,group,"user",p->user);
-     g_key_file_set_string(data,group,"root",p->root);
-     g_key_file_set_string(data,group,"relative",p->relative);
-     g_free(group);
+   for(guint kind=0;kind<2;kind++){
+     GPtrArray *items=kind==0?s->places:s->recents;
+     for(guint i=0;i<items->len;i++){
+       SavedPlace *p=g_ptr_array_index(items,i);
+       gchar *group=g_strdup_printf("%s%u",kind==0?"place":"recent",i);
+       g_key_file_set_string(data,group,"host",p->host);
+       g_key_file_set_string(data,group,"user",p->user);
+       g_key_file_set_string(data,group,"root",p->root);
+       g_key_file_set_string(data,group,"relative",p->relative);
+       g_free(group);
+     }
    }
    gsize size=0;
    gchar *raw=g_key_file_to_data(data,&size,NULL);
@@ -171,20 +180,24 @@ static void load_places(Picker *s){
  if(g_file_get_contents(file,&raw,&size,NULL) && size<=32768){
    GKeyFile *data=g_key_file_new();
    if(g_key_file_load_from_data(data,raw,size,G_KEY_FILE_NONE,NULL)){
-     for(guint i=0;i<MAX_SAVED_PLACES;i++){
-       gchar *group=g_strdup_printf("place%u",i);
-       gchar *host=g_key_file_get_string(data,group,"host",NULL);
-       gchar *user=g_key_file_get_string(data,group,"user",NULL);
-       gchar *root=g_key_file_get_string(data,group,"root",NULL);
-       gchar *relative=g_key_file_get_string(data,group,"relative",NULL);
-       if(valid_bookmark_host(host) && valid_bookmark_user(user) &&
-          safe_root(root) && safe_relative(relative)){
-         SavedPlace *p=g_new0(SavedPlace,1);
-         p->host=g_strdup(host);p->user=g_strdup(user);
-         p->root=g_strdup(root);p->relative=g_strdup(relative);
-         g_ptr_array_add(s->places,p);
+     for(guint kind=0;kind<2;kind++){
+       GPtrArray *items=kind==0?s->places:s->recents;
+       guint bound=kind==0?MAX_SAVED_PLACES:MAX_RECENT_PLACES;
+       for(guint i=0;i<bound;i++){
+         gchar *group=g_strdup_printf("%s%u",kind==0?"place":"recent",i);
+         gchar *host=g_key_file_get_string(data,group,"host",NULL);
+         gchar *user=g_key_file_get_string(data,group,"user",NULL);
+         gchar *root=g_key_file_get_string(data,group,"root",NULL);
+         gchar *relative=g_key_file_get_string(data,group,"relative",NULL);
+         if(valid_bookmark_host(host) && valid_bookmark_user(user) &&
+            safe_root(root) && safe_relative(relative)){
+           SavedPlace *p=g_new0(SavedPlace,1);
+           p->host=g_strdup(host);p->user=g_strdup(user);
+           p->root=g_strdup(root);p->relative=g_strdup(relative);
+           g_ptr_array_add(items,p);
+         }
+         g_free(host);g_free(user);g_free(root);g_free(relative);g_free(group);
        }
-       g_free(host);g_free(user);g_free(root);g_free(relative);g_free(group);
      }
    }
    g_key_file_unref(data);

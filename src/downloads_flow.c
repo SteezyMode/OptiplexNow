@@ -11,6 +11,7 @@ static GtkWidget *queue_label;
 static GtkWidget *queue_view;
 static GtkWidget *search_view;
 static GtkWidget *destination_view;
+static GtkWidget *search_workspace,*search_back_button;
 static GtkWidget *downloads_scroll,*downloads_content;
 static gboolean picker_scroll_pending;
 static GtkWidget *downloads_subtabs;
@@ -570,13 +571,15 @@ static void on_transfer_action(const char *operation,const char *torrent_hash,
  }
  g_free(helper);g_free(directory);g_free(queue_helper);
 }
-/* Reveal the picker after GTK allocates it in the scrolling Downloads page. */
+/* Navigate the outer scroll to the active work area, not the global toolbar.
+ * Selecting a torrent brings the dedicated folder step into view. */
 static gboolean reveal_destination(gpointer data){
  GtkWidget *picker=GTK_WIDGET(data);
+ GtkWidget *area=search_workspace?search_workspace:picker;
  if(!downloads_scroll || !downloads_content ||
-    !gtk_widget_get_mapped(picker))return G_SOURCE_REMOVE;
+    !gtk_widget_get_mapped(area))return G_SOURCE_REMOVE;
  gint x=0,y=0;
- if(!gtk_widget_translate_coordinates(picker,downloads_content,0,0,&x,&y))
+ if(!gtk_widget_translate_coordinates(area,downloads_content,0,0,&x,&y))
    return G_SOURCE_REMOVE;
  GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
                        GTK_SCROLLED_WINDOW(downloads_scroll));
@@ -595,17 +598,29 @@ static void destination_allocated(GtkWidget *picker,GtkAllocation *allocated,
  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
                  g_object_ref(picker),g_object_unref);
 }
+/* Standard in-place drill-down: Results and Destination each own the
+ * full-height work area, rather than competing for projector space. */
+static void on_search_back(GtkButton *button,gpointer unused){
+ (void)button;(void)unused;
+ if(!search_workspace)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
+ if(search_view)
+   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
+                   g_object_ref(search_view),g_object_unref);
+}
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
- if(destination_view){
-   picker_scroll_pending=TRUE;
-   now_downloads_destination_view_select(destination_view,magnet);
-   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
-                   g_object_ref(destination_view),g_object_unref);
- }
+ if(!destination_view || !search_workspace)return;
+ if(!now_downloads_destination_view_select(destination_view,magnet))return;
+ gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination");
+ picker_scroll_pending=TRUE;
+ g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
+                 g_object_ref(destination_view),g_object_unref);
 }
 static void on_download_submitted(gpointer unused){
  (void)unused;
+ if(search_workspace)
+   gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
  if(last_host && last_user)
    now_downloads_refresh(last_host,last_user);
 }
@@ -740,12 +755,33 @@ GtkWidget *now_downloads_page(void){
  gtk_box_pack_start(GTK_BOX(transfers),queue_view,TRUE,TRUE,0);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers");
  GtkWidget *search=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ search_workspace=gtk_stack_new();
+ gtk_stack_set_hhomogeneous(GTK_STACK(search_workspace),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(search_workspace),FALSE);
+ gtk_stack_set_transition_type(GTK_STACK(search_workspace),
+                               GTK_STACK_TRANSITION_TYPE_NONE);
+ gtk_box_pack_start(GTK_BOX(search),search_workspace,TRUE,TRUE,0);
  search_view=now_downloads_search_view_new();
- gtk_box_pack_start(GTK_BOX(search),search_view,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(search_workspace),search_view,"results");
+ GtkWidget *folder_page=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ GtkWidget *folder_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(folder_page),folder_header,FALSE,FALSE,0);
+ search_back_button=gtk_button_new_with_label("BACK TO RESULTS");
+ gtk_style_context_add_class(gtk_widget_get_style_context(search_back_button),
+                             "now-action");
+ gtk_widget_set_tooltip_text(search_back_button,
+   "Return to the last search without losing the results");
+ g_signal_connect(search_back_button,"clicked",G_CALLBACK(on_search_back),NULL);
+ gtk_box_pack_start(GTK_BOX(folder_header),search_back_button,FALSE,FALSE,0);
+ GtkWidget *folder_heading=gtk_label_new("CHOOSE DOWNLOAD LOCATION");
+ gtk_label_set_ellipsize(GTK_LABEL(folder_heading),PANGO_ELLIPSIZE_END);
+ gtk_label_set_xalign(GTK_LABEL(folder_heading),0);
+ gtk_box_pack_start(GTK_BOX(folder_header),folder_heading,TRUE,TRUE,0);
  destination_view=now_downloads_destination_view_new();
  g_signal_connect(destination_view,"size-allocate",
                   G_CALLBACK(destination_allocated),NULL);
- gtk_box_pack_start(GTK_BOX(search),destination_view,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(folder_page),destination_view,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(search_workspace),folder_page,"destination");
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);
  now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
@@ -753,6 +789,7 @@ GtkWidget *now_downloads_page(void){
   * page before selecting the nested queue and transfers views; otherwise the
   * first visit can show an empty placeholder until an external resize. */
  gtk_widget_show_all(root);
+ gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
  gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
  update_download_tab_buttons();

@@ -13,11 +13,13 @@ class DestinationViewTests(unittest.TestCase):
             text=True).split()
         with tempfile.TemporaryDirectory() as temp:
             exe=str(Path(temp)/"picker-test")
-            subprocess.run(["cc","-std=gnu11","-Wall","-Wextra",
+            compile_result=subprocess.run(["cc","-std=gnu11","-Wall","-Wextra",
                  "-Werror=incompatible-pointer-types",
                  "-Werror=implicit-function-declaration","-Isrc",
                  "tests/test_downloads_destination_view.c",
-                 "-o",exe,*flags],cwd=ROOT,check=True,capture_output=True)
+                 "-o",exe,*flags],cwd=ROOT,check=False,capture_output=True,text=True)
+            self.assertEqual(compile_result.returncode,0,
+                             compile_result.stdout+"\\n"+compile_result.stderr)
             result=subprocess.run(["xvfb-run","-a","-s",
                                    "-screen 0 1920x1080x24",exe],cwd=ROOT,
                                   capture_output=True,text=True,

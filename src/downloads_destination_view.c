@@ -594,8 +594,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
  s->new_folder=gtk_button_new_with_label("+ NEW FOLDER");
- gtk_style_context_add_class(gtk_widget_get_style_context(s->new_folder),
-                             "now-action");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->new_folder),"now-action");
  gtk_widget_set_tooltip_text(s->new_folder,
    "Create a Games, Books or other folder within the approved download drive");
  gtk_box_pack_start(GTK_BOX(bar),s->new_folder,FALSE,FALSE,0);

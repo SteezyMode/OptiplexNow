@@ -210,6 +210,11 @@ static gboolean remember_current_place(Picker *s){
  refresh_place_choices(s);
  return store_places(s);
 }
+static gboolean has_places_for_host(Picker *s){
+ for(guint i=0;i<s->places->len;i++)
+   if(same_server(s,g_ptr_array_index(s->places,i)))return TRUE;
+ return FALSE;
+}
 static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->add,!s->running && s->folder_valid &&
                           s->magnet && s->root);
@@ -217,7 +222,7 @@ static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->roots,!s->running);
  gtk_widget_set_sensitive(s->new_folder,!s->running && s->folder_valid);
  gtk_widget_set_sensitive(s->pin_place,!s->running && s->folder_valid);
- gtk_widget_set_sensitive(s->places_combo,!s->running && s->places->len>0);
+ gtk_widget_set_sensitive(s->places_combo,!s->running && has_places_for_host(s));
  gtk_widget_set_sensitive(s->unpin_place,!s->running && 
    gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo))>0);
 }
@@ -236,9 +241,14 @@ static void on_remove_place(GtkButton *unused,gpointer data){
  (void)unused;
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running)return;
- gint selected=gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo));
- if(selected<=0 || selected>(gint)s->places->len)return;
- g_ptr_array_remove_index(s->places,(guint)selected-1);
+ const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->places_combo));
+ if(!id || !*id)return;
+ gchar *end=NULL;
+ guint64 selected=g_ascii_strtoull(id,&end,10);
+ if(!end || *end || selected>=s->places->len)return;
+ SavedPlace *place=g_ptr_array_index(s->places,(guint)selected);
+ if(!same_server(s,place))return;
+ g_ptr_array_remove_index(s->places,(guint)selected);
  refresh_place_choices(s);
  if(store_places(s))
    gtk_label_set_text(GTK_LABEL(s->status),"Saved location removed.");
@@ -249,12 +259,14 @@ static void on_remove_place(GtkButton *unused,gpointer data){
 static void on_place_selected(GtkComboBox *combo,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->loading_places || s->running)return;
- gint selected=gtk_combo_box_get_active(combo);
- if(selected<=0 || selected>(gint)s->places->len){
-   button_states(s);return;
- }
- SavedPlace *place=g_ptr_array_index(s->places,(guint)selected-1);
- if(!safe_root(place->root) || !safe_relative(place->relative))return;
+ const gchar *id=gtk_combo_box_get_active_id(combo);
+ if(!id || !*id){button_states(s);return;}
+ gchar *end=NULL;
+ guint64 selected=g_ascii_strtoull(id,&end,10);
+ if(!end || *end || selected>=s->places->len)return;
+ SavedPlace *place=g_ptr_array_index(s->places,(guint)selected);
+ if(!same_server(s,place) || !safe_root(place->root) ||
+    !safe_relative(place->relative))return;
  s->loading_roots=TRUE;
  gboolean available=gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),place->root);
  s->loading_roots=FALSE;
@@ -620,6 +632,7 @@ void now_downloads_destination_view_configure(GtkWidget *view,const char *host,
  g_free(s->host);s->host=g_strdup(host);
  g_free(s->user);s->user=g_strdup(user);
  g_free(s->helper);s->helper=g_strdup(helper);
+ refresh_place_choices(s);
  button_states(s);
 }
 gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magnet){

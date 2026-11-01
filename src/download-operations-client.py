@@ -63,7 +63,7 @@ def present(action,data):
         if (data.get("service")!="qbittorrent" or
                 not isinstance(hash_value,str) or
                 not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",hash_value) or
-                not isinstance(entries,list) or len(entries)>120 or
+                not isinstance(entries,list) or len(entries)>240 or
                 type(truncated) is not bool):
             raise ValueError("Invalid file listing")
         lines=[f"FILES\t{hash_value.lower()}\t{int(truncated)}\t{len(entries)}"]

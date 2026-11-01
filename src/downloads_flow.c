@@ -497,7 +497,7 @@ static void files_finished(GObject *source,GAsyncResult *res,gpointer data){
                "transfers")){
    if(ok){
      gsize len=strlen(out);
-     if(len && out[len-1]=='\\n')out[len-1]=0;
+     if(len && out[len-1]=='\n')out[len-1]=0;
      ok=now_downloads_queue_view_files_dialog(queue_view,out,
                                                 job->torrent_hash,job->name);
    }

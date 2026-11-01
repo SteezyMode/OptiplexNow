@@ -67,6 +67,7 @@ NowSettingsApplyResult now_settings_apply(
         copy_value(values[16], draft->web_gaming_url);
 
     now_ui_state_set_start_page(draft->startup_page);
+    now_ui_state_set_gpu_power_enabled(draft->gpu_power_enabled);
     now_ui_state_save();
 
     return invalid_web_url ? NOW_SETTINGS_APPLY_INVALID_WEB_URL :

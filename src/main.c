@@ -560,7 +560,7 @@ static void setup_tailscale(void)
     now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160]; NowHostJobTarget target; char specs[7][160]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],gpu_cap[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160]; NowHostJobTarget target; int gpu_power_opt_in; char specs[7][160]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -650,7 +650,24 @@ static gboolean finish_on_main(void *arg) {
    gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),r->success==1?"online":r->success==2?"pair":"offline");
    gtk_label_set_text(GTK_LABEL(status_detail),r->success==1?"":r->message);
    if(metric_cpu){char val[110];snprintf(val,sizeof val,"CPU   %s  %s",*r->cpu_load?r->cpu_load:"--",*r->cpu?r->cpu:"");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
-   if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
+   if(metric_gpu){
+     char val[110];
+     snprintf(val,sizeof val,"GPU   %s  %s",
+              *r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"");
+     if(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled() && *r->gpu_cap){
+       /* The cap is secondary metadata, not instantaneous wattage.
+        * Escape host-supplied strings before applying Pango markup. */
+       gchar *base=g_markup_escape_text(val,-1);
+       gchar *cap=g_markup_escape_text(r->gpu_cap,-1);
+       gchar *markup=g_strdup_printf(
+         "%s<span size='smaller' foreground='#b1b5ad' rise='700'>  ·  CAP %s</span>",
+         base,cap);
+       gtk_label_set_markup(GTK_LABEL(metric_gpu),markup);
+       g_free(markup);g_free(cap);g_free(base);
+     }else{
+       gtk_label_set_text(GTK_LABEL(metric_gpu),val);
+     }
+   }
    if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
    if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
    if(metric_network){gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  connected":"TAILSCALE  disconnected");
@@ -749,6 +766,8 @@ static void *worker(void*arg){
       "printf 'RAM_USED='; awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if(t>0)printf \"%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; "
       "printf 'GPU_LOAD='; nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | awk 'NF {print $1\"%\"}'; "
       "printf 'VRAM_USED='; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | awk -F, 'NF>=2 {printf \"%.1f / %.1f GiB\\n\",$1/1024,$2/1024}'; "
+       "printf 'GPU_CAP='; if [ \"$NOW_GPU_POWER\" = 1 ] && [ -S /run/lactd.sock ] && python3 -c 'import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(0.4); s.connect(\"/run/lactd.sock\"); s.close()' 2>/dev/null; then nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader,nounits 2>/dev/null | head -1 | "
+       "awk -F, 'NF>=2 {a=$1+0;b=$2+0;if(a>0 && b>=a)printf \"%.0f/%.0f W\",a,b}'; fi; printf '\\n'; "
       "printf 'VPN_STATUS='; if command -v docker >/dev/null 2>&1; then "
       "vpn_id=$(docker ps -a --format '{{.ID}}|{{.Image}}' 2>/dev/null | awk -F'|' '$2 ~ /(^|\\/)gluetun(:|@|$)/ {print $1; exit}'); "
       "if [ -n \"$vpn_id\" ]; then docker inspect \"$vpn_id\" --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' 2>/dev/null; else echo 'missing|no-healthcheck'; fi | "
@@ -764,7 +783,13 @@ static void *worker(void*arg){
       "| awk 'NR>1 && index($1,\"/dev/\")==1 && $7 !~ \"^/(boot|efi|snap)(/|$)\" {print \"DRIVE=\" $7 \"|\" $3 \"|\" $5 \"|\" $6}' ; "
       "printf 'DRIVES_END\n'";
      char stats[8192]={0};
-     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,cmd,NULL};
+     /* Disabled clients never probe LACT; original telemetry stays intact. */
+     char remote_cmd[8192];
+     if(snprintf(remote_cmd,sizeof remote_cmd,"NOW_GPU_POWER=%d; %s",
+                 r->gpu_power_opt_in,cmd)>=(int)sizeof remote_cmd){
+       r->success=0;strcpy(r->message,"SERVER QUERY TOO LARGE");goto done;
+     }
+     char *argv[]={"ssh","-o","BatchMode=yes","-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=4","-o","ConnectionAttempts=1","-l",r->target.user,r->target.host,remote_cmd,NULL};
      int code=now_run(argv,stats,sizeof stats,9);
      if(code==0&&strstr(stats,"READY")){
        r->success=1;strcpy(r->message,"SERVER REACHABLE");
@@ -773,6 +798,7 @@ static void *worker(void*arg){
        now_host_get_metric(r->gpu,sizeof r->gpu,stats,"GPU=");
        now_host_get_metric(r->cpu_load,sizeof r->cpu_load,stats,"CPU_LOAD=");
        now_host_get_metric(r->gpu_load,sizeof r->gpu_load,stats,"GPU_LOAD=");
+        now_host_get_metric(r->gpu_cap,sizeof r->gpu_cap,stats,"GPU_CAP=");
        now_host_get_metric(r->ram_used,sizeof r->ram_used,stats,"RAM_USED=");
        now_host_get_metric(r->vram_used,sizeof r->vram_used,stats,"VRAM_USED=");
        now_host_get_metric(r->vpn_state,sizeof r->vpn_state,stats,"VPN_STATUS=");
@@ -863,6 +889,7 @@ static void begin_job(int type) {
    else if(type==8)wolf_inflight=0;else power_inflight=0;
    return;
  }
+ if(type==0)r->gpu_power_opt_in=now_ui_state_gpu_power_enabled();
  if(type==8)safe_copy(r->message,sizeof r->message,*wolf_probe_host?wolf_probe_host:cfg[0]);
  pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
 }
@@ -2359,7 +2386,41 @@ static void settings_save(GtkWidget *widget, gpointer data)
  refresh();
  settings_discard(NULL,NULL);
 }
-static void on_settings(void*w,void*p){
+static void on_gpu_power_settings(GtkWidget *widget, gpointer data){
+  (void)widget;(void)data;
+  if(!now_valid_host(cfg[0])||!now_valid_user(cfg[1])){
+    say("SET A VALID SERVER ADDRESS AND SSH USER IN SETTINGS");return;
+  }
+  const char *helper="/usr/lib/optiplex-now/gpu-power-ui.py";
+  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+    say("GPU CONTROLS NOT INSTALLED. UPDATE YOUR NOW CLIENT.");return;
+  }
+  gchar *args[]={"/usr/bin/python3",(gchar *)helper,cfg[0],cfg[1],NULL};
+  GError *error=NULL;
+  if(!g_spawn_async(NULL,args,NULL,G_SPAWN_DEFAULT,NULL,NULL,NULL,&error)){
+    say("COULD NOT OPEN GPU CONTROLS");
+    g_clear_error(&error);
+  }
+ }
+ static gboolean on_dashboard_gpu_pressed(GtkWidget *widget, GdkEventButton *event,
+                                         gpointer unused){
+  (void)widget;(void)unused;
+  if(!event || event->type!=GDK_BUTTON_PRESS || event->button!=GDK_BUTTON_PRIMARY)
+    return FALSE;
+  if(now_ui_state_gpu_power_enabled()){
+    on_gpu_power_settings(NULL,NULL);
+  }else{
+    /* Fresh clients land on the opt-in page; no LACT error or host action. */
+    on_settings(NULL,NULL);
+    if(settings_view){
+      GtkWidget *stack=g_object_get_data(G_OBJECT(settings_view),"now-settings-stack");
+      if(GTK_IS_STACK(stack))
+        gtk_stack_set_visible_child_name(GTK_STACK(stack),"gpu");
+    }
+  }
+  return TRUE;
+ }
+ static void on_settings(void*w,void*p){
  (void)w;(void)p;
  if(!main_pages)return;
  if(settings_view){
@@ -2369,6 +2430,7 @@ static void on_settings(void*w,void*p){
  }
  const NowSettingsCallbacks actions={
   .on_system_info=G_CALLBACK(on_system_info),
+  .on_gpu_power=G_CALLBACK(on_gpu_power_settings),
   .on_wizard=G_CALLBACK(on_wizard),
   .on_server_readiness=G_CALLBACK(on_server_readiness),
   .on_tail=G_CALLBACK(on_tail),
@@ -3044,7 +3106,16 @@ int main(int argc,char**argv) {
  GtkWidget*rule=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);gtk_widget_set_name(rule,"rule");gtk_widget_set_size_request(rule,-1,1);add(body,rule,0);
  GtkWidget*metrics=gtk_grid_new();gtk_grid_set_column_homogeneous(GTK_GRID(metrics),1);gtk_grid_set_column_spacing(GTK_GRID(metrics),8);add(body,metrics,0);
  metric_cpu=label("CPU   --","metric");metric_gpu=label("GPU   --","metric");
- gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);
+ /* Transparent hit target: preserve the exact label styling and geometry.
+  * Only the primary click navigates; the label remains the live readout. */
+ GtkWidget *gpu_hitbox=gtk_event_box_new();
+ gtk_event_box_set_visible_window(GTK_EVENT_BOX(gpu_hitbox),FALSE);
+ gtk_widget_add_events(gpu_hitbox,GDK_BUTTON_PRESS_MASK);
+ gtk_container_add(GTK_CONTAINER(gpu_hitbox),metric_gpu);
+ g_signal_connect(gpu_hitbox,"button-press-event",
+                  G_CALLBACK(on_dashboard_gpu_pressed),NULL);
+ gtk_grid_attach(GTK_GRID(metrics),metric_cpu,0,0,1,1);
+ gtk_grid_attach(GTK_GRID(metrics),gpu_hitbox,1,0,1,1);
   metric_ram=label("RAM   --","metric");metric_vram=label("VRAM   --","metric");
   gtk_grid_attach(GTK_GRID(metrics),metric_ram,0,1,1,1);gtk_grid_attach(GTK_GRID(metrics),metric_vram,1,1,1,1);
  GtkWidget*diskbox=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);gtk_widget_set_name(diskbox,"drivemetric");

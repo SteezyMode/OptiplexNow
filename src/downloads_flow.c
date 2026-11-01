@@ -621,14 +621,11 @@ static void on_destination_cancel(gpointer unused){
 }
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
- if(!destination_view || !search_workspace)return;
- if(!now_downloads_destination_view_select(destination_view,magnet))return;
- gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination");
- gtk_widget_queue_resize(search_workspace);
- gtk_widget_queue_draw(search_workspace);
- picker_scroll_pending=TRUE;
- g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
-                 g_object_ref(destination_view),g_object_unref);
+ if(!destination_view)return;
+ /* Transmission-style native file chooser opens as a system dialog.
+  * Keep search results in place rather than navigating to a second
+  * proprietary folder-browser page. Cancel simply closes the dialog. */
+ now_downloads_destination_view_select(destination_view,magnet);
 }
 static void on_download_submitted(gpointer unused){
  (void)unused;

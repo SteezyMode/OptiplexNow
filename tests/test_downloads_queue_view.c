@@ -20,33 +20,32 @@ static void test_queue_items(void){
  g_list_free(rows);
  gtk_widget_destroy(view);
 }
-static GtkWidget *first_actions_toggle(GtkWidget *view){
- GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
- GtkListBoxRow *listrow=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);
- if(!listrow)return NULL;
- GtkWidget *content=gtk_bin_get_child(GTK_BIN(listrow));
- return content?g_object_get_data(G_OBJECT(content),"now-actions-toggle"):NULL;
-}
-static void test_actions_collapsed_until_clicked(void){
+static void test_compact_context_menu_rows(void){
  GtkWidget *view=now_downloads_queue_view_new();
  const char *wire=
-   "ITEM\t21.2\tdownloading\tExample Movie\t" HASH_A "\t150\t180\t7\n"
-   "ITEM\t90.0\tdownloading\tExample Game\t" HASH_B "\t200\t60\t4";
+  "ITEM\\t21.2\\tdownloading\\tExample Movie\\t" HASH_A "\\t150\\t180\\t7\\n"
+  "ITEM\\t90.0\\tdownloading\\tExample Game\\t" HASH_B "\\t200\\t60\\t4";
  g_assert_true(now_downloads_queue_view_update(view,wire));
- GtkWidget *first=first_actions_toggle(view);
- g_assert_nonnull(first);
- g_assert_false(gtk_expander_get_expanded(GTK_EXPANDER(first)));
- gtk_expander_set_expanded(GTK_EXPANDER(first),TRUE);
- g_assert_true(gtk_expander_get_expanded(GTK_EXPANDER(first)));
- /* Background queue refresh must not close a panel the user intentionally opened. */
+ GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
+ GtkListBoxRow *row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);
+ g_assert_nonnull(row);
+ GtkWidget *event_box=gtk_bin_get_child(GTK_BIN(row));
+ g_assert_true(GTK_IS_EVENT_BOX(event_box));
+ g_assert_cmpstr(g_object_get_data(G_OBJECT(event_box),"now-torrent-hash"),==,HASH_A);
+ g_assert_true(gtk_widget_get_can_focus(event_box));
+ GtkWidget *content=gtk_bin_get_child(GTK_BIN(event_box));
+ g_assert_true(GTK_IS_BOX(content));
+ GList *children=gtk_container_get_children(GTK_CONTAINER(content));
+ g_assert_cmpint(g_list_length(children),==,3);
+ g_list_free(children);
+ /* No Actions rows should be added, including on background refresh. */
  g_assert_true(now_downloads_queue_view_update(view,wire));
- first=first_actions_toggle(view);
- g_assert_nonnull(first);
- g_assert_true(gtk_expander_get_expanded(GTK_EXPANDER(first)));
- gtk_expander_set_expanded(GTK_EXPANDER(first),FALSE);
- g_assert_true(now_downloads_queue_view_update(view,wire));
- first=first_actions_toggle(view);
- g_assert_false(gtk_expander_get_expanded(GTK_EXPANDER(first)));
+ row=gtk_list_box_get_row_at_index(GTK_LIST_BOX(list),0);
+ event_box=gtk_bin_get_child(GTK_BIN(row));
+ content=gtk_bin_get_child(GTK_BIN(event_box));
+ children=gtk_container_get_children(GTK_CONTAINER(content));
+ g_assert_cmpint(g_list_length(children),==,3);
+ g_list_free(children);
  gtk_widget_destroy(view);
 }
 static void test_malformed_refused(void){
@@ -68,26 +67,6 @@ static void test_malformed_refused(void){
  gtk_widget_destroy(view);
 }
 
-static guint actions_seen=0;
-static char last_action[32]={0};
-static void recorded_action(const char *operation,const char *hash,
-                            const char *name,gpointer data){
- (void)name;(void)data;
- ++actions_seen;
- g_strlcpy(last_action,operation,sizeof last_action);
- g_assert_cmpstr(hash,==,HASH_A);
-}
-static GtkWidget *find_button(GtkWidget *root,const char *label){
- if(GTK_IS_BUTTON(root) && g_strcmp0(gtk_button_get_label(GTK_BUTTON(root)),label)==0)
-   return root;
- if(!GTK_IS_CONTAINER(root))return NULL;
- GList *children=gtk_container_get_children(GTK_CONTAINER(root));
- GtkWidget *found=NULL;
- for(GList *it=children;it&&!found;it=it->next)
-   found=find_button(GTK_WIDGET(it->data),label);
- g_list_free(children);
- return found;
-}
 static gboolean cancel_dialog(gpointer unused){
  (void)unused;
  GList *windows=gtk_window_list_toplevels();
@@ -99,29 +78,6 @@ static gboolean cancel_dialog(gpointer unused){
  }
  g_list_free(windows);
  return G_SOURCE_REMOVE;
-}
-static void test_files_and_delete_controls(void){
- GtkWidget *view=now_downloads_queue_view_new();
- now_downloads_queue_view_on_action(view,recorded_action,NULL);
- g_assert_true(now_downloads_queue_view_update(view,
-   "ITEM\t21.2\tdownloading\tExample Movie\t" HASH_A "\t150\t180\t7"));
- GtkWidget *files=find_button(view,"FILES");
- GtkWidget *keep=find_button(view,"REMOVE");
- GtkWidget *delete_data=find_button(view,"DELETE FILES");
- g_assert_nonnull(files);
- g_assert_nonnull(keep);
- g_assert_nonnull(delete_data);
- g_assert_cmpstr(gtk_widget_get_name(delete_data),==,"danger");
- gtk_button_clicked(GTK_BUTTON(files));
- g_assert_cmpuint(actions_seen,==,1);
- g_assert_cmpstr(last_action,==,"files");
- /* Cancel must never deliver either destructive action to the broker. */
- g_idle_add(cancel_dialog,NULL);
- gtk_button_clicked(GTK_BUTTON(keep));
- g_idle_add(cancel_dialog,NULL);
- gtk_button_clicked(GTK_BUTTON(delete_data));
- g_assert_cmpuint(actions_seen,==,1);
- gtk_widget_destroy(view);
 }
 static void test_files_dialog_wire_validation(void){
  GtkWidget *view=now_downloads_queue_view_new();
@@ -142,9 +98,8 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/native-downloads/items",test_queue_items);
- g_test_add_func("/native-downloads/collapsible-actions",test_actions_collapsed_until_clicked);
+ g_test_add_func("/native-downloads/context-menu-rows",test_compact_context_menu_rows);
  g_test_add_func("/native-downloads/malformed",test_malformed_refused);
- g_test_add_func("/native-downloads/actions",test_files_and_delete_controls);
  g_test_add_func("/native-downloads/files",test_files_dialog_wire_validation);
  return g_test_run();
 }

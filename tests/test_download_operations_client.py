@@ -138,7 +138,7 @@ class OwnerOperationsTests(unittest.TestCase):
                 self.assertEqual(observed,[{"version":1,
                     "action":"downloads_mkdir","root":"bigdisk",
                     "relative":"","name":"Games"}])
-                for name in ("/etc","../Games","Games/Other","bad\\nline",""):
+                for name in ("/etc","../Games","Games/Other","bad\nline",""):
                     with self.subTest(name=name),self.assertRaises(ValueError):
                         mod.fetch("100.121.156.34","optiplex",
                            "mkdir","bigdisk","",name,

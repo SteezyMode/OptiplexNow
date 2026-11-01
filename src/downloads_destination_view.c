@@ -7,7 +7,7 @@
 #include <string.h>
 
 typedef struct {
- GtkWidget *view,*roots,*folders,*path,*status,*up,*add;
+ GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
  gchar *host,*user,*helper,*root,*relative,*magnet;
  gboolean running,loading_roots,folder_valid;
  void (*on_added)(gpointer);
@@ -32,6 +32,32 @@ static void clear_folder_buttons(Picker *s){
  for(GList *at=children;at;at=at->next)
    gtk_widget_destroy(GTK_WIDGET(at->data));
  g_list_free(children);
+}
+/* Filter only already-authorized folder names; nothing typed here is sent
+ * to the server, and a match is still revalidated on the host when opened. */
+static void filter_folder_buttons(Picker *s){
+ if(!s || !s->filter || !s->folders)return;
+ const char *query=gtk_entry_get_text(GTK_ENTRY(s->filter));
+ gchar *needle=g_utf8_casefold(query,-1);
+ GList *buttons=gtk_container_get_children(GTK_CONTAINER(s->folders));
+ for(GList *it=buttons;it;it=it->next){
+   GtkWidget *button=GTK_WIDGET(it->data);
+   const char *name=gtk_button_get_label(GTK_BUTTON(button));
+   gchar *folded=g_utf8_casefold(name?name:"",-1);
+   gtk_widget_set_visible(button,!*needle || strstr(folded,needle)!=NULL);
+   g_free(folded);
+ }
+ g_list_free(buttons);g_free(needle);
+}
+static void on_filter_changed(GtkEditable *entry,gpointer data){
+ (void)entry;
+ Picker *s=state(GTK_WIDGET(data));
+ filter_folder_buttons(s);
+ if(s && s->folder_scroll){
+   GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
+                         GTK_SCROLLED_WINDOW(s->folder_scroll));
+   if(adj)gtk_adjustment_set_value(adj,gtk_adjustment_get_lower(adj));
+ }
 }
 static gboolean safe_name(const char *s){
  if(!s || !*s || !g_utf8_validate(s,-1,NULL) ||
@@ -137,7 +163,15 @@ static gboolean read_response(Picker *s,char action,char *wire){
        gtk_box_pack_start(GTK_BOX(s->folders),button,FALSE,FALSE,1);
        g_strfreev(part);
      }
+     /* Every folder change starts with the full directory. A search for
+      * "Horror" in Movies must not silently hide folders inside Horror. */
+     gtk_entry_set_text(GTK_ENTRY(s->filter),"");
      gtk_widget_show_all(s->folders);
+     if(s->folder_scroll){
+       GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
+                             GTK_SCROLLED_WINDOW(s->folder_scroll));
+       if(adj)gtk_adjustment_set_value(adj,gtk_adjustment_get_lower(adj));
+     }
      gchar *title=g_strdup_printf("%s / %s",s->root,s->relative && *s->relative ?
                                     s->relative : "(root)");
      gtk_label_set_text(GTK_LABEL(s->path),title);
@@ -263,17 +297,8 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_label_set_xalign(GTK_LABEL(s->path),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view),s->path,FALSE,FALSE,0);
- GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
-                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_widget_set_size_request(scroll,-1,110);
- s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
- gtk_container_add(GTK_CONTAINER(scroll),s->folders);
- gtk_box_pack_start(GTK_BOX(view),scroll,FALSE,FALSE,0);
- s->status=gtk_label_new("Choose a folder before adding.");
- gtk_label_set_xalign(GTK_LABEL(s->status),0);
- gtk_label_set_ellipsize(GTK_LABEL(s->status),PANGO_ELLIPSIZE_END);
- gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
+ /* The confirm action is ABOVE the long folder list, so it never gets
+  * pushed off the bottom of a 4:3 display by the list's contents. */
  s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
  gtk_widget_set_halign(s->add,GTK_ALIGN_END);
  gtk_widget_set_name(s->add,"downloadconfirm");
@@ -281,6 +306,28 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
  g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
  gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
+ s->status=gtk_label_new("Choose a folder before adding.");
+ gtk_label_set_xalign(GTK_LABEL(s->status),0);
+ gtk_label_set_line_wrap(GTK_LABEL(s->status),TRUE);
+ gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
+ s->filter=gtk_search_entry_new();
+ gtk_entry_set_placeholder_text(GTK_ENTRY(s->filter),
+   "Find a folder in this location (e.g. Horror)");
+ gtk_widget_set_tooltip_text(s->filter,
+   "Filter the visible approved folders only; clear to show them all.");
+ gtk_box_pack_start(GTK_BOX(view),s->filter,FALSE,FALSE,0);
+ g_signal_connect(s->filter,"changed",G_CALLBACK(on_filter_changed),view);
+ s->folder_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->folder_scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_scrolled_window_set_overlay_scrolling(
+   GTK_SCROLLED_WINDOW(s->folder_scroll),FALSE);
+ /* Previously 110px (~3 folders). Give the folder chooser a useful
+  * viewport (~10 folders); the entire native Downloads page also scrolls. */
+ gtk_widget_set_size_request(s->folder_scroll,-1,300);
+ s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
+ gtk_box_pack_start(GTK_BOX(view),s->folder_scroll,FALSE,FALSE,0);
  button_states(s);
  return view;
 }

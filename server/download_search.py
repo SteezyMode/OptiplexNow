@@ -223,6 +223,7 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
     job_id=started["id"]
     received=0
     last=None
+    stopped_empty_polls=0
     deadline=time.monotonic()+150
     try:
         for _ in range(120):
@@ -241,14 +242,27 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
                        "append":received>0}
                 emit(frame)
             received+=len(rows)
-            if last["status"]=="Stopped" or received>=1000:
+            if received>=1000:
                 break
+            if last["status"]=="Stopped":
+                # qBittorrent's results API can return only one short batch
+                # (often 25), even when total reports more. A Stopped job
+                # means plugins are done, NOT that results pagination is done.
+                # Drain additional offsets until total is reached. Allow a
+                # few empty polls for eventually consistent search storage;
+                # bound the retry when the total itself is inaccurate.
+                stopped_empty_polls=0 if rows else stopped_empty_polls+1
+                if received>=last["total"] or stopped_empty_polls>=3:
+                    break
+            else:
+                stopped_empty_polls=0
         if last is None:
             raise SearchError("Search produced no response")
-        if last["status"]=="Running":
-            # Explicit completion for the bounded window. Don't imply every
-            # plugin finished if qBittorrent still reports Running.
-            emit({"status":"Running","total":last["total"],"results":[],
+        if last["status"]=="Running" or received<last["total"]:
+            # Do not mistake a completed search with an incomplete results
+            # page for success; preserve rows already rendered and make the
+            # discrepancy explicit in the client status.
+            emit({"status":last["status"],"total":last["total"],"results":[],
                   "partial":True,"append":received>0})
         return {"status":last["status"],"total":last["total"],
                 "received":received}

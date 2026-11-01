@@ -146,6 +146,28 @@ class OwnerOperationsTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             mod.present("mkdir",{"success":True,"status":"submitted"})
 
+    def test_native_chooser_path_is_forwarded_without_shell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            seen=[]
+            def runner(cmd,**kwargs):
+                self.assertEqual(cmd[0],"ssh")
+                self.assertIn("StrictHostKeyChecking=yes",cmd)
+                seen.append(json.loads(kwargs["input"]))
+                return subprocess.CompletedProcess(cmd,0,
+                    b'{"success":true,"status":"submitted"}',b"")
+            with patch.object(mod,"KEY",key):
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex","addpath",
+                      "/media/BigDisk/Movies/Horror",MAGNET,runner=runner),"SUBMITTED")
+                for path in ("../outside","/etc/../secret","//other/server",
+                             "/media/BigDisk//Horror","/media/Bad\nPlace"):
+                    with self.subTest(path=path),self.assertRaises(ValueError):
+                        mod.fetch("100.121.156.34","optiplex","addpath",
+                                  path,MAGNET,runner=runner)
+            self.assertEqual(seen,[{"version":1,"action":"downloads_add_path",
+                                    "path":"/media/BigDisk/Movies/Horror",
+                                    "magnet":MAGNET}])
+
     def test_add_only_explicit_client_request(self):
         self.assertEqual(self.call("add","bigdisk","Movies/Horror",MAGNET),
                          "SUBMITTED")

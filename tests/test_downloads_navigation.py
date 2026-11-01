@@ -90,7 +90,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("gtk_stack_set_vhomogeneous(GTK_STACK(downloads_subtabs),FALSE)",FLOW)
         self.assertIn("reveal_destination",FLOW)
         self.assertIn("destination_allocated",FLOW)
-        self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,300)",picker)
+        self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,420)",picker)
         self.assertIn("gtk_search_entry_new()",picker)
         self.assertIn("filter_folder_buttons",picker)
         self.assertIn('gtk_button_new_with_label("ADD TO SELECTED FOLDER")',picker)
@@ -100,6 +100,29 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('"remove","remove_delete"',transfers)
         self.assertIn('"FILES"',transfers)
         self.assertIn("DELETE TORRENT AND FILES",transfers)
+
+    def test_projector_search_and_destination_use_full_height_drilldown(self):
+        search_view=(ROOT/"src/downloads_search_view.c").read_text()
+        destination=(ROOT/"src/downloads_destination_view.c").read_text()
+        destination_header=(ROOT/"src/downloads_destination_view.h").read_text()
+        self.assertIn("search_workspace=gtk_stack_new()",FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(search_workspace),search_view,"results")',FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(search_workspace),folder_page,"destination")',FLOW)
+        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination")',FLOW)
+        self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results")',FLOW)
+        self.assertIn('gtk_button_new_with_label("BACK TO RESULTS")',FLOW)
+        self.assertIn('G_CALLBACK(on_search_back)',FLOW)
+        self.assertIn('if(!now_downloads_destination_view_select(destination_view,magnet))return;',FLOW)
+        self.assertIn("gtk_widget_set_size_request(s->results,-1,420)",search_view)
+        self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,420)",destination)
+        self.assertIn("gtk_widget_set_vexpand(s->folder_scroll,TRUE)",destination)
+        self.assertIn("gboolean now_downloads_destination_view_select",destination_header)
+        self.assertNotIn('gtk_box_pack_start(GTK_BOX(search),destination_view',FLOW)
+        # Switching between two views must not run a torrent mutation.
+        back=FLOW.split("static void on_search_back(",1)[1].split(
+             "static void on_search_result(",1)[0]
+        self.assertNotIn("now_downloads_refresh",back)
+        self.assertNotIn("g_subprocess_newv",back)
 
     def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
         self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)

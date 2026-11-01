@@ -12,7 +12,7 @@ typedef struct {
 } SavedPlace;
 typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
- GtkWidget *new_folder,*places_combo,*pin_place,*unpin_place;
+ GtkWidget *new_folder,*places_combo,*pin_place;
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
  GPtrArray *places,*recents;
  gboolean running,loading_roots,loading_places,folder_valid,auto_pin_created;
@@ -130,7 +130,7 @@ static void refresh_place_choices(Picker *s){
  s->loading_places=TRUE;
  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->places_combo));
  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->places_combo),"",
-                           "SAVED LOCATIONS");
+                           "★ FAVORITES / ↺ RECENT LOCATIONS");
  for(guint kind=0;kind<2;kind++){
    GPtrArray *items=kind==0?s->places:s->recents;
    for(guint i=0;i<items->len;i++){
@@ -289,24 +289,6 @@ static void on_save_place(GtkButton *unused,gpointer data){
    "Unable to change Favorites. Check local permissions or limit.");
  button_states(s);
 }
-static void on_remove_place(GtkButton *unused,gpointer data){
- (void)unused;
- Picker *s=state(GTK_WIDGET(data));
- if(!s || s->running)return;
- const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->places_combo));
- if(!id || id[0]!='f')return;
- gchar *end=NULL;
- guint64 selected=g_ascii_strtoull(id+1,&end,10);
- if(!end || *end || selected>=s->places->len)return;
- SavedPlace *place=g_ptr_array_index(s->places,(guint)selected);
- if(!same_server(s,place))return;
- g_ptr_array_remove_index(s->places,(guint)selected);
- refresh_place_choices(s);
- if(store_places(s))
-   gtk_label_set_text(GTK_LABEL(s->status),"Favorite removed.");
- else gtk_label_set_text(GTK_LABEL(s->status),"Unable to remove Favorite.");
- button_states(s);
-}
 static void on_place_selected(GtkComboBox *combo,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->loading_places || s->running)return;
@@ -437,7 +419,12 @@ static gboolean read_response(Picker *s,char action,char *wire){
      for(guint i=1;lines[i];i++){
        gchar **part=g_strsplit(lines[i],"\t",-1);
        GtkWidget *button=gtk_button_new_with_label(part[1]);
-       gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
+       gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");
+       gtk_widget_set_tooltip_text(button,part[1]);
+       GtkWidget *folder_icon=gtk_image_new_from_icon_name("folder",
+                                                          GTK_ICON_SIZE_MENU);
+       gtk_button_set_image(GTK_BUTTON(button),folder_icon);
+       gtk_button_set_always_show_image(GTK_BUTTON(button),TRUE);
        gtk_widget_set_halign(button,GTK_ALIGN_FILL);
        g_signal_connect(button,"clicked",G_CALLBACK(on_folder_clicked),s->view);
        gtk_box_pack_start(GTK_BOX(s->folders),button,FALSE,FALSE,1);
@@ -457,7 +444,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
      gtk_label_set_text(GTK_LABEL(s->path),title);
      g_free(title);
      gtk_label_set_text(GTK_LABEL(s->status),
-       "Choose a subfolder, or Add to the folder shown.");
+       "Open a folder or choose a Favorite / Recent location, then Add Torrent.");
      s->folder_valid=TRUE;
      if(s->auto_pin_created){
        s->auto_pin_created=FALSE;
@@ -594,7 +581,7 @@ GtkWidget *now_downloads_destination_view_new(void){
   s->places=g_ptr_array_new_with_free_func(free_place);
  s->recents=g_ptr_array_new_with_free_func(free_place);
  g_object_set_data_full(G_OBJECT(view),"now-destination-state",s,free_state);
- GtkWidget *title=gtk_label_new("SAVE SELECTED TORRENT TO");
+ GtkWidget *title=gtk_label_new("CHOOSE WHERE TO SAVE");
  gtk_label_set_xalign(GTK_LABEL(title),0);
  gtk_box_pack_start(GTK_BOX(view),title,FALSE,FALSE,0);
  GtkWidget *bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
@@ -602,11 +589,11 @@ GtkWidget *now_downloads_destination_view_new(void){
  s->roots=gtk_combo_box_text_new();
  gtk_box_pack_start(GTK_BOX(bar),s->roots,TRUE,TRUE,0);
  g_signal_connect(s->roots,"changed",G_CALLBACK(on_root),view);
- s->up=gtk_button_new_with_label("UP");
+ s->up=gtk_button_new_with_label("← UP");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->up),"now-action");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
  gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
- s->new_folder=gtk_button_new_with_label("NEW FOLDER");
+ s->new_folder=gtk_button_new_with_label("+ NEW FOLDER");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->new_folder),
                              "now-action");
  gtk_widget_set_tooltip_text(s->new_folder,
@@ -622,21 +609,16 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_box_pack_start(GTK_BOX(view),places_row,FALSE,FALSE,0);
  s->places_combo=gtk_combo_box_text_new();
  gtk_widget_set_tooltip_text(s->places_combo,
-    "Jump to saved locations, such as Games or Movies/Horror");
+    "Jump to a Favorite or recently used folder; host authorization is checked each time");
  gtk_box_pack_start(GTK_BOX(places_row),s->places_combo,TRUE,TRUE,0);
  g_signal_connect(s->places_combo,"changed",G_CALLBACK(on_place_selected),view);
- s->pin_place=gtk_button_new_with_label("SAVE LOCATION");
+ s->pin_place=gtk_button_new_with_label("☆ Favorite");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->pin_place),"now-action");
  gtk_box_pack_start(GTK_BOX(places_row),s->pin_place,FALSE,FALSE,0);
  g_signal_connect(s->pin_place,"clicked",G_CALLBACK(on_save_place),view);
- s->unpin_place=gtk_button_new_with_label("REMOVE SAVED");
- gtk_style_context_add_class(gtk_widget_get_style_context(s->unpin_place),
-                             "now-action");
- gtk_box_pack_start(GTK_BOX(places_row),s->unpin_place,FALSE,FALSE,0);
- g_signal_connect(s->unpin_place,"clicked",G_CALLBACK(on_remove_place),view);
  /* The confirm action is ABOVE the long folder list, so it never gets
   * pushed off the bottom of a 4:3 display by the list's contents. */
- s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
+ s->add=gtk_button_new_with_label("ADD TORRENT HERE");
  gtk_widget_set_halign(s->add,GTK_ALIGN_END);
  gtk_widget_set_name(s->add,"downloadconfirm");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-action");

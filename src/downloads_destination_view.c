@@ -4,12 +4,18 @@
  */
 #include "downloads_destination_view.h"
 #include <gio/gio.h>
+#include <glib/gstdio.h>
 #include <string.h>
 
 typedef struct {
+ gchar *root,*relative;
+} SavedPlace;
+typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
- gchar *host,*user,*helper,*root,*relative,*magnet;
- gboolean running,loading_roots,folder_valid;
+ GtkWidget *new_folder,*places_combo,*pin_place,*unpin_place;
+ gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
+ GPtrArray *places;
+ gboolean running,loading_roots,loading_places,folder_valid,auto_pin_created;
  void (*on_added)(gpointer);
  gpointer added_data;
 } Picker;
@@ -25,7 +31,10 @@ static Picker *state(GtkWidget *view){
 static void free_state(gpointer data){
  Picker *s=data;
  g_free(s->host);g_free(s->user);g_free(s->helper);
- g_free(s->root);g_free(s->relative);g_free(s->magnet);g_free(s);
+ g_free(s->root);g_free(s->relative);g_free(s->magnet);
+ g_free(s->pending_folder);
+ if(s->places)g_ptr_array_unref(s->places);
+ g_free(s);
 }
 static void clear_folder_buttons(Picker *s){
  GList *children=gtk_container_get_children(GTK_CONTAINER(s->folders));
@@ -90,6 +99,11 @@ static void button_states(Picker *s){
                           s->magnet && s->root);
  gtk_widget_set_sensitive(s->up,!s->running && s->relative && *s->relative);
  gtk_widget_set_sensitive(s->roots,!s->running);
+ gtk_widget_set_sensitive(s->new_folder,!s->running && s->folder_valid);
+ gtk_widget_set_sensitive(s->pin_place,!s->running && s->folder_valid);
+ gtk_widget_set_sensitive(s->places_combo,!s->running && s->places->len>0);
+ gtk_widget_set_sensitive(s->unpin_place,!s->running && 
+   gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo))>0);
 }
 static void start(Picker *s,char action);
 static void on_folder_clicked(GtkButton *button,gpointer data){
@@ -279,6 +293,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_widget_set_no_show_all(view,TRUE);
  Picker *s=g_new0(Picker,1);
  s->view=view;
+ s->places=g_ptr_array_new_with_free_func((GDestroyNotify)g_free);
  g_object_set_data_full(G_OBJECT(view),"now-destination-state",s,free_state);
  GtkWidget *title=gtk_label_new("SAVE SELECTED TORRENT TO");
  gtk_label_set_xalign(GTK_LABEL(title),0);

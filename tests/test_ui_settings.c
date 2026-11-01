@@ -84,6 +84,7 @@ int main(int argc, char **argv)
         g_object_get_data(G_OBJECT(root), "now-settings-form");
     g_assert_nonnull(form);
     g_assert_true(form->root == root);
+    g_assert_false(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(form->gpu_power_toggle)));
     g_assert_cmpstr(gtk_entry_get_text(GTK_ENTRY(form->fields[0])),
                     ==, "198.51.100.8");
     g_assert_cmpstr(gtk_entry_get_text(GTK_ENTRY(form->fields[1])),
@@ -121,9 +122,15 @@ int main(int argc, char **argv)
     g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(pages)),
                     ==, "gpu");
     GtkWidget *gpu_button = button_named(root, "OPEN GPU POWER CONTROLS");
+    g_assert_false(gtk_widget_get_sensitive(gpu_button));
+    gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(form->gpu_power_toggle), TRUE);
+    g_assert_true(gtk_widget_get_sensitive(gpu_button));
     g_assert_nonnull(gpu_button);
     gtk_button_clicked(GTK_BUTTON(gpu_button));
     g_assert_cmpuint(action_calls, ==, 1);
+    NowSettingsDraft gpu_draft = {0};
+    now_settings_collect(form, &gpu_draft);
+    g_assert_cmpint(gpu_draft.gpu_power_enabled, ==, 1);
     GtkWidget *gpu_back = button_named(
         gtk_stack_get_child_by_name(GTK_STACK(pages), "gpu"),
         "‹ BACK TO SETTINGS");

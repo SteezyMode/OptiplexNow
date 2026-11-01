@@ -560,7 +560,7 @@ static void setup_tailscale(void)
     now_tailscale_install_async(tailscale_install_done, NULL);
 }
 
-typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],gpu_cap[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160]; NowHostJobTarget target; char specs[7][160]; } Result;
+typedef struct { int type; int success; int tail; char message[300]; char cpu[40],gpu[40],cpu_load[40],gpu_load[40],gpu_cap[40],ram_used[40],vram_used[40],vpn_state[80],wolf_state[80],wolf_sessions[80],free_space[40]; int drive_count; Drive drives[MAX_DRIVES]; char model[160]; NowHostJobTarget target; int gpu_power_opt_in; char specs[7][160]; } Result;
 static void set_drive_readout(void){
   if(!metric_free)return;
   int n=gtk_combo_box_get_active(GTK_COMBO_BOX(drive_combo));
@@ -650,7 +650,7 @@ static gboolean finish_on_main(void *arg) {
    gtk_style_context_add_class(GTK_STYLE_CONTEXT(sty),r->success==1?"online":r->success==2?"pair":"offline");
    gtk_label_set_text(GTK_LABEL(status_detail),r->success==1?"":r->message);
    if(metric_cpu){char val[110];snprintf(val,sizeof val,"CPU   %s  %s",*r->cpu_load?r->cpu_load:"--",*r->cpu?r->cpu:"");gtk_label_set_text(GTK_LABEL(metric_cpu),val);}
-   if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s%s%s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"",*r->gpu_cap?"  ·  ":"",r->gpu_cap);gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
+   if(metric_gpu){char val[110];snprintf(val,sizeof val,"GPU   %s  %s%s%s",*r->gpu_load?r->gpu_load:"--",*r->gpu?r->gpu:"",(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled() && *r->gpu_cap)?"  ·  ":"",(r->gpu_power_opt_in && now_ui_state_gpu_power_enabled())?r->gpu_cap:"");gtk_label_set_text(GTK_LABEL(metric_gpu),val);}
    if(metric_ram){char val[110];snprintf(val,sizeof val,"RAM   %s",*r->ram_used?r->ram_used:"--");gtk_label_set_text(GTK_LABEL(metric_ram),val);}
    if(metric_vram){char val[110];snprintf(val,sizeof val,"VRAM   %s",*r->vram_used?r->vram_used:"--");gtk_label_set_text(GTK_LABEL(metric_vram),val);}
    if(metric_network){gtk_label_set_text(GTK_LABEL(metric_network),r->tail?"TAILSCALE  connected":"TAILSCALE  disconnected");
@@ -749,8 +749,8 @@ static void *worker(void*arg){
       "printf 'RAM_USED='; awk '/MemTotal:/ {t=$2} /MemAvailable:/ {a=$2} END {if(t>0)printf \"%.1f / %.1f GiB\\n\",(t-a)/1048576,t/1048576}' /proc/meminfo; "
       "printf 'GPU_LOAD='; nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -1 | awk 'NF {print $1\"%\"}'; "
       "printf 'VRAM_USED='; nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader,nounits 2>/dev/null | head -1 | awk -F, 'NF>=2 {printf \"%.1f / %.1f GiB\\n\",$1/1024,$2/1024}'; "
-       "printf 'GPU_CAP='; nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader,nounits 2>/dev/null | head -1 | "
-       "awk -F, 'NF>=2 {a=$1+0;b=$2+0;if(a>0 && b>=a)printf \"%.0f/%.0f W\",a,b}'; printf '\\n'; "
+       "printf 'GPU_CAP='; if [ -S /run/lactd.sock ] && python3 -c 'import socket; s=socket.socket(socket.AF_UNIX); s.settimeout(0.4); s.connect(\"/run/lactd.sock\"); s.close()' 2>/dev/null; then nvidia-smi --query-gpu=power.limit,power.max_limit --format=csv,noheader,nounits 2>/dev/null | head -1 | "
+       "awk -F, 'NF>=2 {a=$1+0;b=$2+0;if(a>0 && b>=a)printf \"%.0f/%.0f W\",a,b}'; fi; printf '\\n'; "
       "printf 'VPN_STATUS='; if command -v docker >/dev/null 2>&1; then "
       "vpn_id=$(docker ps -a --format '{{.ID}}|{{.Image}}' 2>/dev/null | awk -F'|' '$2 ~ /(^|\\/)gluetun(:|@|$)/ {print $1; exit}'); "
       "if [ -n \"$vpn_id\" ]; then docker inspect \"$vpn_id\" --format '{{.State.Status}}|{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' 2>/dev/null; else echo 'missing|no-healthcheck'; fi | "
@@ -866,6 +866,7 @@ static void begin_job(int type) {
    else if(type==8)wolf_inflight=0;else power_inflight=0;
    return;
  }
+ if(type==0)r->gpu_power_opt_in=now_ui_state_gpu_power_enabled();
  if(type==8)safe_copy(r->message,sizeof r->message,*wolf_probe_host?wolf_probe_host:cfg[0]);
  pthread_t t; if(pthread_create(&t,NULL,worker,r)==0)pthread_detach(t);else{free(r);if(type==0)status_inflight=0;else if(type==6)specs_inflight=0;else if(type==8)wolf_inflight=0;else power_inflight=0;}
 }

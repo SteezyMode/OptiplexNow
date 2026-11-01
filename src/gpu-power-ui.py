@@ -215,6 +215,8 @@ def main(argv=None):
     if len(argv) != 2 or not valid_target(*argv):
         return 2
     Gtk.init([])
+    from now_theme import install as install_theme
+    install_theme()
     PowerWindow(*argv)
     Gtk.main()
     return 0

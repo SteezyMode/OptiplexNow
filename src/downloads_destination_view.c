@@ -12,10 +12,10 @@ typedef struct {
 } SavedPlace;
 typedef struct {
  GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
- GtkWidget *new_folder,*places_list,*pin_place,*browser_area,*sidebar;
+ GtkWidget *new_folder,*places_list,*pin_place,*browser_area,*sidebar,*places_toggle;
  gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder;
  GPtrArray *places,*recents;
- gboolean running,loading_roots,folder_valid,auto_pin_created;
+ gboolean running,loading_roots,folder_valid,auto_pin_created,sidebar_compact,sidebar_requested;
  void (*on_added)(gpointer);
  gpointer added_data;
 } Picker;
@@ -586,6 +586,25 @@ static void on_add(GtkButton *unused,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(s && !s->running && s->folder_valid && s->magnet)start(s,'a');
 }
+static void toggle_places(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ s->sidebar_requested=!s->sidebar_requested;
+ gtk_widget_set_visible(s->sidebar,s->sidebar_requested);
+}
+static void adapt_picker_width(GtkWidget *unused,GtkAllocation *size,
+                               gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ gboolean compact=size->width<650;
+ if(s->sidebar_compact==compact)return;
+ s->sidebar_compact=compact;
+ s->sidebar_requested=!compact;
+ gtk_widget_set_visible(s->sidebar,!compact);
+ gtk_widget_set_visible(s->places_toggle,compact);
+}
 GtkWidget *now_downloads_destination_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_widget_set_no_show_all(view,TRUE);
@@ -601,6 +620,7 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_box_pack_start(GTK_BOX(view),title,FALSE,FALSE,4);
  GtkWidget *main_area=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
  gtk_box_pack_start(GTK_BOX(view),main_area,TRUE,TRUE,0);
+ g_signal_connect(main_area,"size-allocate",G_CALLBACK(adapt_picker_width),view);
  s->sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
  gtk_widget_set_size_request(s->sidebar,170,-1);
  gtk_box_pack_start(GTK_BOX(main_area),s->sidebar,FALSE,FALSE,0);
@@ -621,6 +641,11 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_box_pack_start(GTK_BOX(main_area),s->browser_area,TRUE,TRUE,0);
  GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
  gtk_box_pack_start(GTK_BOX(s->browser_area),toolbar,FALSE,FALSE,0);
+ s->places_toggle=gtk_button_new_with_label("Locations");
+ gtk_box_pack_start(GTK_BOX(toolbar),s->places_toggle,FALSE,FALSE,0);
+ g_signal_connect(s->places_toggle,"clicked",G_CALLBACK(toggle_places),view);
+ gtk_widget_set_no_show_all(s->places_toggle,TRUE);
+ gtk_widget_hide(s->places_toggle);
  s->up=gtk_button_new_with_label("Up");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->up),"now-action");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);

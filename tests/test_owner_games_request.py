@@ -62,6 +62,31 @@ class TrustedGamesGateTests(unittest.TestCase):
                 self.call("downloads_add",client="99999999")
             self.assertEqual(add_call.call_count,1)
 
+    def test_native_file_chooser_path_requires_owner_and_exact_schema(self):
+        from unittest.mock import patch
+        magnet="magnet:?xt=urn:btih:"+"f"*40
+        req={"version":1,"action":"downloads_add_path",
+             "path":"/media/BigDisk/Movies/Horror","magnet":magnet}
+        with patch("owner_games_request.add_magnet_host_path",
+                   return_value={"status":"submitted"}) as add:
+            self.assertEqual(handle_owner_games_request(req,
+                verified_client_id="1001",store=self.store,wolf_api=self.api),
+                {"success":True,"status":"submitted"})
+            add.assert_called_once_with("/media/BigDisk/Movies/Horror",magnet)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(req,verified_client_id="99999999",
+                                           store=self.store,wolf_api=self.api)
+            for change in ({"path":"/etc/../secret"},
+                           {"path":"relative/folder"},
+                           {"path":"//host/share"},
+                           {"magnet":"not a magnet"},
+                           {"command":"sh"},
+                           {"root":"bigdisk"}):
+                with self.subTest(change=change),self.assertRaises(PolicyError):
+                    handle_owner_games_request(dict(req,**change),
+                        verified_client_id="1001",store=self.store,wolf_api=self.api)
+            self.assertEqual(add.call_count,1)
+
     def test_new_download_games_folder_requires_owner_and_exact_schema(self):
         from unittest.mock import patch
         req={"version":1,"action":"downloads_mkdir","root":"bigdisk",

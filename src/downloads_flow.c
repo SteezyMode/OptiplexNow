@@ -600,6 +600,8 @@ static void on_search_result(const char *magnet,gpointer unused){
  if(destination_view){
    picker_scroll_pending=TRUE;
    now_downloads_destination_view_select(destination_view,magnet);
+   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
+                   g_object_ref(destination_view),g_object_unref);
  }
 }
 static void on_download_submitted(gpointer unused){
@@ -616,6 +618,7 @@ GtkWidget *now_downloads_page(void){
  GtkWidget *root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  queue_stack=gtk_stack_new();
  gtk_stack_set_hhomogeneous(GTK_STACK(queue_stack),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(queue_stack),FALSE);
  gtk_stack_set_transition_type(GTK_STACK(queue_stack),
                                GTK_STACK_TRANSITION_TYPE_NONE);
  gtk_widget_set_vexpand(queue_stack,TRUE);
@@ -721,7 +724,11 @@ GtkWidget *now_downloads_page(void){
  gtk_box_pack_start(GTK_BOX(tabs),search_tab,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(body),tabs,FALSE,FALSE,0);
  downloads_subtabs=gtk_stack_new();
- gtk_widget_set_vexpand(downloads_subtabs,TRUE);
+ /* The hidden Transfers list must not determine Search's page height.
+  * Let visible Search / Picker content set the outer scroller's height. */
+ gtk_stack_set_hhomogeneous(GTK_STACK(downloads_subtabs),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(downloads_subtabs),FALSE);
+ gtk_widget_set_vexpand(downloads_subtabs,FALSE);
  gtk_box_pack_start(GTK_BOX(body),downloads_subtabs,TRUE,TRUE,0);
  GtkWidget *transfers=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  queue_label=gtk_label_new("Current downloads");

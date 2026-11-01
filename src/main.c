@@ -2010,23 +2010,11 @@ static void on_bruiser_admin(void*w,void*p){
  browser_open(url);
  say("BRUISER ADMIN REQUIRES OPEN WEBUI ADMIN ACCOUNT");
 }
-/* Reallocate the Downloads page after it is mapped into the GTK stack.
- * No host or queue work is performed by the idle callback. */
-static gboolean downloads_post_show_layout(gpointer data){
- GtkWidget *page=GTK_WIDGET(data);
- if(gtk_widget_get_mapped(page)){
-   gtk_widget_queue_resize(page);
-   gtk_widget_queue_draw(page);
- }
- return G_SOURCE_REMOVE;
-}
 static void open_downloads_page(void){
  now_nav_show_page(main_pages,"downloads");
  now_downloads_open(cfg[0],cfg[1],cfg[7]);
- GtkWidget *page=gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads");
- if(page)
-   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,downloads_post_show_layout,
-                   g_object_ref(page),g_object_unref);
+ /* New nested Downloads stacks must be allocated before their first paint. */
+ now_nav_relayout_page(gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads"));
 }
 static void on_downloads_tab(GtkWidget *widget,gpointer unused){
  (void)widget;(void)unused;

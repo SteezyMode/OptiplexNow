@@ -1,5 +1,6 @@
 """Owner Games host request gate: offline tests, no network or real Docker."""
 import copy
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -649,7 +650,7 @@ class TrustedGamesGateTests(unittest.TestCase):
                     self.assertIsNone(read_lease(fd))
                 archive = Path(self.store.directory) / (
                     "owner-steam-lease.closed-" + lease["id"] + ".json")
-                self.assertEqual(__import__("json").loads(archive.read_text())["state"],
+                self.assertEqual(json.loads(archive.read_text())["state"],
                                  state)
                 # A subsequent managed Start can proceed after Wolf UI returns.
                 self.api.data[4]["sessions"] = copy.deepcopy(fixtures()[4]["sessions"])

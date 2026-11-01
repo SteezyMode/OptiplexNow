@@ -209,6 +209,44 @@ def create_folder(root, relative, name, *, runner=subprocess.run):
     return {"status": "created"}
 
 
+def checked_host_path(value):
+    """Validate a real OptiPlex absolute path, never a client filesystem path."""
+    if (not isinstance(value, str) or not 2 <= len(value) <= 1024
+            or not value.startswith("/") or value.startswith("//")
+            or os.path.normpath(value) != value
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+            or any(part in (".", "..") for part in value.split("/")[1:])):
+        raise DestinationError("Invalid host destination")
+    return value
+
+
+def add_magnet_host_path(host_path, magnet, *, runner=subprocess.run):
+    """Map a native SFTP chooser's host path to a real qBittorrent bind mount.
+
+    The client supplies a *host* path, never Docker commands or mount names.
+    Only existing, verified writable bind locations may receive a torrent.
+    """
+    host_path = checked_host_path(host_path)
+    if checked_magnet(magnet) is None:
+        raise DestinationError("Invalid magnet URI")
+    _, _, _, mounts = _mounts(runner=runner)
+    best = None
+    for root, mapping in mounts.items():
+        source = mapping["source"].rstrip("/")
+        if host_path != source and not host_path.startswith(source + "/"):
+            continue
+        suffix = host_path[len(source):].lstrip("/")
+        try:
+            _relative(suffix)
+        except DestinationError:
+            continue
+        if best is None or len(source) > best[0]:
+            best = (len(source), root, suffix)
+    if best is None:
+        raise DestinationError("Selected drive is not exposed to qBittorrent")
+    return add_magnet(best[1], best[2], magnet, runner=runner)
+
+
 def add_magnet(root,relative,magnet,*,runner=subprocess.run):
     if not isinstance(root,str) or not ROOT_ID.fullmatch(root):
         raise DestinationError("Unknown library root")

@@ -622,6 +622,8 @@ GtkWidget *now_downloads_destination_view_new(void){
  gtk_box_pack_start(GTK_BOX(view),main_area,TRUE,TRUE,0);
  g_signal_connect(main_area,"size-allocate",G_CALLBACK(adapt_picker_width),view);
  s->sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
+ /* Child visibility is controlled by the responsive layout, not show_all. */
+ gtk_widget_set_no_show_all(s->sidebar,TRUE);
  gtk_widget_set_size_request(s->sidebar,170,-1);
  gtk_box_pack_start(GTK_BOX(main_area),s->sidebar,FALSE,FALSE,0);
  GtkWidget *locations=gtk_label_new("DRIVES");

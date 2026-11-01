@@ -9,7 +9,7 @@ from urllib.parse import parse_qs
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"server"))
-from download_destinations import DestinationError, roots, browse, add_magnet
+from download_destinations import DestinationError, roots, browse, add_magnet, create_folder
 from download_inventory import InventoryError
 
 VPN="a"*64
@@ -98,6 +98,44 @@ class DestinationTests(unittest.TestCase):
         self.assertTrue(self.fake.commands[-1][-1].endswith("/torrents/add"))
         self.assertFalse(any("torrent_files" in str(c) for c in self.fake.commands))
         self.assertFalse(any("rm -rf" in str(c) for c in self.fake.commands))
+
+    def test_create_games_folder_inside_existing_approved_drive(self):
+        self.assertFalse((self.media/"Games").exists())
+        self.assertEqual(create_folder("bigdisk","","Games",runner=self.fake),
+                         {"status":"created"})
+        self.assertTrue((self.media/"Games").is_dir())
+        self.assertIn("Games",browse("bigdisk","",runner=self.fake)["folders"])
+        self.assertEqual(self.fake.commands[-1][:2],["docker","inspect"])
+        # The folder is created only inside the approved mount; it does not
+        # change or restart the qBittorrent/Gluetun containers.
+        self.assertFalse(any("docker run" in str(cmd) or "docker restart" in str(cmd)
+                             for cmd in self.fake.commands))
+
+    def test_create_folder_rejects_escape_symlink_and_unapproved_roots(self):
+        for root,parent,name in [
+            ("unknown","","Games"),
+            ("bigdisk","../Games","Other"),
+            ("bigdisk","Movies/outside-link","Game"),
+            ("bigdisk","","../Games"),
+            ("bigdisk","","a/b"),
+            ("bigdisk","","a\\\\b"),
+            ("bigdisk","",""),
+            ("bigdisk","",".."),
+            ("bigdisk","","Games\\nOther"),
+        ]:
+            with self.subTest(root=root,parent=parent,name=name):
+                with self.assertRaises(DestinationError):
+                    create_folder(root,parent,name,runner=self.fake)
+        self.assertFalse((self.media/"Games").exists())
+
+    def test_create_folder_denies_unwritable_downloader_and_existing_names(self):
+        self.fake.can_write=False
+        with self.assertRaisesRegex(DestinationError,"cannot write"):
+            create_folder("bigdisk","","Games",runner=self.fake)
+        self.assertFalse((self.media/"Games").exists())
+        self.fake.can_write=True
+        with self.assertRaisesRegex(DestinationError,"already exists"):
+            create_folder("bigdisk","","Movies",runner=self.fake)
 
     def test_bad_input_no_add(self):
         for root,path,magnet in [

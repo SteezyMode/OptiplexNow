@@ -40,7 +40,7 @@ class WorkflowSafetyTests(unittest.TestCase):
         data = (WORKFLOWS / "release.yml").read_text()
         package = (ROOT / "package.py").read_text()
         release_version = re.search(
-            r'^DEFAULT_VERSION = "([0-9]+\\.[0-9]+\\.[0-9]+)"$',
+            r'^DEFAULT_VERSION = "([0-9]+\.[0-9]+\.[0-9]+)",
             package, re.MULTILINE)
         self.assertIsNotNone(release_version, "A tagged release needs a version")
         version = release_version.group(1)
@@ -99,14 +99,14 @@ if __name__ == "__main__":
         self.assertIn('gh release view "$tag"', data)
         self.assertIn("--verify-tag", data)
 
-        # Explicit owner-requested one-time v1.21.9 publication: changing
+        # Explicit owner-requested one-time publication of the current version: changing
         # any ordinary main file or pushing a PR cannot publish. Only the
         # curated notes path plus exact squash-merge instruction can do so.
         self.assertIn("    branches:\n      - main", data)
-        self.assertIn("    paths:\n      - 'docs/releases/v1.21.9.md'", data)
+        self.assertIn(f"    paths:\n      - 'docs/releases/v{version}.md'", data)
         self.assertIn("github.ref == 'refs/heads/main'", data)
-        self.assertIn("contains(github.event.head_commit.message, '[publish-v1.21.9]')", data)
-        self.assertIn('version="1.21.9"', data)
+        self.assertIn(f"contains(github.event.head_commit.message, '[publish-v{version}]')", data)
+        self.assertIn(f'version="{version}"', data)
         self.assertIn('test "$(sed -nE', data)
         self.assertIn('package.py)" = "$version"', data)
         self.assertIn('gh api -X POST "repos/$GH_REPO/git/refs"', data)

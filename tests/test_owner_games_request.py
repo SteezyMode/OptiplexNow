@@ -62,6 +62,66 @@ class TrustedGamesGateTests(unittest.TestCase):
                 self.call("downloads_add",client="99999999")
             self.assertEqual(add_call.call_count,1)
 
+    def test_native_file_chooser_path_requires_owner_and_exact_schema(self):
+        from unittest.mock import patch
+        magnet="magnet:?xt=urn:btih:"+"f"*40
+        req={"version":1,"action":"downloads_add_path",
+             "path":"/media/BigDisk/Movies/Horror","magnet":magnet}
+        with patch("owner_games_request.add_magnet_host_path",
+                   return_value={"status":"submitted"}) as add:
+            self.assertEqual(handle_owner_games_request(req,
+                verified_client_id="1001",store=self.store,wolf_api=self.api),
+                {"success":True,"status":"submitted"})
+            add.assert_called_once_with("/media/BigDisk/Movies/Horror",magnet)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(req,verified_client_id="99999999",
+                                           store=self.store,wolf_api=self.api)
+            for change in ({"path":"/etc/../secret"},
+                           {"path":"relative/folder"},
+                           {"path":"//host/share"},
+                           {"magnet":"not a magnet"},
+                           {"command":"sh"},
+                           {"root":"bigdisk"}):
+                with self.subTest(change=change),self.assertRaises(PolicyError):
+                    handle_owner_games_request(dict(req,**change),
+                        verified_client_id="1001",store=self.store,wolf_api=self.api)
+            self.assertEqual(add.call_count,1)
+
+    def test_new_download_games_folder_requires_owner_and_exact_schema(self):
+        from unittest.mock import patch
+        req={"version":1,"action":"downloads_mkdir","root":"bigdisk",
+             "relative":"","name":"Games"}
+        with patch("owner_games_request.new_download_folder",
+                   return_value={"status":"created"}) as create:
+            result=handle_owner_games_request(req,verified_client_id="1001",
+                store=self.store,wolf_api=self.api)
+            self.assertEqual(result,{"success":True,"status":"created"})
+            create.assert_called_once_with("bigdisk","","Games")
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(req,verified_client_id="99999999",
+                    store=self.store,wolf_api=self.api)
+            self.assertEqual(create.call_count,1)
+            for changed in ({"name":"../Games"},{"name":"/etc"},
+                            {"name":"Games/Subfolder"},
+                            {"root":"home"},{"relative":"../"},
+                            {"host_path":"/media/secret"}):
+                bad=dict(req,**changed)
+                with self.subTest(changed=changed):
+                    if changed=={"root":"home"}:
+                        # A valid slug is only a selector; the host mount
+                        # inventory, not this request, will reject unknown IDs.
+                        continue
+                    with self.assertRaises(PolicyError):
+                        handle_owner_games_request(bad,verified_client_id="1001",
+                            store=self.store,wolf_api=self.api)
+            create.assert_called_once()
+        from download_inventory import InventoryError
+        with patch("owner_games_request.new_download_folder",
+                   side_effect=InventoryError("unsafe path")):
+            self.assertEqual(handle_owner_games_request(req,
+                verified_client_id="1001",store=self.store,wolf_api=self.api),
+                {"success":False,"status":"folder_create_unavailable"})
+
     def test_download_add_rejects_arbitrary_paths_and_fields_before_wolf(self):
         from unittest.mock import patch
         magnet="magnet:?xt=urn:btih:"+"f"*40
@@ -173,6 +233,31 @@ class TrustedGamesGateTests(unittest.TestCase):
                         wolf_api=self.api)
             run.assert_not_called()
             self.assertEqual(self.api.calls,[])
+
+    def test_downloads_files_is_read_only_exact_hash_and_owner_only(self):
+        from unittest.mock import patch
+        record={"service":"qbittorrent","torrent_hash":"a"*40,"files":[],
+                "truncated":False}
+        request={"version":1,"action":"downloads_files","torrent_hash":"a"*40}
+        with patch("owner_games_request.inspect_torrent_files",
+                   return_value=record) as inspect:
+            result=handle_owner_games_request(
+                request,verified_client_id="1001",store=self.store,
+                wolf_api=self.api)
+            self.assertEqual(result,{"success":True,**record})
+            inspect.assert_called_once_with("a"*40)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(
+                    request,verified_client_id="99999999",store=self.store,
+                    wolf_api=self.api)
+            self.assertEqual(inspect.call_count,1)
+        for extra in ({"torrent_hash":"all"}, {"root":"/etc"},
+                      {"operation":"remove_delete"}):
+            bad=dict(request,**extra)
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(
+                    bad,verified_client_id="1001",store=self.store,
+                    wolf_api=self.api)
 
     def test_downloads_queue_owner_only_and_no_private_fields(self):
         from unittest.mock import patch

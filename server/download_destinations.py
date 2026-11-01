@@ -1,10 +1,11 @@
 """Owner-only download library destinations and explicit magnet enqueue.
 
-Host-local adapter; the existing restricted owner device command MUST authorize
-before calling any function. Only already-mounted writable Docker bind volumes
-at /library/<slug> can be picked. No arbitrary host paths or shell commands
-arrive from clients, and no media files are moved or reorganized.
+Host-local adapter; the restricted owner broker authorizes each request.
+Writable storage mounts are discovered from the verified qBittorrent container.
+Never expose host root or service configuration mounts as download targets.
+Existing host directories and mounts are never modified by browsing.
 """
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -16,10 +17,10 @@ from download_queue import locate_verified_downloader
 from download_search import checked_magnet
 
 ROOT_ID = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
-MAX_RELATIVE = 512
-MAX_DEPTH = 12
+MAX_RELATIVE = 1024
+MAX_DEPTH = 64
 MAX_DIRS = 100
-MAX_NAME = 160
+MAX_NAME = 255
 
 class DestinationError(InventoryError):
     pass
@@ -38,29 +39,56 @@ def _mounts(*, runner=subprocess.run):
         raise DestinationError("No unique bound downloader")
     qbit=candidates[0]
     roots={}
+    excluded=("/config", "/etc", "/dev", "/proc", "/sys", "/run",
+              "/root", "/usr", "/var", "/boot", "/opt")
+    forbidden_sources=("/etc", "/root", "/usr", "/var", "/dev",
+                       "/sys", "/proc", "/run", "/boot", "/opt")
     for entry in qbit.get("Mounts",[]):
-        if not isinstance(entry,dict) or entry.get("Type")!="bind" or entry.get("RW") is not True:
+        if (not isinstance(entry,dict) or entry.get("Type")!="bind"
+                or entry.get("RW") is not True):
             continue
-        container_path=entry.get("Destination")
-        source=entry.get("Source")
-        if not isinstance(container_path,str) or not isinstance(source,str):
+        target,source=entry.get("Destination"),entry.get("Source")
+        if not isinstance(target,str) or not isinstance(source,str):
             continue
-        found=re.fullmatch(r"/library/([a-z][a-z0-9_-]{0,31})",container_path)
-        if not found or not os.path.isabs(source) or source=="/" or not os.path.isdir(source):
+        if (not target.startswith("/") or target=="/"
+                or os.path.normpath(target)!=target
+                or any(target==p or target.startswith(p+"/") for p in excluded)):
             continue
-        # A bind mount is administrator-owned configuration. Reject symlinked
-        # root aliases and the main OS/system directories, not just / itself.
+        if (not os.path.isabs(source) or source=="/"
+                or not os.path.isdir(source)):
+            continue
         resolved=os.path.realpath(source)
         if (resolved!=source or os.path.islink(source)
-                or resolved in ("/etc","/root","/home","/usr","/var",
-                                "/dev","/sys","/proc","/run","/boot")):
+                or any(resolved==p or resolved.startswith(p+"/")
+                       for p in forbidden_sources)
+                or resolved=="/home"):
             continue
-        slug=found.group(1)
+        match=re.fullmatch(r"/library/([a-z][a-z0-9_-]{0,31})",target)
+        if match:
+            slug=match.group(1)
+            label=slug.replace("_"," ").title()
+        else:
+            # Stable, opaque mount ID: no untrusted host path in requests.
+            # Preserve existing /library/<slug> IDs and saved bookmarks.
+            slug="mount_"+hashlib.sha256(target.encode("utf-8")).hexdigest()[:16]
+            label=os.path.basename(resolved.rstrip("/")) or target.strip("/")
+            label=label[:MAX_NAME]
+        # Use familiar physical drive names for existing personal libraries.
+        # e.g. /mnt/2TB/Plex Expansion -> "2TB · Plex Expansion".
+        mounted_drive=re.match(r"^/(?:mnt|media)/([^/]+)(?:/|$)",resolved)
+        if mounted_drive:
+            drive_name=mounted_drive.group(1)
+            folder_name=os.path.basename(resolved.rstrip("/"))
+            label=(drive_name if folder_name==drive_name
+                   else drive_name+" · "+folder_name)
+        # The client transports labels in one tab-delimited line.
+        label="".join(char if ord(char)>=32 and ord(char)!=127 else " "
+                      for char in label)[:MAX_NAME]
         if slug in roots:
-            raise DestinationError("Duplicate library destination root")
-        roots[slug]={"source":source,"target":container_path}
-    if not roots or len(roots)>12:
-        raise DestinationError("No approved writable media library mounts")
+            raise DestinationError("Ambiguous downloader mount")
+        roots[slug]={"source":source,"target":target,"label":label}
+    if not roots or len(roots)>24:
+        raise DestinationError("No usable writable downloader storage mounts")
     return qbit["Id"],gateway,port,roots
 
 def _relative(value):
@@ -90,8 +118,9 @@ def _open_folder(source,parts):
 
 def roots(*,runner=subprocess.run):
     _,_,_,mounts=_mounts(runner=runner)
-    return {"roots":[{"id":name,"label":name.replace("_"," ").title()}
-                     for name in sorted(mounts)]}
+    return {"roots":[{"id":name,"label":entry["label"]}
+                     for name,entry in sorted(mounts.items(),
+                                            key=lambda item:item[1]["label"].casefold())]}
 
 def browse(root,relative="",*,runner=subprocess.run):
     if not isinstance(root,str) or not ROOT_ID.fullmatch(root):
@@ -118,6 +147,105 @@ def browse(root,relative="",*,runner=subprocess.run):
         raise DestinationError("Folder missing or inaccessible") from exc
     return {"root":root,"relative":relative,
             "folders":sorted(folders,key=str.casefold)}
+
+def checked_folder_name(value):
+    """A single new child in a verified existing library directory."""
+    if (not isinstance(value, str) or not 1 <= len(value) <= MAX_NAME or
+            value in (".", "..") or "/" in value or "\\" in value or
+            any(ord(c) < 32 or ord(c) == 127 for c in value)):
+        raise DestinationError("Invalid new folder name")
+    return value
+
+
+def create_folder(root, relative, name, *, runner=subprocess.run):
+    """Create one directory inside a verified qBittorrent writable bind mount.
+
+    Never accept host paths, create a new Docker mount, follow symlinks,
+    or run a shell with caller-controlled input. This operation is only
+    reachable through the independently authenticated restricted owner gate.
+    """
+    if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
+        raise DestinationError("Invalid library root")
+    child = checked_folder_name(name)
+    parts = _relative(relative)
+    qbit, _gateway, _port, mounts = _mounts(runner=runner)
+    if root not in mounts:
+        raise DestinationError("Library root not configured")
+    parent = mounts[root]["target"]
+    if parts:
+        parent += "/" + "/".join(parts)
+    fd = None
+    try:
+        fd = _open_folder(mounts[root]["source"], parts)
+        # The actual downloader user must have write access, not just the
+        # host operator executing the restricted command.
+        check = ["docker", "exec", "-u", "abc", qbit,
+                 "sh", "-c", 'test -w "$1"', "now", parent]
+        permission = runner(check, capture_output=True, timeout=6, check=False)
+        if permission.returncode != 0:
+            raise DestinationError("Downloader cannot write parent folder")
+        try:
+            os.mkdir(child, mode=0o775, dir_fd=fd)
+        except FileExistsError as exc:
+            raise DestinationError("Folder already exists") from exc
+        # Verify newly created path is also writable by qBittorrent; avoid
+        # advertising a location it cannot actually download into.
+        new_path = parent + "/" + child
+        permission = runner(["docker", "exec", "-u", "abc", qbit,
+                             "sh", "-c", 'test -w "$1"', "now", new_path],
+                            capture_output=True, timeout=6, check=False)
+        if permission.returncode != 0:
+            # Only roll back the empty directory created by this request.
+            try:
+                os.rmdir(child, dir_fd=fd)
+            except OSError:
+                pass
+            raise DestinationError("Downloader cannot write new folder")
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise DestinationError("Unable to create approved folder") from exc
+    finally:
+        if fd is not None:
+            os.close(fd)
+    return {"status": "created"}
+
+
+def checked_host_path(value):
+    """Validate a real OptiPlex absolute path, never a client filesystem path."""
+    if (not isinstance(value, str) or not 2 <= len(value) <= 1024
+            or not value.startswith("/") or value.startswith("//")
+            or os.path.normpath(value) != value
+            or any(ord(ch) < 32 or ord(ch) == 127 for ch in value)
+            or any(part in (".", "..") for part in value.split("/")[1:])):
+        raise DestinationError("Invalid host destination")
+    return value
+
+
+def add_magnet_host_path(host_path, magnet, *, runner=subprocess.run):
+    """Map a native SFTP chooser's host path to a real qBittorrent bind mount.
+
+    The client supplies a *host* path, never Docker commands or mount names.
+    Only existing, verified writable bind locations may receive a torrent.
+    """
+    host_path = checked_host_path(host_path)
+    if checked_magnet(magnet) is None:
+        raise DestinationError("Invalid magnet URI")
+    _, _, _, mounts = _mounts(runner=runner)
+    best = None
+    for root, mapping in mounts.items():
+        source = mapping["source"].rstrip("/")
+        if host_path != source and not host_path.startswith(source + "/"):
+            continue
+        suffix = host_path[len(source):].lstrip("/")
+        try:
+            _relative(suffix)
+        except DestinationError:
+            continue
+        if best is None or len(source) > best[0]:
+            best = (len(source), root, suffix)
+    if best is None:
+        raise DestinationError("Selected drive is not exposed to qBittorrent")
+    return add_magnet(best[1], best[2], magnet, runner=runner)
+
 
 def add_magnet(root,relative,magnet,*,runner=subprocess.run):
     if not isinstance(root,str) or not ROOT_ID.fullmatch(root):

@@ -9,7 +9,9 @@ from urllib.parse import parse_qs
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/"server"))
-from download_destinations import DestinationError, roots, browse, add_magnet
+from download_destinations import (DestinationError, roots, browse, add_magnet,
+                                   add_magnet_host_path, checked_host_path,
+                                   create_folder)
 from download_inventory import InventoryError
 
 VPN="a"*64
@@ -21,6 +23,7 @@ class FakeDocker:
         self.commands=[]
         self.media=media
         self.can_write=writable
+        self.expected_savepath="/library/bigdisk/Movies/Horror"
         self.records=[
           {"Id":VPN,"Name":"/music-vpn",
            "Config":{"Image":"qmcgaw/gluetun:v3.41","Env":[]},
@@ -55,7 +58,7 @@ class FakeDocker:
             self_result=0 if self.can_write else 1
             assert cmd[4]==QBIT and cmd[5:8]==["sh","-c",'test -w "$1"']
             assert cmd[-2].startswith("now")
-            assert self_check.startswith("/library/bigdisk")
+            assert self_check.startswith(("/library/bigdisk","/downloads"))
             return subprocess.CompletedProcess(cmd,self_result,b"",b"")
         assert cmd[:3]==["docker","exec",VPN]
         assert cmd[-1]=="http://127.0.0.1:8085/api/v2/torrents/add"
@@ -65,7 +68,7 @@ class FakeDocker:
         assert len(data)==1
         fields=parse_qs(data[0].partition("=")[2])
         assert fields["autoTMM"]==["false"]
-        assert fields["savepath"]==["/library/bigdisk/Movies/Horror"]
+        assert fields["savepath"]==[self.expected_savepath]
         assert fields["urls"]==[MAGNET]
         return subprocess.CompletedProcess(cmd,0,b"Ok.",b"")
 
@@ -85,10 +88,60 @@ class DestinationTests(unittest.TestCase):
         self.assertEqual(roots(runner=self.fake),{
             "roots":[{"id":"bigdisk","label":"Bigdisk"}]})
 
+    def test_other_writable_mounts_appear_without_manual_registration(self):
+        other=Path(self.temp.name)/"UnsortedData"
+        (other/"Games").mkdir(parents=True)
+        self.fake.records[1]["Mounts"].extend([
+            {"Source":str(other),"Destination":"/downloads",
+             "Type":"bind","RW":True},
+            {"Source":str(other),"Destination":"/config/secret",
+             "Type":"bind","RW":True},
+            {"Source":"/etc","Destination":"/anything",
+             "Type":"bind","RW":True},
+            {"Source":str(other),"Destination":"/run/hidden",
+             "Type":"bind","RW":True},
+        ])
+        found=roots(runner=self.fake)["roots"]
+        self.assertEqual(len(found),2)
+        dynamic=next(record for record in found if record["id"]!="bigdisk")
+        self.assertEqual(dynamic["label"],"UnsortedData")
+        self.assertTrue(dynamic["id"].startswith("mount_"))
+        self.assertEqual(roots(runner=self.fake)["roots"],found)
+        self.assertIn("Games",browse(dynamic["id"],"",runner=self.fake)["folders"])
+        self.fake.expected_savepath="/downloads/Games"
+        self.assertEqual(add_magnet(dynamic["id"],"Games",MAGNET,runner=self.fake),
+                         {"status":"submitted"})
+        self.assertEqual(create_folder(dynamic["id"],"Games","Indie",
+                                       runner=self.fake),{"status":"created"})
+        self.assertTrue((other/"Games"/"Indie").is_dir())
+        with self.assertRaises(DestinationError):
+            browse(dynamic["id"],"../",runner=self.fake)
+
     def test_browse_preserves_trailing_space_genre_and_ignores_symlinks(self):
         result=browse("bigdisk","Movies",runner=self.fake)
         self.assertEqual(result["folders"],["Action ","Horror"])
         self.assertEqual(result["relative"],"Movies")
+
+    def test_native_chooser_host_path_maps_to_existing_docker_mount(self):
+        host_path=str(self.media/"Movies"/"Horror")
+        self.assertEqual(add_magnet_host_path(host_path,MAGNET,runner=self.fake),
+                         {"status":"submitted"})
+        self.assertEqual(self.fake.commands[-1][-1],
+                         "http://127.0.0.1:8085/api/v2/torrents/add")
+        for invalid in ("/", "/etc", "/etc/passwd",
+                        str(self.media)+"/../elsewhere",
+                        "/tmp/other-drive/Movie", "//server/share",
+                        str(self.media)+"/Movies//Horror"):
+            with self.subTest(path=invalid), self.assertRaises(DestinationError):
+                add_magnet_host_path(invalid,MAGNET,runner=self.fake)
+        for invalid in (None, "relative/path", "/tmp/../etc", "/tmp//folder",
+                        "/tmp/foo\nbar"):
+            with self.subTest(invalid=invalid), self.assertRaises(DestinationError):
+                checked_host_path(invalid)
+        # Host symlinks must not let the native chooser escape the mounted root.
+        with self.assertRaises(DestinationError):
+            add_magnet_host_path(str(self.media/"Movies"/"outside-link"),
+                                 MAGNET,runner=self.fake)
 
     def test_add_magnet_explicit_target_and_not_default_downloads(self):
         result=add_magnet("bigdisk","Movies/Horror",MAGNET,runner=self.fake)
@@ -98,6 +151,44 @@ class DestinationTests(unittest.TestCase):
         self.assertTrue(self.fake.commands[-1][-1].endswith("/torrents/add"))
         self.assertFalse(any("torrent_files" in str(c) for c in self.fake.commands))
         self.assertFalse(any("rm -rf" in str(c) for c in self.fake.commands))
+
+    def test_create_games_folder_inside_existing_approved_drive(self):
+        self.assertFalse((self.media/"Games").exists())
+        self.assertEqual(create_folder("bigdisk","","Games",runner=self.fake),
+                         {"status":"created"})
+        self.assertTrue((self.media/"Games").is_dir())
+        self.assertIn("Games",browse("bigdisk","",runner=self.fake)["folders"])
+        self.assertEqual(self.fake.commands[-1][:2],["docker","inspect"])
+        # The folder is created only inside the approved mount; it does not
+        # change or restart the qBittorrent/Gluetun containers.
+        self.assertFalse(any("docker run" in str(cmd) or "docker restart" in str(cmd)
+                             for cmd in self.fake.commands))
+
+    def test_create_folder_rejects_escape_symlink_and_unapproved_roots(self):
+        for root,parent,name in [
+            ("unknown","","Games"),
+            ("bigdisk","../Games","Other"),
+            ("bigdisk","Movies/outside-link","Game"),
+            ("bigdisk","","../Games"),
+            ("bigdisk","","a/b"),
+            ("bigdisk","","a\\b"),
+            ("bigdisk","",""),
+            ("bigdisk","",".."),
+            ("bigdisk","","Games\nOther"),
+        ]:
+            with self.subTest(root=root,parent=parent,name=name):
+                with self.assertRaises(DestinationError):
+                    create_folder(root,parent,name,runner=self.fake)
+        self.assertFalse((self.media/"Games").exists())
+
+    def test_create_folder_denies_unwritable_downloader_and_existing_names(self):
+        self.fake.can_write=False
+        with self.assertRaisesRegex(DestinationError,"cannot write"):
+            create_folder("bigdisk","","Games",runner=self.fake)
+        self.assertFalse((self.media/"Games").exists())
+        self.fake.can_write=True
+        with self.assertRaisesRegex(DestinationError,"already exists"):
+            create_folder("bigdisk","","Movies",runner=self.fake)
 
     def test_bad_input_no_add(self):
         for root,path,magnet in [

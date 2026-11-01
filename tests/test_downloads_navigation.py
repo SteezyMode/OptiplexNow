@@ -79,6 +79,50 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")', FLOW)
         self.assertIn('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"web")', FLOW)
 
+    def test_projector_downloads_page_scroll_and_safe_picker_reveal(self):
+        picker=(ROOT/"src/downloads_destination_view.c").read_text()
+        transfers=(ROOT/"src/downloads_queue_view.c").read_text()
+        self.assertIn("downloads_scroll=gtk_scrolled_window_new(NULL,NULL)",FLOW)
+        self.assertIn("GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC",FLOW)
+        self.assertIn("gtk_container_add(GTK_CONTAINER(downloads_scroll),downloads_content)",FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(queue_stack),downloads_scroll,"queue")',FLOW)
+        self.assertIn('gtk_stack_add_named(GTK_STACK(queue_stack),web_page,"web")',FLOW)
+        self.assertIn("gtk_stack_set_vhomogeneous(GTK_STACK(downloads_subtabs),FALSE)",FLOW)
+        self.assertIn("reveal_destination",FLOW)
+        self.assertIn("destination_allocated",FLOW)
+        self.assertIn("gtk_widget_set_size_request(s->folder_scroll,-1,275)",picker)
+        self.assertIn("gtk_search_entry_new()",picker)
+        self.assertIn("filter_folder_buttons",picker)
+        self.assertIn('gtk_button_new_with_label("Add Torrent")',picker)
+        self.assertLess(picker.index("gtk_box_pack_start(GTK_BOX(s->browser_area),s->folder_scroll"),
+                        picker.index("gtk_box_pack_end(GTK_BOX(footer),s->add"))
+        self.assertIn("gtk_menu_popup_at_pointer",transfers)
+        self.assertNotIn("gtk_expander_new",transfers)
+        self.assertIn('"remove","remove_delete"',transfers)
+        self.assertIn('"View files"',transfers)
+        self.assertIn("DELETE TORRENT AND FILES",transfers)
+
+    def test_standard_gtk_remote_folder_chooser_replaces_custom_picker_flow(self):
+        picker=(ROOT/"src/downloads_destination_view.c").read_text()
+        host=(ROOT/"server/download_destinations.py").read_text()
+        ops=(ROOT/"src/download-operations-client.py").read_text()
+        request=(ROOT/"server/owner_games_request.py").read_text()
+        self.assertIn("gtk_file_chooser_dialog_new(",picker)
+        self.assertIn("GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER",picker)
+        self.assertIn("gtk_file_chooser_set_local_only",picker)
+        self.assertIn("sftp://%s@%s/",picker)
+        self.assertIn("gtk_file_chooser_get_uri",picker)
+        self.assertIn("native_uri_host_path(",picker)
+        self.assertIn("gtk_file_chooser_set_create_folders",picker)
+        self.assertIn('"addpath":"downloads_add_path"',ops)
+        self.assertIn("def add_magnet_host_path(",host)
+        self.assertIn("add_magnet_host_path(request",request)
+        self.assertIn("now_downloads_destination_view_select(destination_view,magnet);",FLOW)
+        callback=FLOW.split("static void on_search_result(",1)[1].split(
+                         "static void on_download_submitted(",1)[0]
+        self.assertNotIn('gtk_stack_set_visible_child_name(',callback)
+        self.assertNotIn('gtk_widget_queue_resize(',callback)
+
     def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
         self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)
         self.assertIn("g_timeout_add_seconds(4,reconnect_once,NULL)", FLOW)

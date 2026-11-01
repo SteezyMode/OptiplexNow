@@ -11,6 +11,9 @@ static GtkWidget *queue_label;
 static GtkWidget *queue_view;
 static GtkWidget *search_view;
 static GtkWidget *destination_view;
+static GtkWidget *search_workspace,*search_back_button;
+static GtkWidget *downloads_scroll,*downloads_content;
+static gboolean picker_scroll_pending;
 static GtkWidget *downloads_subtabs;
 static GtkWidget *transfers_tab,*search_tab;
 static gboolean queue_has_data;
@@ -26,6 +29,7 @@ static GtkWidget *webview;
 static gchar *loaded_url;
 static gboolean running;
 static gboolean manage_running;
+static gboolean files_running;
 static gchar *last_host;
 static gchar *last_user;
 static gchar *last_override;
@@ -474,12 +478,74 @@ static void managed_finished(GObject *source,GAsyncResult *res,gpointer data){
  g_object_unref(job->proc);
  g_free(job->host);g_free(job->user);g_free(job->operation);g_free(job);
 }
+typedef struct {
+ GSubprocess *proc;
+ gchar *host,*user,*torrent_hash,*name;
+} FilesJob;
+static void files_finished(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
+ FilesJob *job=data;
+ gchar *out=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&error)
+             && g_subprocess_get_successful(job->proc) && out &&
+             strlen(out)<=32768;
+ files_running=FALSE;
+ if(!g_strcmp0(last_host,job->host) && !g_strcmp0(last_user,job->user) &&
+    queue_view && gtk_widget_get_mapped(queue_view) &&
+    downloads_subtabs &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(downloads_subtabs)),
+               "transfers")){
+   if(ok){
+     gsize len=strlen(out);
+     if(len && out[len-1]=='\n')out[len-1]=0;
+     ok=now_downloads_queue_view_files_dialog(queue_view,out,
+                                                job->torrent_hash,job->name);
+   }
+   if(!ok && status_label)
+     gtk_label_set_text(GTK_LABEL(status_label),
+                        "File list unavailable; check host owner module or open Advanced VueTorrent.");
+ }
+ g_clear_error(&error);g_free(out);
+ g_object_unref(job->proc);
+ g_free(job->host);g_free(job->user);
+ g_free(job->torrent_hash);g_free(job->name);g_free(job);
+}
+static void on_torrent_files(const char *hash,const char *name){
+ if(files_running || !last_host || !last_user)return;
+ gchar *queue_helper=helper_path();
+ gchar *directory=g_path_get_dirname(queue_helper);
+ gchar *helper=g_build_filename(directory,"download-operations-client.py",NULL);
+ if(g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+   const gchar *argv[]={"/usr/bin/python3",helper,last_host,last_user,
+                        "files",hash,NULL};
+   GError *err=NULL;
+   GSubprocess *proc=g_subprocess_newv(
+       argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
+   if(proc){
+     FilesJob *job=g_new0(FilesJob,1);
+     job->proc=proc;job->host=g_strdup(last_host);job->user=g_strdup(last_user);
+     job->torrent_hash=g_strdup(hash);job->name=g_strdup(name);
+     files_running=TRUE;
+     if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                         "Loading selected torrent file list...");
+     g_subprocess_communicate_utf8_async(proc,NULL,NULL,files_finished,job);
+   }else if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                            "Cannot request torrent file list.");
+   g_clear_error(&err);
+ }
+ g_free(helper);g_free(directory);g_free(queue_helper);
+}
 static void on_transfer_action(const char *operation,const char *torrent_hash,
                                const char *name,gpointer unused){
- (void)name;(void)unused;
+ (void)unused;
  if(manage_running || !last_host || !last_user ||
     !now_valid_host(last_host) || !now_valid_user(last_user) ||
     !owner_device_key_exists() || !operation || !torrent_hash)return;
+ if(!strcmp(operation,"files")){
+   on_torrent_files(torrent_hash,name);
+   return;
+ }
  gchar *queue_helper=helper_path();
  gchar *directory=g_path_get_dirname(queue_helper);
  gchar *helper=g_build_filename(directory,"download-operations-client.py",NULL);
@@ -505,13 +571,68 @@ static void on_transfer_action(const char *operation,const char *torrent_hash,
  }
  g_free(helper);g_free(directory);g_free(queue_helper);
 }
+/* Navigate the outer scroll to the active work area, not the global toolbar.
+ * Selecting a torrent brings the dedicated folder step into view. */
+static gboolean reveal_destination(gpointer data){
+ GtkWidget *picker=GTK_WIDGET(data);
+ if(!downloads_scroll || !downloads_content)return G_SOURCE_REMOVE;
+ /* Resolve the containing workflow through the live widget tree, not a
+  * static raw pointer that could outlive a closed window's GTK children. */
+ GtkWidget *area=picker;
+ while(area && area!=downloads_content && !GTK_IS_STACK(area))
+   area=gtk_widget_get_parent(area);
+ if(!area || area==downloads_content ||
+    !gtk_widget_get_mapped(area))return G_SOURCE_REMOVE;
+ gint x=0,y=0;
+ if(!gtk_widget_translate_coordinates(area,downloads_content,0,0,&x,&y))
+   return G_SOURCE_REMOVE;
+ GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
+                       GTK_SCROLLED_WINDOW(downloads_scroll));
+ gdouble lower=gtk_adjustment_get_lower(adj);
+ gdouble upper=MAX(lower,gtk_adjustment_get_upper(adj)-
+                               gtk_adjustment_get_page_size(adj));
+ gtk_adjustment_set_value(adj,CLAMP((gdouble)y-10.0,lower,upper));
+ return G_SOURCE_REMOVE;
+}
+static void destination_allocated(GtkWidget *picker,GtkAllocation *allocated,
+                                  gpointer unused){
+ (void)unused;
+ if(!picker_scroll_pending || allocated->height<10 ||
+    !gtk_widget_get_mapped(picker))return;
+ picker_scroll_pending=FALSE;
+ g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
+                 g_object_ref(picker),g_object_unref);
+}
+/* Standard in-place drill-down: Results and Destination each own the
+ * full-height work area, rather than competing for projector space. */
+static void on_search_back(GtkButton *button,gpointer unused){
+ (void)button;(void)unused;
+ if(!search_workspace)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
+ gtk_widget_queue_resize(search_workspace);
+ gtk_widget_queue_draw(search_workspace);
+ if(search_view)
+   g_idle_add_full(G_PRIORITY_DEFAULT_IDLE,reveal_destination,
+                   g_object_ref(search_view),g_object_unref);
+}
+static void on_destination_cancel(gpointer unused){
+ (void)unused;
+ on_search_back(NULL,NULL);
+}
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
- if(destination_view)
-   now_downloads_destination_view_select(destination_view,magnet);
+ if(!destination_view)return;
+ /* Transmission-style native file chooser opens as a system dialog.
+  * Keep search results in place rather than navigating to a second
+  * proprietary folder-browser page. Cancel simply closes the dialog. */
+ now_downloads_destination_view_select(destination_view,magnet);
 }
 static void on_download_submitted(gpointer unused){
  (void)unused;
+ if(search_workspace){
+   gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
+   gtk_widget_queue_resize(search_workspace);
+ }
  if(last_host && last_user)
    now_downloads_refresh(last_host,last_user);
 }
@@ -521,12 +642,31 @@ static void on_refresh_clicked(GtkButton *button,gpointer unused){
    now_downloads_refresh(last_host,last_user);
 }
 GtkWidget *now_downloads_page(void){
- GtkWidget *root=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
- gtk_container_set_border_width(GTK_CONTAINER(root),8);
+ GtkWidget *root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ queue_stack=gtk_stack_new();
+ gtk_stack_set_hhomogeneous(GTK_STACK(queue_stack),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(queue_stack),FALSE);
+ gtk_stack_set_transition_type(GTK_STACK(queue_stack),
+                               GTK_STACK_TRANSITION_TYPE_NONE);
+ gtk_widget_set_vexpand(queue_stack,TRUE);
+ gtk_box_pack_start(GTK_BOX(root),queue_stack,TRUE,TRUE,0);
+ /* Scroll the entire native Downloads surface, including its status,
+  * Refresh toolbar, results and destination picker. Advanced WebKit remains
+  * a separate full-height view so it keeps native browser scrolling. */
+ downloads_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(downloads_scroll),
+                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_scrolled_window_set_overlay_scrolling(
+     GTK_SCROLLED_WINDOW(downloads_scroll),FALSE);
+ gtk_widget_set_vexpand(downloads_scroll,TRUE);
+ downloads_content=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ gtk_container_set_border_width(GTK_CONTAINER(downloads_content),8);
+ gtk_container_add(GTK_CONTAINER(downloads_scroll),downloads_content);
+ gtk_stack_add_named(GTK_STACK(queue_stack),downloads_scroll,"queue");
  /* A dedicated VPN/status row prevents long Advanced actions from
   * colliding with the right-anchored VPN badge at minimum window width. */
  GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
- gtk_box_pack_start(GTK_BOX(root),toolbar,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(downloads_content),toolbar,FALSE,FALSE,0);
  GtkWidget *status_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
  GtkWidget *actions_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
  gtk_box_pack_start(GTK_BOX(toolbar),status_row,FALSE,FALSE,0);
@@ -572,7 +712,6 @@ GtkWidget *now_downloads_page(void){
  g_signal_connect(advanced_button,"clicked",G_CALLBACK(show_web),NULL);
  back_button=gtk_button_new_with_label("BACK TO QUEUE");
  gtk_style_context_add_class(gtk_widget_get_style_context(back_button),"now-action");
- gtk_box_pack_start(GTK_BOX(actions_row),back_button,FALSE,FALSE,0);
  g_signal_connect(back_button,"clicked",G_CALLBACK(show_queue),NULL);
  gtk_widget_set_no_show_all(back_button,TRUE);
  gtk_widget_hide(back_button);
@@ -581,16 +720,24 @@ GtkWidget *now_downloads_page(void){
  gtk_label_set_xalign(GTK_LABEL(status_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(status_label),PANGO_ELLIPSIZE_END);
  gtk_widget_set_no_show_all(status_label,TRUE);
- gtk_box_pack_start(GTK_BOX(root),status_label,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(downloads_content),status_label,FALSE,FALSE,0);
  gtk_widget_show(status_label);
 
- queue_stack=gtk_stack_new();
- gtk_widget_set_vexpand(queue_stack,TRUE);
- gtk_box_pack_start(GTK_BOX(root),queue_stack,TRUE,TRUE,0);
+ /* VueTorrent stays independent of the page scroller. */
+ GtkWidget *web_page=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ gtk_container_set_border_width(GTK_CONTAINER(web_page),8);
+ GtkWidget *web_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(web_page),web_header,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(web_header),back_button,FALSE,FALSE,0);
+ GtkWidget *web_title=gtk_label_new("ADVANCED · VUETORRENT");
+ gtk_widget_set_halign(web_title,GTK_ALIGN_START);
+ gtk_box_pack_start(GTK_BOX(web_header),web_title,FALSE,FALSE,0);
  view_holder=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
- gtk_stack_add_named(GTK_STACK(queue_stack),view_holder,"web");
+ gtk_box_pack_start(GTK_BOX(web_page),view_holder,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(queue_stack),web_page,"web");
 
  GtkWidget *body=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ gtk_box_pack_start(GTK_BOX(downloads_content),body,TRUE,TRUE,0);
  GtkWidget *tabs=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
  transfers_tab=gtk_button_new_with_label("TRANSFERS");
  search_tab=gtk_button_new_with_label("SEARCH");
@@ -604,7 +751,11 @@ GtkWidget *now_downloads_page(void){
  gtk_box_pack_start(GTK_BOX(tabs),search_tab,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(body),tabs,FALSE,FALSE,0);
  downloads_subtabs=gtk_stack_new();
- gtk_widget_set_vexpand(downloads_subtabs,TRUE);
+ /* The hidden Transfers list must not determine Search's page height.
+  * Let visible Search / Picker content set the outer scroller's height. */
+ gtk_stack_set_hhomogeneous(GTK_STACK(downloads_subtabs),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(downloads_subtabs),FALSE);
+ gtk_widget_set_vexpand(downloads_subtabs,FALSE);
  gtk_box_pack_start(GTK_BOX(body),downloads_subtabs,TRUE,TRUE,0);
  GtkWidget *transfers=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
  queue_label=gtk_label_new("Current downloads");
@@ -616,18 +767,42 @@ GtkWidget *now_downloads_page(void){
  gtk_box_pack_start(GTK_BOX(transfers),queue_view,TRUE,TRUE,0);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),transfers,"transfers");
  GtkWidget *search=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ search_workspace=gtk_stack_new();
+ gtk_stack_set_hhomogeneous(GTK_STACK(search_workspace),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(search_workspace),FALSE);
+ gtk_stack_set_transition_type(GTK_STACK(search_workspace),
+                               GTK_STACK_TRANSITION_TYPE_NONE);
+ gtk_box_pack_start(GTK_BOX(search),search_workspace,TRUE,TRUE,0);
  search_view=now_downloads_search_view_new();
- gtk_box_pack_start(GTK_BOX(search),search_view,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(search_workspace),search_view,"results");
+ GtkWidget *folder_page=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
+ GtkWidget *folder_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(folder_page),folder_header,FALSE,FALSE,0);
+ search_back_button=gtk_button_new_with_label("BACK TO RESULTS");
+ gtk_style_context_add_class(gtk_widget_get_style_context(search_back_button),
+                             "now-action");
+ gtk_widget_set_tooltip_text(search_back_button,
+   "Return to the last search without losing the results");
+ g_signal_connect(search_back_button,"clicked",G_CALLBACK(on_search_back),NULL);
+ gtk_box_pack_start(GTK_BOX(folder_header),search_back_button,FALSE,FALSE,0);
+ GtkWidget *folder_heading=gtk_label_new("CHOOSE DOWNLOAD LOCATION");
+ gtk_label_set_ellipsize(GTK_LABEL(folder_heading),PANGO_ELLIPSIZE_END);
+ gtk_label_set_xalign(GTK_LABEL(folder_heading),0);
+ gtk_box_pack_start(GTK_BOX(folder_header),folder_heading,TRUE,TRUE,0);
  destination_view=now_downloads_destination_view_new();
- gtk_box_pack_start(GTK_BOX(search),destination_view,FALSE,FALSE,0);
+ g_signal_connect(destination_view,"size-allocate",
+                  G_CALLBACK(destination_allocated),NULL);
+ gtk_box_pack_start(GTK_BOX(folder_page),destination_view,TRUE,TRUE,0);
+ gtk_stack_add_named(GTK_STACK(search_workspace),folder_page,"destination");
  now_downloads_search_view_on_select(search_view,on_search_result,NULL);
  now_downloads_destination_view_on_added(destination_view,on_download_submitted,NULL);
+ now_downloads_destination_view_on_cancel(destination_view,on_destination_cancel,NULL);
  gtk_stack_add_named(GTK_STACK(downloads_subtabs),search,"search");
- gtk_stack_add_named(GTK_STACK(queue_stack),body,"queue");
  /* GtkStack only selects a child that is visible. Finish showing the entire
   * page before selecting the nested queue and transfers views; otherwise the
   * first visit can show an empty placeholder until an external resize. */
  gtk_widget_show_all(root);
+ gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"results");
  gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers");
  gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue");
  update_download_tab_buttons();

@@ -16,13 +16,15 @@ from owner_host_pilot import inspect_candidate
 from media_endpoint import inspect_local_jellyfin
 from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
+from download_files import inspect_torrent_files
 from download_manage import manage_torrent, checked_hash, OPERATIONS
 from download_search import search_once, stream_search, checked_query, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
-                                   add_magnet as enqueue_download, _relative, ROOT_ID)
+                                   add_magnet as enqueue_download, create_folder as new_download_folder,
+                                    checked_folder_name, checked_host_path, add_magnet_host_path, _relative, ROOT_ID)
 
 VERSION = 1
-ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_manage"))
+ACTIONS = frozenset(("status", "start", "stop", "reconcile", "observe", "cleanup", "media", "downloads_status", "downloads_queue", "downloads_files", "downloads_search", "downloads_roots", "downloads_browse", "downloads_add", "downloads_add_path", "downloads_mkdir", "downloads_manage"))
 
 
 def _validated_request(request):
@@ -39,10 +41,16 @@ def _validated_request(request):
             fields.add("stream")
     elif action == "downloads_manage":
         fields.update(("operation", "torrent_hash"))
+    elif action == "downloads_files":
+        fields.add("torrent_hash")
     elif action == "downloads_browse":
         fields.update(("root", "relative"))
+    elif action == "downloads_mkdir":
+        fields.update(("root", "relative", "name"))
     elif action == "downloads_add":
         fields.update(("root", "relative", "magnet"))
+    elif action == "downloads_add_path":
+        fields.update(("path", "magnet"))
     if (set(request) != fields
             or type(request.get("version")) is not int or request["version"] != VERSION
             or not isinstance(action, str) or action not in ACTIONS):
@@ -60,13 +68,21 @@ def _validated_request(request):
                     request["operation"] not in OPERATIONS):
                 raise PolicyError("Unsupported download operation")
             checked_hash(request["torrent_hash"])
-        elif action in ("downloads_browse", "downloads_add"):
+        elif action == "downloads_files":
+            checked_hash(request["torrent_hash"])
+        elif action == "downloads_add_path":
+            checked_host_path(request["path"])
+            if checked_magnet(request["magnet"]) is None:
+                raise PolicyError("Invalid magnet URI")
+        elif action in ("downloads_browse", "downloads_add", "downloads_mkdir"):
             root = request["root"]
             if not isinstance(root, str) or not ROOT_ID.fullmatch(root):
                 raise PolicyError("Invalid download library root")
             _relative(request["relative"])
             if action == "downloads_add" and checked_magnet(request["magnet"]) is None:
                 raise PolicyError("Invalid magnet URI")
+            if action == "downloads_mkdir":
+                checked_folder_name(request["name"])
     except InventoryError:
         raise PolicyError("Invalid download operation") from None
     return action
@@ -118,10 +134,24 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
         except InventoryError:
             return {"success": False, "status": "folder_unavailable"}
 
+    if action == "downloads_mkdir":
+        try:
+            return {"success": True, **new_download_folder(
+                request["root"], request["relative"], request["name"])}
+        except InventoryError:
+            return {"success": False, "status": "folder_create_unavailable"}
+
     if action == "downloads_add":
         try:
             return {"success": True,
                     **enqueue_download(request["root"],request["relative"],request["magnet"])}
+        except InventoryError:
+            return {"success": False, "status": "add_unavailable"}
+
+    if action == "downloads_add_path":
+        try:
+            return {"success": True,
+                    **add_magnet_host_path(request["path"],request["magnet"])}
         except InventoryError:
             return {"success": False, "status": "add_unavailable"}
 
@@ -149,6 +179,12 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                     **manage_torrent(request["operation"],request["torrent_hash"])}
         except InventoryError:
             return {"success": False, "status": "manage_unavailable"}
+
+    if action == "downloads_files":
+        try:
+            return {"success": True, **inspect_torrent_files(request["torrent_hash"])}
+        except InventoryError:
+            return {"success": False, "status": "files_unavailable"}
 
     if action == "downloads_queue":
         try:

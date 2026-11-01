@@ -1,5 +1,6 @@
 """Compile GTK inline destination independently, then run tests in Xvfb."""
 from pathlib import Path
+import os
 import subprocess
 import tempfile
 import unittest
@@ -12,14 +13,19 @@ class DestinationViewTests(unittest.TestCase):
             text=True).split()
         with tempfile.TemporaryDirectory() as temp:
             exe=str(Path(temp)/"picker-test")
-            subprocess.run(["cc","-std=gnu11","-Wall","-Wextra",
+            compile_result=subprocess.run(["cc","-std=gnu11","-Wall","-Wextra",
                  "-Werror=incompatible-pointer-types",
                  "-Werror=implicit-function-declaration","-Isrc",
                  "tests/test_downloads_destination_view.c",
-                 "-o",exe,*flags],cwd=ROOT,check=True,capture_output=True)
-            result=subprocess.run(["xvfb-run","-a",exe],cwd=ROOT,
+                 "-o",exe,*flags],cwd=ROOT,check=False,capture_output=True,text=True)
+            self.assertEqual(compile_result.returncode,0,
+                             compile_result.stdout+"\\n"+compile_result.stderr)
+            result=subprocess.run(["xvfb-run","-a","-s",
+                                   "-screen 0 1920x1080x24",exe],cwd=ROOT,
                                   capture_output=True,text=True,
-                                  timeout=25,check=False)
+                                  timeout=25,check=False,
+                                  env={**os.environ,
+                                       "XDG_CONFIG_HOME":str(Path(temp)/"config")})
             self.assertEqual(result.returncode,0,
                              result.stdout+"\n"+result.stderr)
     def test_inline_picker_not_new_window(self):

@@ -12,4 +12,8 @@ void now_downloads_queue_view_on_action(GtkWidget *view,
 GtkWidget *now_downloads_queue_view_new(void);
 gboolean now_downloads_queue_view_update(GtkWidget *view, const char *wire);
 void now_downloads_queue_view_message(GtkWidget *view, const char *message);
+/* Validates a bounded read-only file listing and opens an in-app scrollable
+ * details dialog; returns FALSE on malformed or stale owner response. */
+gboolean now_downloads_queue_view_files_dialog(GtkWidget *view,
+      const char *wire,const char *expected_hash,const char *torrent_name);
 #endif

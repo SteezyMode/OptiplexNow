@@ -4,14 +4,23 @@
  */
 #include "downloads_destination_view.h"
 #include <gio/gio.h>
+#include <glib/gstdio.h>
 #include <string.h>
 
 typedef struct {
- GtkWidget *view,*roots,*folders,*path,*status,*up,*add;
- gchar *host,*user,*helper,*root,*relative,*magnet;
- gboolean running,loading_roots,folder_valid;
- void (*on_added)(gpointer);
- gpointer added_data;
+ gchar *host,*user,*root,*relative;
+} SavedPlace;
+typedef struct {
+ GtkWidget *view,*roots,*folders,*folder_scroll,*filter,*path,*status,*up,*add;
+ GtkWidget *new_folder,*places_list,*drive_list,*pin_place,*browser_area,*sidebar,*places_toggle;
+ GtkListStore *folder_store;
+ GtkTreeModelFilter *filtered;
+ gchar *host,*user,*helper,*root,*relative,*magnet,*pending_folder,*host_path;
+ GtkWidget *native_dialog;
+ GPtrArray *places,*recents;
+ gboolean running,loading_roots,folder_valid,sidebar_compact,sidebar_requested;
+ void (*on_added)(gpointer),(*on_cancel)(gpointer);
+ gpointer added_data,cancel_data;
 } Picker;
 typedef struct {
  GtkWidget *view;
@@ -22,16 +31,52 @@ typedef struct {
 static Picker *state(GtkWidget *view){
  return view?g_object_get_data(G_OBJECT(view),"now-destination-state"):NULL;
 }
+static void free_place(gpointer data){
+ SavedPlace *p=data;
+ if(p){g_free(p->host);g_free(p->user);
+       g_free(p->root);g_free(p->relative);g_free(p);}
+}
 static void free_state(gpointer data){
  Picker *s=data;
  g_free(s->host);g_free(s->user);g_free(s->helper);
- g_free(s->root);g_free(s->relative);g_free(s->magnet);g_free(s);
+ g_free(s->root);g_free(s->relative);g_free(s->magnet);
+ g_free(s->pending_folder);
+ g_free(s->host_path);
+ if(s->places)g_ptr_array_unref(s->places);
+ if(s->recents)g_ptr_array_unref(s->recents);
+ g_clear_object(&s->filtered);
+ g_clear_object(&s->folder_store);
+ g_free(s);
 }
+/* Native GTK directory list, not buttons. Filter stays on the client. */
 static void clear_folder_buttons(Picker *s){
- GList *children=gtk_container_get_children(GTK_CONTAINER(s->folders));
- for(GList *at=children;at;at=at->next)
-   gtk_widget_destroy(GTK_WIDGET(at->data));
- g_list_free(children);
+ if(s && s->folder_store)gtk_list_store_clear(s->folder_store);
+}
+static gboolean filter_folder_row(GtkTreeModel *model,GtkTreeIter *iter,
+                                  gpointer data){
+ Picker *s=data;
+ const gchar *query=gtk_entry_get_text(GTK_ENTRY(s->filter));
+ if(!query || !*query)return TRUE;
+ gchar *name=NULL;
+ gtk_tree_model_get(model,iter,0,&name,-1);
+ gchar *needle=g_utf8_casefold(query,-1);
+ gchar *haystack=g_utf8_casefold(name?name:"",-1);
+ gboolean visible=(strstr(haystack,needle)!=NULL);
+ g_free(haystack);g_free(needle);g_free(name);
+ return visible;
+}
+static void filter_folder_buttons(Picker *s){
+ if(s && s->filtered)gtk_tree_model_filter_refilter(s->filtered);
+}
+static void on_filter_changed(GtkEditable *entry,gpointer data){
+ (void)entry;
+ Picker *s=state(GTK_WIDGET(data));
+ filter_folder_buttons(s);
+ if(s && s->folder_scroll){
+   GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
+                         GTK_SCROLLED_WINDOW(s->folder_scroll));
+   if(adj)gtk_adjustment_set_value(adj,gtk_adjustment_get_lower(adj));
+ }
 }
 static gboolean safe_name(const char *s){
  if(!s || !*s || !g_utf8_validate(s,-1,NULL) ||
@@ -59,28 +104,291 @@ static gboolean safe_relative(const char *value){
  g_strfreev(parts);
  return ok;
 }
+/* Saved places are bookmarks scoped to this client's approved root IDs and
+ * relative folders, never raw host paths. Every use re-runs owner browse. */
+#define MAX_SAVED_PLACES 24
+#define MAX_RECENT_PLACES 8
+static gboolean valid_bookmark_host(const gchar *host){
+ if(!host || !*host || strlen(host)>253 || host[0]=='-')return FALSE;
+ for(const gchar *p=host;*p;p++)
+   if(!g_ascii_isalnum(*p) && *p!='.' && *p!=':' && *p!='-')
+     return FALSE;
+ return TRUE;
+}
+static gboolean valid_bookmark_user(const gchar *user){
+ if(!user || !*user || strlen(user)>32 ||
+    !(g_ascii_isalpha(user[0]) || user[0]=='_'))return FALSE;
+ for(const gchar *p=user;*p;p++)
+   if(!g_ascii_isalnum(*p) && *p!='_' && *p!='-')return FALSE;
+ return TRUE;
+}
+static gboolean same_server(Picker *s,SavedPlace *p){
+ return p && !g_strcmp0(s->host,p->host) &&
+             !g_strcmp0(s->user,p->user);
+}
+static gchar *places_path(void){
+ return g_build_filename(g_get_user_config_dir(),"optiplex-now",
+                         "download-places.ini",NULL);
+}
+static void on_place_shortcut(GtkButton *button,gpointer data);
+static void on_drive_clicked(GtkButton *button,gpointer data);
+static void refresh_place_choices(Picker *s){
+ if(!s->places_list)return;
+ GList *old=gtk_container_get_children(GTK_CONTAINER(s->places_list));
+ for(GList *it=old;it;it=it->next)gtk_widget_destroy(GTK_WIDGET(it->data));
+ g_list_free(old);
+ for(guint kind=0;kind<2;kind++){
+   const char *heading=kind==0?"FAVORITES":"RECENT";
+   GtkWidget *header=gtk_label_new(heading);
+   gtk_label_set_xalign(GTK_LABEL(header),0);
+   gtk_widget_set_margin_top(header,kind==0?4:14);
+   gtk_box_pack_start(GTK_BOX(s->places_list),header,FALSE,FALSE,3);
+   guint count=0;
+   GPtrArray *items=kind==0?s->places:s->recents;
+   for(guint i=0;i<items->len;i++){
+     SavedPlace *p=g_ptr_array_index(items,i);
+     if(!same_server(s,p))continue;
+     const gchar *name=*p->relative?strrchr(p->relative,'/'):NULL;
+     name=name?name+1:(*p->relative?p->relative:p->root);
+     GtkWidget *button=gtk_button_new_with_label(name);
+     gtk_widget_set_halign(button,GTK_ALIGN_FILL);
+     gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");
+     gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-places-item");
+     gchar *location=g_strdup_printf("%s / %s",p->root,
+                             *p->relative?p->relative:"(root)");
+     gtk_widget_set_tooltip_text(button,location);
+     g_object_set_data_full(G_OBJECT(button),"shortcut-root",g_strdup(p->root),g_free);
+     g_object_set_data_full(G_OBJECT(button),"shortcut-path",g_strdup(p->relative),g_free);
+     g_signal_connect(button,"clicked",G_CALLBACK(on_place_shortcut),s->view);
+     gtk_box_pack_start(GTK_BOX(s->places_list),button,FALSE,FALSE,1);
+     g_free(location);count++;
+   }
+   if(!count){
+     GtkWidget *empty=gtk_label_new(kind==0?"No favorites yet":"No recent folders");
+     gtk_label_set_xalign(GTK_LABEL(empty),0);
+     gtk_widget_set_sensitive(empty,FALSE);
+     gtk_box_pack_start(GTK_BOX(s->places_list),empty,FALSE,FALSE,2);
+   }
+ }
+ gtk_widget_show_all(s->places_list);
+}
+static gboolean store_places(Picker *s){
+ gchar *file=places_path();
+ gchar *directory=g_path_get_dirname(file);
+ gboolean ok=FALSE;
+ if(g_mkdir_with_parents(directory,0700)==0){
+   GKeyFile *data=g_key_file_new();
+   for(guint kind=0;kind<2;kind++){
+     GPtrArray *items=kind==0?s->places:s->recents;
+     for(guint i=0;i<items->len;i++){
+       SavedPlace *p=g_ptr_array_index(items,i);
+       gchar *group=g_strdup_printf("%s%u",kind==0?"place":"recent",i);
+       g_key_file_set_string(data,group,"host",p->host);
+       g_key_file_set_string(data,group,"user",p->user);
+       g_key_file_set_string(data,group,"root",p->root);
+       g_key_file_set_string(data,group,"relative",p->relative);
+       g_free(group);
+     }
+   }
+   gsize size=0;
+   gchar *raw=g_key_file_to_data(data,&size,NULL);
+   if(raw && size<=32768)
+     ok=g_file_set_contents(file,raw,size,NULL);
+   g_free(raw);g_key_file_unref(data);
+ }
+ g_free(directory);g_free(file);
+ return ok;
+}
+static void load_places(Picker *s){
+ gchar *file=places_path(),*raw=NULL;
+ gsize size=0;
+ if(g_file_get_contents(file,&raw,&size,NULL) && size<=32768){
+   GKeyFile *data=g_key_file_new();
+   if(g_key_file_load_from_data(data,raw,size,G_KEY_FILE_NONE,NULL)){
+     for(guint kind=0;kind<2;kind++){
+       GPtrArray *items=kind==0?s->places:s->recents;
+       guint bound=kind==0?MAX_SAVED_PLACES:MAX_RECENT_PLACES;
+       for(guint i=0;i<bound;i++){
+         gchar *group=g_strdup_printf("%s%u",kind==0?"place":"recent",i);
+         gchar *host=g_key_file_get_string(data,group,"host",NULL);
+         gchar *user=g_key_file_get_string(data,group,"user",NULL);
+         gchar *root=g_key_file_get_string(data,group,"root",NULL);
+         gchar *relative=g_key_file_get_string(data,group,"relative",NULL);
+         if(valid_bookmark_host(host) && valid_bookmark_user(user) &&
+            safe_root(root) && safe_relative(relative)){
+           SavedPlace *p=g_new0(SavedPlace,1);
+           p->host=g_strdup(host);p->user=g_strdup(user);
+           p->root=g_strdup(root);p->relative=g_strdup(relative);
+           g_ptr_array_add(items,p);
+         }
+         g_free(host);g_free(user);g_free(root);g_free(relative);g_free(group);
+       }
+     }
+   }
+   g_key_file_unref(data);
+ }
+ g_free(raw);g_free(file);
+ refresh_place_choices(s);
+}
+static gboolean remember_current_place(Picker *s){
+ if(!s || !s->folder_valid || !valid_bookmark_host(s->host) ||
+    !valid_bookmark_user(s->user) || !safe_root(s->root) ||
+    !safe_relative(s->relative))return FALSE;
+ for(guint i=0;i<s->places->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->places,i);
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative))
+     return TRUE;
+ }
+ if(s->places->len>=MAX_SAVED_PLACES)return FALSE;
+ SavedPlace *p=g_new0(SavedPlace,1);
+ p->host=g_strdup(s->host);p->user=g_strdup(s->user);
+ p->root=g_strdup(s->root);p->relative=g_strdup(s->relative);
+ g_ptr_array_add(s->places,p);
+ refresh_place_choices(s);
+ return store_places(s);
+}
+static gint current_favorite(Picker *s){
+ if(!s || !s->root || !s->relative)return -1;
+ for(guint i=0;i<s->places->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->places,i);
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative))return (gint)i;
+ }
+ return -1;
+}
+static gboolean record_recent_place(Picker *s){
+ /* Only a successfully submitted torrent becomes Recent. No default. */
+ if(!s || !valid_bookmark_host(s->host) || !valid_bookmark_user(s->user) ||
+    !safe_root(s->root) || !safe_relative(s->relative))return FALSE;
+ for(guint i=0;i<s->recents->len;i++){
+   SavedPlace *p=g_ptr_array_index(s->recents,i);
+   if(same_server(s,p) && !strcmp(p->root,s->root) &&
+      !strcmp(p->relative,s->relative)){
+     g_ptr_array_remove_index(s->recents,i);
+     break;
+   }
+ }
+ SavedPlace *p=g_new0(SavedPlace,1);
+ p->host=g_strdup(s->host);p->user=g_strdup(s->user);
+ p->root=g_strdup(s->root);p->relative=g_strdup(s->relative);
+ g_ptr_array_insert(s->recents,0,p);
+ while(s->recents->len>MAX_RECENT_PLACES)
+   g_ptr_array_remove_index(s->recents,s->recents->len-1);
+ refresh_place_choices(s);
+ return store_places(s);
+}
 static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->add,!s->running && s->folder_valid &&
                           s->magnet && s->root);
  gtk_widget_set_sensitive(s->up,!s->running && s->relative && *s->relative);
  gtk_widget_set_sensitive(s->roots,!s->running);
+ if(s->drive_list)gtk_widget_set_sensitive(s->drive_list,!s->running);
+ gtk_widget_set_sensitive(s->new_folder,!s->running && s->folder_valid);
+ gtk_widget_set_sensitive(s->pin_place,!s->running && s->folder_valid);
+ gtk_button_set_label(GTK_BUTTON(s->pin_place),
+                      current_favorite(s)>=0?"★ Favorited":"☆ Favorite");
+ gtk_widget_set_sensitive(s->places_list,!s->running);
 }
 static void start(Picker *s,char action);
-static void on_folder_clicked(GtkButton *button,gpointer data){
+static void on_save_place(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running || !s->folder_valid)return;
+ gint old=current_favorite(s);
+ gboolean ok=FALSE;
+ if(old>=0){
+   g_ptr_array_remove_index(s->places,(guint)old);
+   refresh_place_choices(s);
+   ok=store_places(s);
+ }else ok=remember_current_place(s);
+ gtk_label_set_text(GTK_LABEL(s->status),ok ?
+   (old>=0?"Favorite removed.":"Location saved to Favorites.") :
+   "Unable to change Favorites. Check local permissions or limit.");
+ button_states(s);
+}
+static void on_place_shortcut(GtkButton *button,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running)return;
+ const gchar *root=g_object_get_data(G_OBJECT(button),"shortcut-root");
+ const gchar *relative=g_object_get_data(G_OBJECT(button),"shortcut-path");
+ if(!safe_root(root) || !safe_relative(relative))return;
+ s->loading_roots=TRUE;
+ gboolean available=gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),root);
+ s->loading_roots=FALSE;
+ if(!available){
+   gtk_label_set_text(GTK_LABEL(s->status),
+       "That saved drive is no longer available.");
+   button_states(s);return;
+ }
+ g_free(s->root);s->root=g_strdup(root);
+ g_free(s->relative);s->relative=g_strdup(relative);
+ start(s,'b'); /* Revalidated by the host, never trusted from bookmarks. */
+}
+static void on_new_folder(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running || !s->folder_valid || !s->root)return;
+ GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+ GtkWidget *dialog=gtk_dialog_new_with_buttons("CREATE DOWNLOAD FOLDER",
+    GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+    GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+    "CANCEL",GTK_RESPONSE_CANCEL,"CREATE FOLDER",GTK_RESPONSE_ACCEPT,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),420,-1);
+ GtkWidget *area=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+ GtkWidget *explain=gtk_label_new(
+   "Create a folder inside the selected approved download drive.");
+ gtk_label_set_line_wrap(GTK_LABEL(explain),TRUE);
+ gtk_label_set_xalign(GTK_LABEL(explain),0);
+ gtk_box_pack_start(GTK_BOX(area),explain,FALSE,FALSE,7);
+ GtkWidget *entry=gtk_entry_new();
+ gtk_entry_set_max_length(GTK_ENTRY(entry),160);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(entry),"Games");
+ gtk_box_pack_start(GTK_BOX(area),entry,FALSE,FALSE,6);
+ gtk_widget_show_all(dialog);
+ gint choice=gtk_dialog_run(GTK_DIALOG(dialog));
+ gchar *name=choice==GTK_RESPONSE_ACCEPT ?
+               g_strdup(gtk_entry_get_text(GTK_ENTRY(entry))):NULL;
+ gtk_widget_destroy(dialog);
+ if(!name)return;
+ gchar *next=*s->relative ?
+       g_strconcat(s->relative,"/",name,NULL):g_strdup(name);
+ gboolean valid=safe_name(name) && !strchr(name,'\\') &&
+                safe_relative(next);
+ g_free(next);
+ if(!valid){
+   gtk_label_set_text(GTK_LABEL(s->status),
+     "Use one folder name (such as Games), without /, \\, or ..");
+   g_free(name);return;
+ }
+ g_free(s->pending_folder);s->pending_folder=name;
+ start(s,'m');
+}
+static void on_folder_activated(GtkTreeView *tree,GtkTreePath *path,
+                                GtkTreeViewColumn *column,gpointer data){
+ (void)column;
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running || !s->root)return;
- const char *folder=gtk_button_get_label(button);
- if(!safe_name(folder))return;
- gchar *next=(*s->relative) ? g_strconcat(s->relative,"/",folder,NULL) :
-                             g_strdup(folder);
+ GtkTreeIter iter;
+ GtkTreeModel *model=gtk_tree_view_get_model(tree);
+ if(!gtk_tree_model_get_iter(model,&iter,path))return;
+ gchar *folder=NULL;
+ gtk_tree_model_get(model,&iter,0,&folder,-1);
+ if(!safe_name(folder)){g_free(folder);return;}
+ gchar *next=(s->relative && *s->relative) ?
+         g_strconcat(s->relative,"/",folder,NULL):g_strdup(folder);
+ g_free(folder);
+ if(!safe_relative(next)){g_free(next);return;}
  g_free(s->relative);s->relative=next;
  start(s,'b');
 }
 static gboolean read_response(Picker *s,char action,char *wire){
  if(!wire || !*wire || strlen(wire)>32768 ||
     !g_utf8_validate(wire,-1,NULL))return FALSE;
- if(action=='a'){
+ if(action=='m')return !strcmp(wire,"CREATED");
+ if(action=='a' || action=='h'){
    if(strcmp(wire,"SUBMITTED"))return FALSE;
+   if(action=='a')record_recent_place(s);
    gtk_label_set_text(GTK_LABEL(s->status),"Torrent submitted to selected folder.");
    g_clear_pointer(&s->magnet,g_free);
    s->folder_valid=FALSE;
@@ -95,7 +403,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
    if(strcmp(lines[0],"ROOTS"))ok=FALSE;
    for(guint i=1;ok && lines[i];i++){
      gchar **fields=g_strsplit(lines[i],"\t",-1);
-     if(++count>12 || g_strv_length(fields)!=3 ||
+     if(++count>24 || g_strv_length(fields)!=3 ||
         strcmp(fields[0],"ROOT") || !safe_root(fields[1]) ||
         !safe_name(fields[2]))ok=FALSE;
      g_strfreev(fields);
@@ -104,13 +412,41 @@ static gboolean read_response(Picker *s,char action,char *wire){
    if(ok){
      s->loading_roots=TRUE;
      gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(s->roots));
+     GList *old=gtk_container_get_children(GTK_CONTAINER(s->drive_list));
+     for(GList *it=old;it;it=it->next)
+       gtk_widget_destroy(GTK_WIDGET(it->data));
+     g_list_free(old);
      for(guint i=1;lines[i];i++){
        gchar **fields=g_strsplit(lines[i],"\t",-1);
        gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->roots),
                                  fields[1],fields[2]);
+       GtkWidget *button=gtk_button_new_with_label(fields[2]);
+       gtk_button_set_relief(GTK_BUTTON(button),GTK_RELIEF_NONE);
+       gtk_style_context_add_class(gtk_widget_get_style_context(button),
+                                   "now-places-item");
+       gtk_widget_set_halign(button,GTK_ALIGN_FILL);
+       GtkWidget *drive_icon=gtk_image_new_from_icon_name("drive-harddisk",
+                                                          GTK_ICON_SIZE_MENU);
+       gtk_button_set_image(GTK_BUTTON(button),drive_icon);
+       gtk_button_set_always_show_image(GTK_BUTTON(button),TRUE);
+       gtk_widget_set_tooltip_text(button,fields[2]);
+       g_object_set_data_full(G_OBJECT(button),"drive-id",
+                              g_strdup(fields[1]),g_free);
+       g_signal_connect(button,"clicked",G_CALLBACK(on_drive_clicked),s->view);
+       gtk_box_pack_start(GTK_BOX(s->drive_list),button,FALSE,FALSE,1);
        g_strfreev(fields);
      }
-     gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),0);
+     gtk_widget_show_all(s->drive_list);
+     gtk_combo_box_set_active(GTK_COMBO_BOX(s->roots),-1);
+     g_clear_pointer(&s->root,g_free);
+     g_clear_pointer(&s->relative,g_free);
+     clear_folder_buttons(s);
+     gtk_widget_set_size_request(s->folder_scroll,-1,120);
+     gtk_label_set_text(GTK_LABEL(s->path),"Choose a drive");
+     gchar *found=g_strdup_printf("%u storage location%s available. Choose a drive.",
+                                   count,count==1?"":"s");
+     gtk_label_set_text(GTK_LABEL(s->status),found);
+     g_free(found);
      s->loading_roots=FALSE;
    }
  }else if(action=='b'){
@@ -130,26 +466,41 @@ static gboolean read_response(Picker *s,char action,char *wire){
      clear_folder_buttons(s);
      for(guint i=1;lines[i];i++){
        gchar **part=g_strsplit(lines[i],"\t",-1);
-       GtkWidget *button=gtk_button_new_with_label(part[1]);
-       gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
-       gtk_widget_set_halign(button,GTK_ALIGN_FILL);
-       g_signal_connect(button,"clicked",G_CALLBACK(on_folder_clicked),s->view);
-       gtk_box_pack_start(GTK_BOX(s->folders),button,FALSE,FALSE,1);
+       GtkTreeIter row;
+       gtk_list_store_append(s->folder_store,&row);
+       gtk_list_store_set(s->folder_store,&row,0,part[1],-1);
        g_strfreev(part);
      }
-     gtk_widget_show_all(s->folders);
-     gchar *title=g_strdup_printf("%s / %s",s->root,s->relative && *s->relative ?
-                                    s->relative : "(root)");
+     /* Sparse directories should not push Add Torrent below blank space.
+      * Larger directories stay bounded and scroll like a file chooser. */
+     gtk_widget_set_size_request(s->folder_scroll,-1,
+                                 CLAMP(42+(gint)count*28,120,290));
+     /* Every folder change starts with the full directory. A search for
+      * "Horror" in Movies must not silently hide folders inside Horror. */
+     gtk_entry_set_text(GTK_ENTRY(s->filter),"");
+     if(s->folder_scroll){
+       GtkAdjustment *adj=gtk_scrolled_window_get_vadjustment(
+                             GTK_SCROLLED_WINDOW(s->folder_scroll));
+       if(adj)gtk_adjustment_set_value(adj,gtk_adjustment_get_lower(adj));
+     }
+     gchar *drive=gtk_combo_box_text_get_active_text(
+                     GTK_COMBO_BOX_TEXT(s->roots));
+     gchar *title=g_strdup_printf("%s%s%s",
+          drive?drive:s->root,
+          (s->relative && *s->relative)?"/":"",
+          (s->relative && *s->relative)?s->relative:"");
      gtk_label_set_text(GTK_LABEL(s->path),title);
-     g_free(title);
+     g_free(title);g_free(drive);
      gtk_label_set_text(GTK_LABEL(s->status),
-       "Choose a subfolder, or Add to the folder shown.");
+       "Double-click a folder to open it. Add Torrent saves to the folder shown above.");
      s->folder_valid=TRUE;
+
    }
  }else ok=FALSE;
  g_strfreev(lines);
  return ok;
 }
+static void open_native_chooser(Picker *s);
 static void finished(GObject *source,GAsyncResult *res,gpointer data){
  (void)source;
  Job *job=data;
@@ -174,16 +525,45 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        "Folder operation failed. Check owner approval and library mounts.");
    }
    s->running=FALSE;
-   if(ok && job->action=='r'){
-     const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
-     if(safe_root(id)){
-       g_free(s->root);s->root=g_strdup(id);
-       g_free(s->relative);s->relative=g_strdup("");
-       start(s,'b');
-     }else{ok=FALSE;}
+   if(!ok && job->action=='h'){
+     GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+     GtkWidget *message=gtk_message_dialog_new(
+        GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+        GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+        GTK_MESSAGE_ERROR,GTK_BUTTONS_CLOSE,
+        "Unable to download to this folder");
+     gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(message),
+        "The selected OptiPlex folder may not be mounted or writable "
+        "inside qBittorrent, or its owner connection is unavailable. "
+        "No torrent was submitted.");
+     gtk_dialog_run(GTK_DIALOG(message));
+     gtk_widget_destroy(message);
+     if(s->magnet)open_native_chooser(s);
    }
-   if(!ok)gtk_label_set_text(GTK_LABEL(s->status),
-                           "No approved folders available.");
+   if(ok && job->action=='m'){
+     gchar *next=s->relative && *s->relative ?
+         g_strconcat(s->relative,"/",s->pending_folder,NULL) :
+         g_strdup(s->pending_folder);
+     if(g_strcmp0(s->root,job->root) ||
+        g_strcmp0(s->relative,job->relative) ||
+        !safe_relative(next)){
+       ok=FALSE;
+     }else{
+       g_free(s->relative);s->relative=next;next=NULL;
+       start(s,'b');
+     }
+     g_clear_pointer(&s->pending_folder,g_free);
+     g_free(next);
+   }
+   /* No automatic download destination: choose a drive explicitly. */
+    if(!ok){
+     if(job->action=='m')
+       gtk_label_set_text(GTK_LABEL(s->status),
+         "Cannot create folder. It may exist or the approved drive is not writable.");
+     else
+       gtk_label_set_text(GTK_LABEL(s->status),"No approved folders available.");
+     g_clear_pointer(&s->pending_folder,g_free);
+   }
    button_states(s);
  }else if(s){s->running=FALSE;button_states(s);}
  g_clear_error(&err);g_free(out);
@@ -192,12 +572,15 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
  g_free(job);
 }
 static void start(Picker *s,char action){
- if(s->running || !s->helper || !s->host || !s->user)return;
- const char *operation=action=='r'?"roots":action=='b'?"browse":"add";
+ if(s->running || !s->helper || !s->host || !s->user ||
+    (action=='h' && (!s->host_path || !s->magnet)))return;
+ const char *operation=action=='r'?"roots":action=='b'?"browse":
+                       action=='m'?"mkdir":action=='h'?"addpath":"add";
  const char *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,operation,
-                    action=='r'?NULL:s->root,
-                    action=='r'?NULL:s->relative,
-                    action=='a'?s->magnet:NULL,NULL};
+                    action=='r'?NULL:action=='h'?s->host_path:s->root,
+                    action=='r'?NULL:action=='h'?s->magnet:s->relative,
+                    action=='a'?s->magnet:
+                    action=='m'?s->pending_folder:NULL,NULL};
  GError *err=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|
                                      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
@@ -213,8 +596,9 @@ static void start(Picker *s,char action){
  job->action=action;
  s->running=TRUE;s->folder_valid=FALSE;
  button_states(s);
- gtk_label_set_text(GTK_LABEL(s->status),action=='a'?
-    "Submitting to selected folder..." : "Reading approved media folders...");
+ gtk_label_set_text(GTK_LABEL(s->status),(action=='a' || action=='h')?
+    "Submitting to selected folder..." : action=='m'?
+    "Creating approved download folder..." : "Reading approved folders...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,finished,job);
 }
 static void on_root(GtkComboBox *combo,gpointer data){
@@ -226,6 +610,20 @@ static void on_root(GtkComboBox *combo,gpointer data){
  g_free(s->relative);s->relative=g_strdup("");
  start(s,'b');
 }
+static void on_drive_clicked(GtkButton *button,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running)return;
+ const gchar *id=g_object_get_data(G_OBJECT(button),"drive-id");
+ if(!safe_root(id))return;
+ const gchar *active=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
+ if(g_strcmp0(active,id)==0){
+   /* Clicking a drive while inside a subdirectory returns to that drive's root. */
+   g_free(s->relative);s->relative=g_strdup("");
+   start(s,'b');
+ }else{
+   gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),id);
+ }
+}
 static void on_up(GtkButton *unused,gpointer data){
  (void)unused;
  Picker *s=state(GTK_WIDGET(data));
@@ -235,52 +633,171 @@ static void on_up(GtkButton *unused,gpointer data){
  else *s->relative=0;
  start(s,'b');
 }
+static void on_cancel(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ g_clear_pointer(&s->magnet,g_free);
+ s->folder_valid=FALSE;
+ gtk_widget_hide(s->view);
+ if(s->on_cancel)s->on_cancel(s->cancel_data);
+}
 static void on_add(GtkButton *unused,gpointer data){
  (void)unused;
  Picker *s=state(GTK_WIDGET(data));
  if(s && !s->running && s->folder_valid && s->magnet)start(s,'a');
 }
+static void toggle_places(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ s->sidebar_requested=!s->sidebar_requested;
+ gtk_widget_set_visible(s->sidebar,s->sidebar_requested);
+}
+static void adapt_picker_width(GtkWidget *unused,GtkAllocation *size,
+                               gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ gboolean compact=size->width<650;
+ if(s->sidebar_compact!=compact){
+   s->sidebar_compact=compact;
+   s->sidebar_requested=!compact;
+ }
+ /* GTK show_all can re-show a child after an early allocation. Enforce
+  * compact visibility on every layout pass, not only at mode transitions. */
+ gboolean sidebar_visible=!compact || s->sidebar_requested;
+ if(gtk_widget_get_visible(s->sidebar)!=sidebar_visible)
+   gtk_widget_set_visible(s->sidebar,sidebar_visible);
+ if(gtk_widget_get_visible(s->places_toggle)!=compact)
+   gtk_widget_set_visible(s->places_toggle,compact);
+}
 GtkWidget *now_downloads_destination_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_style_context_add_class(gtk_widget_get_style_context(view),
+                             "now-native-file-dialog");
  gtk_widget_set_no_show_all(view,TRUE);
  Picker *s=g_new0(Picker,1);
  s->view=view;
+  s->places=g_ptr_array_new_with_free_func(free_place);
+ s->recents=g_ptr_array_new_with_free_func(free_place);
  g_object_set_data_full(G_OBJECT(view),"now-destination-state",s,free_state);
- GtkWidget *title=gtk_label_new("SAVE SELECTED TORRENT TO");
+ /* Familiar file-dialog structure: sidebar locations, folder pane,
+  * then a fixed confirmation footer. No destination is preselected. */
+ GtkWidget *title=gtk_label_new("Choose download location");
  gtk_label_set_xalign(GTK_LABEL(title),0);
- gtk_box_pack_start(GTK_BOX(view),title,FALSE,FALSE,0);
- GtkWidget *bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
- gtk_box_pack_start(GTK_BOX(view),bar,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view),title,FALSE,FALSE,4);
+ GtkWidget *main_area=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(view),main_area,FALSE,FALSE,0);
+ g_signal_connect(main_area,"size-allocate",G_CALLBACK(adapt_picker_width),view);
+ s->sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
+ /* Child visibility is controlled by the responsive layout, not show_all. */
+ gtk_widget_set_no_show_all(s->sidebar,TRUE);
+ gtk_widget_set_size_request(s->sidebar,170,-1);
+ gtk_box_pack_start(GTK_BOX(main_area),s->sidebar,FALSE,FALSE,0);
+ GtkWidget *locations=gtk_label_new("DRIVES");
+ gtk_label_set_xalign(GTK_LABEL(locations),0);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),locations,FALSE,FALSE,3);
  s->roots=gtk_combo_box_text_new();
- gtk_box_pack_start(GTK_BOX(bar),s->roots,TRUE,TRUE,0);
+ /* Internal ID selector; drives are visible as separate sidebar rows. */
+ gtk_widget_set_no_show_all(s->roots,TRUE);
+ s->drive_list=gtk_box_new(GTK_ORIENTATION_VERTICAL,1);
+ GtkWidget *drives_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(drives_scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_size_request(drives_scroll,-1,138);
+ gtk_container_add(GTK_CONTAINER(drives_scroll),s->drive_list);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),drives_scroll,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),s->roots,FALSE,FALSE,0);
  g_signal_connect(s->roots,"changed",G_CALLBACK(on_root),view);
- s->up=gtk_button_new_with_label("UP");
+ GtkWidget *places_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(places_scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_size_request(places_scroll,-1,160);
+ s->places_list=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ gtk_container_add(GTK_CONTAINER(places_scroll),s->places_list);
+ gtk_box_pack_start(GTK_BOX(s->sidebar),places_scroll,FALSE,FALSE,0);
+ s->browser_area=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_box_pack_start(GTK_BOX(main_area),s->browser_area,TRUE,TRUE,0);
+ GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
+ gtk_box_pack_start(GTK_BOX(s->browser_area),toolbar,FALSE,FALSE,0);
+ s->places_toggle=gtk_button_new_with_label("Locations");
+ gtk_box_pack_start(GTK_BOX(toolbar),s->places_toggle,FALSE,FALSE,0);
+ g_signal_connect(s->places_toggle,"clicked",G_CALLBACK(toggle_places),view);
+ gtk_widget_set_no_show_all(s->places_toggle,TRUE);
+ gtk_widget_hide(s->places_toggle);
+ s->up=gtk_button_new_with_label("Up");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->up),"now-action");
  g_signal_connect(s->up,"clicked",G_CALLBACK(on_up),view);
- gtk_box_pack_start(GTK_BOX(bar),s->up,FALSE,FALSE,0);
-
- s->path=gtk_label_new("Select a media drive.");
+ gtk_box_pack_start(GTK_BOX(toolbar),s->up,FALSE,FALSE,0);
+ s->new_folder=gtk_button_new_with_label("New Folder");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->new_folder),"now-action");
+ gtk_box_pack_start(GTK_BOX(toolbar),s->new_folder,FALSE,FALSE,0);
+ g_signal_connect(s->new_folder,"clicked",G_CALLBACK(on_new_folder),view);
+ s->pin_place=gtk_button_new_with_label("☆ Favorite");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->pin_place),"now-action");
+ gtk_box_pack_end(GTK_BOX(toolbar),s->pin_place,FALSE,FALSE,0);
+ g_signal_connect(s->pin_place,"clicked",G_CALLBACK(on_save_place),view);
+ s->path=gtk_label_new("Choose a drive on the left.");
  gtk_label_set_xalign(GTK_LABEL(s->path),0);
- gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_END);
- gtk_box_pack_start(GTK_BOX(view),s->path,FALSE,FALSE,0);
- GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+ gtk_label_set_selectable(GTK_LABEL(s->path),TRUE);
+ gtk_label_set_ellipsize(GTK_LABEL(s->path),PANGO_ELLIPSIZE_MIDDLE);
+ gtk_box_pack_start(GTK_BOX(s->browser_area),s->path,FALSE,FALSE,0);
+ s->filter=gtk_search_entry_new();
+ gtk_entry_set_placeholder_text(GTK_ENTRY(s->filter),"Filter folders");
+ gtk_box_pack_start(GTK_BOX(s->browser_area),s->filter,FALSE,FALSE,0);
+ g_signal_connect(s->filter,"changed",G_CALLBACK(on_filter_changed),view);
+ s->folder_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(s->folder_scroll),
                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_widget_set_size_request(scroll,-1,110);
- s->folders=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
- gtk_container_add(GTK_CONTAINER(scroll),s->folders);
- gtk_box_pack_start(GTK_BOX(view),scroll,FALSE,FALSE,0);
- s->status=gtk_label_new("Choose a folder before adding.");
+ gtk_scrolled_window_set_overlay_scrolling(
+      GTK_SCROLLED_WINDOW(s->folder_scroll),FALSE);
+ /* The action footer immediately follows a normal-size directory viewport. */
+ gtk_widget_set_size_request(s->folder_scroll,-1,275);
+ s->folder_store=gtk_list_store_new(1,G_TYPE_STRING);
+ GtkTreeModel *filtered=gtk_tree_model_filter_new(
+                                  GTK_TREE_MODEL(s->folder_store),NULL);
+ s->filtered=GTK_TREE_MODEL_FILTER(filtered);
+ gtk_tree_model_filter_set_visible_func(s->filtered,filter_folder_row,s,NULL);
+ s->folders=gtk_tree_view_new_with_model(filtered);
+ gtk_tree_view_set_headers_visible(GTK_TREE_VIEW(s->folders),TRUE);
+ GtkTreeViewColumn *column=gtk_tree_view_column_new();
+ gtk_tree_view_column_set_title(column,"Name");
+ GtkCellRenderer *folder_icon=gtk_cell_renderer_pixbuf_new();
+ g_object_set(folder_icon,"icon-name","folder",NULL);
+ gtk_tree_view_column_pack_start(column,folder_icon,FALSE);
+ GtkCellRenderer *folder_text=gtk_cell_renderer_text_new();
+ g_object_set(folder_text,"ellipsize",PANGO_ELLIPSIZE_END,NULL);
+ gtk_tree_view_column_pack_start(column,folder_text,TRUE);
+ gtk_tree_view_column_add_attribute(column,folder_text,"text",0);
+ gtk_tree_view_append_column(GTK_TREE_VIEW(s->folders),column);
+ g_signal_connect(s->folders,"row-activated",
+                  G_CALLBACK(on_folder_activated),view);
+ gtk_container_add(GTK_CONTAINER(s->folder_scroll),s->folders);
+ gtk_box_pack_start(GTK_BOX(s->browser_area),s->folder_scroll,FALSE,FALSE,0);
+ GtkWidget *footer=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ gtk_box_pack_start(GTK_BOX(view),footer,FALSE,FALSE,4);
+ s->status=gtk_label_new("Choose a destination folder.");
+ gtk_label_set_max_width_chars(GTK_LABEL(s->status),45);
  gtk_label_set_xalign(GTK_LABEL(s->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(s->status),PANGO_ELLIPSIZE_END);
- gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
- s->add=gtk_button_new_with_label("ADD TO SELECTED FOLDER");
- gtk_widget_set_halign(s->add,GTK_ALIGN_END);
+ gtk_box_pack_start(GTK_BOX(footer),s->status,TRUE,TRUE,0);
+ s->add=gtk_button_new_with_label("Add Torrent");
  gtk_widget_set_name(s->add,"downloadconfirm");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-action");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->add),"now-primary");
  g_signal_connect(s->add,"clicked",G_CALLBACK(on_add),view);
- gtk_box_pack_start(GTK_BOX(view),s->add,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(footer),s->add,FALSE,FALSE,0);
+ GtkWidget *cancel=gtk_button_new_with_label("Cancel");
+ g_signal_connect(cancel,"clicked",G_CALLBACK(on_cancel),view);
+ gtk_box_pack_end(GTK_BOX(footer),cancel,FALSE,FALSE,0);
+ /* Realize every child of the locations sidebar once. Thereafter only the
+  * complete sidebar is shown/hidden at narrow widths: no empty side panel. */
+ gtk_widget_set_no_show_all(s->sidebar,FALSE);
+ gtk_widget_show_all(s->sidebar);
+ gtk_widget_set_no_show_all(s->sidebar,TRUE);
+ gtk_widget_hide(s->sidebar);
+ load_places(s);
  button_states(s);
  return view;
 }
@@ -298,19 +815,129 @@ void now_downloads_destination_view_configure(GtkWidget *view,const char *host,
  g_free(s->host);s->host=g_strdup(host);
  g_free(s->user);s->user=g_strdup(user);
  g_free(s->helper);s->helper=g_strdup(helper);
+ refresh_place_choices(s);
  button_states(s);
 }
-void now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
+/* The real GTK folder chooser is GIO-backed. GVfs provides server SFTP,
+ * familiar folder navigation, and bookmarks. The Mac's local paths cannot
+ * be mistaken for OptiPlex paths; host checks remain in the owner broker.
+ */
+static gchar *native_uri_host_path(Picker *s,const gchar *uri){
+ if(!s || !uri)return NULL;
+ GError *error=NULL;
+ GUri *parsed=g_uri_parse(uri,G_URI_FLAGS_ENCODED_PATH,&error);
+ if(!parsed){g_clear_error(&error);return NULL;}
+ const gchar *scheme=g_uri_get_scheme(parsed);
+ const gchar *host=g_uri_get_host(parsed);
+ const gchar *user=g_uri_get_userinfo(parsed);
+ gint port=g_uri_get_port(parsed);
+ gchar *folder=NULL;
+ if(g_strcmp0(scheme,"sftp")==0 && g_strcmp0(host,s->host)==0 &&
+    g_strcmp0(user,s->user)==0 && (port==-1 || port==22) &&
+    !g_uri_get_query(parsed) && !g_uri_get_fragment(parsed)){
+   /* Keep the raw path: URI parsers may normalize /../ before callers
+    * inspect it. This remote selector must never silently reinterpret a
+    * path picked by the user. */
+   const gchar *delimiter=strstr(uri,"://");
+   const gchar *slash=delimiter?strchr(delimiter+3,'/'):NULL;
+   if(slash){
+     gchar *encoded=g_strndup(slash,strcspn(slash,"?#"));
+     folder=g_uri_unescape_string(encoded,NULL);
+     g_free(encoded);
+   }
+   if(!folder || strlen(folder)<2 || strlen(folder)>1024 ||
+      !g_path_is_absolute(folder) || g_str_has_prefix(folder,"//") ||
+      g_str_has_suffix(folder,"/") || strstr(folder,"//") ||
+      !g_utf8_validate(folder,-1,NULL)){
+     g_clear_pointer(&folder,g_free);
+   }else{
+     gchar **parts=g_strsplit(folder,"/",-1);
+     for(guint i=1;parts[i];i++){
+       if(!strcmp(parts[i],".") || !strcmp(parts[i],"..")){
+         g_clear_pointer(&folder,g_free);break;
+       }
+       for(const guchar *p=(const guchar *)parts[i];folder && *p;p++)
+         if(*p<32 || *p==127){g_clear_pointer(&folder,g_free);break;}
+     }
+     g_strfreev(parts);
+   }
+ }
+ g_uri_unref(parsed);
+ return folder;
+}
+static void native_response(GtkDialog *dialog,gint response,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s)return;
+ if(response!=GTK_RESPONSE_ACCEPT){
+   s->native_dialog=NULL;
+   gtk_widget_destroy(GTK_WIDGET(dialog));
+   on_cancel(NULL,s->view);
+   return;
+ }
+ gchar *uri=gtk_file_chooser_get_uri(GTK_FILE_CHOOSER(dialog));
+ gchar *path=native_uri_host_path(s,uri);
+ g_free(uri);
+ if(!path){
+   GtkWidget *msg=gtk_message_dialog_new(GTK_WINDOW(dialog),
+      GTK_DIALOG_MODAL,GTK_MESSAGE_WARNING,GTK_BUTTONS_CLOSE,
+      "Choose an OptiPlex folder");
+   gtk_message_dialog_format_secondary_text(GTK_MESSAGE_DIALOG(msg),
+      "Select the OptiPlex SFTP location in the file chooser. "
+      "Local folders belong to this client computer, not the server.");
+   gtk_dialog_run(GTK_DIALOG(msg));
+   gtk_widget_destroy(msg);
+   return;
+ }
+ g_free(s->host_path);s->host_path=path;
+ s->native_dialog=NULL;
+ gtk_widget_destroy(GTK_WIDGET(dialog));
+ start(s,'h');
+}
+static void open_native_chooser(Picker *s){
+ if(!s || s->native_dialog || s->running || !s->host || !s->user ||
+    !valid_bookmark_host(s->host) || !valid_bookmark_user(s->user))return;
+ GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+ GtkWidget *dialog=gtk_file_chooser_dialog_new(
+      "Choose a folder on OptiPlex",
+      GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+      GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER,
+      "Cancel",GTK_RESPONSE_CANCEL,
+      "Add Torrent",GTK_RESPONSE_ACCEPT,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),900,600);
+ gtk_file_chooser_set_local_only(GTK_FILE_CHOOSER(dialog),FALSE);
+ gtk_file_chooser_set_create_folders(GTK_FILE_CHOOSER(dialog),TRUE);
+ gchar *base=g_strdup_printf("sftp://%s@%s/",s->user,s->host);
+ /* GVfs uses the normal system SSH/SFTP login; the restricted owner key
+  * is not an SFTP credential and is never modified here. */
+ if(s->host_path){
+   gchar *escaped=g_uri_escape_string(s->host_path,"/",FALSE);
+   gchar *previous=g_strconcat(base,escaped+1,NULL);
+   gtk_file_chooser_set_current_folder_uri(GTK_FILE_CHOOSER(dialog),previous);
+   g_free(previous);g_free(escaped);
+ }else{
+   gtk_file_chooser_set_current_folder_uri(GTK_FILE_CHOOSER(dialog),base);
+ }
+ g_free(base);
+ s->native_dialog=dialog;
+ g_signal_connect(dialog,"response",G_CALLBACK(native_response),s->view);
+ gtk_widget_show(dialog);
+}
+gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magnet){
  Picker *s=state(view);
- if(!s || !s->host || !s->helper || !magnet ||
+ if(!s || !s->host || !s->user || !s->helper || !magnet ||
     !g_str_has_prefix(magnet,"magnet:?xt=urn:bt") ||
-    strlen(magnet)>1024 || s->running)return;
+    strlen(magnet)>1024 || s->running || s->native_dialog)return FALSE;
  g_free(s->magnet);s->magnet=g_strdup(magnet);
+ /* Do not force the previously used folder as a default for a new torrent. */
+ g_clear_pointer(&s->host_path,g_free);
  s->folder_valid=FALSE;
- gtk_widget_set_no_show_all(view,FALSE);
- gtk_widget_show_all(view);
- gtk_widget_set_no_show_all(view,TRUE);
- start(s,'r');
+ open_native_chooser(s);
+ return s->native_dialog!=NULL;
+}
+void now_downloads_destination_view_on_cancel(GtkWidget *view,
+                                             void (*callback)(gpointer),gpointer data){
+ Picker *s=state(view);
+ if(s){s->on_cancel=callback;s->cancel_data=data;}
 }
 void now_downloads_destination_view_on_added(GtkWidget *view,
                                              void (*callback)(gpointer),gpointer data){

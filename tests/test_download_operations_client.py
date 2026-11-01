@@ -76,6 +76,98 @@ class OwnerOperationsTests(unittest.TestCase):
                                            "vpn",runner=runner),
                                  "VPN\tHEALTHY\tother")
 
+    def test_files_listing_and_guarded_remove_protocol(self):
+        files={"success":True,"service":"qbittorrent","torrent_hash":"a"*40,
+               "truncated":False,"files":[
+                 {"name":"Movie/Horror.mkv","size":1024,
+                  "progress_percent":40.0,"priority":1}]}
+        self.assertEqual(mod.present("files",files),
+            "FILES\t"+"a"*40+"\t0\t1\nFILE\t1024\t40.0\t1\tMovie/Horror.mkv")
+        with self.assertRaises(ValueError):
+            mod.present("files",dict(files,files=[
+                         {"name":"../escape","size":1,
+                          "progress_percent":20.0,"priority":1}]))
+        self.assertEqual(mod.present("manage",{"success":True,
+              "status":"submitted","operation":"remove_delete"}),"MANAGED")
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            seen=[]
+            def runner(cmd,**kw):
+                payload=json.loads(kw["input"])
+                seen.append(payload)
+                if payload["action"]=="downloads_files":
+                    result=files
+                else:
+                    result={"success":True,"status":"submitted",
+                            "operation":"remove_delete"}
+                return subprocess.CompletedProcess(cmd,0,json.dumps(result).encode(),b"")
+            with patch.object(mod,"KEY",key):
+                self.assertTrue(mod.fetch("100.121.156.34","optiplex","files","a"*40,
+                                          runner=runner).startswith("FILES"))
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex",
+                                   "manage","remove_delete","a"*40,
+                                   runner=runner),"MANAGED")
+            self.assertEqual(seen,[{"version":1,"action":"downloads_files",
+                                    "torrent_hash":"a"*40},
+                                   {"version":1,"action":"downloads_manage",
+                                    "operation":"remove_delete",
+                                    "torrent_hash":"a"*40}])
+
+    def test_files_invalid_hash_blocks_ssh(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            with patch.object(mod,"KEY",key):
+                with self.assertRaises(ValueError):
+                    mod.fetch("100.121.156.34","optiplex","files","all",
+                              runner=lambda *a,**kw:self.fail("Must reject before SSH"))
+
+    def test_owner_can_create_games_folder_only_inside_approved_mount(self):
+        result={"success":True,"status":"created"}
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            observed=[]
+            def runner(cmd,**kwargs):
+                request=json.loads(kwargs["input"])
+                observed.append(request)
+                self.assertIn("StrictHostKeyChecking=yes",cmd)
+                return subprocess.CompletedProcess(cmd,0,
+                           json.dumps(result).encode(),b"")
+            with patch.object(mod,"KEY",key):
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex",
+                    "mkdir","bigdisk","","Games",runner=runner),"CREATED")
+                self.assertEqual(observed,[{"version":1,
+                    "action":"downloads_mkdir","root":"bigdisk",
+                    "relative":"","name":"Games"}])
+                for name in ("/etc","../Games","Games/Other","bad\nline",""):
+                    with self.subTest(name=name),self.assertRaises(ValueError):
+                        mod.fetch("100.121.156.34","optiplex",
+                           "mkdir","bigdisk","",name,
+                           runner=lambda *a,**kw:self.fail("Unsafe SSH operation"))
+        with self.assertRaises(ValueError):
+            mod.present("mkdir",{"success":True,"status":"submitted"})
+
+    def test_native_chooser_path_is_forwarded_without_shell(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            key=Path(tmp)/"owner";key.write_text("test only")
+            seen=[]
+            def runner(cmd,**kwargs):
+                self.assertEqual(cmd[0],"ssh")
+                self.assertIn("StrictHostKeyChecking=yes",cmd)
+                seen.append(json.loads(kwargs["input"]))
+                return subprocess.CompletedProcess(cmd,0,
+                    b'{"success":true,"status":"submitted"}',b"")
+            with patch.object(mod,"KEY",key):
+                self.assertEqual(mod.fetch("100.121.156.34","optiplex","addpath",
+                      "/media/BigDisk/Movies/Horror",MAGNET,runner=runner),"SUBMITTED")
+                for path in ("../outside","/etc/../secret","//other/server",
+                             "/media/BigDisk//Horror","/media/Bad\nPlace"):
+                    with self.subTest(path=path),self.assertRaises(ValueError):
+                        mod.fetch("100.121.156.34","optiplex","addpath",
+                                  path,MAGNET,runner=runner)
+            self.assertEqual(seen,[{"version":1,"action":"downloads_add_path",
+                                    "path":"/media/BigDisk/Movies/Horror",
+                                    "magnet":MAGNET}])
+
     def test_add_only_explicit_client_request(self):
         self.assertEqual(self.call("add","bigdisk","Movies/Horror",MAGNET),
                          "SUBMITTED")

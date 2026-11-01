@@ -53,10 +53,45 @@ def present(action,data):
         return f"VPN\t{status}\t{provider or 'other'}"
     if action=="manage":
         if (data.get("status")!="submitted" or
-                data.get("operation") not in ("pause","resume","reannounce","recheck","remove")):
+                data.get("operation") not in ("pause","resume","reannounce","recheck","remove","remove_delete")):
             raise ValueError("Torrent operation was not accepted")
         return "MANAGED"
-    if action=="add":
+    if action=="files":
+        hash_value=data.get("torrent_hash")
+        entries=data.get("files")
+        truncated=data.get("truncated")
+        if (data.get("service")!="qbittorrent" or
+                not isinstance(hash_value,str) or
+                not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",hash_value) or
+                not isinstance(entries,list) or len(entries)>240 or
+                type(truncated) is not bool):
+            raise ValueError("Invalid file listing")
+        lines=[f"FILES\t{hash_value.lower()}\t{int(truncated)}\t{len(entries)}"]
+        for entry in entries:
+            if not isinstance(entry,dict):
+                raise ValueError("Invalid torrent file")
+            name=entry.get("name")
+            size=entry.get("size")
+            progress=entry.get("progress_percent")
+            priority=entry.get("priority")
+            if (not isinstance(name,str) or not 1<=len(name)<=220 or
+                    name.startswith("/") or "\\" in name or
+                    any(p in ("",".","..") for p in name.split("/")) or
+                    any(ord(c)<32 or ord(c)==127 for c in name) or
+                    type(size) is not int or not 0<=size<=2**63-1 or
+                    type(progress) not in (int,float) or not 0<=progress<=100 or
+                    type(priority) is not int or not 0<=priority<=7):
+                raise ValueError("Invalid torrent file fields")
+            lines.append(f"FILE\t{size}\t{progress:.1f}\t{priority}\t{name}")
+        result="\n".join(lines)
+        if len(result.encode("utf-8"))>32768:
+            raise ValueError("File listing too long")
+        return result
+    if action=="mkdir":
+        if data.get("status")!="created":
+            raise ValueError("Host did not create the selected folder")
+        return "CREATED"
+    if action in ("add","addpath"):
         if data.get("status")!="submitted":
             raise ValueError("Downloader did not accept the torrent")
         return "SUBMITTED"
@@ -94,20 +129,46 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
-        "add":"downloads_add","manage":"downloads_manage",
-        "vpn":"downloads_status"}.get(action)}
+        "add":"downloads_add","addpath":"downloads_add_path",
+        "mkdir":"downloads_mkdir","manage":"downloads_manage",
+        "files":"downloads_files","vpn":"downloads_status"}.get(action)}
     if request["action"] is None:
         raise ValueError("Invalid download action")
     if action=="manage":
-        if (root not in ("pause","resume","reannounce","recheck","remove") or
+        if (root not in ("pause","resume","reannounce","recheck","remove","remove_delete") or
                 not isinstance(path,str) or
                 not re.fullmatch(r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",path)):
             raise ValueError("Invalid torrent operation")
         request.update(operation=root,torrent_hash=path.lower())
+    elif action=="files":
+        if not isinstance(root,str) or not re.fullmatch(
+                r"[0-9a-fA-F]{40}(?:[0-9a-fA-F]{24})?",root):
+            raise ValueError("Invalid torrent hash")
+        request["torrent_hash"]=root.lower()
+    elif action=="addpath":
+        from posixpath import normpath
+        host_path=root
+        if (not isinstance(host_path,str) or not 2<=len(host_path)<=1024
+                or not host_path.startswith("/") or host_path.startswith("//")
+                or normpath(host_path)!=host_path
+                or any(ord(ch)<32 or ord(ch)==127 for ch in host_path)
+                or any(part in (".","..") for part in host_path.split("/")[1:])):
+            raise ValueError("Invalid OptiPlex folder")
+        if (not isinstance(path,str) or not 10<=len(path)<=1024
+                or not path.startswith("magnet:?xt=urn:bt")
+                or any(ord(ch)<33 or ord(ch)>126 for ch in path)):
+            raise ValueError("Invalid magnet URI")
+        request.update(path=host_path,magnet=path)
     elif action not in ("roots","vpn"):
         if not isinstance(root,str) or not ROOT.fullmatch(root):
             raise ValueError("Invalid library root")
         request.update(root=root,relative=relative(path))
+        if action=="mkdir":
+            if (not isinstance(magnet,str) or not 1<=len(magnet)<=160 or
+                    magnet in (".","..") or "/" in magnet or "\\" in magnet or
+                    any(ord(c)<32 or ord(c)==127 for c in magnet)):
+                raise ValueError("Invalid folder name")
+            request["name"]=magnet
         if action=="add":
             if (not isinstance(magnet,str) or not 10<=len(magnet)<=1024 or
                 not magnet.startswith("magnet:?xt=urn:bt") or
@@ -134,11 +195,14 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
 if __name__=="__main__":
     try:
         args=sys.argv[1:]
-        if len(args)<3 or args[2] not in ("roots","browse","add","manage","vpn") or (
+        if len(args)<3 or args[2] not in ("roots","browse","add","addpath","mkdir","manage","files","vpn") or (
             (args[2] in ("roots","vpn") and len(args)!=3) or
             (args[2]=="browse" and len(args)!=5) or
             (args[2]=="add" and len(args)!=6) or
-            (args[2]=="manage" and len(args)!=5)):
+            (args[2]=="addpath" and len(args)!=5) or
+            (args[2]=="mkdir" and len(args)!=6) or
+            (args[2]=="manage" and len(args)!=5) or
+            (args[2]=="files" and len(args)!=4)):
             raise ValueError("Expected owner host, action and checked selection")
         print(fetch(args[0],args[1],args[2],
                     *(args[3:]+[None]*(3-len(args[3:])))))

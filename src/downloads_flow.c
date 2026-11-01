@@ -28,6 +28,7 @@ static GtkWidget *webview;
 static gchar *loaded_url;
 static gboolean running;
 static gboolean manage_running;
+static gboolean files_running;
 static gchar *last_host;
 static gchar *last_user;
 static gchar *last_override;
@@ -476,12 +477,74 @@ static void managed_finished(GObject *source,GAsyncResult *res,gpointer data){
  g_object_unref(job->proc);
  g_free(job->host);g_free(job->user);g_free(job->operation);g_free(job);
 }
+typedef struct {
+ GSubprocess *proc;
+ gchar *host,*user,*torrent_hash,*name;
+} FilesJob;
+static void files_finished(GObject *source,GAsyncResult *res,gpointer data){
+ (void)source;
+ FilesJob *job=data;
+ gchar *out=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(job->proc,res,&out,NULL,&error)
+             && g_subprocess_get_successful(job->proc) && out &&
+             strlen(out)<=32768;
+ files_running=FALSE;
+ if(!g_strcmp0(last_host,job->host) && !g_strcmp0(last_user,job->user) &&
+    queue_view && gtk_widget_get_mapped(queue_view) &&
+    downloads_subtabs &&
+    !g_strcmp0(gtk_stack_get_visible_child_name(GTK_STACK(downloads_subtabs)),
+               "transfers")){
+   if(ok){
+     gsize len=strlen(out);
+     if(len && out[len-1]=='\\n')out[len-1]=0;
+     ok=now_downloads_queue_view_files_dialog(queue_view,out,
+                                                job->torrent_hash,job->name);
+   }
+   if(!ok && status_label)
+     gtk_label_set_text(GTK_LABEL(status_label),
+                        "File list unavailable; check host owner module or open Advanced VueTorrent.");
+ }
+ g_clear_error(&error);g_free(out);
+ g_object_unref(job->proc);
+ g_free(job->host);g_free(job->user);
+ g_free(job->torrent_hash);g_free(job->name);g_free(job);
+}
+static void on_torrent_files(const char *hash,const char *name){
+ if(files_running || !last_host || !last_user)return;
+ gchar *queue_helper=helper_path();
+ gchar *directory=g_path_get_dirname(queue_helper);
+ gchar *helper=g_build_filename(directory,"download-operations-client.py",NULL);
+ if(g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+   const gchar *argv[]={"/usr/bin/python3",helper,last_host,last_user,
+                        "files",hash,NULL};
+   GError *err=NULL;
+   GSubprocess *proc=g_subprocess_newv(
+       argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
+   if(proc){
+     FilesJob *job=g_new0(FilesJob,1);
+     job->proc=proc;job->host=g_strdup(last_host);job->user=g_strdup(last_user);
+     job->torrent_hash=g_strdup(hash);job->name=g_strdup(name);
+     files_running=TRUE;
+     if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                         "Loading selected torrent file list...");
+     g_subprocess_communicate_utf8_async(proc,NULL,NULL,files_finished,job);
+   }else if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
+                                            "Cannot request torrent file list.");
+   g_clear_error(&err);
+ }
+ g_free(helper);g_free(directory);g_free(queue_helper);
+}
 static void on_transfer_action(const char *operation,const char *torrent_hash,
                                const char *name,gpointer unused){
- (void)name;(void)unused;
+ (void)unused;
  if(manage_running || !last_host || !last_user ||
     !now_valid_host(last_host) || !now_valid_user(last_user) ||
     !owner_device_key_exists() || !operation || !torrent_hash)return;
+ if(!strcmp(operation,"files")){
+   on_torrent_files(torrent_hash,name);
+   return;
+ }
  gchar *queue_helper=helper_path();
  gchar *directory=g_path_get_dirname(queue_helper);
  gchar *helper=g_build_filename(directory,"download-operations-client.py",NULL);

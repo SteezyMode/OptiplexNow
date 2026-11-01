@@ -62,6 +62,41 @@ class TrustedGamesGateTests(unittest.TestCase):
                 self.call("downloads_add",client="99999999")
             self.assertEqual(add_call.call_count,1)
 
+    def test_new_download_games_folder_requires_owner_and_exact_schema(self):
+        from unittest.mock import patch
+        req={"version":1,"action":"downloads_mkdir","root":"bigdisk",
+             "relative":"","name":"Games"}
+        with patch("owner_games_request.new_download_folder",
+                   return_value={"status":"created"}) as create:
+            result=handle_owner_games_request(req,verified_client_id="1001",
+                store=self.store,wolf_api=self.api)
+            self.assertEqual(result,{"success":True,"status":"created"})
+            create.assert_called_once_with("bigdisk","","Games")
+            with self.assertRaises(PolicyError):
+                handle_owner_games_request(req,verified_client_id="99999999",
+                    store=self.store,wolf_api=self.api)
+            self.assertEqual(create.call_count,1)
+            for changed in ({"name":"../Games"},{"name":"/etc"},
+                            {"name":"Games/Subfolder"},
+                            {"root":"home"},{"relative":"../"},
+                            {"host_path":"/media/secret"}):
+                bad=dict(req,**changed)
+                with self.subTest(changed=changed):
+                    if changed=={"root":"home"}:
+                        # A valid slug is only a selector; the host mount
+                        # inventory, not this request, will reject unknown IDs.
+                        continue
+                    with self.assertRaises(PolicyError):
+                        handle_owner_games_request(bad,verified_client_id="1001",
+                            store=self.store,wolf_api=self.api)
+            create.assert_called_once()
+        from download_inventory import InventoryError
+        with patch("owner_games_request.new_download_folder",
+                   side_effect=InventoryError("unsafe path")):
+            self.assertEqual(handle_owner_games_request(req,
+                verified_client_id="1001",store=self.store,wolf_api=self.api),
+                {"success":False,"status":"folder_create_unavailable"})
+
     def test_download_add_rejects_arbitrary_paths_and_fields_before_wolf(self):
         from unittest.mock import patch
         magnet="magnet:?xt=urn:btih:"+"f"*40

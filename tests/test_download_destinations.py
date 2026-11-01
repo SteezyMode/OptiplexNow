@@ -121,7 +121,7 @@ class DestinationTests(unittest.TestCase):
             ("bigdisk","","a\\\\b"),
             ("bigdisk","",""),
             ("bigdisk","",".."),
-            ("bigdisk","","Games\\nOther"),
+            ("bigdisk","","Games\nOther"),
         ]:
             with self.subTest(root=root,parent=parent,name=name):
                 with self.assertRaises(DestinationError):

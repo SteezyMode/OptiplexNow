@@ -272,14 +272,6 @@ static gboolean record_recent_place(Picker *s){
  refresh_place_choices(s);
  return store_places(s);
 }
-static gboolean has_places_for_host(Picker *s){
- for(guint kind=0;kind<2;kind++){
-   GPtrArray *items=kind==0?s->places:s->recents;
-   for(guint i=0;i<items->len;i++)
-     if(same_server(s,g_ptr_array_index(items,i)))return TRUE;
- }
- return FALSE;
-}
 static void button_states(Picker *s){
  gtk_widget_set_sensitive(s->add,!s->running && s->folder_valid &&
                           s->magnet && s->root);
@@ -499,7 +491,6 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        ok=FALSE;
      }else{
        g_free(s->relative);s->relative=next;next=NULL;
-       s->auto_pin_created=TRUE;
        start(s,'b');
      }
      g_clear_pointer(&s->pending_folder,g_free);
@@ -520,7 +511,6 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
      else
        gtk_label_set_text(GTK_LABEL(s->status),"No approved folders available.");
      g_clear_pointer(&s->pending_folder,g_free);
-     s->auto_pin_created=FALSE;
    }
    button_states(s);
  }else if(s){s->running=FALSE;button_states(s);}

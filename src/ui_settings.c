@@ -12,6 +12,12 @@ static GtkWidget *label(const char *text,const char *id){
  GtkWidget *l=gtk_label_new(text);
  gtk_label_set_xalign(GTK_LABEL(l),0);
  if(id)gtk_widget_set_name(l,id);
+ if(id && !strcmp(id,"helper")){
+  /* Optional/advanced Settings text must wrap instead of enlarging the
+   * minimum window width, including when Host GPU is the visible page. */
+  gtk_label_set_line_wrap(GTK_LABEL(l),TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(l),48);
+ }
  return l;
 }
 static GtkWidget *button(const char *text,const char *id){

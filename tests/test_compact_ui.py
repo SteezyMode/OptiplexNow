@@ -67,6 +67,12 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('now_nav_show_page(main_pages,"downloads");', main)
         self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', main)
         self.assertIn('now_nav_relayout_page(gtk_stack_get_child_by_name(GTK_STACK(main_pages),"downloads"))', main)
+        flow = (ROOT / "src" / "downloads_flow.c").read_text(encoding="utf-8")
+        init = flow.split("GtkWidget *now_downloads_page(void){", 1)[1]
+        self.assertLess(init.index("gtk_widget_show_all(root);"),
+                        init.index('gtk_stack_set_visible_child_name(GTK_STACK(downloads_subtabs),"transfers")'))
+        self.assertLess(init.index("gtk_widget_show_all(root);"),
+                        init.index('gtk_stack_set_visible_child_name(GTK_STACK(queue_stack),"queue")'))
         self.assertIn('gtk_widget_queue_resize(page)', navigation)
         self.assertIn('gtk_widget_queue_draw(page)', navigation)
         self.assertIn('gtk_widget_get_mapped(page)', navigation)

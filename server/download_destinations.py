@@ -140,7 +140,7 @@ def browse(root,relative="",*,runner=subprocess.run):
 def checked_folder_name(value):
     """A single new child in a verified existing library directory."""
     if (not isinstance(value, str) or not 1 <= len(value) <= MAX_NAME or
-            value in (".", "..") or "/" in value or "\\\\" in value or
+            value in (".", "..") or "/" in value or "\\" in value or
             any(ord(c) < 32 or ord(c) == 127 for c in value)):
         raise DestinationError("Invalid new folder name")
     return value

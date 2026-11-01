@@ -388,7 +388,7 @@ static gboolean read_response(Picker *s,char action,char *wire){
    if(strcmp(lines[0],"ROOTS"))ok=FALSE;
    for(guint i=1;ok && lines[i];i++){
      gchar **fields=g_strsplit(lines[i],"\t",-1);
-     if(++count>12 || g_strv_length(fields)!=3 ||
+     if(++count>24 || g_strv_length(fields)!=3 ||
         strcmp(fields[0],"ROOT") || !safe_root(fields[1]) ||
         !safe_name(fields[2]))ok=FALSE;
      g_strfreev(fields);

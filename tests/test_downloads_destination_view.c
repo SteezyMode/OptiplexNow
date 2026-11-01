@@ -94,6 +94,8 @@ static void test_native_directory_and_visible_drive_shortcuts(void){
  g_free(s->relative);s->relative=g_strdup("Movies");
  g_assert_true(read_response(s,'b',
     "FOLDERS\tbigdisk\tMovies\nFOLDER\tAction \nFOLDER\tHorror\nFOLDER\tComedy"));
+ gtk_widget_get_size_request(s->folder_scroll,&width,&height);
+ g_assert_cmpint(height,==,126); /* No huge dead zone below three folders. */
  GtkTreeModel *model=GTK_TREE_MODEL(s->folder_store);
  g_assert_cmpint(gtk_tree_model_iter_n_children(model,NULL),==,3);
  gtk_entry_set_text(GTK_ENTRY(s->filter),"hOrRoR");

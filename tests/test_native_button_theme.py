@@ -42,7 +42,7 @@ class NativeActionThemeTests(unittest.TestCase):
             "downloads_flow.c": ("refresh", "advanced_button", "back_button"),
             "downloads_search_view.c": ("s->button", "button"),
             "downloads_queue_view.c": ("button",),
-            "downloads_destination_view.c": ("s->up", "s->add", "button"),
+            "downloads_destination_view.c": ("s->up", "s->add", "s->new_folder", "s->pin_place"),
         }
         for file, widgets in checks.items():
             src = (SRC / file).read_text()
@@ -52,6 +52,13 @@ class NativeActionThemeTests(unittest.TestCase):
                         'gtk_style_context_add_class(gtk_widget_get_style_context('
                         + widget + '),"now-action");',
                         src)
+        destination = (SRC / "downloads_destination_view.c").read_text()
+        # Folder *rows* deliberately use the native flat treatment, not
+        # large action-button styling. This resembles a normal file browser.
+        self.assertIn(
+            'gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");',
+            destination)
+        self.assertIn('gtk_image_new_from_icon_name("folder"', destination)
         search = (SRC / "downloads_search_view.c").read_text()
         self.assertIn(
             'gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-sort");',

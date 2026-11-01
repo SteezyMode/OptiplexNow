@@ -151,6 +151,7 @@ static void refresh_place_choices(Picker *s){
      GtkWidget *button=gtk_button_new_with_label(name);
      gtk_widget_set_halign(button,GTK_ALIGN_FILL);
      gtk_style_context_add_class(gtk_widget_get_style_context(button),"flat");
+     gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-places-item");
      gchar *location=g_strdup_printf("%s / %s",p->root,
                              *p->relative?p->relative:"(root)");
      gtk_widget_set_tooltip_text(button,location);
@@ -419,6 +420,8 @@ static gboolean read_response(Picker *s,char action,char *wire){
                                  fields[1],fields[2]);
        GtkWidget *button=gtk_button_new_with_label(fields[2]);
        gtk_button_set_relief(GTK_BUTTON(button),GTK_RELIEF_NONE);
+       gtk_style_context_add_class(gtk_widget_get_style_context(button),
+                                   "now-places-item");
        gtk_widget_set_halign(button,GTK_ALIGN_FILL);
        GtkWidget *drive_icon=gtk_image_new_from_icon_name("drive-harddisk",
                                                           GTK_ICON_SIZE_MENU);
@@ -437,8 +440,10 @@ static gboolean read_response(Picker *s,char action,char *wire){
      g_clear_pointer(&s->relative,g_free);
      clear_folder_buttons(s);
      gtk_label_set_text(GTK_LABEL(s->path),"Choose a drive");
-     gtk_label_set_text(GTK_LABEL(s->status),
-            "Choose one of the server's available storage locations.");
+     gchar *found=g_strdup_printf("%u storage location%s available. Choose a drive.",
+                                   count,count==1?"":"s");
+     gtk_label_set_text(GTK_LABEL(s->status),found);
+     g_free(found);
      s->loading_roots=FALSE;
    }
  }else if(action=='b'){
@@ -645,6 +650,8 @@ static void adapt_picker_width(GtkWidget *unused,GtkAllocation *size,
 }
 GtkWidget *now_downloads_destination_view_new(void){
  GtkWidget *view=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_style_context_add_class(gtk_widget_get_style_context(view),
+                             "now-native-file-dialog");
  gtk_widget_set_no_show_all(view,TRUE);
  Picker *s=g_new0(Picker,1);
  s->view=view;

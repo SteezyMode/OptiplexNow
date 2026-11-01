@@ -192,6 +192,88 @@ static void button_states(Picker *s){
    gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo))>0);
 }
 static void start(Picker *s,char action);
+static void on_save_place(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running)return;
+ gboolean ok=remember_current_place(s);
+ gtk_label_set_text(GTK_LABEL(s->status),ok ?
+   "Location saved on this device. Use SAVED LOCATIONS next time." :
+   "Unable to save location. Choose an approved folder (24 saved maximum).");
+ button_states(s);
+}
+static void on_remove_place(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running)return;
+ gint selected=gtk_combo_box_get_active(GTK_COMBO_BOX(s->places_combo));
+ if(selected<=0 || selected>(gint)s->places->len)return;
+ g_ptr_array_remove_index(s->places,(guint)selected-1);
+ refresh_place_choices(s);
+ if(store_places(s))
+   gtk_label_set_text(GTK_LABEL(s->status),"Saved location removed.");
+ else
+   gtk_label_set_text(GTK_LABEL(s->status),"Unable to update saved locations.");
+ button_states(s);
+}
+static void on_place_selected(GtkComboBox *combo,gpointer data){
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->loading_places || s->running)return;
+ gint selected=gtk_combo_box_get_active(combo);
+ if(selected<=0 || selected>(gint)s->places->len){
+   button_states(s);return;
+ }
+ SavedPlace *place=g_ptr_array_index(s->places,(guint)selected-1);
+ if(!safe_root(place->root) || !safe_relative(place->relative) ||
+    !gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->roots),place->root)){
+   gtk_label_set_text(GTK_LABEL(s->status),
+      "Saved drive is not currently mounted for downloads.");
+   button_states(s);return;
+ }
+ /* Root selection itself must not start a competing browse. */
+ g_free(s->root);s->root=g_strdup(place->root);
+ g_free(s->relative);s->relative=g_strdup(place->relative);
+ start(s,'b'); /* Host revalidates the saved path before allowing Add. */
+}
+static void on_new_folder(GtkButton *unused,gpointer data){
+ (void)unused;
+ Picker *s=state(GTK_WIDGET(data));
+ if(!s || s->running || !s->folder_valid || !s->root)return;
+ GtkWidget *parent=gtk_widget_get_toplevel(s->view);
+ GtkWidget *dialog=gtk_dialog_new_with_buttons("CREATE DOWNLOAD FOLDER",
+    GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+    GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+    "CANCEL",GTK_RESPONSE_CANCEL,"CREATE FOLDER",GTK_RESPONSE_ACCEPT,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),420,-1);
+ GtkWidget *area=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+ GtkWidget *explain=gtk_label_new(
+   "Create a folder inside the selected approved download drive.");
+ gtk_label_set_line_wrap(GTK_LABEL(explain),TRUE);
+ gtk_label_set_xalign(GTK_LABEL(explain),0);
+ gtk_box_pack_start(GTK_BOX(area),explain,FALSE,FALSE,7);
+ GtkWidget *entry=gtk_entry_new();
+ gtk_entry_set_max_length(GTK_ENTRY(entry),160);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(entry),"Games");
+ gtk_box_pack_start(GTK_BOX(area),entry,FALSE,FALSE,6);
+ gtk_widget_show_all(dialog);
+ gint choice=gtk_dialog_run(GTK_DIALOG(dialog));
+ gchar *name=choice==GTK_RESPONSE_ACCEPT ?
+               g_strdup(gtk_entry_get_text(GTK_ENTRY(entry))):NULL;
+ gtk_widget_destroy(dialog);
+ if(!name)return;
+ gchar *next=*s->relative ?
+       g_strconcat(s->relative,"/",name,NULL):g_strdup(name);
+ gboolean valid=safe_name(name) && !strchr(name,'\\') &&
+                safe_relative(next);
+ g_free(next);
+ if(!valid){
+   gtk_label_set_text(GTK_LABEL(s->status),
+     "Use one folder name (such as Games), without /, \\, or ..");
+   g_free(name);return;
+ }
+ g_free(s->pending_folder);s->pending_folder=name;
+ start(s,'m');
+}
 static void on_folder_clicked(GtkButton *button,gpointer data){
  Picker *s=state(GTK_WIDGET(data));
  if(!s || s->running || !s->root)return;
@@ -205,6 +287,7 @@ static void on_folder_clicked(GtkButton *button,gpointer data){
 static gboolean read_response(Picker *s,char action,char *wire){
  if(!wire || !*wire || strlen(wire)>32768 ||
     !g_utf8_validate(wire,-1,NULL))return FALSE;
+ if(action=='m')return !strcmp(wire,"CREATED");
  if(action=='a'){
    if(strcmp(wire,"SUBMITTED"))return FALSE;
    gtk_label_set_text(GTK_LABEL(s->status),"Torrent submitted to selected folder.");
@@ -279,6 +362,12 @@ static gboolean read_response(Picker *s,char action,char *wire){
      gtk_label_set_text(GTK_LABEL(s->status),
        "Choose a subfolder, or Add to the folder shown.");
      s->folder_valid=TRUE;
+     if(s->auto_pin_created){
+       s->auto_pin_created=FALSE;
+       if(remember_current_place(s))
+         gtk_label_set_text(GTK_LABEL(s->status),
+           "New download folder created and saved as a location.");
+     }
    }
  }else ok=FALSE;
  g_strfreev(lines);
@@ -308,6 +397,22 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        "Folder operation failed. Check owner approval and library mounts.");
    }
    s->running=FALSE;
+   if(ok && job->action=='m'){
+     gchar *next=s->relative && *s->relative ?
+         g_strconcat(s->relative,"/",s->pending_folder,NULL) :
+         g_strdup(s->pending_folder);
+     if(g_strcmp0(s->root,job->root) ||
+        g_strcmp0(s->relative,job->relative) ||
+        !safe_relative(next)){
+       ok=FALSE;
+     }else{
+       g_free(s->relative);s->relative=next;next=NULL;
+       s->auto_pin_created=TRUE;
+       start(s,'b');
+     }
+     g_clear_pointer(&s->pending_folder,g_free);
+     g_free(next);
+   }
    if(ok && job->action=='r'){
      const gchar *id=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->roots));
      if(safe_root(id)){
@@ -316,8 +421,15 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
        start(s,'b');
      }else{ok=FALSE;}
    }
-   if(!ok)gtk_label_set_text(GTK_LABEL(s->status),
-                           "No approved folders available.");
+   if(!ok){
+     if(job->action=='m')
+       gtk_label_set_text(GTK_LABEL(s->status),
+         "Cannot create folder. It may exist or the approved drive is not writable.");
+     else
+       gtk_label_set_text(GTK_LABEL(s->status),"No approved folders available.");
+     g_clear_pointer(&s->pending_folder,g_free);
+     s->auto_pin_created=FALSE;
+   }
    button_states(s);
  }else if(s){s->running=FALSE;button_states(s);}
  g_clear_error(&err);g_free(out);
@@ -327,11 +439,13 @@ static void finished(GObject *source,GAsyncResult *res,gpointer data){
 }
 static void start(Picker *s,char action){
  if(s->running || !s->helper || !s->host || !s->user)return;
- const char *operation=action=='r'?"roots":action=='b'?"browse":"add";
+ const char *operation=action=='r'?"roots":action=='b'?"browse":
+                       action=='m'?"mkdir":"add";
  const char *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,operation,
                     action=='r'?NULL:s->root,
                     action=='r'?NULL:s->relative,
-                    action=='a'?s->magnet:NULL,NULL};
+                    action=='a'?s->magnet:
+                    action=='m'?s->pending_folder:NULL,NULL};
  GError *err=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|
                                      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
@@ -348,7 +462,8 @@ static void start(Picker *s,char action){
  s->running=TRUE;s->folder_valid=FALSE;
  button_states(s);
  gtk_label_set_text(GTK_LABEL(s->status),action=='a'?
-    "Submitting to selected folder..." : "Reading approved media folders...");
+    "Submitting to selected folder..." : action=='m'?
+    "Creating approved download folder..." : "Reading approved folders...");
  g_subprocess_communicate_utf8_async(proc,NULL,NULL,finished,job);
 }
 static void on_root(GtkComboBox *combo,gpointer data){

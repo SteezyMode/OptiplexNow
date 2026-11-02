@@ -10,6 +10,7 @@
 #include <gio/gio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 typedef struct {
  char *id, *title, *artist, *cover_id;
@@ -29,13 +30,13 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
- GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider;
+ GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
  GPtrArray *visible_tracks, *queue;
  NowMusicPlayback *playback;
  int queue_index, album_offset, volume;
- guint volume_debounce;
- gboolean paused;
+ guint volume_debounce, seek_debounce, play_duration;
+ gboolean paused, seek_updating, seek_dragging;
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial;
  void (*tray_changed)(void);
@@ -75,7 +76,8 @@ static void music_view_destroy(GtkWidget *unused,gpointer data){
  MusicView *view=data;
  view->closing=TRUE;
  if(view->volume_debounce)g_source_remove(view->volume_debounce);
- view->volume_debounce=0;
+ if(view->seek_debounce)g_source_remove(view->seek_debounce);
+ view->volume_debounce=view->seek_debounce=0;
  if(active_music_view==view)active_music_view=NULL;
  if(view->playback){
   now_music_playback_free(view->playback);
@@ -155,15 +157,36 @@ static void music_update_controls(MusicView *view){
  gtk_button_set_label(GTK_BUTTON(view->pause_button),
                       view->paused?"Resume":"Pause");
  gtk_widget_set_sensitive(view->previous_button,TRUE);
+ if(view->seek_slider)
+  gtk_widget_set_sensitive(view->seek_slider,view->play_duration>0);
  gtk_widget_set_sensitive(view->next_button,
                   view->queue_index+1<(int)view->queue->len);
  gtk_widget_show(view->player_bar);
  music_notify_tray(view);
 }
+static void music_update_position(MusicView *view,unsigned position,unsigned duration){
+ if(!view->seek_slider || !view->seek_caption)return;
+ view->play_duration=duration;
+ gtk_widget_set_sensitive(view->seek_slider,duration>0);
+ if(!view->seek_dragging){
+  view->seek_updating=TRUE;
+  gtk_range_set_range(GTK_RANGE(view->seek_slider),0,duration);
+  gtk_range_set_value(GTK_RANGE(view->seek_slider),position);
+  view->seek_updating=FALSE;
+ }
+ char *label=g_strdup_printf("%u:%02u / %u:%02u",
+      position/60,position%60,duration/60,duration%60);
+ gtk_label_set_text(GTK_LABEL(view->seek_caption),label);
+ g_free(label);
+}
 static void music_stop(MusicView *view){
  if(view->playback)now_music_playback_stop(view->playback);
  view->queue_index=-1;
  view->paused=FALSE;
+ view->play_duration=0;
+ if(view->seek_debounce)g_source_remove(view->seek_debounce);
+ view->seek_debounce=0;
+ if(view->seek_slider)music_update_position(view,0,0);
  g_clear_pointer(&view->playing_caption,g_free);
  view->playing_art_serial++;
  if(!view->closing){
@@ -175,6 +198,17 @@ static void music_stop(MusicView *view){
 static void music_player_event(const char *event,void *data){
  MusicView *view=data;
  if(view->closing)return;
+ if(g_str_has_prefix(event,"POSITION ")){
+  unsigned pos=0,duration=0;
+  if(sscanf(event,"POSITION %u %u",&pos,&duration)==2 && duration>0 &&
+     pos<=duration && duration<=604800)
+   music_update_position(view,pos,duration);
+  return;
+ }
+ if(!strcmp(event,"SEEK_UNAVAILABLE")){
+  status_set(view,"This track cannot be scrubbed on this server.");
+  return;
+ }
  if(!strcmp(event,"ENDED")){
   if(view->queue_index+1<(int)view->queue->len)
    music_start_track(view,view->queue_index+1);
@@ -210,6 +244,10 @@ static void music_start_track(MusicView *view,int index){
  }
  view->queue_index=index;
  view->paused=FALSE;
+ view->play_duration=0;
+ if(view->seek_debounce)g_source_remove(view->seek_debounce);
+ view->seek_debounce=0;
+ if(view->seek_slider)music_update_position(view,0,0);
  g_free(view->playing_caption);
  char *full=g_strdup_printf("%s — %s",song->title,song->artist);
  g_strdelimit(full,"\r\n\t",' ');
@@ -241,6 +279,41 @@ static void music_pause_clicked(GtkWidget *unused,gpointer data){
   now_music_playback_pause(view->playback,!view->paused);
 }
 /* Do not block the GTK thread for every slider pixel; throttle IPC. */
+static gboolean music_apply_seek(gpointer data){
+ MusicView *view=data;
+ view->seek_debounce=0;
+ if(!view->closing && view->play_duration && view->playback &&
+    now_music_playback_active(view->playback) && view->seek_slider){
+  int target=CLAMP((int)gtk_range_get_value(GTK_RANGE(view->seek_slider)),
+                   0,(int)view->play_duration);
+  now_music_playback_seek(view->playback,target);
+ }
+ return G_SOURCE_REMOVE;
+}
+static void music_seek_changed(GtkRange *range,gpointer data){
+ (void)range;
+ MusicView *view=data;
+ if(view->closing || view->seek_updating || !view->play_duration)return;
+ if(view->seek_debounce)g_source_remove(view->seek_debounce);
+ view->seek_debounce=g_timeout_add(350,music_apply_seek,view);
+}
+static gboolean music_seek_press(GtkWidget *widget,GdkEventButton *event,gpointer data){
+ (void)widget;
+ MusicView *view=data;
+ if(event->button==1)view->seek_dragging=TRUE;
+ return FALSE;
+}
+static gboolean music_seek_release(GtkWidget *widget,GdkEventButton *event,gpointer data){
+ (void)widget;
+ MusicView *view=data;
+ if(event->button==1){
+  view->seek_dragging=FALSE;
+  if(view->seek_debounce)g_source_remove(view->seek_debounce);
+  view->seek_debounce=0;
+  music_apply_seek(view);
+ }
+ return FALSE;
+}
 static gboolean music_apply_volume(gpointer data){
  MusicView *view=data;
  view->volume_debounce=0;
@@ -1171,43 +1244,42 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
- view->player_bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
+ GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
                              "music-player-bar");
  gtk_widget_set_name(view->player_bar,"music-player");
  view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
  gtk_widget_set_size_request(view->playing_art,44,44);
- gtk_box_pack_start(GTK_BOX(view->player_bar),view->playing_art,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(controls),view->playing_art,FALSE,FALSE,0);
  view->playing_label=gtk_label_new("");
  gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
  gtk_widget_set_hexpand(view->playing_label,TRUE);
- gtk_box_pack_start(GTK_BOX(view->player_bar),view->playing_label,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(controls),view->playing_label,TRUE,TRUE,0);
  view->previous_button=music_button("Previous");
  g_signal_connect(view->previous_button,"clicked",
                   G_CALLBACK(music_prev_clicked),view);
- gtk_box_pack_start(GTK_BOX(view->player_bar),
+ gtk_box_pack_start(GTK_BOX(controls),
                     view->previous_button,FALSE,FALSE,0);
  view->pause_button=music_button("Pause");
  g_signal_connect(view->pause_button,"clicked",
                   G_CALLBACK(music_pause_clicked),view);
- gtk_box_pack_start(GTK_BOX(view->player_bar),
+ gtk_box_pack_start(GTK_BOX(controls),
                     view->pause_button,FALSE,FALSE,0);
  view->next_button=music_button("Next");
  g_signal_connect(view->next_button,"clicked",
                   G_CALLBACK(music_next_clicked),view);
- gtk_box_pack_start(GTK_BOX(view->player_bar),
+ gtk_box_pack_start(GTK_BOX(controls),
                     view->next_button,FALSE,FALSE,0);
  GtkWidget *stop_button=music_button("Stop");
  g_signal_connect(stop_button,"clicked",
                   G_CALLBACK(music_stop_clicked),view);
- gtk_box_pack_start(GTK_BOX(view->player_bar),stop_button,FALSE,FALSE,0);
- /* Local audio volume only; never touches the host's Jellyfin, Steam or
-  * another user's Amperfy session. No decorative scrubber for a pipe
-  * that has not yet gained real seek support. */
+ gtk_box_pack_start(GTK_BOX(controls),stop_button,FALSE,FALSE,0);
+ /* Local volume only; never changes another user's playback. */
  GtkWidget *vol_label=gtk_label_new("Volume");
- gtk_box_pack_start(GTK_BOX(view->player_bar),vol_label,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(controls),vol_label,FALSE,FALSE,0);
  view->volume_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,100,1);
  gtk_scale_set_draw_value(GTK_SCALE(view->volume_slider),FALSE);
  gtk_range_set_value(GTK_RANGE(view->volume_slider),view->volume);
@@ -1215,7 +1287,26 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_tooltip_text(view->volume_slider,"This device's music volume");
  g_signal_connect(view->volume_slider,"value-changed",
                   G_CALLBACK(music_volume_changed),view);
- gtk_box_pack_start(GTK_BOX(view->player_bar),view->volume_slider,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(controls),view->volume_slider,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0);
+ GtkWidget *timeline=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ view->seek_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,1,1);
+ gtk_scale_set_draw_value(GTK_SCALE(view->seek_slider),FALSE);
+ gtk_widget_set_hexpand(view->seek_slider,TRUE);
+ gtk_widget_set_sensitive(view->seek_slider,FALSE);
+ gtk_widget_set_tooltip_text(view->seek_slider,"Seek through the current song");
+ gtk_widget_add_events(view->seek_slider,GDK_BUTTON_PRESS_MASK|GDK_BUTTON_RELEASE_MASK);
+ g_signal_connect(view->seek_slider,"value-changed",
+                  G_CALLBACK(music_seek_changed),view);
+ g_signal_connect(view->seek_slider,"button-press-event",
+                  G_CALLBACK(music_seek_press),view);
+ g_signal_connect(view->seek_slider,"button-release-event",
+                  G_CALLBACK(music_seek_release),view);
+ gtk_box_pack_start(GTK_BOX(timeline),view->seek_slider,TRUE,TRUE,0);
+ view->seek_caption=gtk_label_new("0:00 / 0:00");
+ gtk_widget_set_size_request(view->seek_caption,100,-1);
+ gtk_box_pack_start(GTK_BOX(timeline),view->seek_caption,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),timeline,FALSE,FALSE,0);
  /* Show children once, then suppress the entire bar from root show_all()
   * until a real playback session becomes active. */
  gtk_widget_show_all(view->player_bar);

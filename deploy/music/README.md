@@ -45,6 +45,10 @@ slskd's `50300/tcp` port is the **Soulseek peer-transfer listener**, not a web a
 
 **Legal/operational:** the user is responsible for content permissions, applicable local law, and any files shared on Soulseek. Public distribution of modified AGPL software must follow its license and additional terms. Unmodified deployment of independently licensed upstream services is a simpler route than bundling or forking their source.
 
+## Existing NOW music-profile exporter (different stack)
+
+The repository already contains `src/server-profile.py`, which exports the **reference host's four-service JSON Compose** with `gluetun`, `slskd`, `qbittorrent`, and `droppedneedle`. It also expects DroppedNeedle's encryption-key file, database, and an `/app/imports` mount. **That exporter does not operate on this two-service YAML example.** Do not point it at this file or claim compatibility; the legacy/reference host and its backup workflow must remain unchanged. Build a separate validated backup/restore path for this example before calling the module reproducible end to end, or deliberately extend the existing exporter with tests to support both shapes without weakening validation.
+
 ## Restore and acceptance
 
 - Back up the complete `MUSIC_STATE_ROOT` (DroppedNeedle config/database, cache, plugins, slskd configuration and credentials) and the separate `MUSIC_MEDIA_ROOT` data as appropriate. Keep the backup private; it contains credentials and possible personal listening data.

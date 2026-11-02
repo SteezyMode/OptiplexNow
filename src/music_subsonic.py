@@ -272,7 +272,14 @@ def main(argv: list[str] | None = None) -> int:
             }[args.operation]
             data = query(args.base_url, "getAlbumList2", auth,
                          {"type": sort, "size": "100", "offset": "0"})
-            result = {"albums": data.get("albumList2", {}).get("album", [])}
+            albums = data.get("albumList2", {}).get("album", [])
+            # A freshly installed player has no history yet. Populate Home
+            # with real library additions, not a fabricated recommendation.
+            if args.operation == "home" and not albums:
+                data = query(args.base_url, "getAlbumList2", auth,
+                             {"type": "newest", "size": "100", "offset": "0"})
+                albums = data.get("albumList2", {}).get("album", [])
+            result = {"albums": albums}
         elif args.operation == "liked":
             data = query(args.base_url, "getStarred2", auth)
             result = {"starred": data.get("starred2", {})}

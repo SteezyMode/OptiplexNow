@@ -25,7 +25,7 @@ import threading
 import time
 from urllib.parse import parse_qs
 
-from music_subsonic import MusicTransportError, _bounded_text, _post, endpoint_for
+from music_subsonic import MusicTransportError, _bounded_text, _post, endpoint_for, query
 
 AUTH_MAX = 4096
 CONTROL_MAX = 32
@@ -214,6 +214,25 @@ def socket_seek(path: str, seconds: int) -> bool:
         return False
 
 
+def report_scrobble(server: str, auth: dict[str, str], track_id: str,
+                   completed: bool) -> bool:
+    """Best-effort upstream playback history; no effect on audio output.
+
+    DroppedNeedle v2.15.0 accepts Subsonic scrobble submission=false when
+    playing starts and submission=true after a track ends naturally.
+    A skipped/stopped/error track is never submitted as a completed listen.
+    The user app key stays in POST form data, not URLs or arguments.
+    """
+    try:
+        query(server, "scrobble", auth, {
+            "id": track_id,
+            "submission": "true" if completed else "false",
+        })
+        return True
+    except (MusicTransportError, OSError, ValueError):
+        return False
+
+
 def run(server: str, track_id: str, credential_stream, command_stream, output,
         *, mpv_binary: str | None = None, initial_volume: int = 75) -> int:
     # Keep real music credentials exclusively on this worker's stdin.
@@ -279,11 +298,26 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
                 playing=False
                 stopped=False
                 paused=False
+                now_playing_job=None
                 while True:
                     if decoder.poll() is not None:
-                        if stopped:send("STOPPED")
-                        elif decoder.returncode!=0:send("ERROR")
-                        else:send("ENDED")
+                        if stopped:
+                            send("STOPPED")
+                        elif decoder.returncode!=0:
+                            send("ERROR")
+                        else:
+                            if playing:
+                                # Avoid a skipped/aborted song counting as a
+                                # completed listen. Bound the final report;
+                                # offline tracking cannot stall auto-next.
+                                if now_playing_job is not None:
+                                    now_playing_job.join(timeout=0.2)
+                                finished=threading.Thread(
+                                    target=report_scrobble,
+                                    args=(server,auth,track_id,True),daemon=True)
+                                finished.start()
+                                finished.join(timeout=0.8)
+                            send("ENDED")
                         return 0 if stopped or decoder.returncode==0 else 2
                     now=time.monotonic()
                     if not os.path.exists(ipc) and now-started>MPV_START_TIMEOUT:
@@ -296,6 +330,10 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
                             if not playing:
                                 send("PLAYING")
                                 playing=True
+                                now_playing_job=threading.Thread(
+                                    target=report_scrobble,
+                                    args=(server,auth,track_id,False),daemon=True)
+                                now_playing_job.start()
                             if duration is not None and duration>0:
                                 send("POSITION %d %d" % (int(position),int(duration)))
                     ready,_,_=select.select([command_stream],[],[],0.13)

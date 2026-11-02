@@ -32,8 +32,8 @@ class ExistingOwnerLinkTests(TestCase):
             store.locked.return_value.__enter__.return_value=4
             store.read.return_value={"principals":[{"id":"owner-id","role":"owner"}]}
             with patch("music_link_existing._read_private_config",return_value={
-                    "state_dir":temp,"enabled":True,"legacy_links_reviewed":True}), \\
-                 patch("music_link_existing.OwnerStore",return_value=store), \\
+                    "state_dir":temp,"enabled":True,"legacy_links_reviewed":True}), \
+                 patch("music_link_existing.OwnerStore",return_value=store), \
                  patch("music_link_existing._private_config_dir"):
                 with self.assertRaises(PolicyError):
                     link_existing(url="http://127.0.0.1:8688",
@@ -50,8 +50,8 @@ class ExistingOwnerLinkTests(TestCase):
             api=MagicMock()
             api.call.return_value={"required":True}
             with patch("music_link_existing._read_private_config",return_value={
-                    "state_dir":temp,"enabled":True,"legacy_links_reviewed":True}), \\
-                 patch("music_link_existing.OwnerStore",return_value=store), \\
+                    "state_dir":temp,"enabled":True,"legacy_links_reviewed":True}), \
+                 patch("music_link_existing.OwnerStore",return_value=store), \
                  patch("music_link_existing.DroppedNeedleAPI",return_value=api):
                 with self.assertRaises(ProvisionError):
                     link_existing(url="http://127.0.0.1:8688",

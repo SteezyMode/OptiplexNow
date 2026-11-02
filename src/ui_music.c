@@ -36,6 +36,8 @@ typedef struct {
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more, *load_more_songs, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
+ GQueue *pending_art;
+ guint art_inflight;
  GPtrArray *visible_tracks, *queue;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
@@ -76,6 +78,7 @@ static void music_refresh_status(MusicView *view);
 static void music_next_clicked(GtkWidget *unused,gpointer data);
 static void music_play_visible(MusicView *view,int index);
 static void music_notify_tray(MusicView *view);
+static void music_card_queue_pump(MusicView *view);
 static gboolean music_status_tick(gpointer data);
 
 static void wipe_free(char *value){
@@ -86,10 +89,26 @@ static void wipe_free(char *value){
  g_free(value);
 }
 
+typedef struct {
+ char *cover_id;
+ GtkWidget *image;
+ guint64 serial;
+} MusicPendingArt;
+static void music_pending_free(gpointer data){
+ MusicPendingArt *p=data;
+ if(!p)return;
+ g_free(p->cover_id);
+ g_clear_object(&p->image);
+ g_free(p);
+}
+static void music_pending_clear(MusicView *view){
+ if(view->pending_art)g_queue_clear_full(view->pending_art,music_pending_free);
+}
 static void music_view_destroy(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  view->closing=TRUE;
+ music_pending_clear(view);
  if(view->volume_debounce)g_source_remove(view->volume_debounce);
  if(view->seek_debounce)g_source_remove(view->seek_debounce);
  if(view->status_timer)g_source_remove(view->status_timer);
@@ -115,6 +134,7 @@ static void music_view_free(gpointer data){
  if(view->queue)g_ptr_array_unref(view->queue);
  if(view->shuffle_order)g_array_unref(view->shuffle_order);
  if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
+ if(view->pending_art)g_queue_free_full(view->pending_art,music_pending_free);
  g_free(view);
 }
 
@@ -513,6 +533,10 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
  }
  if(output)g_bytes_unref(output);
  g_clear_error(&error);
+ if(job->card_target && view && view->art_inflight>0){
+  view->art_inflight--;
+  if(!view->closing)music_card_queue_pump(view);
+ }
  music_art_free(job);
 }
 static void music_art_start(MusicView *view,const char *cover_id,gboolean playing){
@@ -557,24 +581,21 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  g_bytes_unref(sent);
 }
 
-/* Bounded asynchronous grid art: only the first 16 visible cards initiate
- * an art lookup per page. Older/late responses never paint into a new page.
- * This avoids hundreds of parallel jobs on older Linux clients. */
-static void music_card_art_start(MusicView *view,const char *cover_id,GtkWidget *image){
- if(view->closing || view->card_art_count>=16 || !image ||
-    !cover_id || !*cover_id || strlen(cover_id)>512 ||
-    !view->app_password || !view->bound_url ||
+/* Cover art is loaded near the scroll viewport with four concurrent
+ * workers. The previous fixed 16-card cutoff left most library cards blank.
+ * No artwork requests are made for cards the user never reaches. */
+static void music_card_art_launch(MusicView *view,const char *cover_id,
+                                  GtkWidget *image){
+ if(view->closing || !view->app_password || !view->bound_url ||
     g_strcmp0(cfg[6],view->bound_url)!=0)return;
  char *helper=helper_path();
- if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
-  g_free(helper);return;
- }
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){g_free(helper);return;}
  const char *argv[]={"/usr/bin/python3",helper,view->bound_url,
                      "art",cover_id,"--auth-format=form",NULL};
  GError *error=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,
-   G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
-   G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+     G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+     G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
  g_free(helper);
  if(!proc){g_clear_error(&error);return;}
  MusicArtJob *job=g_new0(MusicArtJob,1);
@@ -590,9 +611,52 @@ static void music_card_art_start(MusicView *view,const char *cover_id,GtkWidget 
  wipe_free(key);g_free(name);
  GBytes *sent=g_bytes_new(job->input,strlen(job->input));
  job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
- ++view->card_art_count;
+ view->art_inflight++;
  g_subprocess_communicate_async(proc,sent,job->cancel,music_art_complete,job);
  g_bytes_unref(sent);
+}
+static void music_card_art_start(MusicView *view,const char *cover_id,
+                                 GtkWidget *image){
+ if(view->closing || !image || !view->pending_art)return;
+ if(!cover_id || !*cover_id || strlen(cover_id)>512){
+  gtk_widget_set_tooltip_text(image,"No cover art provided for this album.");
+  return;
+ }
+ MusicPendingArt *pending=g_new0(MusicPendingArt,1);
+ pending->cover_id=g_strdup(cover_id);
+ pending->image=g_object_ref(image);
+ pending->serial=view->card_art_serial;
+ g_queue_push_tail(view->pending_art,pending);
+}
+static void music_card_queue_pump(MusicView *view){
+ if(view->closing || !view->pending_art || !view->cards ||
+    !view->cards_scroll || !view->app_password)return;
+ GtkAdjustment *adjustment=gtk_scrolled_window_get_vadjustment(
+                                  GTK_SCROLLED_WINDOW(view->cards_scroll));
+ double top=gtk_adjustment_get_value(adjustment);
+ double height=gtk_adjustment_get_page_size(adjustment);
+ GList *link=view->pending_art->head;
+ while(link && view->art_inflight<4){
+  GList *next=link->next;
+  MusicPendingArt *item=link->data;
+  gboolean stale=item->serial!=view->card_art_serial ||
+                 !gtk_widget_get_parent(item->image);
+  int x=0,y=0;
+  gboolean placed=gtk_widget_translate_coordinates(
+                        item->image,view->cards,0,0,&x,&y);
+  gboolean visible=height<=0 || (placed && y+160>=top-180 &&
+                                             y<=top+height+180);
+  if(stale || visible){
+   g_queue_delete_link(view->pending_art,link);
+   if(!stale)music_card_art_launch(view,item->cover_id,item->image);
+   music_pending_free(item);
+  }
+  link=next;
+ }
+}
+static void music_card_scroll_changed(GtkAdjustment *unused,gpointer data){
+ (void)unused;
+ music_card_queue_pump(data);
 }
 
 /* A single queue action is shared by row selection and the album Play
@@ -1161,6 +1225,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
 static int render_rows(MusicView *view,const char *output,gboolean append){
  if(!append){
   ++view->card_art_serial;
+  music_pending_clear(view);
   view->card_art_count=0;
   GList *cards=gtk_container_get_children(GTK_CONTAINER(view->cards));
   for(GList *p=cards;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
@@ -1202,6 +1267,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  g_strfreev(lines);
  gtk_widget_show_all(view->list);
  gtk_widget_show_all(view->cards);
+ music_card_queue_pump(view);
  return count;
 }
 
@@ -1841,6 +1907,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
  view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
+ view->pending_art=g_queue_new();
  view->queue_index=-1;
  view->volume=75;
  view->playback=now_music_playback_new(music_player_event,view);
@@ -2024,6 +2091,12 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(view->cards),10);
  gtk_container_set_border_width(GTK_CONTAINER(view->cards),6);
  gtk_container_add(GTK_CONTAINER(view->cards_scroll),view->cards);
+ GtkAdjustment *art_scroll=gtk_scrolled_window_get_vadjustment(
+                             GTK_SCROLLED_WINDOW(view->cards_scroll));
+ g_signal_connect(art_scroll,"value-changed",
+                  G_CALLBACK(music_card_scroll_changed),view);
+ g_signal_connect(art_scroll,"changed",
+                  G_CALLBACK(music_card_scroll_changed),view);
  gtk_widget_set_no_show_all(view->cards_scroll,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->cards_scroll,TRUE,TRUE,0);
  view->load_more=music_button("Load more albums");

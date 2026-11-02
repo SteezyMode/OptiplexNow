@@ -31,7 +31,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
- GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more, *load_more_songs;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more, *load_more_songs, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll;
  GPtrArray *visible_tracks, *queue;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
@@ -1618,15 +1618,14 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_size_request(sidebar,135,-1);
  /* Established Spotify-style grouping: Home + Search, then
   * Your Library filters. Never put downloads/admin workflow in this rail. */
- const char *ops[]={"home",NULL,"discover","playlists","artists","albums",
-                    "liked","recent","new"};
- const char *titles[]={"Home","Search","Discover","Playlists","Artists",
-                       "Albums","Liked Songs","Recently played","New additions"};
- const char *headings[]={"Music Home","Search","Discover","Your playlists",
-                         "Artists","All albums","Liked music",
-                         "Recently played albums","New additions"};
- for(guint i=0;i<G_N_ELEMENTS(ops);i++){
-  if(i==3 || i==7){
+ const char *ops[]={"home",NULL,"discover","songs","playlists","artists",
+                    "albums","liked","recent","new"};
+ const char *titles[]={"Home","Search","Discover","All Songs","Playlists",
+                       "Artists","Albums","Liked Songs","Recently played","New additions"};
+ const char *headings[]={"Music Home","Search","Discover","All songs",
+                         "Your playlists","Artists","All albums","Liked music",
+                         "Recently played albums","New additions"}; for(guint i=0;i<G_N_ELEMENTS(ops);i++){
+  if(i==3 || i==8){
    GtkWidget *heading=gtk_label_new(i==3?"YOUR LIBRARY":"BROWSE");
    gtk_widget_set_name(heading,"music-library-label");
    gtk_label_set_xalign(GTK_LABEL(heading),0);

@@ -175,6 +175,32 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(fields["id"], ["a1"])
         self.assertNotIn("secret-should-never-be-in-url", path)
 
+    def test_cover_art_rejects_svg_html_and_oversized_images(self):
+        from unittest import mock
+        class Response:
+            def __init__(self, mime, payload):
+                self.headers = {"Content-Type": mime}
+                self.payload = payload
+            def __enter__(self): return self
+            def __exit__(self, *unused): return None
+            def read(self, amount): return self.payload[:amount]
+        class Output:
+            def __init__(self): self.buffer=io.BytesIO()
+        for mime, payload in (
+            ("image/svg+xml", b"<svg></svg>"),
+            ("text/html", b"<h1>private error</h1>"),
+            ("image/png", b"A" * (music.MAX_COVER + 1)),
+            ("image/jpeg", b""),
+        ):
+            with self.subTest(mime=mime, length=len(payload)):
+                out=Output()
+                with mock.patch.object(music, "_post",
+                                       return_value=Response(mime, payload)), \
+                     mock.patch.object(music.sys, "stdout", out), \
+                     self.assertRaises(music.MusicTransportError):
+                    music.cover_art(self.base, self.auth, "album1")
+                self.assertEqual(out.buffer.getvalue(), b"")
+
     def test_base64_rows_cannot_inject_newlines_or_tabs(self):
         from base64 import b64decode
         text = music._rows("albums", {"albums": [

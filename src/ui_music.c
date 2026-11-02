@@ -11,7 +11,7 @@
 
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *user, *password, *search;
- char *username, *app_password;
+ char *username, *app_password, *bound_url;
  gboolean busy, closing;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
@@ -47,6 +47,7 @@ static void music_view_free(gpointer data){
  MusicView *view=data;
  wipe_free(view->app_password);
  g_free(view->username);
+ g_free(view->bound_url);
  g_free(view);
 }
 
@@ -220,6 +221,12 @@ static void query_start(MusicView *view,const char *operation,
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
  }
+ if(!view->bound_url || g_strcmp0(view->bound_url,cfg[6])){
+  wipe_free(view->app_password);
+  view->app_password=NULL;
+  status_set(view,"Music server changed. Reconnect with its app password.");
+  return;
+ }
  if(!view->app_password || !*view->app_password){
   status_set(view,"Enter your OpenSubsonic app password and connect first.");
   return;
@@ -234,10 +241,10 @@ static void query_start(MusicView *view,const char *operation,
   g_free(helper);
   return;
  }
- const gchar *argv[]={"/usr/bin/python3",helper,cfg[6],operation,
+ const gchar *argv[]={"/usr/bin/python3",helper,view->bound_url,operation,
                       value && *value?value:NULL,"--format=rows","--auth-format=form",NULL};
  /* Avoid a NULL gap (the helper needs no arbitrary value for browse calls). */
- const gchar *without_value[]={"/usr/bin/python3",helper,cfg[6],operation,
+ const gchar *without_value[]={"/usr/bin/python3",helper,view->bound_url,operation,
                               "--format=rows","--auth-format=form",NULL};
  const gchar *const *command=value && *value?argv:without_value;
  GError *error=NULL;
@@ -277,6 +284,12 @@ static void music_connect(GtkWidget *unused,gpointer data){
   status_set(view,"Enter your user app password from DroppedNeedle.");
   return;
  }
+ if(!*cfg[6]){
+  status_set(view,"Add your Music server URL under NOW Settings.");
+  return;
+ }
+ g_free(view->bound_url);
+ view->bound_url=g_strdup(cfg[6]);
  wipe_free(view->app_password);
  view->app_password=g_strdup(entered);
  g_free(view->username);

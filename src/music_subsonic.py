@@ -19,7 +19,7 @@ import sys
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, parse_qs, urlsplit, urlunsplit
-from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler, Request
+from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler, ProxyHandler, Request
 
 CLIENT = "bruiser-music"
 VERSION = "1.16.1"
@@ -117,7 +117,7 @@ def _post(base: str, method: str, auth: dict[str, str],
         headers={"Content-Type": "application/x-www-form-urlencoded",
                  "Accept": "application/json, audio/*;q=0.8, */*;q=0.1"}
     )
-    opener = build_opener(DenyRedirects(), HTTPHandler(), HTTPSHandler(context=ssl.create_default_context()))
+    opener = build_opener(ProxyHandler({}), DenyRedirects(), HTTPHandler(), HTTPSHandler(context=ssl.create_default_context()))
     try:
         return opener.open(request, timeout=20)
     except MusicTransportError:

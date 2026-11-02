@@ -313,7 +313,13 @@ static void music_player_event(const char *event,void *data){
   return;
  }
  if(!strcmp(event,"ENDED")){
-  music_next_clicked(NULL,view);
+  /* Process has already exited; the button callback rejects inactive
+   * playback, so advance directly for gapless queue progression. */
+  int next=music_next_queue_index(view);
+  if(next>=0){
+   if(view->shuffle_enabled)view->shuffle_cursor++;
+   music_start_track(view,next);
+  }else music_stop(view);
   return;
  }
  if(!strcmp(event,"ERROR") || !strcmp(event,"STOPPED")){

@@ -29,11 +29,12 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
- GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
+ GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
  GPtrArray *visible_tracks, *queue;
  NowMusicPlayback *playback;
- int queue_index, album_offset;
+ int queue_index, album_offset, volume;
+ guint volume_debounce;
  gboolean paused;
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial;
@@ -73,6 +74,8 @@ static void music_view_destroy(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  view->closing=TRUE;
+ if(view->volume_debounce)g_source_remove(view->volume_debounce);
+ view->volume_debounce=0;
  if(active_music_view==view)active_music_view=NULL;
  if(view->playback){
   now_music_playback_free(view->playback);
@@ -200,7 +203,7 @@ static void music_start_track(MusicView *view,int index){
  }
  MusicTrack *song=g_ptr_array_index(view->queue,index);
  if(!now_music_playback_start(view->playback,view->bound_url,
-                             view->username,view->app_password,song->id)){
+                             view->username,view->app_password,song->id,view->volume)){
   music_stop(view);
   status_set(view,"Cannot start local audio. Check music helper and mpv installation.");
   return;
@@ -236,6 +239,22 @@ static void music_pause_clicked(GtkWidget *unused,gpointer data){
  MusicView *view=data;
  if(view->playback && now_music_playback_active(view->playback))
   now_music_playback_pause(view->playback,!view->paused);
+}
+/* Do not block the GTK thread for every slider pixel; throttle IPC. */
+static gboolean music_apply_volume(gpointer data){
+ MusicView *view=data;
+ view->volume_debounce=0;
+ if(!view->closing && view->playback &&
+    now_music_playback_active(view->playback))
+  now_music_playback_volume(view->playback,view->volume);
+ return G_SOURCE_REMOVE;
+}
+static void music_volume_changed(GtkRange *range,gpointer data){
+ MusicView *view=data;
+ if(view->closing)return;
+ view->volume=CLAMP((int)gtk_range_get_value(range),0,100);
+ if(view->volume_debounce)g_source_remove(view->volume_debounce);
+ view->volume_debounce=g_timeout_add(120,music_apply_volume,view);
 }
 static void music_stop_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -966,6 +985,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
  view->queue_index=-1;
+ view->volume=75;
  view->playback=now_music_playback_new(music_player_event,view);
  active_music_view=view;
  view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
@@ -1161,6 +1181,19 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_signal_connect(stop_button,"clicked",
                   G_CALLBACK(music_stop_clicked),view);
  gtk_box_pack_start(GTK_BOX(view->player_bar),stop_button,FALSE,FALSE,0);
+ /* Local audio volume only; never touches the host's Jellyfin, Steam or
+  * another user's Amperfy session. No decorative scrubber for a pipe
+  * that has not yet gained real seek support. */
+ GtkWidget *vol_label=gtk_label_new("Volume");
+ gtk_box_pack_start(GTK_BOX(view->player_bar),vol_label,FALSE,FALSE,0);
+ view->volume_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,100,1);
+ gtk_scale_set_draw_value(GTK_SCALE(view->volume_slider),FALSE);
+ gtk_range_set_value(GTK_RANGE(view->volume_slider),view->volume);
+ gtk_widget_set_size_request(view->volume_slider,84,-1);
+ gtk_widget_set_tooltip_text(view->volume_slider,"This device's music volume");
+ g_signal_connect(view->volume_slider,"value-changed",
+                  G_CALLBACK(music_volume_changed),view);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),view->volume_slider,FALSE,FALSE,0);
  /* Show children once, then suppress the entire bar from root show_all()
   * until a real playback session becomes active. */
  gtk_widget_show_all(view->player_bar);

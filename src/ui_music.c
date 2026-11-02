@@ -29,10 +29,10 @@ static MusicTrack *track_copy(const MusicTrack *source){
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
- GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
  GPtrArray *visible_tracks, *queue;
  NowMusicPlayback *playback;
- int queue_index;
+ int queue_index, album_offset;
  gboolean paused;
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial;
@@ -50,6 +50,8 @@ typedef struct {
  guint deadline;
  char *operation;
  char *heading;
+ gboolean append_albums;
+ int offset;
  char *input;                /* securely wiped on completion */
 } MusicQuery;
 
@@ -457,11 +459,13 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1);
 }
 
-static int render_rows(MusicView *view,const char *output){
- g_ptr_array_set_size(view->visible_tracks,0);
- GList *children=gtk_container_get_children(GTK_CONTAINER(view->list));
- for(GList *p=children;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
- g_list_free(children);
+static int render_rows(MusicView *view,const char *output,gboolean append){
+ if(!append){
+  g_ptr_array_set_size(view->visible_tracks,0);
+  GList *children=gtk_container_get_children(GTK_CONTAINER(view->list));
+  for(GList *p=children;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
+  g_list_free(children);
+ }
  if(!output)return 0;
  char **lines=g_strsplit(output,"\n",-1);
  int count=0;
@@ -542,8 +546,17 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    if(view->hero_row)gtk_widget_hide(view->hero_row);
    status_set(view,"Music library unavailable. Check URL, app password, and server access.");
   }else{
-   int count=render_rows(view,output);
-   if(count==0)music_show_empty(view,job->operation);
+   int count=render_rows(view,output,job->append_albums);
+   if(count==0 && !job->append_albums)music_show_empty(view,job->operation);
+   if(view->load_more){
+    if(!g_strcmp0(job->operation,"albums")){
+     view->album_offset=job->offset+count;
+     gtk_widget_set_sensitive(view->load_more,TRUE);
+     if(count==200 && view->album_offset<=1000000)
+      gtk_widget_show(view->load_more);
+     else gtk_widget_hide(view->load_more);
+    }else gtk_widget_hide(view->load_more);
+   }
    if(view->hero_play){
     gboolean playable=(!g_strcmp0(job->operation,"album") ||
                        !g_strcmp0(job->operation,"playlist")) &&
@@ -551,7 +564,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     gtk_widget_set_sensitive(view->hero_play,playable);
    }
    gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
-   char *message=g_strdup_printf("%d items · Connected to your music library",count);
+   char *message=g_strdup_printf("%d items · Connected to your music library",
+                                 !g_strcmp0(job->operation,"albums")
+                                   ? view->album_offset : count);
    status_set(view,message);
    g_free(message);
    if(view->remember_pending){
@@ -623,6 +638,12 @@ static void query_start(MusicView *view,const char *operation,
  job->cancel=g_cancellable_new();
  job->operation=g_strdup(operation);
  job->heading=g_strdup(heading?heading:"Music");
+ job->append_albums=append_albums;
+ job->offset=append_albums?atoi(value):0;
+ if(view->load_more){
+  if(!append_albums)gtk_widget_hide(view->load_more);
+  else gtk_widget_set_sensitive(view->load_more,FALSE);
+ }
  job->input=g_strdup_printf("api_key=%s&username=%s",encoded_key,encoded_user);
  wipe_free(encoded_key);
  g_free(encoded_user);
@@ -875,6 +896,16 @@ static void music_nav(GtkWidget *button,gpointer data){
  }
 }
 
+static void music_load_more(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->busy || view->closing || view->album_offset<=0 ||
+    view->album_offset>1000000)return;
+ char *value=g_strdup_printf("%d",view->album_offset);
+ query_start(view,"albums",value,"All albums");
+ g_free(value);
+}
+
 static void music_search(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
@@ -1046,6 +1077,10 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(scroll),view->list);
  gtk_box_pack_start(GTK_BOX(maincol),scroll,TRUE,TRUE,0);
+ view->load_more=music_button("Load more albums");
+ gtk_widget_set_no_show_all(view->load_more,TRUE);
+ g_signal_connect(view->load_more,"clicked",G_CALLBACK(music_load_more),view);
+ gtk_box_pack_start(GTK_BOX(maincol),view->load_more,FALSE,FALSE,0);
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */

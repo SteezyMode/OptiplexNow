@@ -30,19 +30,21 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
- GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider, *seek_slider, *seek_caption;
- GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
+ GtkWidget *player_bar, *playing_label, *playing_artist_label, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more, *load_more_songs;
  GtkWidget *cards, *cards_scroll, *list_scroll;
  GPtrArray *visible_tracks, *queue;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
- int queue_index, album_offset, volume;
+ int queue_index, album_offset, song_offset, volume;
  guint volume_debounce, seek_debounce, play_duration, status_timer;
  gboolean paused, seek_updating, seek_dragging, status_inflight;
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode;
+ gboolean grid_mode, shuffle_enabled;
+ GArray *shuffle_order;
+ guint shuffle_cursor;
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
@@ -58,7 +60,7 @@ typedef struct {
  guint deadline;
  char *operation;
  char *heading;
- gboolean append_albums;
+ gboolean append_albums, append_songs;
  int offset;
  char *input;                /* securely wiped on completion */
 } MusicQuery;
@@ -68,6 +70,9 @@ static void music_stop(MusicView *view);
 static void music_start_track(MusicView *view,int index);
 static void music_art_start(MusicView *view,const char *cover_id,gboolean playing);
 static void music_refresh_status(MusicView *view);
+static void music_next_clicked(GtkWidget *unused,gpointer data);
+static void music_play_visible(MusicView *view,int index);
+static void music_notify_tray(MusicView *view);
 static gboolean music_status_tick(gpointer data);
 
 static void wipe_free(char *value){
@@ -105,6 +110,7 @@ static void music_view_free(gpointer data){
  g_free(view->playing_caption);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
+ if(view->shuffle_order)g_array_unref(view->shuffle_order);
  if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
  g_free(view);
 }
@@ -152,6 +158,56 @@ static void music_vault_begin(MusicView *view,const char *action,
                               const char *input);
 static void music_auto_enroll(MusicView *view);
 
+/* Shuffle is a permutation of the current queue, without repeats. */
+static void music_shuffle_reset(MusicView *view,int start){
+ if(!view->shuffle_order)view->shuffle_order=g_array_new(FALSE,FALSE,sizeof(guint));
+ g_array_set_size(view->shuffle_order,0);
+ if(start<0 || start>=(int)view->queue->len)return;
+ guint first=(guint)start;
+ g_array_append_val(view->shuffle_order,first);
+ for(guint i=0;i<view->queue->len;i++){
+  if(i!=first)g_array_append_val(view->shuffle_order,i);
+ }
+ if(view->shuffle_enabled){
+  for(guint i=view->shuffle_order->len;i>2;i--){
+   guint pick=g_random_int_range(1,i);
+   guint tmp=g_array_index(view->shuffle_order,guint,i-1);
+   g_array_index(view->shuffle_order,guint,i-1)=g_array_index(view->shuffle_order,guint,pick);
+   g_array_index(view->shuffle_order,guint,pick)=tmp;
+  }
+ }
+ view->shuffle_cursor=0;
+}
+static int music_next_queue_index(MusicView *view){
+ if(!view->queue || view->queue_index<0)return -1;
+ if(view->shuffle_enabled){
+  if(!view->shuffle_order || view->shuffle_cursor+1>=view->shuffle_order->len)return -1;
+  return (int)g_array_index(view->shuffle_order,guint,view->shuffle_cursor+1);
+ }
+ return view->queue_index+1<(int)view->queue->len?view->queue_index+1:-1;
+}
+static int music_previous_queue_index(MusicView *view){
+ if(view->queue_index<0)return -1;
+ if(view->shuffle_enabled && view->shuffle_order && view->shuffle_cursor>0)
+  return (int)g_array_index(view->shuffle_order,guint,view->shuffle_cursor-1);
+ return MAX(0,view->queue_index-1);
+}
+static GtkWidget *music_icon_button(const char *icon,const char *tooltip){
+ GtkWidget *button=gtk_button_new_from_icon_name(icon,GTK_ICON_SIZE_BUTTON);
+ gtk_style_context_add_class(gtk_widget_get_style_context(button),"music-transport");
+ gtk_widget_set_tooltip_text(button,tooltip);
+ gtk_widget_set_size_request(button,38,38);
+ return button;
+}
+static void music_shuffle_clicked(GtkToggleButton *button,gpointer data){
+ MusicView *view=data;
+ view->shuffle_enabled=gtk_toggle_button_get_active(button);
+ if(view->queue_index>=0)music_shuffle_reset(view,view->queue_index);
+ gtk_widget_set_tooltip_text(GTK_WIDGET(button),view->shuffle_enabled?
+     "Shuffle on":"Shuffle off");
+ music_notify_tray(view);
+}
+
 static void music_notify_tray(MusicView *view){
  if(view->tray_changed)view->tray_changed();
 }
@@ -165,13 +221,16 @@ static void music_update_controls(MusicView *view){
  }
  gtk_label_set_text(GTK_LABEL(view->playing_label),
                     view->playing_caption?view->playing_caption:"Now playing");
- gtk_button_set_label(GTK_BUTTON(view->pause_button),
-                      view->paused?"Resume":"Pause");
+ gtk_button_set_image(GTK_BUTTON(view->pause_button),
+       gtk_image_new_from_icon_name(view->paused?
+          "media-playback-start-symbolic":"media-playback-pause-symbolic",
+          GTK_ICON_SIZE_BUTTON));
+ gtk_widget_set_tooltip_text(view->pause_button,view->paused?"Play":"Pause");
  gtk_widget_set_sensitive(view->previous_button,TRUE);
  if(view->seek_slider)
   gtk_widget_set_sensitive(view->seek_slider,view->play_duration>0);
  gtk_widget_set_sensitive(view->next_button,
-                  view->queue_index+1<(int)view->queue->len);
+                  music_next_queue_index(view)>=0);
  gtk_widget_show(view->player_bar);
  music_notify_tray(view);
 }
@@ -221,9 +280,7 @@ static void music_player_event(const char *event,void *data){
   return;
  }
  if(!strcmp(event,"ENDED")){
-  if(view->queue_index+1<(int)view->queue->len)
-   music_start_track(view,view->queue_index+1);
-  else music_stop(view);
+  music_next_clicked(NULL,view);
   return;
  }
  if(!strcmp(event,"ERROR") || !strcmp(event,"STOPPED")){
@@ -273,15 +330,20 @@ static void music_prev_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  if(!view->playback || !now_music_playback_active(view->playback))return;
- music_start_track(view,MAX(0,view->queue_index-1));
+ int next=music_previous_queue_index(view);
+ if(next<0)return;
+ if(view->shuffle_enabled && view->shuffle_cursor>0)view->shuffle_cursor--;
+ music_start_track(view,next);
 }
 static void music_next_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  if(!view->playback || !now_music_playback_active(view->playback))return;
- if(view->queue_index+1<(int)view->queue->len)
-  music_start_track(view,view->queue_index+1);
- else music_stop(view);
+ int next=music_next_queue_index(view);
+ if(next>=0){
+  if(view->shuffle_enabled)view->shuffle_cursor++;
+  music_start_track(view,next);
+ }else music_stop(view);
 }
 static void music_pause_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -356,7 +418,7 @@ gboolean now_music_is_paused(void){
 }
 gboolean now_music_can_next(void){
  return now_music_is_playing_session() &&
-    active_music_view->queue_index+1<(int)active_music_view->queue->len;
+    music_next_queue_index(active_music_view)>=0;
 }
 const char *now_music_caption(void){
  return now_music_is_playing_session() && active_music_view->playing_caption
@@ -527,6 +589,7 @@ static void music_play_visible(MusicView *view,int index){
  g_ptr_array_set_size(view->queue,0);
  for(guint i=0;i<view->visible_tracks->len;i++)
   g_ptr_array_add(view->queue,track_copy(g_ptr_array_index(view->visible_tracks,i)));
+ music_shuffle_reset(view,index);
  music_start_track(view,index);
 }
 static void music_play_album(GtkWidget *unused,gpointer data){

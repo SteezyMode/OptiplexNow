@@ -242,7 +242,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     server, track_id = argv
     try:
-        return run(server, track_id, sys.stdin.buffer, sys.stdin.buffer, sys.stdout)
+        # Use the unbuffered file object for BOTH auth and later commands.
+        # BufferedReader.readline() can prefetch a PAUSE/STOP line and then
+        # select() would see an empty kernel pipe despite buffered commands.
+        channel = sys.stdin.buffer.raw
+        return run(server, track_id, channel, channel, sys.stdout)
     except (OSError, ValueError):
         print("ERROR", flush=True)
         return 2

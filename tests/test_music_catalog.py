@@ -1,7 +1,6 @@
-"""Bruiser Music discovery uses DroppedNeedle's existing READ-ONLY search.
+"""Bruiser Music native search requires a *separate* DroppedNeedle REST session.
 
-No OpenSubsonic app key, owner token or slskd key may be sent to this
-search route; album requests remain separately authorization-gated.
+No OpenSubsonic streaming key or slskd key may be forwarded to this route.
 """
 from __future__ import annotations
 
@@ -38,6 +37,8 @@ class FakeCatalog(BaseHTTPRequestHandler):
                                     dict(self.headers.items())))
         if parsed.path != "/api/v1/search":
             self.send_response(404); self.end_headers();return
+        if self.headers.get("Authorization") != "Bearer REST-companion-token-12345":
+            self.send_response(401); self.end_headers();return
         raw = json.dumps(self.result).encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type","application/json")
@@ -75,7 +76,8 @@ class MusicCatalogTests(unittest.TestCase):
 
     def test_search_uses_exact_upstream_route_and_no_secret(self):
         FakeCatalog.observed.clear()
-        found=music.catalog_search(self.base,"new album")
+        with patch("music_rest.get_session",return_value="REST-companion-token-12345"):
+            found=music.catalog_search(self.base,"new album")
         self.assertEqual(found["albums"][0]["title"],"New Album")
         path,params,headers=FakeCatalog.observed[-1]
         self.assertEqual(path,"/api/v1/search")
@@ -83,7 +85,7 @@ class MusicCatalogTests(unittest.TestCase):
         self.assertEqual(params["limit_albums"],["25"])
         self.assertEqual(params["limit_artists"],["10"])
         self.assertNotIn("apiKey",str((path,params,headers)))
-        self.assertNotIn("Authorization",headers)
+        self.assertEqual(headers.get("Authorization"),"Bearer REST-companion-token-12345")
         self.assertNotIn("Cookie",headers)
 
     def test_library_and_missing_catalog_results_have_distinct_types(self):

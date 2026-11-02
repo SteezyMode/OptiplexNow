@@ -29,6 +29,8 @@ shutil.copy2(root/'src/music_keyring.py',pkg/'usr/lib/optiplex-now/music_keyring
 shutil.copy2(root/'src/music_player.py',pkg/'usr/lib/optiplex-now/music_player.py')
 shutil.copy2(root/'src/music_http_stream.py',pkg/'usr/lib/optiplex-now/music_http_stream.py')
 shutil.copy2(root/'src/music_rest.py',pkg/'usr/lib/optiplex-now/music_rest.py')
+shutil.copy2(root/'src/music_device_client.py',pkg/'usr/lib/optiplex-now/music_device_client.py')
+shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
 # Shared theme used by main GTK UI and owner/host Python dialogs.
 shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
 shutil.copy2(root/'src/now_theme.py',pkg/'usr/lib/optiplex-now/now_theme.py')

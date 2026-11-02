@@ -27,6 +27,16 @@ class Stream(BaseHTTPRequestHandler):
             self.send_response(403)
             self.end_headers()
             return
+        if self.path=="/subsonic/rest/scrobble":
+            payload=b'{"subsonic-response":{"status":"ok"}}'
+            self.send_response(200)
+            self.send_header("Content-Type","application/json")
+            self.send_header("Content-Length",str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if self.path!="/subsonic/rest/stream":
+            self.send_response(404);self.end_headers();return
         sound=io.BytesIO()
         with wave.open(sound,"wb") as audio:
             audio.setnchannels(1)
@@ -93,9 +103,20 @@ class PlaybackSmoke(unittest.TestCase):
                     self.assertTrue(any(x.startswith("POSITION ") for x in events),
                                     "mpv must report real elapsed/duration")
                     self.assertEqual(proc.wait(timeout=2),0)
-                    path,params=Stream.requests[-1]
+                    stream_calls=[x for x in Stream.requests
+                                  if x[0]=="/subsonic/rest/stream"]
+                    self.assertGreater(len(stream_calls),0)
+                    path,params=stream_calls[-1]
                     self.assertEqual(path,"/subsonic/rest/stream")
                     self.assertEqual(params["apiKey"],["test-only"])
+                    scrobbles=[params for path,params in Stream.requests
+                               if path=="/subsonic/rest/scrobble"]
+                    self.assertTrue(any(p.get("submission")==["false"]
+                                        for p in scrobbles),
+                                    "Now-playing should update the music server")
+                    self.assertTrue(any(p.get("submission")==["true"]
+                                        for p in scrobbles),
+                                    "Natural end should update listening history")
                     self.assertNotIn("test-only"," ".join(proc.args))
                 finally:
                     if proc.poll() is None:

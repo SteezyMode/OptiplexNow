@@ -1032,7 +1032,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                     !g_strcmp0(job->operation,"new") ||
                     !g_strcmp0(job->operation,"artists") ||
                     !g_strcmp0(job->operation,"playlists"));
-   int count=render_rows(view,output,job->append_albums);
+   int count=render_rows(view,output,job->append_albums || job->append_songs);
    if(view->grid_mode){
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);
@@ -1040,7 +1040,22 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     gtk_widget_hide(view->cards_scroll);
     gtk_widget_show(view->list_scroll);
    }
-   if(count==0 && !job->append_albums)music_show_empty(view,job->operation);
+   if(count==0 && !job->append_albums && !job->append_songs)
+    music_show_empty(view,job->operation);
+   if(view->shuffle_all){
+    if(!g_strcmp0(job->operation,"songs") ||
+       !g_strcmp0(job->operation,"random_songs"))gtk_widget_show(view->shuffle_all);
+    else gtk_widget_hide(view->shuffle_all);
+   }
+   if(view->load_more_songs){
+    if(!g_strcmp0(job->operation,"songs")){
+     view->song_offset=job->offset+count;
+     gtk_widget_set_sensitive(view->load_more_songs,TRUE);
+     if(count==200 && view->song_offset<=1000000)
+      gtk_widget_show(view->load_more_songs);
+     else gtk_widget_hide(view->load_more_songs);
+    }else gtk_widget_hide(view->load_more_songs);
+   }
    if(view->load_more){
     if(!g_strcmp0(job->operation,"albums")){
      view->album_offset=job->offset+count;
@@ -1064,6 +1079,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
             !g_strcmp0(job->operation,"albums")?view->album_offset:count);
    status_set(view,message);
    g_free(message);
+   /* Shuffle All uses an authenticated, server-randomized song selection. */
+   if(!g_strcmp0(job->operation,"random_songs") &&
+      view->visible_tracks->len>0)music_play_visible(view,0);
    if(view->remember_pending){
     view->remember_pending=FALSE;
     /* Credentials are saved only AFTER the OpenSubsonic API accepted them. */
@@ -1086,6 +1104,7 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
+ const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
                         !g_strcmp0(operation,"discover");
  if(!*cfg[6]){
@@ -1145,10 +1164,15 @@ static void query_start(MusicView *view,const char *operation,
  job->operation=g_strdup(operation);
  job->heading=g_strdup(heading?heading:"Music");
  job->append_albums=append_albums;
- job->offset=append_albums?atoi(value):0;
+ job->append_songs=append_songs;
+ job->offset=(append_albums || append_songs)?atoi(value):0;
  if(view->load_more){
   if(!append_albums)gtk_widget_hide(view->load_more);
   else gtk_widget_set_sensitive(view->load_more,FALSE);
+ }
+ if(view->load_more_songs){
+  if(!append_songs)gtk_widget_hide(view->load_more_songs);
+  else gtk_widget_set_sensitive(view->load_more_songs,FALSE);
  }
  job->input=catalog?g_strdup(""):g_strdup_printf(
      "api_key=%s&username=%s",encoded_key,encoded_user);
@@ -1489,6 +1513,23 @@ static void music_load_more(GtkWidget *unused,gpointer data){
  g_free(value);
 }
 
+static void music_load_more_songs(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->busy || view->closing || view->song_offset<=0 ||
+    view->song_offset>1000000)return;
+ char *value=g_strdup_printf("%d",view->song_offset);
+ query_start(view,"songs",value,"All songs");
+ g_free(value);
+}
+static void music_shuffle_all(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->busy || view->closing)return;
+ if(view->shuffle_button)
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(view->shuffle_button),TRUE);
+ query_start(view,"random_songs",NULL,"Shuffle all songs");
+}
 static void music_search(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
@@ -1675,6 +1716,10 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_name(view->heading,"music-section-title");
  gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
+ view->shuffle_all=music_button("Shuffle all");
+ g_signal_connect(view->shuffle_all,"clicked",G_CALLBACK(music_shuffle_all),view);
+ gtk_widget_set_no_show_all(view->shuffle_all,TRUE);
+ gtk_box_pack_start(GTK_BOX(maincol),view->shuffle_all,FALSE,FALSE,0);
  /* Album/artist/playlist art is fetched on demand, not through an
   * unbounded request fan-out for every visible library item. */
  view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,12);
@@ -1723,6 +1768,10 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_no_show_all(view->load_more,TRUE);
  g_signal_connect(view->load_more,"clicked",G_CALLBACK(music_load_more),view);
  gtk_box_pack_start(GTK_BOX(maincol),view->load_more,FALSE,FALSE,0);
+ view->load_more_songs=music_button("Load more songs");
+ gtk_widget_set_no_show_all(view->load_more_songs,TRUE);
+ g_signal_connect(view->load_more_songs,"clicked",G_CALLBACK(music_load_more_songs),view);
+ gtk_box_pack_start(GTK_BOX(maincol),view->load_more_songs,FALSE,FALSE,0);
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
@@ -1800,5 +1849,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_hide(view->hero_row);
  gtk_widget_hide(view->cards_scroll);
  gtk_widget_hide(view->player_bar);
+ gtk_widget_hide(view->shuffle_all);
+ gtk_widget_hide(view->load_more_songs);
+ gtk_widget_hide(view->load_more);
  return view->root;
 }

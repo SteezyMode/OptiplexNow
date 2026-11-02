@@ -854,6 +854,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_signal_connect(stop_button,"clicked",
                   G_CALLBACK(music_stop_clicked),view);
  gtk_box_pack_start(GTK_BOX(view->player_bar),stop_button,FALSE,FALSE,0);
+ /* Show children once, then suppress the entire bar from root show_all()
+  * until a real playback session becomes active. */
+ gtk_widget_show_all(view->player_bar);
  gtk_widget_set_no_show_all(view->player_bar,TRUE);
  gtk_box_pack_end(GTK_BOX(view->root),view->player_bar,FALSE,FALSE,0);
  g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view);

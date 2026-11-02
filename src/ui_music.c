@@ -29,7 +29,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
- GtkWidget *hero_row, *hero_art, *hero_title, *playing_art;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art;
  GPtrArray *visible_tracks, *queue;
  NowMusicPlayback *playback;
  int queue_index;
@@ -372,6 +372,20 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  g_bytes_unref(sent);
 }
 
+/* A single queue action is shared by row selection and the album Play
+ * button; it uses the authenticated visible track list, not download APIs. */
+static void music_play_visible(MusicView *view,int index){
+ if(view->closing || index<0 || index>=(int)view->visible_tracks->len)return;
+ g_ptr_array_set_size(view->queue,0);
+ for(guint i=0;i<view->visible_tracks->len;i++)
+  g_ptr_array_add(view->queue,track_copy(g_ptr_array_index(view->visible_tracks,i)));
+ music_start_track(view,index);
+}
+static void music_play_album(GtkWidget *unused,gpointer data){
+ (void)unused;
+ music_play_visible(data,0);
+}
+
 static void music_item_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
  GtkWidget *button=GTK_WIDGET(data);
@@ -386,6 +400,7 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
   if(view->hero_row){
    gtk_widget_show(view->hero_row);
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+   gtk_widget_set_sensitive(view->hero_play,FALSE);
   }
   music_art_start(view,cover,FALSE);
   query_start(view,kind,id,title);
@@ -393,10 +408,7 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
   int selected=GPOINTER_TO_INT(
                  g_object_get_data(G_OBJECT(button),"music-song-index"))-1;
   if(selected<0 || selected>=(int)view->visible_tracks->len)return;
-  g_ptr_array_set_size(view->queue,0);
-  for(guint i=0;i<view->visible_tracks->len;i++)
-   g_ptr_array_add(view->queue,track_copy(g_ptr_array_index(view->visible_tracks,i)));
-  music_start_track(view,selected);
+  music_play_visible(view,selected);
  }
 }
 
@@ -510,6 +522,12 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    status_set(view,"Music library unavailable. Check URL, app password, and server access.");
   }else{
    int count=render_rows(view,output);
+   if(view->hero_play){
+    gboolean playable=(!g_strcmp0(job->operation,"album") ||
+                       !g_strcmp0(job->operation,"playlist")) &&
+                       view->visible_tracks->len>0;
+    gtk_widget_set_sensitive(view->hero_play,playable);
+   }
    gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
    char *message=g_strdup_printf("%d items · Connected to your music library",count);
    status_set(view,message);
@@ -962,6 +980,10 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_ellipsize(GTK_LABEL(view->hero_title),PANGO_ELLIPSIZE_END);
  gtk_widget_set_hexpand(view->hero_title,TRUE);
  gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_title,TRUE,TRUE,0);
+ view->hero_play=music_button("Play");
+ gtk_widget_set_sensitive(view->hero_play,FALSE);
+ g_signal_connect(view->hero_play,"clicked",G_CALLBACK(music_play_album),view);
+ gtk_box_pack_end(GTK_BOX(view->hero_row),view->hero_play,FALSE,FALSE,0);
  gtk_widget_show_all(view->hero_row);
  gtk_widget_set_no_show_all(view->hero_row,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->hero_row,FALSE,FALSE,0);

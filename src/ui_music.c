@@ -979,7 +979,16 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *forget=music_button("Forget this device");
  g_signal_connect(forget,"clicked",G_CALLBACK(music_forget_device),view);
  gtk_box_pack_end(GTK_BOX(sidebar),forget,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(content),sidebar,FALSE,FALSE,0);
+ /* The sidebar owns its scrolling, so nine nav actions must not
+  * enlarge a 640x500 client or the still-hidden Dashboard stack. */
+ GtkWidget *sidebar_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sidebar_scroll),
+                                 GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),135);
+ gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140);
+ gtk_widget_set_vexpand(sidebar_scroll,TRUE);
+ gtk_container_add(GTK_CONTAINER(sidebar_scroll),sidebar);
+ gtk_box_pack_start(GTK_BOX(content),sidebar_scroll,FALSE,TRUE,0);
 
  GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
  gtk_widget_set_name(maincol,"music-main");

@@ -40,7 +40,12 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertNotIn('now_tray_videos_open_in_app()', SOURCE)
         self.assertNotIn('now_media_embedded_webview_new(url,cfg[0])', SOURCE)
         self.assertIn('now_media_browser_open(now_media_fallback());', (ROOT / 'src' / 'media_flow.c').read_text())
-        self.assertIn('browser_open(cfg[6]);', SOURCE)
+        # Music now has a first-party browse view; the upstream management UI
+        # stays available via the explicit Advanced button.
+        self.assertIn('now_music_build(browser_open,on_settings)', SOURCE)
+        music_ui = (ROOT / 'src' / 'ui_music.c').read_text(encoding='utf-8')
+        self.assertIn('view->open_url(cfg[6])', music_ui)
+        self.assertIn('g_subprocess_communicate_utf8_async', music_ui)
         # Downloads now opens the authenticated in-window queue, not the legacy URL.
         self.assertIn('now_downloads_open(cfg[0],cfg[1],cfg[7]);', SOURCE)
         self.assertIn('now_nav_show_page(main_pages,"downloads");', SOURCE)

@@ -149,6 +149,43 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertTrue(target.buffer.getvalue().startswith(b"ID3"))
         self.assertEqual(self.server.requests[-1][1]["id"], ["t1"])
 
+    def test_base64_rows_cannot_inject_newlines_or_tabs(self):
+        from base64 import b64decode
+        text = music._rows("albums", {"albums": [
+            {"id": "a1", "name": "Album\nwith\tcontrols", "artist": "歌手"},
+            {"id": "a2", "name": "Another Album", "artist": "Band"},
+        ]})
+        lines = text.splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(b64decode(lines[0].split("\t")[2]).decode(),
+                         "Album\nwith\tcontrols")
+        self.assertEqual(b64decode(lines[0].split("\t")[3]).decode(), "歌手")
+        self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
+
+    def test_readonly_row_shapes(self):
+        cases = {
+            "artists": {"indexes": [{"artist": [{"id": "artist1", "name": "Singer"}]}]},
+            "playlists": {"playlists": [{"id": "p1", "name": "Favorite"}]},
+            "album": {"album": {"song": [{"id": "t1", "title": "Song"}]}},
+            "playlist": {"playlist": {"entry": [{"id": "t1", "title": "Song"}]}},
+            "artist": {"artist": {"album": [{"id": "a1", "name": "Album"}]}},
+            "search": {"results": {"album": [{"id": "a1", "name": "Album"}]}},
+        }
+        for operation, result in cases.items():
+            with self.subTest(operation=operation):
+                self.assertEqual(len(music._rows(operation, result).splitlines()), 1)
+
+    def test_form_stdin_is_supported_without_exposing_secrets_in_argv(self):
+        class Stdin:
+            buffer = io.BytesIO(b"api_key=app%2Bsecret&username=listener")
+        original = music.sys.stdin
+        try:
+            music.sys.stdin = Stdin()
+            result = music._auth_from_stdin("form")
+        finally:
+            music.sys.stdin = original
+        self.assertEqual(result, {"apiKey": "app+secret", "u": "listener"})
+
     def test_app_password_only_arrives_via_stdin(self):
         class Stdin:
             buffer = io.BytesIO(b'{"api_key":"app-test-key","username":"listener"}')

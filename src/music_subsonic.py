@@ -284,7 +284,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -294,11 +294,24 @@ def main(argv: list[str] | None = None) -> int:
         # per-user library playback API. Do not request, store or forward a
         # playback key for a basic search. The configured private host is
         # validated by catalog_search before the outbound request.
-        if args.operation == "catalog":
-            result = {"catalog": catalog_search(
-                args.base_url, _bounded_text(args.value, "search query", 200))}
+        if args.operation in ("catalog", "discover"):
+            if args.operation == "catalog":
+                result = {"catalog": catalog_search(
+                    args.base_url, _bounded_text(args.value, "search query", 200))}
+                rows = _rows("catalog", result)
+            else:
+                from music_rest import (
+                    get_session, request as rest_request, _discover_rows,
+                    MusicRESTError,
+                )
+                try:
+                    result = rest_request(args.base_url, "discover",
+                                          token=get_session(args.base_url))
+                except MusicRESTError as exc:
+                    raise MusicTransportError(str(exc)) from None
+                rows = _discover_rows(result)
             if args.format == "rows":
-                sys.stdout.write(_rows("catalog", result))
+                sys.stdout.write(rows)
             else:
                 json.dump(result, sys.stdout, ensure_ascii=False, separators=(",", ":"))
                 sys.stdout.write("\n")

@@ -9,6 +9,6 @@
  * No slskd/admin credentials are ever needed by this widget.
  */
 GtkWidget *now_music_build(void (*open_url)(const char *),
-                           void (*open_settings)(GtkWidget *, gpointer));
+                           void (*open_settings)(void *, void *));
 
 #endif

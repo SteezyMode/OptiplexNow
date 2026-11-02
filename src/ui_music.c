@@ -11,28 +11,31 @@
 #include <string.h>
 
 typedef struct {
- char *id, *title, *artist;
+ char *id, *title, *artist, *cover_id;
 } MusicTrack;
 static void track_free(gpointer data){
  MusicTrack *t=data;
  if(!t)return;
- g_free(t->id);g_free(t->title);g_free(t->artist);g_free(t);
+ g_free(t->id);g_free(t->title);g_free(t->artist);g_free(t->cover_id);g_free(t);
 }
 static MusicTrack *track_copy(const MusicTrack *source){
  MusicTrack *t=g_new0(MusicTrack,1);
  t->id=g_strdup(source->id);
  t->title=g_strdup(source->title);
  t->artist=g_strdup(source->artist);
+ t->cover_id=g_strdup(source->cover_id);
  return t;
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
+ GtkWidget *hero_row, *hero_art, *hero_title, *playing_art;
  GPtrArray *visible_tracks, *queue;
  NowMusicPlayback *playback;
  int queue_index;
  gboolean paused;
- char *playing_caption;
+ char *playing_caption, *pending_cover_id;
+ guint64 hero_art_serial, playing_art_serial;
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
@@ -53,6 +56,7 @@ typedef struct {
 static MusicView *active_music_view=NULL;
 static void music_stop(MusicView *view);
 static void music_start_track(MusicView *view,int index);
+static void music_art_start(MusicView *view,const char *cover_id,gboolean playing);
 
 static void wipe_free(char *value){
  if(!value)return;
@@ -82,6 +86,7 @@ static void music_view_free(gpointer data){
  g_free(view->bound_url);
  g_free(view->vault_attempted_url);
  g_free(view->playing_caption);
+ g_free(view->pending_cover_id);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
  g_free(view);
@@ -155,6 +160,7 @@ static void music_stop(MusicView *view){
  view->queue_index=-1;
  view->paused=FALSE;
  g_clear_pointer(&view->playing_caption,g_free);
+ view->playing_art_serial++;
  if(!view->closing){
   if(view->player_bar)gtk_widget_hide(view->player_bar);
   status_set(view,"Playback stopped.");
@@ -206,6 +212,7 @@ static void music_start_track(MusicView *view,int index){
                             MIN(72,(int)g_utf8_strlen(full,-1)));
  g_free(full);
  status_set(view,"Buffering music...");
+ music_art_start(view,song->cover_id,TRUE);
  music_update_controls(view);
 }
 static void music_prev_clicked(GtkWidget *unused,gpointer data){

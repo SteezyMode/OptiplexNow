@@ -212,6 +212,21 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('music_auto_enroll(view);',UI_MUSIC)
         self.assertIn('This device already has Music playback access.',UI_MUSIC)
 
+    def test_standard_album_grid_preserves_track_list_and_limits_art_fetches(self):
+        self.assertIn("gtk_flow_box_new()", UI_MUSIC)
+        self.assertIn("gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);", UI_MUSIC)
+        self.assertIn("gtk_flow_box_set_max_children_per_line", UI_MUSIC)
+        self.assertIn("gtk_widget_set_name(card,\"music-card\")", UI_MUSIC)
+        self.assertIn("music_card_art_start(view,cover,art);", UI_MUSIC)
+        self.assertIn("view->card_art_count>=16", UI_MUSIC)
+        self.assertIn("job->serial==", UI_MUSIC)
+        self.assertIn("view->card_art_serial", UI_MUSIC)
+        self.assertIn("gtk_widget_show(view->cards_scroll);", UI_MUSIC)
+        self.assertIn("gtk_widget_show(view->list_scroll);", UI_MUSIC)
+        self.assertIn("gtk_widget_set_no_show_all(view->cards_scroll,TRUE)", UI_MUSIC)
+        self.assertIn("gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1)", UI_MUSIC)
+        self.assertIn('"#music-card-grid', MAIN)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

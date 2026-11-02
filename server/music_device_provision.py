@@ -75,6 +75,7 @@ class DroppedNeedleAPI:
         valid = (resource in (
             "/auth/login", "/auth/device-sessions", "/auth/sessions",
             "/connect-apps/app-passwords",
+            "/auth/setup/status", "/auth/setup",
         ) or (
             resource.startswith("/connect-apps/app-passwords/")
             and ID.fullmatch(resource[len("/connect-apps/app-passwords/"):])
@@ -84,6 +85,11 @@ class DroppedNeedleAPI:
         ))
         if not valid:
             raise ProvisionError("Unexpected Music authorization endpoint.")
+        if resource=="/auth/setup/status" and (method!="GET" or bearer or data is not None):
+            raise ProvisionError("Invalid initial Music account status request.")
+        if resource=="/auth/setup" and (method!="POST" or bearer or not isinstance(data,dict)
+                 or set(data)!={"display_name","username","password"}):
+            raise ProvisionError("Invalid initial Music account creation request.")
         if data is not None and (method != "POST" or not isinstance(data, dict)):
             raise ProvisionError("Invalid Music authorization payload.")
         if bearer is not None and not _text(bearer):

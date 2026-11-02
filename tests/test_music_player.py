@@ -79,6 +79,60 @@ class MusicPlaybackContract(unittest.TestCase):
         self.assertEqual(code, 3)
         self.assertEqual(out.getvalue(), "ERROR\n")
 
+    def test_local_http_audio_post_reaches_decoder_pipe(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        import threading
+
+        class StreamHandler(BaseHTTPRequestHandler):
+            seen = []
+            def log_message(self, *unused): pass
+            def do_POST(self):
+                size = int(self.headers.get("Content-Length", 0))
+                fields = self.rfile.read(size).decode("utf-8")
+                self.seen.append((self.path, fields))
+                self.send_response(200)
+                self.send_header("Content-Type", "audio/mpeg")
+                self.end_headers()
+                self.wfile.write(b"ID3" + b"audio-payload")
+
+        class Pipe:
+            def __init__(self):
+                self.data = bytearray()
+                self.closed = False
+            def write(self, block):
+                self.data.extend(block)
+            def flush(self): pass
+            def close(self): self.closed = True
+
+        class Decoder:
+            def __init__(self): self.stdin = Pipe()
+            def poll(self): return None
+
+        server=ThreadingHTTPServer(("127.0.0.1",0),StreamHandler)
+        thread=threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            output=[]
+            failure=[]
+            done=threading.Event()
+            decoder=Decoder()
+            player.stream_audio("http://127.0.0.1:%d" % server.server_port,
+                     {"apiKey":"never-in-url"}, "track-1", decoder,
+                     output.append, done, failure)
+            self.assertEqual(failure, [])
+            self.assertTrue(done.is_set())
+            self.assertTrue(decoder.stdin.closed)
+            self.assertEqual(decoder.stdin.data, b"ID3audio-payload")
+            self.assertEqual(output, ["PLAYING"])
+            path, posted=StreamHandler.seen[-1]
+            self.assertEqual(path,"/subsonic/rest/stream")
+            self.assertIn("apiKey=never-in-url",posted)
+            self.assertNotIn("apiKey",path)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=2)
+
     def test_no_proxy_or_redirect_in_shared_transport(self):
         content=(ROOT / "src" / "music_subsonic.py").read_text()
         self.assertIn("ProxyHandler({})", content)

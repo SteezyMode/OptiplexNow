@@ -22,6 +22,7 @@ class CompactUiTests(unittest.TestCase):
 
     def test_hidden_pages_and_cap_do_not_force_full_width(self):
         self.assertIn('gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
+        self.assertIn('gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
         self.assertIn('gtk_stack_set_hhomogeneous(GTK_STACK(stack),FALSE)', SETTINGS)
         self.assertIn('gtk_label_set_ellipsize(GTK_LABEL(metric_gpu),PANGO_ELLIPSIZE_END)', MAIN)
         self.assertIn('  ·  cap %s', MAIN)
@@ -34,6 +35,13 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('g_object_ref(storage)', MAIN)
         self.assertIn('g_object_unref(storage)', MAIN)
         self.assertIn('gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1)', MAIN)
+
+    def test_optional_music_sidebar_cannot_force_larger_alpha_window(self):
+        music = (ROOT / "src" / "ui_music.c").read_text(encoding="utf-8")
+        self.assertIn('gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140)', music)
+        self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sidebar_scroll)', music)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(content),sidebar_scroll,FALSE,TRUE,0);', music)
+        self.assertIn('gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
 
     def test_settings_home_uses_balanced_responsive_navigation_tiles(self):
         self.assertIn('gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(menu),1)', SETTINGS)

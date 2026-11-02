@@ -163,7 +163,7 @@ GtkWidget *now_settings_build(GtkWidget *main_pages, GtkWidget *parent,
  gtk_widget_set_vexpand(stack,TRUE);
  add(area,stack,1);
  GtkWidget*home=settings_page(stack,"home");
- add(home,label("SETTINGS","modalheading"),0);
+ /* The selected SETTINGS tab identifies this page. */
  add(home,label("Choose a section to configure this client or its approved server.","helper"),0);
  GtkWidget*home_menu=settings_home_menu_new();
  g_object_set_data(G_OBJECT(settings_view),"now-settings-menu",home_menu);

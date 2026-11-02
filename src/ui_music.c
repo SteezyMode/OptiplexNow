@@ -43,6 +43,7 @@ typedef struct {
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
+ gboolean auto_enroll_busy, auto_enroll_attempted;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
 } MusicView;
@@ -146,6 +147,7 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading);
 static void music_vault_begin(MusicView *view,const char *action,
                               const char *input);
+static void music_auto_enroll(MusicView *view);
 
 static void music_notify_tray(MusicView *view){
  if(view->tray_changed)view->tray_changed();
@@ -1068,6 +1070,86 @@ static void vault_free(MusicVault *job){
  g_free(job);
 }
 
+typedef struct {
+ GtkWidget *root;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+ char *server_url;
+} MusicEnrollment;
+
+static gboolean music_enroll_timeout(gpointer data){
+ MusicEnrollment *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+static void music_enroll_free(MusicEnrollment *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_object_unref(job->cancel);
+ g_object_unref(job->process);
+ g_object_unref(job->root);
+ g_free(job->server_url);
+ g_free(job);
+}
+static void music_enroll_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicEnrollment *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ char *output=NULL;
+ GError *error=NULL;
+ gboolean done=g_subprocess_communicate_utf8_finish(
+     job->process,result,&output,NULL,&error);
+ if(view && !view->closing){
+  view->auto_enroll_busy=FALSE;
+  if(done && g_subprocess_get_successful(job->process) &&
+     g_strcmp0(job->server_url,cfg[6])==0 &&
+     !g_strcmp0(output,"connected\n")){
+   status_set(view,"Music device approved. Opening your library...");
+   music_vault_begin(view,"lookup",NULL);
+  }else{
+   status_set(view,"Music requires owner approval on this host. "
+                   "Your existing Games, Video and Downloads are unaffected.");
+   gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+  }
+ }
+ g_free(output);
+ g_clear_error(&error);
+ music_enroll_free(job);
+}
+static void music_auto_enroll(MusicView *view){
+ if(view->closing || view->auto_enroll_busy ||
+    view->auto_enroll_attempted || !*cfg[0] || !*cfg[1] || !*cfg[6])
+  return;
+ view->auto_enroll_attempted=TRUE;
+ char *source=helper_path();
+ char *dir=g_path_get_dirname(source);
+ char *helper=g_build_filename(dir,"music_device_client.py",NULL);
+ g_free(source);g_free(dir);
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  g_free(helper);return;
+ }
+ const char *argv[]={"/usr/bin/python3",helper,cfg[0],cfg[1],cfg[6],NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+       G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+       G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){g_clear_error(&error);return;}
+ MusicEnrollment *job=g_new0(MusicEnrollment,1);
+ job->root=g_object_ref(view->root);
+ job->process=proc;
+ job->cancel=g_cancellable_new();
+ job->server_url=g_strdup(cfg[6]);
+ job->deadline=g_timeout_add_seconds(75,music_enroll_timeout,job);
+ view->auto_enroll_busy=TRUE;
+ gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
+ status_set(view,"Checking approved Music access...");
+ g_subprocess_communicate_utf8_async(proc,"",job->cancel,
+                                      music_enroll_complete,job);
+}
+
 static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
  (void)unused;
  MusicVault *job=data;
@@ -1094,10 +1176,15 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
      query_start(view,"home",NULL,"Music Home");
     }else{
      wipe_free(key);wipe_free(username);
-     gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
-     status_set(view,exit_code==3
-       ? "Music access is not linked on this device. Connect once or wait for NOW owner enrollment support."
-       : "OS keyring unavailable or locked. Check keyring setup to enable automatic sign-in.");
+     if(exit_code==3 && !view->auto_enroll_attempted &&
+        *cfg[0] && *cfg[1]){
+      music_auto_enroll(view);
+     }else{
+      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+      status_set(view,exit_code==3
+        ? "Ask your server owner to approve Music on this device."
+        : "OS keyring unavailable or locked. Check keyring setup.");
+     }
     }
    }
   }else if(!g_strcmp0(job->action,"store")){
@@ -1176,6 +1263,7 @@ static void music_opened(GtkWidget *unused,gpointer data){
   view->app_password=NULL;
   g_free(view->bound_url);
   view->bound_url=NULL;
+  view->auto_enroll_attempted=FALSE;
  }
  if(view->vault_attempted_url &&
     !g_strcmp0(view->vault_attempted_url,cfg[6]))return;

@@ -84,7 +84,7 @@ class MusicSubsonicTests(unittest.TestCase):
 
     def setUp(self):
         self.server.requests.clear()
-        self.auth = {"apiKey": "secret-should-never-be-in-url", "u": "listener"}
+        self.auth = {"apiKey": "secret-should-never-be-in-url"}
 
     def test_private_http_and_https_require_clean_origin(self):
         self.assertEqual(music.endpoint_for("http://100.121.156.34:8688", "ping"),
@@ -108,6 +108,7 @@ class MusicSubsonicTests(unittest.TestCase):
         path, fields = self.server.requests[-1]
         self.assertEqual(path, "/subsonic/rest/getAlbumList2")
         self.assertEqual(fields["apiKey"], ["secret-should-never-be-in-url"])
+        self.assertNotIn("u", fields, "Upstream forbids username plus apiKey")
         self.assertEqual(fields["c"], [music.CLIENT])
         self.assertEqual(fields["f"], ["json"])
         self.assertNotIn("secret", path)
@@ -293,7 +294,7 @@ class MusicSubsonicTests(unittest.TestCase):
             result = music._auth_from_stdin("form")
         finally:
             music.sys.stdin = original
-        self.assertEqual(result, {"apiKey": "app+secret", "u": "listener"})
+        self.assertEqual(result, {"apiKey": "app+secret"})
 
     def test_app_password_only_arrives_via_stdin(self):
         class Stdin:
@@ -304,7 +305,7 @@ class MusicSubsonicTests(unittest.TestCase):
             result = music._auth_from_stdin()
         finally:
             music.sys.stdin = original
-        self.assertEqual(result, {"apiKey": "app-test-key", "u": "listener"})
+        self.assertEqual(result, {"apiKey": "app-test-key"})
 
 
 if __name__ == "__main__":

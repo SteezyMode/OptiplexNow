@@ -9,6 +9,7 @@
 #include "music_playback.h"
 #include <gio/gio.h>
 #include <string.h>
+#include <stdlib.h>
 
 typedef struct {
  char *id, *title, *artist, *cover_id;

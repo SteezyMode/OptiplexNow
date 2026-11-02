@@ -64,9 +64,9 @@ class OptionalMusicContract(unittest.TestCase):
 
     def test_standard_music_navigation_and_advanced_are_separate(self):
         # Match familiar Home, Search, Your Library and player navigation.
-        self.assertIn('gtk_label_new(i==2?"YOUR LIBRARY":"BROWSE")', UI_MUSIC)
-        self.assertIn('const char *ops[]={"home",NULL,"playlists","artists","albums",', UI_MUSIC)
-        self.assertIn('const char *titles[]={"Home","Search","Playlists","Artists",', UI_MUSIC)
+        self.assertIn('gtk_label_new(i==3?"YOUR LIBRARY":"BROWSE")', UI_MUSIC)
+        self.assertIn('const char *ops[]={"home",NULL,"discover","playlists","artists","albums",', UI_MUSIC)
+        self.assertIn('const char *titles[]={"Home","Search","Discover","Playlists","Artists",', UI_MUSIC)
         self.assertIn('G_CALLBACK(music_focus_search)', UI_MUSIC)
         self.assertIn('gtk_widget_grab_focus(view->search);', UI_MUSIC)
         self.assertIn('gtk_menu_button_set_popup(GTK_MENU_BUTTON(advanced),menu);', UI_MUSIC)
@@ -150,6 +150,19 @@ class OptionalMusicContract(unittest.TestCase):
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
         self.assertIn('if args.operation == "catalog":',transport)
         self.assertIn('catalog_search(args.base_url',transport)
+
+    def test_real_discover_sections_and_request_buttons(self):
+        self.assertIn('!strcmp(kind,"section")', UI_MUSIC)
+        self.assertIn('gtk_list_box_insert(GTK_LIST_BOX(view->list),heading,-1);', UI_MUSIC)
+        self.assertIn('gtk_button_new_with_label("Add to Library")', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_request_album)', UI_MUSIC)
+        self.assertIn('g_subprocess_communicate_utf8_async(proc,"",job->cancel', UI_MUSIC)
+        self.assertIn('status_set(view,"Album requested.', UI_MUSIC)
+        self.assertIn('!g_strcmp0(operation,"discover")', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_seek_changed)', UI_MUSIC)
+        self.assertIn('now_music_playback_seek(view->playback,target)', UI_MUSIC)
+        self.assertIn('shutil.copy2(root/' + "'src/music_http_stream.py'",(ROOT/"package.py").read_text())
+        self.assertIn('shutil.copy2(root/' + "'src/music_rest.py'",(ROOT/"package.py").read_text())
 
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)

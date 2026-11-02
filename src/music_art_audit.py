@@ -73,13 +73,24 @@ def audit(server: str, auth: dict[str, str], *, max_albums: int = 500,
             artist = album.get("artist") or ""
             cover_id = album.get("coverArt") or identifier
             status = cover_status(server, auth, str(cover_id))
+            year = album.get("year")
+            genre = album.get("genre") or ""
+            mbid = album.get("musicBrainzId") or ""
+            songs = album.get("songCount")
             records.append({
                 "id": identifier,
                 "title": title if isinstance(title, str) else "",
                 "artist": artist if isinstance(artist, str) else "",
                 "cover_status": status,
+                "year": year if isinstance(year, int) else None,
+                "genre": genre if isinstance(genre, str) else "",
+                "musicbrainz_release_group_id": mbid if isinstance(mbid, str) else "",
+                "song_count": songs if isinstance(songs, int) else None,
                 "missing_artist": not bool(artist),
                 "missing_title": not bool(title),
+                "missing_year": not isinstance(year,int),
+                "missing_genre": not bool(genre),
+                "missing_musicbrainz_id": not bool(mbid),
             })
             if delay:
                 sleep(delay)
@@ -90,7 +101,18 @@ def audit(server: str, auth: dict[str, str], *, max_albums: int = 500,
     for album in records:
         kind = album["cover_status"]
         categories[kind] = categories.get(kind, 0)+1
+    quality = {field: sum(bool(row.get(field)) for row in records)
+               for field in ("missing_artist","missing_title","missing_year",
+                             "missing_genre","missing_musicbrainz_id")}
+    by_name: dict[tuple[str,str,int | None], list[str]] = {}
+    for row in records:
+        identity=(row["artist"].casefold().strip(),row["title"].casefold().strip(),
+                  row["year"])
+        if identity[0] and identity[1]:
+            by_name.setdefault(identity,[]).append(row["id"])
+    duplicates=[ids for ids in by_name.values() if len(ids)>1]
     return {"albums_scanned": len(records), "cover_status": categories,
+            "metadata_gaps": quality, "possible_duplicate_album_ids": duplicates,
             "records": records, "read_only": True,
             "note": "Warming/unavailable may be transient. This does not modify metadata."}
 
@@ -130,6 +152,8 @@ def main(argv=None) -> int:
         return 1
     print("Albums scanned:",report["albums_scanned"])
     print("Artwork statuses:",json.dumps(report["cover_status"],sort_keys=True))
+    print("Metadata gaps:",json.dumps(report["metadata_gaps"],sort_keys=True))
+    print("Potential duplicate album groups:",len(report["possible_duplicate_album_ids"]))
     print("Read-only report:",args.output)
     return 0
 

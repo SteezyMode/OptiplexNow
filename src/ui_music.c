@@ -567,7 +567,7 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
      g_free(view->bound_url);
      view->bound_url=g_strdup(job->url);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
-     query_start(view,"albums",NULL,"Your albums");
+     query_start(view,"home",NULL,"Recently played albums");
     }else{
      wipe_free(key);wipe_free(username);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
@@ -689,7 +689,7 @@ static void music_connect(GtkWidget *unused,gpointer data){
  view->username=g_strdup(gtk_entry_get_text(GTK_ENTRY(view->user)));
  gtk_entry_set_text(GTK_ENTRY(view->password),"");
  view->remember_pending=TRUE;
- query_start(view,"albums",NULL,"Your albums");
+ query_start(view,"home",NULL,"Recently played albums");
 }
 
 static void music_nav(GtkWidget *button,gpointer data){
@@ -781,13 +781,18 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_vexpand(content,TRUE);
  gtk_box_pack_start(GTK_BOX(view->root),content,TRUE,TRUE,0);
  GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
- gtk_widget_set_size_request(sidebar,100,-1);
- for(int i=0;i<3;i++){
-  const char *ops[]={"albums","artists","playlists"};
-  const char *titles[]={"Albums","Artists","Playlists"};
+ gtk_widget_set_size_request(sidebar,135,-1);
+ /* Familiar, functional library destinations: no unsupported
+  * recommendation placeholders or hidden DroppedNeedle admin controls. */
+ const char *ops[]={"home","albums","recent","new","liked","artists","playlists"};
+ const char *titles[]={"Home","Albums","Recently played",
+                       "New additions","Liked","Artists","Playlists"};
+ const char *headings[]={"Recently played albums","All albums","Recently played albums",
+                         "New additions","Liked music","Artists","Your playlists"};
+ for(guint i=0;i<G_N_ELEMENTS(ops);i++){
   GtkWidget *b=music_button(titles[i]);
   g_object_set_data(G_OBJECT(b),"music-operation",(gpointer)ops[i]);
-  g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)titles[i]);
+  g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)headings[i]);
   g_signal_connect(b,"clicked",G_CALLBACK(music_nav),view);
   gtk_box_pack_start(GTK_BOX(sidebar),b,FALSE,FALSE,0);
  }
@@ -812,7 +817,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_signal_connect(search_button,"clicked",G_CALLBACK(music_search),view);
  gtk_box_pack_start(GTK_BOX(searchrow),search_button,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(maincol),searchrow,FALSE,FALSE,0);
- view->heading=gtk_label_new("Your library");
+ view->heading=gtk_label_new("Recently played albums");
  gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
  GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);

@@ -110,7 +110,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertNotIn('getCoverArt?id=', UI_MUSIC)
 
     def test_library_count_is_in_heading_not_a_dashboard_row(self):
-        self.assertNotIn("Connected to your music library", UI_MUSIC)
+        self.assertNotIn('g_strdup_printf("%d items · Connected to your music library"', UI_MUSIC)
         self.assertIn('g_strdup_printf("%s · %d %s",job->heading,', UI_MUSIC)
         self.assertIn('gtk_label_set_text(GTK_LABEL(view->heading),heading);', UI_MUSIC)
         self.assertIn('view->status=gtk_label_new("");', UI_MUSIC)
@@ -167,7 +167,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('const char *server_url=catalog?cfg[6]:view->bound_url;',UI_MUSIC)
         self.assertIn('job->input=catalog?g_strdup(""):g_strdup_printf(',UI_MUSIC)
         self.assertIn('query_start(view,connected?"search":"catalog",value,',UI_MUSIC)
-        self.assertIn('"Searching the music catalog..."',UI_MUSIC)
+        self.assertIn('status_clear(view);',UI_MUSIC)
         self.assertIn('gtk_widget_set_sensitive(button,FALSE);',UI_MUSIC)
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
         self.assertIn('if args.operation == "catalog":',transport)
@@ -241,7 +241,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE',UI_MUSIC)
         self.assertIn('g_strcmp0(job->server_url,cfg[6])==0',UI_MUSIC)
         self.assertIn('music_vault_begin(view,"lookup",NULL);',UI_MUSIC)
-        self.assertIn('"Checking approved Music access..."',UI_MUSIC)
+        self.assertNotIn('status_set(view,"Checking approved Music access...")',UI_MUSIC)
         package=(ROOT/"package.py").read_text()
         for helper in ("music_device_client.py","owner_music_ssh.py",
                        "music_device_provision.py","music_device_ledger.py"):
@@ -256,7 +256,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_retry_access)',UI_MUSIC)
         self.assertIn('view->auto_enroll_attempted=FALSE;',UI_MUSIC)
         self.assertIn('music_auto_enroll(view);',UI_MUSIC)
-        self.assertIn('This device already has Music playback access.',UI_MUSIC)
+        self.assertNotIn('status_set(view,"This device already has Music playback access.")',UI_MUSIC)
 
     def test_standard_album_grid_preserves_track_list_and_limits_art_fetches(self):
         self.assertIn("gtk_flow_box_new()", UI_MUSIC)

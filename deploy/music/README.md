@@ -49,6 +49,22 @@ slskd's `50300/tcp` port is the **Soulseek peer-transfer listener**, not a web a
 
 The repository already contains `src/server-profile.py`, which exports the **reference host's four-service JSON Compose** with `gluetun`, `slskd`, `qbittorrent`, and `droppedneedle`. It also expects DroppedNeedle's encryption-key file, database, and an `/app/imports` mount. **That exporter does not operate on this two-service YAML example.** Do not point it at this file or claim compatibility; the legacy/reference host and its backup workflow must remain unchanged. Build a separate validated backup/restore path for this example before calling the module reproducible end to end, or deliberately extend the existing exporter with tests to support both shapes without weakening validation.
 
+## Reduce unnecessary manual review (owner-opt-in only)
+
+DroppedNeedle v2.15.0 exposes an **acquisition-scoring threshold** at `Settings → Download clients → Acquisition quality → Download behavior (advanced)`:
+
+| Control | Upstream default | Suggested experiment |
+| --- | ---: | ---: |
+| Auto-accept score (≥) | 0.70 | 0.60 |
+| Manual-review score (≥) | 0.50 | 0.50 |
+| Verify downloads | On | Keep on |
+
+The auto-accept number controls the score needed to pick a candidate automatically; the manual-review minimum is **not** an automatic-approval setting. Lowering the first value to 0.60 can reduce unnecessary intervention while retaining the separate evidence checks for artist/album identity and downloaded-file validity. Never change these settings silently during a Bruiser/NOW install. New tasks receive newly saved acquisition policy; tasks already active retain their existing policy snapshot.
+
+**Two review systems exist:** `Downloads → Held imports` involves acquisition matches, while `Library → Manual Review` involves library scan/identification. Acquisition-scoring changes do **not** automatically clear the latter. Consider enabling AcoustID fingerprint identification for library scans where a valid API key is available, and assess proven exact-edition acceptance per the upstream documented profile policy after observing real results. Do not broadly auto-approve unidentified tracks or bypass content/artist safety checks.
+
+For the intended NOW music UX, ordinary library/playlist/playback/discovery interactions live inside Bruiser. An `Advanced → Open DroppedNeedle` action remains for repair and rare administrative operations. Future integrated `Needs Review` cards should show reason and safe accept/reject through owner-authorized upstream APIs rather than hiding blocked items.
+
 ## Restore and acceptance
 
 - Back up the complete `MUSIC_STATE_ROOT` (DroppedNeedle config/database, cache, plugins, slskd configuration and credentials) and the separate `MUSIC_MEDIA_ROOT` data as appropriate. Keep the backup private; it contains credentials and possible personal listening data.

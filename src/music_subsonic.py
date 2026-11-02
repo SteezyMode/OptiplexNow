@@ -103,7 +103,9 @@ def _auth_from_stdin(fmt: str = "json") -> dict[str, str]:
     username = auth.get("username", "")
     if username:
         username = _bounded_text(username, "username", 128)
-    return {"apiKey": key, **({"u": username} if username else {})}
+    # DroppedNeedle v2.15.0 rejects apiKey together with u (Subsonic 43).
+    # Keep the optional username in the local vault for display only.
+    return {"apiKey": key}
 
 
 def _post(base: str, method: str, auth: dict[str, str],

@@ -155,7 +155,8 @@ static const char *CSS =
  * for ordinary Videos/Downloads buttons. No functional changes. */
 /* Music player: distinct navigation, legible song rows and compact controls. */
 "#music-home {background:#111613;color:#eef1ec;}"
-"#music-sidebar {background:#1b241e;border:0;border-radius:9px;padding:4px;}"
+"#music-sidebar-rail {background:#1b241e;border-radius:9px;padding:5px;}"
+"#music-sidebar {background:transparent;border:0;padding:0;}"
 "#music-sidebar button#music-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:12px;font-weight:600;color:#dbe4dc;}"
 "#music-sidebar button#music-nav.now-action:hover {background:#304036;border:0;}"
 "#music-sidebar button#music-nav.now-action.music-active {background:#314438;color:#fff;}"

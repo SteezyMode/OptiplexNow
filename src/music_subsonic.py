@@ -261,7 +261,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
         found = [("song", x) for x in items(result.get(operation, {}).get(key))]
     elif operation == "artist":
         found = [("album", x) for x in items(result.get("artist", {}).get("album"))]
-    elif operation == "search":
+    elif operation in ("search", "catalog"):
         payload = result.get("results") or {}
         found = [(kind, x) for kind in ("artist", "album", "song")
                  for x in items(payload.get(kind))][:1000]
@@ -303,12 +303,25 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
     args = parser.parse_args(argv)
     try:
+        # DroppedNeedle's read-only public catalog route is separate from its
+        # per-user library playback API. Do not request, store or forward a
+        # playback key for a basic search. The configured private host is
+        # validated by catalog_search before the outbound request.
+        if args.operation == "catalog":
+            result = {"catalog": catalog_search(
+                args.base_url, _bounded_text(args.value, "search query", 200))}
+            if args.format == "rows":
+                sys.stdout.write(_rows("catalog", result))
+            else:
+                json.dump(result, sys.stdout, ensure_ascii=False, separators=(",", ":"))
+                sys.stdout.write("\n")
+            return 0
         auth = _auth_from_stdin(args.auth_format)
         # Authenticate and validate before making any outbound request.
         endpoint_for(args.base_url, "ping")

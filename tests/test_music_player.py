@@ -78,6 +78,24 @@ class MusicPlaybackContract(unittest.TestCase):
                 mpv_binary="/bin/false",initial_volume=101),2)
             launched.assert_not_called()
 
+    def test_now_playing_and_natural_completion_are_safe_optional_posts(self):
+        events=[]
+        def fake_query(server,method,auth,fields):
+            events.append((server,method,auth,dict(fields)))
+            return {"status":"ok"}
+        with mock.patch.object(player,"query",side_effect=fake_query):
+            self.assertTrue(player.report_scrobble(
+                "http://127.0.0.1:8688",{"apiKey":"not-in-url"},"song-1",False))
+            self.assertTrue(player.report_scrobble(
+                "http://127.0.0.1:8688",{"apiKey":"not-in-url"},"song-1",True))
+        self.assertEqual([x[1] for x in events],["scrobble","scrobble"])
+        self.assertEqual([x[3]["submission"] for x in events],["false","true"])
+        self.assertTrue(all(x[3]["id"]=="song-1" for x in events))
+        self.assertNotIn("not-in-url",str([x[0] for x in events]))
+        with mock.patch.object(player,"query",side_effect=player.MusicTransportError("offline")):
+            self.assertFalse(player.report_scrobble(
+                "http://127.0.0.1:8688",{"apiKey":"not-in-url"},"song-1",True))
+
     def test_mpv_commands_do_not_contain_keys_or_urls(self):
         content = (ROOT / "src" / "music_player.py").read_text()
         self.assertIn('stdin=subprocess.DEVNULL', content)

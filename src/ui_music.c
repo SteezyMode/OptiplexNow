@@ -2102,6 +2102,10 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  active_music_view=view;
  view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_widget_set_name(view->root,"music-home");
+ /* Music must fill the GtkStack allocation at any window width. The
+  * sidebar stays next to the main browser while extra width goes to tracks. */
+ gtk_widget_set_halign(view->root,GTK_ALIGN_FILL);
+ gtk_widget_set_hexpand(view->root,TRUE);
  gtk_container_set_border_width(GTK_CONTAINER(view->root),5);
  g_object_set_data_full(G_OBJECT(view->root),"music-view",view,music_view_free);
  g_signal_connect(view->root,"destroy",G_CALLBACK(music_view_destroy),view);
@@ -2157,11 +2161,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_start(GTK_BOX(view->root),view->status,FALSE,FALSE,0);
 
  GtkWidget *content=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
+ gtk_widget_set_hexpand(content,TRUE);
+ gtk_widget_set_halign(content,GTK_ALIGN_FILL);
  gtk_widget_set_vexpand(content,TRUE);
  gtk_box_pack_start(GTK_BOX(view->root),content,TRUE,TRUE,0);
  GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(sidebar,"music-sidebar");
- gtk_widget_set_size_request(sidebar,172,-1);
+ gtk_widget_set_size_request(sidebar,162,-1);
  /* Deliberately sparse: two primary destinations and one expandable
   * collection. Search lives in the content toolbar, not duplicated here. */
  GtkWidget *home_button=music_button("Home");
@@ -2225,15 +2231,19 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  /* The sidebar owns its scrolling, so nine nav actions must not
   * enlarge a 640x500 client or the still-hidden Dashboard stack. */
  GtkWidget *sidebar_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_widget_set_name(sidebar_scroll,"music-sidebar-scroll");
+ gtk_widget_set_hexpand(sidebar_scroll,FALSE);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sidebar_scroll),
                                  GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),172);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),162);
  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140);
  gtk_widget_set_vexpand(sidebar_scroll,TRUE);
  gtk_container_add(GTK_CONTAINER(sidebar_scroll),sidebar);
  GtkWidget *sidebar_rail=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(sidebar_rail,"music-sidebar-rail");
  gtk_widget_set_size_request(sidebar_rail,172,-1);
+ gtk_widget_set_hexpand(sidebar_rail,FALSE);
+ gtk_widget_set_halign(sidebar_rail,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(content),sidebar_rail,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(sidebar_rail),sidebar_scroll,TRUE,TRUE,0);
  GtkWidget *sidebar_separator=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
@@ -2242,6 +2252,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
 
  GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(maincol,"music-main");
+ gtk_widget_set_halign(maincol,GTK_ALIGN_FILL);
  gtk_widget_set_hexpand(maincol,TRUE);
  gtk_box_pack_start(GTK_BOX(content),maincol,TRUE,TRUE,0);
  /* One small toolbar: view title and song count, Shuffle, and Search.

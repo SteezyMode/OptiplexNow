@@ -10,6 +10,7 @@ This is a tested transport foundation; it does not yet install a playback UI.
 from __future__ import annotations
 
 import argparse
+import base64
 import ipaddress
 import json
 import socket
@@ -17,7 +18,7 @@ import ssl
 import sys
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode, parse_qs, urlsplit, urlunsplit
 from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler, HTTPHandler, Request
 
 CLIENT = "bruiser-music"
@@ -77,13 +78,20 @@ def _bounded_text(value: object, name: str, maximum: int = MAX_TEXT) -> str:
     return value
 
 
-def _auth_from_stdin() -> dict[str, str]:
+def _auth_from_stdin(fmt: str = "json") -> dict[str, str]:
     # Credentials intentionally stay session-only; there is no write to disk.
     raw = sys.stdin.buffer.read(MAX_STDIN + 1)
     if len(raw) > MAX_STDIN:
         raise MusicTransportError("Music credentials were too large.")
     try:
-        auth = json.loads(raw)
+        if fmt == "form":
+            values = parse_qs(raw.decode("utf-8"), strict_parsing=True,
+                              keep_blank_values=True, max_num_fields=3)
+            if any(len(v) != 1 for v in values.values()) or set(values) - {"api_key", "username"}:
+                raise ValueError("unexpected fields")
+            auth = {k: v[0] for k, v in values.items()}
+        else:
+            auth = json.loads(raw)
     except (ValueError, UnicodeError) as exc:
         raise MusicTransportError("Missing or invalid music credentials.") from exc
     if not isinstance(auth, dict):
@@ -166,17 +174,59 @@ def stream(base: str, auth: dict[str, str], song_id: str) -> None:
         return
 
 
+def _rows(operation: str, result: dict[str, Any]) -> str:
+    """Base64-tabbed, bounded GTK transport; music titles never become delimiters."""
+    def items(source: object) -> list[dict[str, Any]]:
+        return [x for x in source if isinstance(x, dict)][:1000] if isinstance(source, list) else []
+
+    if operation == "albums":
+        found = [("album", x) for x in items(result.get("albums"))]
+    elif operation == "artists":
+        found = [("artist", artist) for index in items(result.get("indexes"))
+                 for artist in items(index.get("artist"))][:1000]
+    elif operation == "playlists":
+        found = [("playlist", x) for x in items(result.get("playlists"))]
+    elif operation in ("album", "playlist"):
+        key = "song" if operation == "album" else "entry"
+        found = [("song", x) for x in items(result.get(operation, {}).get(key))]
+    elif operation == "artist":
+        found = [("album", x) for x in items(result.get("artist", {}).get("album"))]
+    elif operation == "search":
+        payload = result.get("results") or {}
+        found = [(kind, x) for kind in ("artist", "album", "song")
+                 for x in items(payload.get(kind))][:1000]
+    else:
+        found = []
+    lines = []
+    for kind, item in found:
+        identifier = item.get("id")
+        if not isinstance(identifier, str) or not identifier:
+            continue
+        title = item.get("title") or item.get("name") or "Untitled"
+        artist = item.get("artist") or item.get("artistName") or ""
+        if not isinstance(title, str):
+            title = "Untitled"
+        if not isinstance(artist, str):
+            artist = ""
+        fields = (kind, identifier[:512], title[:2048], artist[:1024])
+        lines.append("\t".join(base64.b64encode(x.encode("utf-8")).decode("ascii")
+                               for x in fields))
+    return "\n".join(lines) + ("\n" if lines else "")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "albums", "artists", "search", "album", "playlists", "playlist", "stream"))
+    parser.add_argument("operation", choices=("ping", "albums", "artists", "search", "album", "artist", "playlists", "playlist", "stream"))
     parser.add_argument("value", nargs="?")
+    parser.add_argument("--format", choices=("json", "rows"), default="json")
+    parser.add_argument("--auth-format", choices=("json", "form"), default="json")
     args = parser.parse_args(argv)
     try:
-        auth = _auth_from_stdin()
+        auth = _auth_from_stdin(args.auth_format)
         # Authenticate and validate before making any outbound request.
         endpoint_for(args.base_url, "ping")
-        if args.operation in ("album", "playlist", "stream", "search") and not args.value:
+        if args.operation in ("album", "artist", "playlist", "stream", "search") and not args.value:
             raise MusicTransportError("This music operation needs a selection.")
         if args.operation == "stream":
             stream(args.base_url, auth, args.value)
@@ -200,11 +250,17 @@ def main(argv: list[str] | None = None) -> int:
         elif args.operation == "playlists":
             data = query(args.base_url, "getPlaylists", auth)
             result = {"playlists": data.get("playlists", {}).get("playlist", [])}
+        elif args.operation == "artist":
+            data = query(args.base_url, "getArtist", auth, {"id": _bounded_text(args.value, "artist ID")})
+            result = {"artist": data.get("artist", {})}
         else:
             data = query(args.base_url, "getPlaylist", auth, {"id": _bounded_text(args.value, "playlist ID")})
             result = {"playlist": data.get("playlist", {})}
-        json.dump(result, sys.stdout, ensure_ascii=False, separators=(",", ":"))
-        sys.stdout.write("\n")
+        if args.format == "rows":
+            sys.stdout.write(_rows(args.operation, result))
+        else:
+            json.dump(result, sys.stdout, ensure_ascii=False, separators=(",", ":"))
+            sys.stdout.write("\n")
         return 0
     except MusicTransportError as exc:
         # Deliberately no URL, request object, traceback, or raw remote error.

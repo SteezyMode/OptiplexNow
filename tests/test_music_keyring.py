@@ -48,6 +48,16 @@ class MusicKeyringTests(unittest.TestCase):
         self.assertEqual(music.vault("clear", self.server, provider=fake_provider), "cleared")
         self.assertIsNone(music.vault("lookup", self.server, provider=fake_provider))
 
+    def test_forget_also_revokes_device_local_request_session(self):
+        from unittest.mock import patch
+        music.vault("store",self.server,
+                    "api_key=private-local-only&username=",fake_provider)
+        with patch("music_rest.clear_session") as clear_rest:
+            self.assertEqual(music.vault("clear",self.server,
+                                         provider=fake_provider),"cleared")
+            clear_rest.assert_called_once_with(self.server,provider=fake_provider)
+        self.assertIsNone(music.vault("lookup",self.server,provider=fake_provider))
+
     def test_key_does_not_cross_server_boundaries(self):
         music.vault("store", self.server, "api_key=token&username=foo", fake_provider)
         self.assertIsNone(music.vault(

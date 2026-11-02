@@ -191,6 +191,81 @@ def _rows(results: dict[str,Any]) -> str:
     return "\n".join(rows)+("\n" if rows else "")
 
 
+
+DISCOVER_SECTIONS = (
+    "fresh_releases", "missing_essentials", "new_from_followed",
+    "artists_you_might_like", "popular_in_your_genres",
+    "globally_trending", "rediscover", "listeners_like_you",
+    "top_picks", "lastfm_weekly_artist_chart", "lastfm_weekly_album_chart",
+    "anniversaries", "unexplored_genres"
+)
+
+
+def _discover_rows(result: dict[str, Any]) -> str:
+    """Flatten only DroppedNeedle's known discovery sections into safe rows.
+
+    Section boundaries are preserved for the native GTK screen. DroppedNeedle
+    remains responsible for recommendation logic and album identity.
+    """
+    lines=[]
+    seen=set()
+    total=0
+
+    def add_section(section: object, key: str):
+        nonlocal total
+        if total>=180 or not isinstance(section,dict):
+            return
+        items=section.get("items",[])
+        if not isinstance(items,list):
+            return
+        kind_hint=str(section.get("type","")).lower()
+        accepted=[]
+        for item in items[:50]:
+            if not isinstance(item,dict) or item.get("in_library") is True:
+                continue
+            mbid=item.get("mbid")
+            title=item.get("name")
+            if (not isinstance(mbid,str) or not MBID.fullmatch(mbid) or
+                not isinstance(title,str) or not title.strip() or
+                mbid in seen):
+                continue
+            artist=item.get("artist_name") or ""
+            if not isinstance(artist,str):artist=""
+            # HomeArtist has no album metadata; HomeAlbum does. Follow the
+            # section's explicit type first and never infer a song request.
+            is_album=("album" in kind_hint or
+                      (artist and "artist" not in kind_hint))
+            kind="catalog_album" if is_album else "catalog_artist"
+            state="Requested" if item.get("requested") else "Not in library"
+            accepted.append((kind,mbid,title[:512],
+                             (artist+" · "+state)[:256],""))
+            seen.add(mbid)
+            total+=1
+            if total>=180:break
+        if not accepted:
+            return
+        heading=section.get("title")
+        if not isinstance(heading,str) or not heading.strip():
+            heading=key.replace("_"," ").title()
+        items=[("section",key,heading[:96],"",""),*accepted]
+        for fields in items:
+            lines.append("\t".join(base64.b64encode(x.encode()).decode()
+                                   for x in fields))
+
+    for key in DISCOVER_SECTIONS:
+        add_section(result.get(key),key)
+    for key in ("daily_mixes","radio_sections"):
+        values=result.get(key,[])
+        if isinstance(values,list):
+            for index,section in enumerate(values[:8]):
+                add_section(section,"%s_%d"%(key,index))
+    because=result.get("because_you_listen_to",[])
+    if isinstance(because,list):
+        for index,pick in enumerate(because[:8]):
+            if isinstance(pick,dict):
+                add_section(pick.get("section"),"because_you_listen_%d"%index)
+    return "\n".join(lines)+("\n" if lines else "")
+
 def main(argv=None) -> int:
     parser=argparse.ArgumentParser(description="Bruiser Music authorized REST operations")
     parser.add_argument("base_url")
@@ -217,9 +292,12 @@ def main(argv=None) -> int:
         token=get_session(args.base_url)
         result=request(args.base_url,args.operation,token=token,value=args.value)
         if args.format=="rows":
-            if args.operation!="search":
-                raise MusicRESTError("Row output is only supported for catalog search.")
-            sys.stdout.write(_rows(result))
+            if args.operation=="search":
+                sys.stdout.write(_rows(result))
+            elif args.operation=="discover":
+                sys.stdout.write(_discover_rows(result))
+            else:
+                raise MusicRESTError("Row output unavailable for this Music action.")
         else:
             json.dump(result,sys.stdout,ensure_ascii=False,separators=(",",":"))
             sys.stdout.write("\n")

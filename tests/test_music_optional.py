@@ -132,6 +132,14 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('view->username=g_strdup("")', UI_MUSIC)
         self.assertIn('music_vault_begin(view,"lookup",NULL)', UI_MUSIC)
 
+    def test_local_volume_slider_and_backend_contract(self):
+        self.assertIn('gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,100,1)', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_volume_changed)', UI_MUSIC)
+        self.assertIn('now_music_playback_volume(view->playback,view->volume)', UI_MUSIC)
+        self.assertIn('view->volume=75;', UI_MUSIC)
+        transport = (ROOT / 'src' / 'music_playback.c').read_text()
+        self.assertIn('g_strdup_printf("%d",initial_volume)', transport)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

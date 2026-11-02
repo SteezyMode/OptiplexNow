@@ -82,7 +82,7 @@ CATALOG = (
                "Music requests go through DroppedNeedle, not slskd",
                "Rotate slskd key and update authorized host integration"),
     Credential("droppedneedle-user", "DroppedNeedle", "human/admin account",
-               "DroppedNeedle", "host owner", "DropppedNeedle account database; human recovery separately",
+               "DroppedNeedle", "host owner", "DroppedNeedle account database; human recovery separately",
                "Link owner account at host once; not once per new Bruiser device",
                "Use upstream password-recovery flow"),
     Credential("droppedneedle-client", "DroppedNeedle", "revocable app password",

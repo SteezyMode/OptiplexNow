@@ -32,8 +32,8 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('g_signal_connect(view->search,"activate",G_CALLBACK(music_search),view)',UI)
         self.assertIn('query_start(view,connected?"search":"catalog",value,',UI)
         self.assertIn('G_CALLBACK(music_shuffle_all)',UI)
-        self.assertIn('G_CALLBACK(music_focus_search)',UI)
-        self.assertIn('music_show_search(view,TRUE)',UI)
+        self.assertIn('G_CALLBACK(music_library_clicked)',UI)
+        self.assertIn('music_show_search(view,g_strcmp0(page,"search")!=0)',UI)
 
     def test_compact_album_and_song_chrome(self):
         self.assertIn('gtk_widget_set_size_request(view->hero_art,96,96)',UI)

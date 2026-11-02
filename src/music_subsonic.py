@@ -110,18 +110,25 @@ def _auth_from_stdin(fmt: str = "json") -> dict[str, str]:
 
 
 def _post(base: str, method: str, auth: dict[str, str],
-          parameters: dict[str, str] | None = None):
+          parameters: dict[str, str] | None = None,
+          *, range_header: str | None = None):
     url = endpoint_for(base, method)
+    # The local seek gateway is the only user of this option. Never forward
+    # arbitrary request headers, URLs, proxy settings, or redirect responses.
+    if range_header is not None:
+        from music_http_stream import RANGE_RE
+        if len(range_header) > 64 or not RANGE_RE.fullmatch(range_header):
+            raise MusicTransportError("Invalid audio range.")
     fields = {"v": VERSION, "c": CLIENT, "f": "json"}
     fields.update(auth)
     if parameters:
         fields.update(parameters)
     payload = urlencode(fields).encode("utf-8")
-    request = Request(
-        url, data=payload, method="POST",
-        headers={"Content-Type": "application/x-www-form-urlencoded",
-                 "Accept": "application/json, audio/*;q=0.8, */*;q=0.1"}
-    )
+    headers={"Content-Type": "application/x-www-form-urlencoded",
+             "Accept": "application/json, audio/*;q=0.8, */*;q=0.1"}
+    if range_header is not None:
+        headers["Range"] = range_header
+    request = Request(url, data=payload, method="POST", headers=headers)
     opener = build_opener(ProxyHandler({}), DenyRedirects(), HTTPHandler(), HTTPSHandler(context=ssl.create_default_context()))
     try:
         return opener.open(request, timeout=20)

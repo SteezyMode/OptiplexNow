@@ -215,6 +215,29 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
         self.assertEqual(b64decode(lines[0].split("\t")[4]), b"a1")
 
+    def test_album_paging_is_explicit_and_bounded(self):
+        from unittest import mock
+        calls = []
+        def fake_query(base, method, auth, params=None):
+            calls.append(dict(params))
+            return {"albumList2": {"album": [{"id": "a1", "name": "Album"}]}}
+        for argument, expected in ((None, "0"), ("0", "0"), ("200", "200"),
+                                    ("400", "400")):
+            with self.subTest(offset=argument):
+                out = io.StringIO()
+                cmd = [self.base, "albums"] + ([argument] if argument else [])
+                with mock.patch.object(music, "query", side_effect=fake_query), \
+                     mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+                     mock.patch.object(music.sys, "stdout", out):
+                    self.assertEqual(music.main(cmd), 0)
+                self.assertEqual(calls[-1]["offset"], expected)
+                self.assertEqual(calls[-1]["size"], "200")
+        for bad in ("-200", "1", "201", "1000001", "NaN", "2e2"):
+            with self.subTest(invalid=bad):
+                with mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+                     mock.patch.object(music.sys, "stderr", io.StringIO()):
+                    self.assertEqual(music.main([self.base, "albums", bad]), 2)
+
     def test_home_with_no_history_falls_back_to_real_library_additions(self):
         from unittest import mock
         calls = []

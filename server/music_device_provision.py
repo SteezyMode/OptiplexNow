@@ -105,7 +105,13 @@ class DroppedNeedleAPI:
                 if method == "DELETE":
                     return {}
                 content = response.read(MAX_BODY + 1)
-        except (HTTPError, URLError, OSError, TimeoutError):
+        except HTTPError as exc:
+            # A credential already revoked is safe to treat as revoked when
+            # retrying a partially completed upstream cleanup.
+            if method == "DELETE" and exc.code == 404:
+                return {}
+            raise ProvisionError("Music authorization service unavailable.") from None
+        except (URLError, OSError, TimeoutError):
             raise ProvisionError("Music authorization service unavailable.") from None
         except Exception as exc:
             # Do not let a redirect or malformed response leak server details.

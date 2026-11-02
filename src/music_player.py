@@ -54,7 +54,9 @@ def read_auth(stream) -> dict[str, str]:
             _bounded_text(username, "username", 128)
     except MusicTransportError as exc:
         raise PlaybackError("Invalid playback authentication.") from exc
-    return {"apiKey": key, **({"u": username} if username else {})}
+    # DroppedNeedle rejects apiKey combined with u. The username remains
+    # local-only context; the revocable app password identifies the account.
+    return {"apiKey": key}
 
 
 def socket_command(path: str, pause: bool) -> bool:

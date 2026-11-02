@@ -31,7 +31,7 @@ class DenseLayoutContract(unittest.TestCase):
 
     def test_music_page_uses_pinned_sidebar_settings(self):
         self.assertNotIn('gtk_label_new("MUSIC")',MUSIC)
-        self.assertIn('gtk_button_set_label(GTK_BUTTON(advanced),"Music settings")',MUSIC)
+        self.assertIn('gtk_button_set_label(GTK_BUTTON(advanced),"Settings")',MUSIC)
         self.assertIn('gtk_box_pack_end(GTK_BOX(sidebar_rail),advanced,FALSE,FALSE,0)',MUSIC)
         self.assertIn('gtk_box_pack_start(GTK_BOX(sidebar_rail),sidebar_scroll,TRUE,TRUE,0)',MUSIC)
 

@@ -2,13 +2,13 @@
 """One-track, local-only Bruiser Music playback worker.
 
 stdin: initial "api_key=...&username=...\n" (never argv/env), then a bounded
-whitelist of commands: PAUSE, RESUME, STOP.
-stdout: single-word events BUFFERING, PLAYING, PAUSED, ENDED, STOPPED, ERROR.
+whitelist of PAUSE, RESUME, STOP, VOLUME and SEEK commands.
+stdout: bounded buffering, playback, progress and terminal events.
 
-OpenSubsonic is queried by authenticated POST with redirects and ambient HTTP
-proxies disabled. The response's audio bytes feed mpv through an anonymous
-pipe; neither credentials nor a stream URL are passed to the decoder. mpv IPC
-lives inside a private 0700 directory and is used only by this worker.
+A one-track loopback HTTP byte-range gateway authenticates upstream OpenSubsonic
+POSTs without exposing upstream credentials to mpv. mpv receives only a
+short-lived, unguessable 127.0.0.1 capability URL, and its control socket
+lives under a private 0700 temporary directory. No audio files are persisted.
 """
 from __future__ import annotations
 

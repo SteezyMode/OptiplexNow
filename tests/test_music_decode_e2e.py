@@ -54,7 +54,7 @@ class PlaybackSmoke(unittest.TestCase):
                 env={**os.environ,"PATH":tmp+os.pathsep+os.environ.get("PATH","")}
                 proc=subprocess.Popen(
                     [sys.executable,"-u",str(PLAYER),
-                     "http://127.0.0.1:%s"%server.server_port,"track-1"],
+                     "http://127.0.0.1:%s"%server.server_port,"track-1","75"],
                     stdin=subprocess.PIPE,stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,env=env)
                 try:

@@ -33,10 +33,11 @@ typedef struct {
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
  GPtrArray *visible_tracks, *queue;
+ GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
  int queue_index, album_offset, volume;
- guint volume_debounce, seek_debounce, play_duration;
- gboolean paused, seek_updating, seek_dragging;
+ guint volume_debounce, seek_debounce, play_duration, status_timer;
+ gboolean paused, seek_updating, seek_dragging, status_inflight;
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial;
  void (*tray_changed)(void);
@@ -62,6 +63,8 @@ static MusicView *active_music_view=NULL;
 static void music_stop(MusicView *view);
 static void music_start_track(MusicView *view,int index);
 static void music_art_start(MusicView *view,const char *cover_id,gboolean playing);
+static void music_refresh_status(MusicView *view);
+static gboolean music_status_tick(gpointer data);
 
 static void wipe_free(char *value){
  if(!value)return;
@@ -77,6 +80,8 @@ static void music_view_destroy(GtkWidget *unused,gpointer data){
  view->closing=TRUE;
  if(view->volume_debounce)g_source_remove(view->volume_debounce);
  if(view->seek_debounce)g_source_remove(view->seek_debounce);
+ if(view->status_timer)g_source_remove(view->status_timer);
+ view->status_timer=0;
  view->volume_debounce=view->seek_debounce=0;
  if(active_music_view==view)active_music_view=NULL;
  if(view->playback){
@@ -96,6 +101,7 @@ static void music_view_free(gpointer data){
  g_free(view->playing_caption);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
+ if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
  g_free(view);
 }
 
@@ -546,6 +552,7 @@ static void music_request_complete(GObject *unused,GAsyncResult *result,gpointer
    gtk_button_set_label(GTK_BUTTON(job->button),"Requested");
    gtk_widget_set_sensitive(job->button,FALSE);
    status_set(view,"Album requested. DroppedNeedle handles downloading and import.");
+   music_refresh_status(view);
   }else{
    gtk_widget_set_sensitive(job->button,TRUE);
    status_set(view,"Music request unavailable. Approve this device for Music in NOW.");
@@ -591,6 +598,99 @@ static void music_request_album(GtkWidget *button,gpointer data){
  job->deadline=g_timeout_add_seconds(25,music_request_timeout,job);
  g_subprocess_communicate_utf8_async(proc,"",job->cancel,
                                      music_request_complete,job);
+}
+
+/* The existing DroppedNeedle queue supplies the actual album status. One
+ * bounded async read every 15 seconds while its catalog is visible. No
+ * transfer scheduling, polling thread, or separate Music download manager. */
+typedef struct {
+ GtkWidget *root;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+} MusicStatusJob;
+
+static gboolean music_status_timeout(gpointer data){
+ MusicStatusJob *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+static void music_status_free(MusicStatusJob *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_clear_object(&job->cancel);
+ g_clear_object(&job->process);
+ g_object_unref(job->root);
+ g_free(job);
+}
+static void music_status_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicStatusJob *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ gchar *output=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_utf8_finish(
+     job->process,result,&output,NULL,&error);
+ if(view && !view->closing){
+  view->status_inflight=FALSE;
+  if(ok && g_subprocess_get_successful(job->process) && output){
+   char **lines=g_strsplit(output,"\n",101);
+   for(int i=0;lines[i] && i<100;i++){
+    char **fields=g_strsplit(lines[i],"\t",2);
+    if(g_strv_length(fields)==2 && strlen(fields[0])==36 &&
+       strlen(fields[1])<72){
+     GtkWidget *button=g_hash_table_lookup(view->album_buttons,fields[0]);
+     if(button && GTK_IS_BUTTON(button)){
+      gtk_button_set_label(GTK_BUTTON(button),fields[1]);
+      if(g_strcmp0(fields[1],"Cancelled")==0)
+       gtk_widget_set_sensitive(button,TRUE);
+      else gtk_widget_set_sensitive(button,FALSE);
+     }
+    }
+    g_strfreev(fields);
+   }
+   g_strfreev(lines);
+  }
+ }
+ g_clear_error(&error);
+ g_free(output);
+ music_status_free(job);
+}
+static void music_refresh_status(MusicView *view){
+ if(view->closing || view->status_inflight || !*cfg[6] ||
+    !view->album_buttons || g_hash_table_size(view->album_buttons)==0)return;
+ char *source=helper_path();
+ char *dir=g_path_get_dirname(source);
+ char *helper=g_build_filename(dir,"music_rest.py",NULL);
+ g_free(source);g_free(dir);
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  g_free(helper);return;
+ }
+ const gchar *argv[]={"/usr/bin/python3",helper,cfg[6],"downloads",
+                      "--format=rows",NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+  G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+  G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){
+  g_clear_error(&error);return;
+ }
+ MusicStatusJob *job=g_new0(MusicStatusJob,1);
+ job->root=g_object_ref(view->root);
+ job->process=proc;
+ job->cancel=g_cancellable_new();
+ view->status_inflight=TRUE;
+ job->deadline=g_timeout_add_seconds(24,music_status_timeout,job);
+ g_subprocess_communicate_utf8_async(proc,"",job->cancel,
+                                     music_status_complete,job);
+}
+static gboolean music_status_tick(gpointer data){
+ MusicView *view=data;
+ if(!view->closing && gtk_widget_get_mapped(view->root))
+  music_refresh_status(view);
+ return G_SOURCE_CONTINUE;
 }
 
 static void music_add_item(MusicView *view,const char *kind,const char *id,
@@ -644,6 +744,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
    g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
   }
   gtk_box_pack_end(GTK_BOX(line),request,FALSE,FALSE,0);
+  g_hash_table_replace(view->album_buttons,g_strdup(id),request);
   gtk_container_add(GTK_CONTAINER(row),line);
  }else{
   gtk_container_add(GTK_CONTAINER(row),button);
@@ -677,6 +778,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
 
 static int render_rows(MusicView *view,const char *output,gboolean append){
  if(!append){
+  g_hash_table_remove_all(view->album_buttons);
   g_ptr_array_set_size(view->visible_tracks,0);
   GList *children=gtk_container_get_children(GTK_CONTAINER(view->list));
   for(GList *p=children;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
@@ -1202,6 +1304,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->tray_changed=tray_changed;
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
+ view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
  view->queue_index=-1;
  view->volume=75;
  view->playback=now_music_playback_new(music_player_event,view);
@@ -1435,6 +1538,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_no_show_all(view->player_bar,TRUE);
  gtk_box_pack_end(GTK_BOX(view->root),view->player_bar,FALSE,FALSE,0);
  g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view);
+ view->status_timer=g_timeout_add_seconds(15,music_status_tick,view);
  gtk_widget_show_all(view->root);
  gtk_widget_hide(view->hero_row);
  gtk_widget_hide(view->player_bar);

@@ -129,9 +129,12 @@ def request(base_url: str, action: str, *,
             raise MusicRESTError("Cannot identify this album for download.")
         body=json.dumps({"musicbrainz_id":value},separators=(",",":")).encode()
     if action=="downloads":
-        if not isinstance(value,str) or not MBID.fullmatch(value):
-            raise MusicRESTError("Invalid album selection.")
-        query={"release_group_mbid":value,"page_size":"20"}
+        # A bounded owner-scoped queue snapshot, never a new download manager.
+        query={"page_size":"100"}
+        if value is not None:
+            if not isinstance(value,str) or not MBID.fullmatch(value):
+                raise MusicRESTError("Invalid album selection.")
+            query={"release_group_mbid":value,"page_size":"20"}
     parts=urlsplit(base)
     url=urlunsplit((parts.scheme,parts.netloc,
                     parts.path.rstrip("/")+"/api/v1"+path,urlencode(query),""))
@@ -190,6 +193,58 @@ def _rows(results: dict[str,Any]) -> str:
                                   for x in fields))
     return "\n".join(rows)+("\n" if rows else "")
 
+
+
+
+STATUS_NAMES = {
+    "queued": "Queued", "searching": "Searching",
+    "downloading": "Downloading", "processing": "Importing",
+    "verifying": "Verifying", "importing": "Importing",
+    "completed": "Downloaded — check library",
+    "held": "Needs review", "held_for_review": "Needs review",
+    "failed": "Failed", "cancelled": "Cancelled",
+    "waiting": "Queued",
+}
+
+
+def _download_rows(result: dict[str,Any]) -> str:
+    """Display a factual bounded snapshot of DroppedNeedle's own queue.
+
+    Return only validated album IDs and fixed status labels. A completed
+    download is NOT proof of playback readiness: actual library presence is
+    checked through OpenSubsonic on the next library refresh.
+    """
+    items=result.get("items",[])
+    if not isinstance(items,list):
+        return ""
+    seen={}
+    # Task responses can represent multiple files of the same album.
+    priority={
+        "downloading": 7,"importing": 6,"processing": 6,
+        "verifying": 6,"held": 5,"held_for_review": 5,
+        "failed": 4,"searching": 3,"queued": 2,"waiting": 2,
+        "completed": 1,"cancelled": 0,
+    }
+    for item in items[:100]:
+        if not isinstance(item,dict):
+            continue
+        mbid=item.get("release_group_mbid")
+        status=item.get("status")
+        if (not isinstance(mbid,str) or not MBID.fullmatch(mbid)
+            or not isinstance(status,str) or status not in STATUS_NAMES):
+            continue
+        if item.get("held_for_review") is True:
+            status="held_for_review"
+        progress=item.get("progress_percent")
+        if type(progress) is not int or not 0<=progress<=100:
+            progress=0
+        label=STATUS_NAMES[status]
+        if status=="downloading":
+            label="Downloading %d%%"%progress
+        previous=seen.get(mbid)
+        if previous is None or priority[status]>previous[0]:
+            seen[mbid]=(priority[status],label)
+    return "".join(mbid+"\t"+value[1]+"\n" for mbid,value in seen.items())
 
 
 DISCOVER_SECTIONS = (
@@ -296,6 +351,8 @@ def main(argv=None) -> int:
                 sys.stdout.write(_rows(result))
             elif args.operation=="discover":
                 sys.stdout.write(_discover_rows(result))
+            elif args.operation=="downloads":
+                sys.stdout.write(_download_rows(result))
             else:
                 raise MusicRESTError("Row output unavailable for this Music action.")
         else:

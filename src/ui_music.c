@@ -1060,22 +1060,32 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  GtkWidget *button=gtk_button_new();
  gtk_widget_set_name(button,"music-row");
  gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
- GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_container_set_border_width(GTK_CONTAINER(content),8);
+ gtk_widget_set_hexpand(button,TRUE);
  GtkWidget *primary=gtk_label_new(title);
  gtk_label_set_ellipsize(GTK_LABEL(primary),PANGO_ELLIPSIZE_END);
  gtk_label_set_xalign(GTK_LABEL(primary),0);
+ gtk_widget_set_name(primary,"music-row-title");
+ gtk_widget_set_hexpand(primary,TRUE);
  gtk_box_pack_start(GTK_BOX(content),primary,FALSE,FALSE,0);
- char *detail=g_strdup_printf("%s%s%s",!g_strcmp0(kind,"song")?"Track · ":
-                               !g_strcmp0(kind,"artist")?"Artist · ":
-                               !g_strcmp0(kind,"catalog_artist")?"Discover artist · ":
-                               !g_strcmp0(kind,"catalog_album")?"Discover album · ":
-                               !g_strcmp0(kind,"playlist")?"Playlist · ":"Album · ",
-                               artist && *artist?artist:"",
-                               "");
+ char *detail;
+ if(!g_strcmp0(kind,"song")){
+  detail=(album && *album && artist && *artist)?
+      g_strdup_printf("%s · %s",artist,album):
+      g_strdup(artist && *artist?artist:album && *album?album:"Unknown artist");
+ }else{
+  detail=g_strdup_printf("%s · %s",
+      !g_strcmp0(kind,"artist")?"Artist":
+      !g_strcmp0(kind,"catalog_artist")?"Discover artist":
+      !g_strcmp0(kind,"catalog_album")?"Discover album":
+      !g_strcmp0(kind,"playlist")?"Playlist":"Album",
+      artist && *artist?artist:"");
+ }
  GtkWidget *secondary=gtk_label_new(detail);
  g_free(detail);
  gtk_label_set_xalign(GTK_LABEL(secondary),0);
+ gtk_widget_set_name(secondary,"music-row-detail");
  gtk_label_set_ellipsize(GTK_LABEL(secondary),PANGO_ELLIPSIZE_END);
  gtk_style_context_add_class(gtk_widget_get_style_context(secondary),"dim-label");
  gtk_box_pack_start(GTK_BOX(content),secondary,FALSE,FALSE,0);
@@ -1096,6 +1106,25 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   }
   gtk_box_pack_end(GTK_BOX(line),request,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
+  gtk_container_add(GTK_CONTAINER(row),line);
+ }else if(!g_strcmp0(kind,"song")){
+  GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+  gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
+  GtkWidget *like=music_icon_button(liked?
+      "emblem-favorite-symbolic":"non-starred-symbolic",
+      liked?"Unlike song":"Like song");
+  gtk_widget_set_name(like,"music-song-action");
+  g_object_set_data(G_OBJECT(like),"music-view",view);
+  g_object_set_data_full(G_OBJECT(like),"music-id",g_strdup(id),g_free);
+  g_object_set_data(G_OBJECT(like),"music-liked",GINT_TO_POINTER(liked?2:1));
+  g_signal_connect(like,"clicked",G_CALLBACK(music_like_clicked),like);
+  gtk_box_pack_start(GTK_BOX(line),like,FALSE,FALSE,0);
+  GtkWidget *add=music_icon_button("list-add-symbolic","Add to playlist");
+  gtk_widget_set_name(add,"music-song-action");
+  g_object_set_data(G_OBJECT(add),"music-view",view);
+  g_object_set_data_full(G_OBJECT(add),"music-id",g_strdup(id),g_free);
+  g_signal_connect(add,"clicked",G_CALLBACK(music_playlist_clicked),add);
+  gtk_box_pack_start(GTK_BOX(line),add,FALSE,FALSE,0);
   gtk_container_add(GTK_CONTAINER(row),line);
  }else{
   gtk_container_add(GTK_CONTAINER(row),button);

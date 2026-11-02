@@ -151,6 +151,26 @@ class RestAccessTests(unittest.TestCase):
                 rest.request(self.base,"search",token=TOKEN,value=bad)
         self.assertFalse(FakeDroppedNeedle.observed)
 
+    def test_upstream_discover_sections_become_real_card_groups(self):
+        album_id="9c1a1111-2dd3-4000-8111-7e9000010000"
+        artist_id="9c1a1111-2dd3-4000-8111-7e9000010001"
+        sections={"fresh_releases":{"title":"Fresh releases","type":"albums",
+                   "items":[{"name":"New record","mbid":album_id,
+                             "artist_name":"Band","in_library":False}]},
+                  "artists_you_might_like":{"title":"For you","type":"artists",
+                   "items":[{"name":"New artist","mbid":artist_id,
+                             "in_library":False}]}}
+        import base64
+        rows=[[base64.b64decode(x).decode() for x in line.split("\t")]
+              for line in rest._discover_rows(sections).splitlines()]
+        self.assertEqual([r[0] for r in rows],
+             ["section","catalog_album","section","catalog_artist"])
+        self.assertEqual(rows[0][2],"Fresh releases")
+        self.assertEqual(rows[1][1],album_id)
+        self.assertEqual(rows[2][2],"For you")
+        self.assertEqual(rows[3][1],artist_id)
+        self.assertIn("Not in library",rows[1][3])
+
     def test_missing_bearer_is_not_an_open_rest_request(self):
         with self.assertRaises(rest.MusicRESTError):
             rest.request(self.base,"search",token="this-is-invalid-token",value="rock")

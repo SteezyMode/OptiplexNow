@@ -32,7 +32,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
  return t;
 }
 typedef struct {
- GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
+ GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
@@ -1226,8 +1226,8 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
  gboolean is_song=!g_strcmp0(kind,"song");
  GtkWidget *content=gtk_box_new(is_song?GTK_ORIENTATION_HORIZONTAL:
-                                  GTK_ORIENTATION_VERTICAL,is_song?9:3);
- gtk_container_set_border_width(GTK_CONTAINER(content),is_song?1:5);
+                                  GTK_ORIENTATION_VERTICAL,is_song?6:3);
+ gtk_container_set_border_width(GTK_CONTAINER(content),is_song?0:5);
  gtk_widget_set_hexpand(button,TRUE);
  GtkWidget *primary=gtk_label_new(title);
  gtk_label_set_ellipsize(GTK_LABEL(primary),PANGO_ELLIPSIZE_END);
@@ -1288,7 +1288,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
       "emblem-favorite-symbolic":"non-starred-symbolic",
       liked?"Unlike song":"Like song");
   gtk_widget_set_name(like,"music-song-action");
-  gtk_widget_set_size_request(like,32,32);
+  gtk_widget_set_size_request(like,28,28);
   g_object_set_data(G_OBJECT(like),"music-view",view);
   g_object_set_data_full(G_OBJECT(like),"music-id",g_strdup(id),g_free);
   g_object_set_data(G_OBJECT(like),"music-liked",GINT_TO_POINTER(liked?2:1));
@@ -1296,7 +1296,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_box_pack_start(GTK_BOX(line),like,FALSE,FALSE,0);
   GtkWidget *add=music_icon_button("list-add-symbolic","Add to playlist");
   gtk_widget_set_name(add,"music-song-action");
-  gtk_widget_set_size_request(add,32,32);
+  gtk_widget_set_size_request(add,28,28);
   g_object_set_data(G_OBJECT(add),"music-view",view);
   g_object_set_data_full(G_OBJECT(add),"music-id",g_strdup(id),g_free);
   g_signal_connect(add,"clicked",G_CALLBACK(music_playlist_clicked),add);
@@ -1921,6 +1921,34 @@ static void music_nav(GtkWidget *button,gpointer data){
  }
 }
 
+/* The library toolbar uses a single row. Search replaces the title, rather
+ * than reserving a second permanent row above the music collection. */
+static void music_show_search(MusicView *view,gboolean open){
+ if(view->closing || !view->header_stack || !view->search_toggle)return;
+ gtk_stack_set_visible_child_name(GTK_STACK(view->header_stack),
+                                   open?"search":"browse");
+ gtk_button_set_image(GTK_BUTTON(view->search_toggle),
+     gtk_image_new_from_icon_name(open?"window-close-symbolic":
+                                  "system-search-symbolic",
+                                  GTK_ICON_SIZE_BUTTON));
+ gtk_widget_set_tooltip_text(view->search_toggle,
+                              open?"Close search":"Search music");
+ if(open){
+  gtk_widget_grab_focus(view->search);
+  gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
+ }
+}
+static void music_toggle_search(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->closing)return;
+ const char *page=gtk_stack_get_visible_child_name(GTK_STACK(view->header_stack));
+ music_show_search(view,g_strcmp0(page,"search")!=0);
+}
+static void music_search_escape(GtkSearchEntry *unused,gpointer data){
+ (void)unused;
+ music_show_search(data,FALSE);
+}
 static void music_focus_search(GtkWidget *unused,gpointer data){
  MusicView *view=data;
  if(unused)music_nav_selected(view,unused);
@@ -1938,8 +1966,7 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  gtk_widget_show(view->list_scroll);
  gtk_label_set_text(GTK_LABEL(view->heading),"Search");
  status_clear(view);
- gtk_widget_grab_focus(view->search);
- gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
+ music_show_search(view,TRUE);
 }
 
 /* Keep every library view within its existing scroll area, without a
@@ -2174,34 +2201,57 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_end(GTK_BOX(sidebar_rail),advanced,FALSE,FALSE,0);
  gtk_box_pack_end(GTK_BOX(sidebar_rail),sidebar_separator,FALSE,FALSE,0);
 
- GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
+ GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(maincol,"music-main");
  gtk_widget_set_hexpand(maincol,TRUE);
  gtk_box_pack_start(GTK_BOX(content),maincol,TRUE,TRUE,0);
- GtkWidget *searchrow=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
- view->search=gtk_search_entry_new();
- gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),"Search albums, artists, and tracks...");
- gtk_widget_set_hexpand(view->search,TRUE);
- g_signal_connect(view->search,"activate",G_CALLBACK(music_search),view);
- gtk_box_pack_start(GTK_BOX(searchrow),view->search,TRUE,TRUE,0);
- GtkWidget *search_button=music_button("Search");
- g_signal_connect(search_button,"clicked",G_CALLBACK(music_search),view);
- gtk_box_pack_start(GTK_BOX(searchrow),search_button,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(maincol),searchrow,FALSE,FALSE,0);
+ /* One small toolbar: view title and song count, Shuffle, and Search.
+  * Tapping Search temporarily replaces the heading in this same row. */
+ GtkWidget *header_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
+ gtk_widget_set_name(header_row,"music-header-row");
+ gtk_box_pack_start(GTK_BOX(maincol),header_row,FALSE,FALSE,0);
+ view->header_stack=gtk_stack_new();
+ gtk_stack_set_transition_type(GTK_STACK(view->header_stack),
+                                GTK_STACK_TRANSITION_TYPE_NONE);
+ gtk_widget_set_hexpand(view->header_stack,TRUE);
+ gtk_box_pack_start(GTK_BOX(header_row),view->header_stack,TRUE,TRUE,0);
+ GtkWidget *browse_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
  view->heading=gtk_label_new("Music Home");
  gtk_widget_set_name(view->heading,"music-section-title");
- gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
- gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
- view->shuffle_all=music_button("Shuffle all");
- g_signal_connect(view->shuffle_all,"clicked",G_CALLBACK(music_shuffle_all),view);
+ gtk_label_set_xalign(GTK_LABEL(view->heading),0);
+ gtk_label_set_ellipsize(GTK_LABEL(view->heading),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_hexpand(view->heading,TRUE);
+ gtk_box_pack_start(GTK_BOX(browse_header),view->heading,TRUE,TRUE,0);
+ view->shuffle_all=music_icon_button("media-playlist-shuffle-symbolic",
+                                      "Shuffle all songs");
+ gtk_widget_set_name(view->shuffle_all,"music-shuffle-all");
+ gtk_widget_set_size_request(view->shuffle_all,32,32);
+ g_signal_connect(view->shuffle_all,"clicked",
+                  G_CALLBACK(music_shuffle_all),view);
  gtk_widget_set_no_show_all(view->shuffle_all,TRUE);
- gtk_box_pack_start(GTK_BOX(maincol),view->shuffle_all,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(browse_header),view->shuffle_all,FALSE,FALSE,0);
+ gtk_stack_add_named(GTK_STACK(view->header_stack),browse_header,"browse");
+ view->search=gtk_search_entry_new();
+ gtk_widget_set_name(view->search,"music-search-field");
+ gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
+                                 "Song, artist or album");
+ g_signal_connect(view->search,"activate",G_CALLBACK(music_search),view);
+ g_signal_connect(view->search,"stop-search",
+                  G_CALLBACK(music_search_escape),view);
+ gtk_stack_add_named(GTK_STACK(view->header_stack),view->search,"search");
+ gtk_stack_set_visible_child_name(GTK_STACK(view->header_stack),"browse");
+ view->search_toggle=music_icon_button("system-search-symbolic","Search music");
+ gtk_widget_set_name(view->search_toggle,"music-search-toggle");
+ gtk_widget_set_size_request(view->search_toggle,32,32);
+ g_signal_connect(view->search_toggle,"clicked",
+                  G_CALLBACK(music_toggle_search),view);
+ gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0);
  /* Album/artist/playlist art is fetched on demand, not through an
   * unbounded request fan-out for every visible library item. */
  view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,12);
  gtk_widget_set_name(view->hero_row,"music-hero");
  view->hero_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
- gtk_widget_set_size_request(view->hero_art,120,120);
+ gtk_widget_set_size_request(view->hero_art,96,96);
  gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_art,FALSE,FALSE,0);
  GtkWidget *header_text=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_widget_set_hexpand(header_text,TRUE);

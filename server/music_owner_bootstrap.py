@@ -58,22 +58,29 @@ def _write_once(path: Path, record: dict) -> None:
     raw=(json.dumps(record,sort_keys=True,separators=(",",":"))+"\n").encode()
     if len(raw)>MAX_FILE:
         raise ProvisionError("Music owner account data is too large.")
+    # Never write a partially complete owner credential directly to the
+    # canonical path. Stage as mode 0600, fsync, then publish with hardlink
+    # (which fails atomically if another owner account already exists).
+    tmp=path.parent/(".owner-music-"+secrets.token_hex(12))
     flags=os.O_WRONLY|os.O_CREAT|os.O_EXCL|getattr(os,"O_NOFOLLOW",0)
-    fd=os.open(path,flags,0o600)
     try:
-        with os.fdopen(fd,"wb",closefd=False) as stream:
-            stream.write(raw)
-            stream.flush()
-            os.fsync(fd)
+        fd=os.open(tmp,flags,0o600)
+        try:
+            with os.fdopen(fd,"wb",closefd=False) as stream:
+                stream.write(raw)
+                stream.flush()
+                os.fsync(fd)
+        finally:
+            os.close(fd)
+        os.link(tmp,path)
+        dfd=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|
+                    getattr(os,"O_NOFOLLOW",0))
+        try:
+            os.fsync(dfd)
+        finally:
+            os.close(dfd)
     finally:
-        os.close(fd)
-    # Commit directory entry so an unexpected shutdown cannot erase the only
-    # copy of the generated secret after the upstream account is created.
-    dfd=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|getattr(os,"O_NOFOLLOW",0))
-    try:
-        os.fsync(dfd)
-    finally:
-        os.close(dfd)
+        tmp.unlink(missing_ok=True)
 
 
 def bootstrap_owner_account(*, state_dir: str, base_url: str,

@@ -38,6 +38,10 @@ class MockHandler(BaseHTTPRequestHandler):
             payload = b"ID3" + b"music-fixture-" * 3
             self.send_response(200)
             self.send_header("Content-Type", "audio/mpeg")
+        elif self.path.endswith("/getCoverArt"):
+            payload = b"\\x89PNG\\r\\n\\x1a\\n" + b"fixture"
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
         elif self.path.endswith("/stream_error"):
             payload = b'{"subsonic-response":{"status":"failed","error":{"code":40}}}'
             self.send_response(200)
@@ -152,6 +156,25 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertTrue(target.buffer.getvalue().startswith(b"ID3"))
         self.assertEqual(self.server.requests[-1][1]["id"], ["t1"])
 
+    def test_cover_art_uses_authenticated_post_and_bounded_raster(self):
+        class Out:
+            def __init__(self):
+                self.buffer = io.BytesIO()
+        original = music.sys.stdout
+        target = Out()
+        try:
+            music.sys.stdout = target
+            music.cover_art(self.base, self.auth, "a1")
+        finally:
+            music.sys.stdout = original
+        self.assertTrue(target.buffer.getvalue().startswith(b"\x89PNG"))
+        path, fields = self.server.requests[-1]
+        self.assertEqual(path, "/subsonic/rest/getCoverArt")
+        self.assertEqual(fields["apiKey"], ["secret-should-never-be-in-url"])
+        self.assertEqual(fields["size"], ["220"])
+        self.assertEqual(fields["id"], ["a1"])
+        self.assertNotIn("secret-should-never-be-in-url", path)
+
     def test_base64_rows_cannot_inject_newlines_or_tabs(self):
         from base64 import b64decode
         text = music._rows("albums", {"albums": [
@@ -164,6 +187,7 @@ class MusicSubsonicTests(unittest.TestCase):
                          "Album\nwith\tcontrols")
         self.assertEqual(b64decode(lines[0].split("\t")[3]).decode(), "歌手")
         self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
+        self.assertEqual(b64decode(lines[0].split("\\t")[4]), b"a1")
 
     def test_real_recent_new_and_liked_endpoint_contracts(self):
         for kind in ("recent", "newest", "alphabeticalByName"):

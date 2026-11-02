@@ -267,6 +267,112 @@ void now_music_next(void){
  if(now_music_is_playing_session())music_next_clicked(NULL,active_music_view);
 }
 
+/* Cover artwork is a bounded, authenticated POST through the same helper.
+ * Never embed the OpenSubsonic key in a URL, persist artwork to a public
+ * cache, or allocate unbounded images from an untrusted media server. */
+typedef struct {
+ GtkWidget *root;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+ guint64 serial;
+ gboolean playing;
+ char *server_url;
+ char *input; /* wipe after the worker completes */
+} MusicArtJob;
+
+static gboolean music_art_timeout(gpointer data){
+ MusicArtJob *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+static void music_art_free(MusicArtJob *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_object_unref(job->cancel);
+ g_object_unref(job->process);
+ g_object_unref(job->root);
+ wipe_free(job->input);
+ g_free(job->server_url);
+ g_free(job);
+}
+static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicArtJob *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ GBytes *output=NULL;
+ GError *error=NULL;
+ gboolean ok=g_subprocess_communicate_finish(job->process,result,&output,NULL,&error);
+ if(view && !view->closing &&
+    g_strcmp0(job->server_url,view->bound_url)==0 &&
+    g_strcmp0(job->server_url,cfg[6])==0 &&
+    job->serial==(job->playing?view->playing_art_serial:view->hero_art_serial) &&
+    ok && g_subprocess_get_successful(job->process) && output){
+  gsize len=0;
+  const guchar *bytes=g_bytes_get_data(output,&len);
+  if(len>0 && len<=3*1024*1024){
+   GdkPixbufLoader *loader=gdk_pixbuf_loader_new();
+   const int pixels=job->playing?44:120;
+   gdk_pixbuf_loader_set_size(loader,pixels,pixels);
+   gboolean valid=gdk_pixbuf_loader_write(loader,bytes,len,NULL);
+   if(valid)valid=gdk_pixbuf_loader_close(loader,NULL);
+   if(valid){
+    GdkPixbuf *pixbuf=gdk_pixbuf_loader_get_pixbuf(loader);
+    if(pixbuf){
+     GtkWidget *target=job->playing?view->playing_art:view->hero_art;
+     if(target)gtk_image_set_from_pixbuf(GTK_IMAGE(target),pixbuf);
+    }
+   }
+   g_object_unref(loader);
+  }
+ }
+ if(output)g_bytes_unref(output);
+ g_clear_error(&error);
+ music_art_free(job);
+}
+static void music_art_start(MusicView *view,const char *cover_id,gboolean playing){
+ if(view->closing)return;
+ guint64 serial=playing?++view->playing_art_serial:++view->hero_art_serial;
+ GtkWidget *target=playing?view->playing_art:view->hero_art;
+ if(target)gtk_image_set_from_icon_name(GTK_IMAGE(target),
+                                        "audio-x-generic",GTK_ICON_SIZE_DIALOG);
+ if(!cover_id || !*cover_id || strlen(cover_id)>512 ||
+    !view->app_password || !view->bound_url ||
+    g_strcmp0(cfg[6],view->bound_url)!=0)return;
+ char *helper=helper_path();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  g_free(helper);return;
+ }
+ const gchar *argv[]={"/usr/bin/python3",helper,view->bound_url,
+                      "art",cover_id,"--auth-format=form",NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+    G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+    G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){
+  g_clear_error(&error);
+  return;
+ }
+ MusicArtJob *job=g_new0(MusicArtJob,1);
+ job->process=proc;
+ job->root=g_object_ref(view->root);
+ job->cancel=g_cancellable_new();
+ job->serial=serial;
+ job->playing=playing;
+ job->server_url=g_strdup(view->bound_url);
+ char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
+ char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+ job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
+ wipe_free(key);g_free(name);
+ GBytes *sent=g_bytes_new(job->input,strlen(job->input));
+ job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
+ g_subprocess_communicate_async(proc,sent,job->cancel,
+                                music_art_complete,job);
+ g_bytes_unref(sent);
+}
+
 static void music_item_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
  GtkWidget *button=GTK_WIDGET(data);

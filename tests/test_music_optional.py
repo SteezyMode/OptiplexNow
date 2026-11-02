@@ -102,6 +102,18 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('ALBUM_PAGE_SIZE = 200', transport)
         self.assertIn('offset % ALBUM_PAGE_SIZE', transport)
 
+    def test_one_time_music_setup_is_compact_and_never_asks_username(self):
+        self.assertNotIn('Username (optional)', UI_MUSIC)
+        self.assertNotIn('view->user=gtk_entry_new()', UI_MUSIC)
+        self.assertNotIn('gtk_entry_get_text(GTK_ENTRY(view->user))', UI_MUSIC)
+        self.assertIn('Music access key (one-time)', UI_MUSIC)
+        self.assertIn('not the regular account login password', UI_MUSIC)
+        self.assertIn('gtk_entry_set_max_length(GTK_ENTRY(view->password),1024)', UI_MUSIC)
+        self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE)', UI_MUSIC)
+        self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE)', UI_MUSIC)
+        self.assertIn('view->username=g_strdup("")', UI_MUSIC)
+        self.assertIn('music_vault_begin(view,"lookup",NULL)', UI_MUSIC)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

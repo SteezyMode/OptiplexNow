@@ -138,6 +138,16 @@ def execute(*, verified_client_id, environ=None, read_request=_request_line,
         raise PolicyError("No verified Games device binding")
     request = read_request()
     config = read_config()
+    # Optional Music provisioning is a separate owner-approved capability.
+    # Exact verified_client_id comes from the host-pinned forced SSH key,
+    # never from client JSON or a Tailnet IP.
+    if isinstance(request, dict) and request.get("action") == "music_access":
+        from owner_music_ssh import issue_ssh_music_access
+        return issue_ssh_music_access(
+            request=request, verified_client_id=verified_client_id,
+            config=config, wolf_api=wolf_api_factory(),
+            host_approved=(config["enabled"] is True and
+                           config["legacy_links_reviewed"] is True))
     def emit(snapshot):
         # Each JSON line is bounded and contains only sanitized search fields.
         print(json.dumps(snapshot, ensure_ascii=True, separators=(",", ":")),

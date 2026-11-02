@@ -42,7 +42,7 @@ class FreshClientMediaTests(unittest.TestCase):
         self.assertIn('now_media_browser_open(now_media_fallback());', (ROOT / 'src' / 'media_flow.c').read_text())
         # Music now has a first-party browse view; the upstream management UI
         # stays available via the explicit Advanced button.
-        self.assertIn('now_music_build(browser_open,on_settings)', SOURCE)
+        self.assertIn('now_music_build(browser_open,on_settings,music_tray_changed)', SOURCE)
         music_ui = (ROOT / 'src' / 'ui_music.c').read_text(encoding='utf-8')
         self.assertIn('view->open_url(cfg[6])', music_ui)
         self.assertIn('g_subprocess_communicate_utf8_async', music_ui)

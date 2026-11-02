@@ -219,8 +219,14 @@ static void music_update_controls(MusicView *view){
   music_notify_tray(view);
   return;
  }
+ MusicTrack *current=(view->queue_index>=0 &&
+     view->queue_index<(int)view->queue->len)
+    ?g_ptr_array_index(view->queue,view->queue_index):NULL;
  gtk_label_set_text(GTK_LABEL(view->playing_label),
-                    view->playing_caption?view->playing_caption:"Now playing");
+     current?current->title:"Now playing");
+ if(view->playing_artist_label)
+  gtk_label_set_text(GTK_LABEL(view->playing_artist_label),
+     current?current->artist:"");
  gtk_button_set_image(GTK_BUTTON(view->pause_button),
        gtk_image_new_from_icon_name(view->paused?
           "media-playback-start-symbolic":"media-playback-pause-symbolic",
@@ -1784,37 +1790,47 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
  gtk_widget_set_size_request(view->playing_art,44,44);
  gtk_box_pack_start(GTK_BOX(controls),view->playing_art,FALSE,FALSE,0);
+ GtkWidget *now_playing=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ gtk_widget_set_hexpand(now_playing,TRUE);
  view->playing_label=gtk_label_new("");
+ gtk_widget_set_name(view->playing_label,"music-now-title");
  gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
  gtk_widget_set_hexpand(view->playing_label,TRUE);
- gtk_box_pack_start(GTK_BOX(controls),view->playing_label,TRUE,TRUE,0);
- view->previous_button=music_button("Previous");
- g_signal_connect(view->previous_button,"clicked",
-                  G_CALLBACK(music_prev_clicked),view);
- gtk_box_pack_start(GTK_BOX(controls),
-                    view->previous_button,FALSE,FALSE,0);
- view->pause_button=music_button("Pause");
- g_signal_connect(view->pause_button,"clicked",
-                  G_CALLBACK(music_pause_clicked),view);
- gtk_box_pack_start(GTK_BOX(controls),
-                    view->pause_button,FALSE,FALSE,0);
- view->next_button=music_button("Next");
- g_signal_connect(view->next_button,"clicked",
-                  G_CALLBACK(music_next_clicked),view);
- gtk_box_pack_start(GTK_BOX(controls),
-                    view->next_button,FALSE,FALSE,0);
- GtkWidget *stop_button=music_button("Stop");
- g_signal_connect(stop_button,"clicked",
-                  G_CALLBACK(music_stop_clicked),view);
+ gtk_box_pack_start(GTK_BOX(now_playing),view->playing_label,FALSE,FALSE,0);
+ view->playing_artist_label=gtk_label_new("");
+ gtk_widget_set_name(view->playing_artist_label,"music-now-artist");
+ gtk_label_set_xalign(GTK_LABEL(view->playing_artist_label),0);
+ gtk_label_set_ellipsize(GTK_LABEL(view->playing_artist_label),PANGO_ELLIPSIZE_END);
+ gtk_box_pack_start(GTK_BOX(now_playing),view->playing_artist_label,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(controls),now_playing,TRUE,TRUE,0);
+ view->shuffle_button=gtk_toggle_button_new();
+ gtk_button_set_image(GTK_BUTTON(view->shuffle_button),
+    gtk_image_new_from_icon_name("media-playlist-shuffle-symbolic",GTK_ICON_SIZE_BUTTON));
+ gtk_style_context_add_class(gtk_widget_get_style_context(view->shuffle_button),"music-transport");
+ gtk_widget_set_tooltip_text(view->shuffle_button,"Shuffle off");
+ gtk_widget_set_size_request(view->shuffle_button,38,38);
+ g_signal_connect(view->shuffle_button,"toggled",G_CALLBACK(music_shuffle_clicked),view);
+ gtk_box_pack_start(GTK_BOX(controls),view->shuffle_button,FALSE,FALSE,0);
+ view->previous_button=music_icon_button("media-skip-backward-symbolic","Previous");
+ g_signal_connect(view->previous_button,"clicked",G_CALLBACK(music_prev_clicked),view);
+ gtk_box_pack_start(GTK_BOX(controls),view->previous_button,FALSE,FALSE,0);
+ view->pause_button=music_icon_button("media-playback-pause-symbolic","Pause");
+ gtk_widget_set_name(view->pause_button,"music-primary-play");
+ g_signal_connect(view->pause_button,"clicked",G_CALLBACK(music_pause_clicked),view);
+ gtk_box_pack_start(GTK_BOX(controls),view->pause_button,FALSE,FALSE,0);
+ view->next_button=music_icon_button("media-skip-forward-symbolic","Next");
+ g_signal_connect(view->next_button,"clicked",G_CALLBACK(music_next_clicked),view);
+ gtk_box_pack_start(GTK_BOX(controls),view->next_button,FALSE,FALSE,0);
+ GtkWidget *stop_button=music_icon_button("media-playback-stop-symbolic","Stop");
+ g_signal_connect(stop_button,"clicked",G_CALLBACK(music_stop_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),stop_button,FALSE,FALSE,0);
  /* Local volume only; never changes another user's playback. */
- GtkWidget *vol_label=gtk_label_new("Volume");
- gtk_box_pack_start(GTK_BOX(controls),vol_label,FALSE,FALSE,0);
+
  view->volume_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,100,1);
  gtk_scale_set_draw_value(GTK_SCALE(view->volume_slider),FALSE);
  gtk_range_set_value(GTK_RANGE(view->volume_slider),view->volume);
- gtk_widget_set_size_request(view->volume_slider,84,-1);
+ gtk_widget_set_size_request(view->volume_slider,65,-1);
  gtk_widget_set_tooltip_text(view->volume_slider,"This device's music volume");
  g_signal_connect(view->volume_slider,"value-changed",
                   G_CALLBACK(music_volume_changed),view);

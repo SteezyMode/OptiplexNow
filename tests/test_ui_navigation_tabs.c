@@ -7,7 +7,7 @@ static void check_selection(GtkWidget *stack, GtkWidget **tabs,
   gtk_stack_set_visible_child_name(GTK_STACK(stack), page);
   now_nav_update_tabs(G_OBJECT(stack), NULL,
                       g_object_get_data(G_OBJECT(stack), "test-nav"));
-  for (unsigned i = 0; i < 5; i++) {
+  for (unsigned i = 0; i < 6; i++) {
     gboolean active = gtk_style_context_has_class(
         gtk_widget_get_style_context(tabs[i]), "active");
     g_assert_cmpint(active, ==, i == selected);
@@ -68,8 +68,8 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   GtkWidget *stack = gtk_stack_new();
   GtkWidget *nav = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
-  GtkWidget *tabs[5] = {NULL};
-  const char *pages[] = {"dashboard", "downloads", "games", "videos", "settings"};
+  GtkWidget *tabs[6] = {NULL};
+  const char *pages[] = {"dashboard", "games", "videos", "music", "downloads", "settings"};
   for (unsigned i = 0; i < 5; i++) {
     tabs[i] = gtk_button_new_with_label(pages[i]);
     now_nav_mark_tab(tabs[i], pages[i]);
@@ -85,10 +85,10 @@ int main(int argc, char **argv) {
   g_signal_connect(stack, "notify::visible-child",
                    G_CALLBACK(now_nav_update_tabs), nav);
 
-  for (unsigned i = 0; i < 5; i++)
+  for (unsigned i = 0; i < 6; i++)
     check_selection(stack, tabs, pages[i], i);
-  check_selection(stack, tabs, "info", 4);
-  check_selection(stack, tabs, "software", 4);
+  check_selection(stack, tabs, "info", 5);
+  check_selection(stack, tabs, "software", 5);
   g_signal_emit_by_name(tabs[0], "clicked");
   g_assert_cmpstr(gtk_stack_get_visible_child_name(GTK_STACK(stack)), ==, "dashboard");
   check_selection(stack, tabs, "dashboard", 0);

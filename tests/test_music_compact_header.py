@@ -35,6 +35,21 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_library_clicked)',UI)
         self.assertIn('music_show_search(view,g_strcmp0(page,"search")!=0)',UI)
 
+    def test_library_sidebar_collapses_without_losing_song_navigation(self):
+        self.assertIn('gtk_label_new("Your Library")',UI)
+        self.assertIn('gtk_widget_set_name(library_button,"music-library-root")',UI)
+        self.assertIn('music_library_expand(view,!was_open)',UI)
+        self.assertIn('query_start(view,"songs",NULL,"All songs")',UI)
+        self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->library_revealer),expanded)',UI)
+        self.assertIn('music_library_expand(view,FALSE)',UI)
+        self.assertIn('gtk_widget_set_size_request(sidebar_rail,126,-1)',UI)
+        self.assertIn('GtkWidget *filter=music_button(filter_labels[i])',UI)
+        self.assertIn('music_align_nav_label(filter)',UI)
+        self.assertNotIn('folder-music-symbolic',UI)
+        self.assertNotIn('GtkWidget *b=music_button(titles[i])',UI)
+        self.assertIn('"#music-library-filters button#music-filter.now-action',CSS)
+        self.assertIn('"#music-sidebar button#music-library-root.now-action',CSS)
+
     def test_compact_album_and_song_chrome(self):
         self.assertIn('gtk_widget_set_size_request(view->hero_art,96,96)',UI)
         self.assertIn('min-height:30px',CSS)

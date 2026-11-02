@@ -82,6 +82,31 @@ def socket_command(path: str, pause: bool) -> bool:
         return False
 
 
+def socket_volume(path: str, level: int) -> bool:
+    """Set only local mpv volume. Arbitrary IPC commands are prohibited."""
+    if type(level) is not int or level < 0 or level > 100:
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+            conn.settimeout(0.8)
+            conn.connect(path)
+            command = json.dumps(
+                {"command": ["set_property", "volume", level]},
+                separators=(",", ":")
+            ).encode() + b"\n"
+            conn.sendall(command)
+            answer = b""
+            while b"\n" not in answer and len(answer) < 4096:
+                chunk = conn.recv(4096 - len(answer))
+                if not chunk:
+                    break
+                answer += chunk
+            result = json.loads(answer.split(b"\n", 1)[0])
+            return result.get("error") == "success"
+    except (OSError, ValueError):
+        return False
+
+
 def _parent_exit_signal():
     """Linux: kill the decoder if the worker is forcibly terminated."""
     import ctypes
@@ -139,8 +164,12 @@ def stream_audio(server: str, auth: dict[str, str], track_id: str, decoder,
 
 
 def run(server: str, track_id: str, credential_stream, command_stream, output,
-        *, mpv_binary: str | None = None) -> int:
+        *, mpv_binary: str | None = None, initial_volume: int = 75) -> int:
     # A configured server address and track ID only; no secrets in argv.
+    if type(initial_volume) is not int or not 0 <= initial_volume <= 100:
+        output.write("ERROR\n")
+        output.flush()
+        return 2
     try:
         endpoint_for(server, "stream")
         _bounded_text(track_id, "track ID", 512)
@@ -182,6 +211,7 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
         argv = [
             mpv, "--no-config", "--no-video", "--no-terminal",
             "--really-quiet", "--audio-display=no",
+            "--volume=" + str(initial_volume),
             "--input-ipc-server=" + ipc, "--", "-"
         ]
         try:
@@ -232,6 +262,13 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
                     stopped = True
                     send("STOPPED")
                     return 0
+                if action.startswith("VOLUME "):
+                    digits = action[7:]
+                    if digits.isascii() and digits.isdecimal() and len(digits) <= 3:
+                        level = int(digits)
+                        if level <= 100 and os.path.exists(ipc):
+                            socket_volume(ipc, level)
+                    continue
                 if action not in ("PAUSE", "RESUME") or not os.path.exists(ipc):
                     continue
                 wanted_paused = action == "PAUSE"
@@ -259,15 +296,21 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
 def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv[1:]
-    if len(argv) != 2:
+    if len(argv) != 3:
         return 2
-    server, track_id = argv
+    server, track_id, raw_volume = argv
+    if not raw_volume.isascii() or not raw_volume.isdecimal() or len(raw_volume) > 3:
+        return 2
+    volume = int(raw_volume)
+    if volume > 100:
+        return 2
     try:
         # Use the unbuffered file object for BOTH auth and later commands.
         # BufferedReader.readline() can prefetch a PAUSE/STOP line and then
         # select() would see an empty kernel pipe despite buffered commands.
         channel = sys.stdin.buffer.raw
-        return run(server, track_id, channel, channel, sys.stdout)
+        return run(server, track_id, channel, channel, sys.stdout,
+                   initial_volume=volume)
     except (OSError, ValueError):
         print("ERROR", flush=True)
         return 2

@@ -57,6 +57,29 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('"#music-library-filters button#music-filter.now-action',CSS)
         self.assertIn('"#music-sidebar button#music-library-root.now-action',CSS)
 
+    def test_wide_window_expands_library_not_sidebar(self):
+        self.assertIn('gtk_widget_set_halign(view->root,GTK_ALIGN_FILL)',UI)
+        self.assertIn('gtk_widget_set_hexpand(view->root,TRUE)',UI)
+        self.assertIn('gtk_widget_set_halign(content,GTK_ALIGN_FILL)',UI)
+        self.assertIn('gtk_widget_set_hexpand(content,TRUE)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(content),sidebar_rail,FALSE,FALSE,0)',UI)
+        self.assertIn('gtk_widget_set_hexpand(sidebar_rail,FALSE)',UI)
+        self.assertIn('gtk_widget_set_halign(sidebar_rail,GTK_ALIGN_START)',UI)
+        self.assertIn('gtk_widget_set_halign(maincol,GTK_ALIGN_FILL)',UI)
+        self.assertIn('gtk_widget_set_hexpand(maincol,TRUE)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(content),maincol,TRUE,TRUE,0)',UI)
+
+    def test_music_palette_matches_application_not_separate_green_theme(self):
+        start=CSS.index('"#music-home {')
+        end=CSS.index('"button.now-action {',start)
+        section=CSS[start:end]
+        self.assertIn('"#music-home {background:#101111;color:#ece8e0;}"',section)
+        self.assertIn('"#music-sidebar-rail {background:#181b19',section)
+        self.assertIn('#c47d65',section)
+        for old in ('#111613','#1b241e','#304036','#314438',
+                    '#1a221c','#253329','#35473a','#202c24'):
+            self.assertNotIn(old,section)
+
     def test_compact_album_and_song_chrome(self):
         self.assertIn('gtk_widget_set_size_request(view->hero_art,96,96)',UI)
         self.assertIn('min-height:30px',CSS)

@@ -82,6 +82,7 @@ static void music_play_visible(MusicView *view,int index);
 static void music_notify_tray(MusicView *view);
 static void music_card_queue_pump(MusicView *view);
 static void music_schedule_next_page(MusicView *view);
+static void music_show_search(MusicView *view,gboolean open);
 static gboolean music_status_tick(gpointer data);
 
 static void wipe_free(char *value){
@@ -1534,6 +1535,10 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
+ /* Browse/detail navigation restores the inline library header.
+  * Searching itself keeps the input open for quick query refinement. */
+ if(g_strcmp0(operation,"search") && g_strcmp0(operation,"catalog"))
+  music_show_search(view,FALSE);
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||

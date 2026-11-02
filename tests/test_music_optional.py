@@ -164,6 +164,20 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('shutil.copy2(root/' + "'src/music_http_stream.py'",(ROOT/"package.py").read_text())
         self.assertIn('shutil.copy2(root/' + "'src/music_rest.py'",(ROOT/"package.py").read_text())
 
+    def test_music_request_status_is_polling_existing_backend_not_duplicated(self):
+        self.assertIn('g_timeout_add_seconds(15,music_status_tick,view)', UI_MUSIC)
+        self.assertIn('g_hash_table_remove_all(view->album_buttons);', UI_MUSIC)
+        self.assertIn('g_hash_table_replace(view->album_buttons,g_strdup(id),request);',
+                      UI_MUSIC)
+        self.assertIn('music_refresh_status(view);',UI_MUSIC)
+        self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE',UI_MUSIC)
+        self.assertIn('gtk_button_set_label(GTK_BUTTON(button),fields[1]);',UI_MUSIC)
+        self.assertIn('view->status_inflight=TRUE;', UI_MUSIC)
+        transport=(ROOT/"src"/"music_rest.py").read_text()
+        self.assertIn('def _download_rows(result:',transport)
+        self.assertIn('args.operation=="downloads"',transport)
+        self.assertIn('"Downloaded — check library"',transport)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

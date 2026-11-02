@@ -489,6 +489,25 @@ static int render_rows(MusicView *view,const char *output){
  return count;
 }
 
+static void music_show_empty(MusicView *view,const char *operation){
+ const char *message="No items found. Try another search or browse your library.";
+ if(!g_strcmp0(operation,"home"))
+  message="No music is available yet. Check your library, or open Advanced for imports.";
+ else if(!g_strcmp0(operation,"recent"))
+  message="No recently played albums yet. Browse Albums or New additions.";
+ else if(!g_strcmp0(operation,"liked"))
+  message="Nothing in Liked yet. Favorites from your music library will appear here.";
+ else if(!g_strcmp0(operation,"playlists"))
+  message="No playlists yet. Existing server playlists will appear here.";
+ GtkWidget *empty=gtk_label_new(message);
+ gtk_label_set_line_wrap(GTK_LABEL(empty),TRUE);
+ gtk_widget_set_margin_top(empty,22);
+ gtk_widget_set_margin_bottom(empty,22);
+ gtk_label_set_xalign(GTK_LABEL(empty),0);
+ gtk_list_box_insert(GTK_LIST_BOX(view->list),empty,-1);
+ gtk_widget_show_all(view->list);
+}
+
 static gboolean query_timeout(gpointer data){
  MusicQuery *job=data;
  job->deadline=0;
@@ -522,6 +541,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    status_set(view,"Music library unavailable. Check URL, app password, and server access.");
   }else{
    int count=render_rows(view,output);
+   if(count==0)music_show_empty(view,job->operation);
    if(view->hero_play){
     gboolean playable=(!g_strcmp0(job->operation,"album") ||
                        !g_strcmp0(job->operation,"playlist")) &&
@@ -707,7 +727,7 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
      g_free(view->bound_url);
      view->bound_url=g_strdup(job->url);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
-     query_start(view,"home",NULL,"Recently played albums");
+     query_start(view,"home",NULL,"Music Home");
     }else{
      wipe_free(key);wipe_free(username);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
@@ -829,7 +849,7 @@ static void music_connect(GtkWidget *unused,gpointer data){
  view->username=g_strdup(gtk_entry_get_text(GTK_ENTRY(view->user)));
  gtk_entry_set_text(GTK_ENTRY(view->password),"");
  view->remember_pending=TRUE;
- query_start(view,"home",NULL,"Recently played albums");
+ query_start(view,"home",NULL,"Music Home");
 }
 
 static void music_nav(GtkWidget *button,gpointer data){
@@ -935,7 +955,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  const char *ops[]={"home","albums","recent","new","liked","artists","playlists"};
  const char *titles[]={"Home","Albums","Recently played",
                        "New additions","Liked","Artists","Playlists"};
- const char *headings[]={"Recently played albums","All albums","Recently played albums",
+ const char *headings[]={"Music Home","All albums","Recently played albums",
                          "New additions","Liked music","Artists","Your playlists"};
  for(guint i=0;i<G_N_ELEMENTS(ops);i++){
   GtkWidget *b=music_button(titles[i]);
@@ -965,7 +985,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_signal_connect(search_button,"clicked",G_CALLBACK(music_search),view);
  gtk_box_pack_start(GTK_BOX(searchrow),search_button,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(maincol),searchrow,FALSE,FALSE,0);
- view->heading=gtk_label_new("Recently played albums");
+ view->heading=gtk_label_new("Music Home");
  gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
  /* Album/artist/playlist art is fetched on demand, not through an

@@ -189,6 +189,24 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
         self.assertEqual(b64decode(lines[0].split("\t")[4]), b"a1")
 
+    def test_home_with_no_history_falls_back_to_real_library_additions(self):
+        from unittest import mock
+        calls = []
+        def fake_query(base, method, auth, params=None):
+            self.assertEqual(method, "getAlbumList2")
+            calls.append(params["type"])
+            if params["type"] == "recent":
+                return {"albumList2": {"album": []}}
+            return {"albumList2": {"album": [{"id": "a7", "name": "New addition"}]}}
+        output = io.StringIO()
+        with mock.patch.object(music, "query", side_effect=fake_query), \
+             mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+             mock.patch.object(music.sys, "stdout", output):
+            code = music.main([self.base, "home"])
+        self.assertEqual(code, 0)
+        self.assertEqual(calls, ["recent", "newest"])
+        self.assertEqual(json.loads(output.getvalue())["albums"][0]["id"], "a7")
+
     def test_real_recent_new_and_liked_endpoint_contracts(self):
         for kind in ("recent", "newest", "alphabeticalByName"):
             with self.subTest(kind=kind):

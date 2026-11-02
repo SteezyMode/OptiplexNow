@@ -457,6 +457,13 @@ static void music_opened(GtkWidget *unused,gpointer data){
  if(view->closing || view->vault_busy || view->busy || !*cfg[6])return;
  if(view->bound_url && !g_strcmp0(view->bound_url,cfg[6]) &&
     view->app_password)return;
+ if(view->bound_url && g_strcmp0(view->bound_url,cfg[6])){
+  /* Credentials are strictly scoped to the originally authorized server. */
+  wipe_free(view->app_password);
+  view->app_password=NULL;
+  g_free(view->bound_url);
+  view->bound_url=NULL;
+ }
  if(view->vault_attempted_url &&
     !g_strcmp0(view->vault_attempted_url,cfg[6]))return;
  g_free(view->vault_attempted_url);

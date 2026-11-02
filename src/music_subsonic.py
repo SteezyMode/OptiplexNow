@@ -29,6 +29,7 @@ MAX_CATALOG = 1024 * 1024
 MAX_STDIN = 8192
 MAX_TEXT = 512
 ALBUM_PAGE_SIZE = 200
+SONG_PAGE_SIZE = 200
 
 
 class MusicTransportError(Exception):
@@ -228,6 +229,8 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 
     if operation in ("albums", "home", "recent", "new"):
         found = [("album", x) for x in items(result.get("albums"))]
+    elif operation in ("songs", "random_songs"):
+        found = [("song", x) for x in items(result.get("songs"))]
     elif operation == "liked":
         saved = result.get("starred") or {}
         found = [(kind, item) for kind in ("album", "song", "artist")
@@ -284,7 +287,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -356,6 +359,22 @@ def main(argv: list[str] | None = None) -> int:
                              {"type": "newest", "size": "100", "offset": "0"})
                 albums = data.get("albumList2", {}).get("album", [])
             result = {"albums": albums}
+        elif args.operation in ("songs", "random_songs"):
+            if args.operation == "random_songs":
+                data = query(args.base_url, "getRandomSongs", auth, {"size": str(SONG_PAGE_SIZE)})
+                result = {"songs": data.get("randomSongs", {}).get("song", [])}
+            else:
+                offset = 0
+                if args.value is not None:
+                    if not args.value.isascii() or not args.value.isdecimal():
+                        raise MusicTransportError("Invalid song page offset.")
+                    offset = int(args.value)
+                    if offset > 1_000_000 or offset % SONG_PAGE_SIZE:
+                        raise MusicTransportError("Invalid song page offset.")
+                data = query(args.base_url, "search3", auth, {
+                    "query": "", "artistCount": "0", "albumCount": "0",
+                    "songCount": str(SONG_PAGE_SIZE), "songOffset": str(offset)})
+                result = {"songs": data.get("searchResult3", {}).get("song", [])}
         elif args.operation == "liked":
             data = query(args.base_url, "getStarred2", auth)
             result = {"starred": data.get("starred2", {})}

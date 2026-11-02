@@ -538,6 +538,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
  if(view && !view->closing){
   view->busy=FALSE;
   if(!ok || !g_subprocess_get_successful(job->process)){
+   view->hero_art_serial++;
+   if(view->hero_row)gtk_widget_hide(view->hero_row);
    status_set(view,"Music library unavailable. Check URL, app password, and server access.");
   }else{
    int count=render_rows(view,output);
@@ -854,6 +856,7 @@ static void music_connect(GtkWidget *unused,gpointer data){
 
 static void music_nav(GtkWidget *button,gpointer data){
  MusicView *view=data;
+ if(view->busy || view->closing)return;
  const char *operation=g_object_get_data(G_OBJECT(button),"music-operation");
  const char *heading=g_object_get_data(G_OBJECT(button),"music-heading");
  if(operation){
@@ -866,6 +869,7 @@ static void music_nav(GtkWidget *button,gpointer data){
 static void music_search(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
+ if(view->busy || view->closing)return;
  const char *value=gtk_entry_get_text(GTK_ENTRY(view->search));
  if(value && *value){
   view->hero_art_serial++;

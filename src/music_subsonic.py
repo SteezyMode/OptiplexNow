@@ -238,7 +238,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
     elif operation == "artists":
         found = [("artist", artist) for index in items(result.get("indexes"))
                  for artist in items(index.get("artist"))][:1000]
-    elif operation == "playlists":
+    elif operation in ("playlists", "playlist_options"):
         found = [("playlist", x) for x in items(result.get("playlists"))]
     elif operation in ("album", "playlist"):
         key = "song" if operation == "album" else "entry"
@@ -278,7 +278,13 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
         cover_id = item.get("coverArt") or item.get("id") or ""
         if not isinstance(cover_id, str):
             cover_id = ""
-        fields = (kind, identifier[:512], title[:2048], artist[:1024], cover_id[:512])
+        album = item.get("album") or ""
+        if not isinstance(album, str):
+            album = ""
+        starred = ("1" if (operation == "liked" and kind == "song") or
+                   bool(item.get("starred")) else "0")
+        fields = (kind, identifier[:512], title[:2048], artist[:1024],
+                  cover_id[:512], album[:1024], starred)
         lines.append("\t".join(base64.b64encode(x.encode("utf-8")).decode("ascii")
                                for x in fields))
     return "\n".join(lines) + ("\n" if lines else "")
@@ -287,7 +293,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "like", "unlike", "playlist_options", "playlist_add", "playlist_create"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -322,7 +328,7 @@ def main(argv: list[str] | None = None) -> int:
         auth = _auth_from_stdin(args.auth_format)
         # Authenticate and validate before making any outbound request.
         endpoint_for(args.base_url, "ping")
-        if args.operation in ("album", "artist", "playlist", "stream", "art", "search") and not args.value:
+        if args.operation in ("album", "artist", "playlist", "stream", "art", "search", "like", "unlike", "playlist_add", "playlist_create") and not args.value:
             raise MusicTransportError("This music operation needs a selection.")
         if args.operation == "stream":
             stream(args.base_url, auth, args.value)
@@ -375,6 +381,28 @@ def main(argv: list[str] | None = None) -> int:
                     "query": "", "artistCount": "0", "albumCount": "0",
                     "songCount": str(SONG_PAGE_SIZE), "songOffset": str(offset)})
                 result = {"songs": data.get("searchResult3", {}).get("song", [])}
+        elif args.operation in ("like", "unlike"):
+            track_id = _bounded_text(args.value, "song ID", 512)
+            query(args.base_url, "star" if args.operation == "like" else "unstar",
+                  auth, {"id": track_id})
+            result = {"ok": True}
+        elif args.operation in ("playlist_add", "playlist_create"):
+            playlist_id_or_name, sep, track_id = args.value.rpartition("|")
+            if not sep:
+                raise MusicTransportError("Invalid playlist selection.")
+            track_id = _bounded_text(track_id, "song ID", 512)
+            target = _bounded_text(playlist_id_or_name,
+                                   "playlist", 256 if args.operation == "playlist_create" else 512)
+            if args.operation == "playlist_create":
+                query(args.base_url, "createPlaylist", auth,
+                      {"name": target, "songId": track_id})
+            else:
+                query(args.base_url, "updatePlaylist", auth,
+                      {"playlistId": target, "songIdToAdd": track_id})
+            result = {"ok": True}
+        elif args.operation == "playlist_options":
+            data = query(args.base_url, "getPlaylists", auth)
+            result = {"playlists": data.get("playlists", {}).get("playlist", [])}
         elif args.operation == "liked":
             data = query(args.base_url, "getStarred2", auth)
             result = {"starred": data.get("starred2", {})}

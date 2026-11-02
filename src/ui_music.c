@@ -33,7 +33,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
- GtkWidget *player_bar, *playing_label, *playing_artist_label, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
+ GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *load_more, *load_more_songs, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
  GQueue *pending_art;
@@ -247,6 +247,17 @@ static void music_update_controls(MusicView *view){
     ?g_ptr_array_index(view->queue,view->queue_index):NULL;
  gtk_label_set_text(GTK_LABEL(view->playing_label),
      current?current->title:"Now playing");
+ if(view->playing_like && current){
+  gtk_button_set_image(GTK_BUTTON(view->playing_like),
+      gtk_image_new_from_icon_name(current->liked?"emblem-favorite-symbolic":
+      "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+  gtk_widget_set_tooltip_text(view->playing_like,
+      current->liked?"Unlike song":"Like song");
+  g_object_set_data_full(G_OBJECT(view->playing_like),"music-id",
+                         g_strdup(current->id),g_free);
+  g_object_set_data(G_OBJECT(view->playing_like),"music-liked",
+                         GINT_TO_POINTER(current->liked?2:1));
+ }
  if(view->playing_artist_label){
   char *by=current && current->album && *current->album
       ?g_strdup_printf("%s · %s",current->artist,current->album)
@@ -1034,6 +1045,11 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
    }
    const char *kind=job->kind;
+   if(view->playing_like && view->queue_index>=0 &&
+      view->queue_index<(int)view->queue->len &&
+      !g_strcmp0(((MusicTrack*)g_ptr_array_index(
+       view->queue,view->queue_index))->id,job->song_id))
+      music_update_controls(view);
    status_set(view,!g_strcmp0(kind,"album")?
        (liked?"Album liked.":"Album unliked."):
        !g_strcmp0(kind,"artist")?
@@ -2186,6 +2202,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_artist_label),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_artist_label,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(controls),now_playing,TRUE,TRUE,0);
+ view->playing_like=music_icon_button("non-starred-symbolic","Like current song");
+ gtk_widget_set_name(view->playing_like,"music-playing-like");
+ g_object_set_data(G_OBJECT(view->playing_like),"music-view",view);
+ g_object_set_data(G_OBJECT(view->playing_like),"music-kind",(gpointer)"song");
+ g_signal_connect(view->playing_like,"clicked",
+                  G_CALLBACK(music_like_clicked),view->playing_like);
+ gtk_box_pack_start(GTK_BOX(controls),view->playing_like,FALSE,FALSE,0);
  view->shuffle_button=gtk_toggle_button_new();
  gtk_button_set_image(GTK_BUTTON(view->shuffle_button),
     gtk_image_new_from_icon_name("media-playlist-shuffle-symbolic",GTK_ICON_SIZE_BUTTON));

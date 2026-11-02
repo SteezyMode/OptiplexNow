@@ -13,18 +13,21 @@
 #include <stdio.h>
 
 typedef struct {
- char *id, *title, *artist, *cover_id;
+ char *id, *title, *artist, *album, *cover_id;
+ gboolean liked;
 } MusicTrack;
 static void track_free(gpointer data){
  MusicTrack *t=data;
  if(!t)return;
- g_free(t->id);g_free(t->title);g_free(t->artist);g_free(t->cover_id);g_free(t);
+ g_free(t->id);g_free(t->title);g_free(t->artist);g_free(t->album);g_free(t->cover_id);g_free(t);
 }
 static MusicTrack *track_copy(const MusicTrack *source){
  MusicTrack *t=g_new0(MusicTrack,1);
  t->id=g_strdup(source->id);
  t->title=g_strdup(source->title);
  t->artist=g_strdup(source->artist);
+ t->album=g_strdup(source->album);
+ t->liked=source->liked;
  t->cover_id=g_strdup(source->cover_id);
  return t;
 }
@@ -224,9 +227,13 @@ static void music_update_controls(MusicView *view){
     ?g_ptr_array_index(view->queue,view->queue_index):NULL;
  gtk_label_set_text(GTK_LABEL(view->playing_label),
      current?current->title:"Now playing");
- if(view->playing_artist_label)
-  gtk_label_set_text(GTK_LABEL(view->playing_artist_label),
-     current?current->artist:"");
+ if(view->playing_artist_label){
+  char *by=current && current->album && *current->album
+      ?g_strdup_printf("%s · %s",current->artist,current->album)
+      :g_strdup(current?current->artist:"");
+  gtk_label_set_text(GTK_LABEL(view->playing_artist_label),by);
+  g_free(by);
+ }
  gtk_button_set_image(GTK_BUTTON(view->pause_button),
        gtk_image_new_from_icon_name(view->paused?
           "media-playback-start-symbolic":"media-playback-pause-symbolic",
@@ -811,7 +818,7 @@ static gboolean music_status_tick(gpointer data){
 
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
-                           const char *cover){
+                           const char *cover,const char *album,gboolean liked){
  if(view->grid_mode && (!g_strcmp0(kind,"album") ||
       !g_strcmp0(kind,"artist") || !g_strcmp0(kind,"playlist"))){
   /* Familiar square-art library tiles, not a second navigation model. */
@@ -909,6 +916,8 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   song->id=g_strdup(id);
   song->title=g_strdup(title);
   song->artist=g_strdup(artist);
+  song->album=g_strdup(album);
+  song->liked=liked;
   song->cover_id=g_strdup(cover);
   g_object_set_data(G_OBJECT(button),"music-song-index",
                     GINT_TO_POINTER(view->visible_tracks->len+1));
@@ -944,22 +953,26 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  int count=0;
  for(int k=0;lines[k] && count<350;k++){
   if(!*lines[k])continue;
-  char **parts=g_strsplit(lines[k],"\t",6);
-  if(g_strv_length(parts)==5){
+  char **parts=g_strsplit(lines[k],"\t",8);
+  guint columns=g_strv_length(parts);
+  if(columns==5 || columns==7){
    char *kind=decode_field(parts[0]);
    char *id=decode_field(parts[1]);
    char *title=decode_field(parts[2]);
    char *artist=decode_field(parts[3]);
    char *cover=decode_field(parts[4]);
-   if(kind && id && title && artist && cover &&
+   char *album=columns==7?decode_field(parts[5]):g_strdup("");
+   char *liked=columns==7?decode_field(parts[6]):g_strdup("0");
+   if(kind && id && title && artist && cover && album && liked &&
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
        !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
        !strcmp(kind,"section"))){
-    music_add_item(view,kind,id,title,artist,cover);
+    music_add_item(view,kind,id,title,artist,cover,album,!strcmp(liked,"1"));
     ++count;
    }
    g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
+   g_free(album);g_free(liked);
   }
   g_strfreev(parts);
  }

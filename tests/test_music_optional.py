@@ -140,6 +140,17 @@ class OptionalMusicContract(unittest.TestCase):
         transport = (ROOT / 'src' / 'music_playback.c').read_text()
         self.assertIn('g_strdup_printf("%d",initial_volume)', transport)
 
+    def test_catalog_search_can_work_before_music_password_setup(self):
+        self.assertIn('const gboolean catalog=!g_strcmp0(operation,"catalog")',UI_MUSIC)
+        self.assertIn('const char *server_url=catalog?cfg[6]:view->bound_url;',UI_MUSIC)
+        self.assertIn('job->input=catalog?g_strdup(""):g_strdup_printf(',UI_MUSIC)
+        self.assertIn('query_start(view,connected?"search":"catalog",value,',UI_MUSIC)
+        self.assertIn('"Searching the music catalog..."',UI_MUSIC)
+        self.assertIn('gtk_widget_set_sensitive(button,FALSE);',UI_MUSIC)
+        transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
+        self.assertIn('if args.operation == "catalog":',transport)
+        self.assertIn('catalog_search(args.base_url',transport)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

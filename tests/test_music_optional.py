@@ -112,7 +112,7 @@ class OptionalMusicContract(unittest.TestCase):
     def test_album_pagination_keeps_previous_rows(self):
         self.assertIn("album_offset", UI_MUSIC)
         self.assertIn("job->append_albums", UI_MUSIC)
-        self.assertIn("render_rows(view,output,job->append_albums)", UI_MUSIC)
+        self.assertIn("render_rows(view,output,job->append_albums || job->append_songs)", UI_MUSIC)
         self.assertIn('music_button("Load more albums")', UI_MUSIC)
         self.assertIn('query_start(view,"albums",value,"All albums")', UI_MUSIC)
         self.assertIn('gtk_widget_set_sensitive(view->load_more,TRUE)', UI_MUSIC)

@@ -26,6 +26,8 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0)',UI)
         self.assertNotIn('gtk_box_pack_start(GTK_BOX(maincol),view->shuffle_all',UI)
         self.assertIn('g_strdup_printf("%s · %d %s",job->heading,',UI)
+        self.assertIn('char *heading=partial?g_strdup(job->heading):',UI)
+        self.assertIn('view->song_has_more',UI)
         self.assertIn('gtk_widget_set_no_show_all(view->shuffle_all,TRUE)',UI)
 
     def test_existing_search_and_song_interactions_stay_wired(self):
@@ -43,9 +45,9 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->library_revealer),expanded)',UI)
         self.assertIn('music_library_expand(view,FALSE)',UI)
         self.assertIn('gtk_widget_set_size_request(sidebar_rail,172,-1)',UI)
-        self.assertIn('gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),172)',UI)
+        self.assertIn('gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),162)',UI)
         self.assertIn('gtk_widget_set_name(sidebar_rail,"music-sidebar-rail")',UI)
-        self.assertIn('"#music-sidebar-rail {background:#1b241e',CSS)
+        self.assertIn('"#music-sidebar-rail {background:#181b19',CSS)
         self.assertIn('"#music-sidebar {background:transparent',CSS)
         self.assertIn('gtk_box_pack_end(GTK_BOX(sidebar_rail),advanced,FALSE,FALSE,0)',UI)
         self.assertIn('GtkWidget *filter=music_button(filter_labels[i])',UI)

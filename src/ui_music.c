@@ -140,8 +140,14 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
  if(!g_strcmp0(kind,"album") || !g_strcmp0(kind,"artist") ||
     !g_strcmp0(kind,"playlist")){
   query_start(view,kind,id,title);
- }else{
-  status_set(view,"Track playback is the next integration stage. Library browsing is available now.");
+ }else if(!g_strcmp0(kind,"song")){
+  int selected=GPOINTER_TO_INT(
+                 g_object_get_data(G_OBJECT(button),"music-song-index"))-1;
+  if(selected<0 || selected>=(int)view->visible_tracks->len)return;
+  g_ptr_array_set_size(view->queue,0);
+  for(guint i=0;i<view->visible_tracks->len;i++)
+   g_ptr_array_add(view->queue,track_copy(g_ptr_array_index(view->visible_tracks,i)));
+  music_start_track(view,selected);
  }
 }
 
@@ -174,11 +180,21 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  g_object_set_data_full(G_OBJECT(button),"music-kind",g_strdup(kind),g_free);
  g_object_set_data_full(G_OBJECT(button),"music-id",g_strdup(id),g_free);
  g_object_set_data_full(G_OBJECT(button),"music-title",g_strdup(title),g_free);
+ if(!g_strcmp0(kind,"song")){
+  MusicTrack *song=g_new0(MusicTrack,1);
+  song->id=g_strdup(id);
+  song->title=g_strdup(title);
+  song->artist=g_strdup(artist);
+  g_object_set_data(G_OBJECT(button),"music-song-index",
+                    GINT_TO_POINTER(view->visible_tracks->len+1));
+  g_ptr_array_add(view->visible_tracks,song);
+ }
  g_signal_connect(button,"clicked",G_CALLBACK(music_item_clicked),button);
  gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1);
 }
 
 static int render_rows(MusicView *view,const char *output){
+ g_ptr_array_set_size(view->visible_tracks,0);
  GList *children=gtk_container_get_children(GTK_CONTAINER(view->list));
  for(GList *p=children;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
  g_list_free(children);

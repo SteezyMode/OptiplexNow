@@ -128,6 +128,20 @@ class MusicPlaybackContract(unittest.TestCase):
             self.assertEqual(path,"/subsonic/rest/stream")
             self.assertIn("apiKey=never-in-url",posted)
             self.assertNotIn("apiKey",path)
+
+            # A Pause already requested during buffering must not be
+            # overridden by the first audio-chunk notification.
+            already_paused=threading.Event()
+            already_paused.set()
+            paused_output=[]
+            paused_failure=[]
+            paused_done=threading.Event()
+            player.stream_audio("http://127.0.0.1:%d" % server.server_port,
+                 {"apiKey":"never-in-url"}, "track-2", Decoder(),
+                 paused_output.append, paused_done, paused_failure,
+                 already_paused, threading.Lock())
+            self.assertEqual(paused_failure, [])
+            self.assertEqual(paused_output, ["PAUSED"])
         finally:
             server.shutdown()
             server.server_close()

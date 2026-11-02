@@ -34,7 +34,7 @@ typedef struct {
  NowMusicPlayback *playback;
  int queue_index;
  gboolean paused;
- char *playing_caption, *pending_cover_id;
+ char *playing_caption;
  guint64 hero_art_serial, playing_art_serial;
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
@@ -86,7 +86,6 @@ static void music_view_free(gpointer data){
  g_free(view->bound_url);
  g_free(view->vault_attempted_url);
  g_free(view->playing_caption);
- g_free(view->pending_cover_id);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
  g_free(view);
@@ -380,9 +379,15 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
  const char *kind=g_object_get_data(G_OBJECT(button),"music-kind");
  const char *id=g_object_get_data(G_OBJECT(button),"music-id");
  const char *title=g_object_get_data(G_OBJECT(button),"music-title");
+ const char *cover=g_object_get_data(G_OBJECT(button),"music-cover");
  if(!view || view->closing || !id || view->busy)return;
  if(!g_strcmp0(kind,"album") || !g_strcmp0(kind,"artist") ||
     !g_strcmp0(kind,"playlist")){
+  if(view->hero_row){
+   gtk_widget_show(view->hero_row);
+   gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+  }
+  music_art_start(view,cover,FALSE);
   query_start(view,kind,id,title);
  }else if(!g_strcmp0(kind,"song")){
   int selected=GPOINTER_TO_INT(
@@ -396,7 +401,8 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
 }
 
 static void music_add_item(MusicView *view,const char *kind,const char *id,
-                           const char *title,const char *artist){
+                           const char *title,const char *artist,
+                           const char *cover){
  GtkWidget *row=gtk_list_box_row_new();
  GtkWidget *button=gtk_button_new();
  gtk_widget_set_name(button,"music-row");
@@ -424,11 +430,13 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  g_object_set_data_full(G_OBJECT(button),"music-kind",g_strdup(kind),g_free);
  g_object_set_data_full(G_OBJECT(button),"music-id",g_strdup(id),g_free);
  g_object_set_data_full(G_OBJECT(button),"music-title",g_strdup(title),g_free);
+ g_object_set_data_full(G_OBJECT(button),"music-cover",g_strdup(cover),g_free);
  if(!g_strcmp0(kind,"song")){
   MusicTrack *song=g_new0(MusicTrack,1);
   song->id=g_strdup(id);
   song->title=g_strdup(title);
   song->artist=g_strdup(artist);
+  song->cover_id=g_strdup(cover);
   g_object_set_data(G_OBJECT(button),"music-song-index",
                     GINT_TO_POINTER(view->visible_tracks->len+1));
   g_ptr_array_add(view->visible_tracks,song);
@@ -447,19 +455,20 @@ static int render_rows(MusicView *view,const char *output){
  int count=0;
  for(int k=0;lines[k] && count<350;k++){
   if(!*lines[k])continue;
-  char **parts=g_strsplit(lines[k],"\t",5);
-  if(g_strv_length(parts)==4){
+  char **parts=g_strsplit(lines[k],"\t",6);
+  if(g_strv_length(parts)==5){
    char *kind=decode_field(parts[0]);
    char *id=decode_field(parts[1]);
    char *title=decode_field(parts[2]);
    char *artist=decode_field(parts[3]);
-   if(kind && id && title && artist &&
+   char *cover=decode_field(parts[4]);
+   if(kind && id && title && artist && cover &&
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist"))){
-    music_add_item(view,kind,id,title,artist);
+    music_add_item(view,kind,id,title,artist,cover);
     ++count;
    }
-   g_free(kind);g_free(id);g_free(title);g_free(artist);
+   g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
   }
   g_strfreev(parts);
  }

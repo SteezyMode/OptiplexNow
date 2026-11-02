@@ -86,7 +86,13 @@ def vault(op: str, server: str, form: str | None = None,
                 raise VaultError("The OS keyring did not save this device.")
             return "saved"
         if op == "clear":
+            # Local Forget must remove BOTH the playback capability and the
+            # separately revocable REST discovery/request capability.
+            # This does not revoke either token upstream; the host owner must
+            # use the Music device revoke action for server-side invalidation.
             Secret.password_clear_sync(schema, attributes, None)
+            from music_rest import clear_session
+            clear_session(canonical, provider=provider)
             return "cleared"
     except VaultError:
         raise

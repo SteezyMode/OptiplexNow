@@ -23,6 +23,8 @@ shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remo
 shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-web-gaming-admin')
 (pkg/'usr/lib/optiplex-now/open-web-gaming-admin').chmod(0o755)
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
+# Optional user-authenticated OpenSubsonic read/stream transport (inert until used).
+shutil.copy2(root/'src/music_subsonic.py',pkg/'usr/lib/optiplex-now/music_subsonic.py')
 # Shared theme used by main GTK UI and owner/host Python dialogs.
 shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
 shutil.copy2(root/'src/now_theme.py',pkg/'usr/lib/optiplex-now/now_theme.py')

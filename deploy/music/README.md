@@ -49,6 +49,15 @@ slskd's `50300/tcp` port is the **Soulseek peer-transfer listener**, not a web a
 
 The repository already contains `src/server-profile.py`, which exports the **reference host's four-service JSON Compose** with `gluetun`, `slskd`, `qbittorrent`, and `droppedneedle`. It also expects DroppedNeedle's encryption-key file, database, and an `/app/imports` mount. **That exporter does not operate on this two-service YAML example.** Do not point it at this file or claim compatibility; the legacy/reference host and its backup workflow must remain unchanged. Build a separate validated backup/restore path for this example before calling the module reproducible end to end, or deliberately extend the existing exporter with tests to support both shapes without weakening validation.
 
+## Music listening: one-time device sign-in
+
+The NOW Music tab is designed to **remember a successful first connection**, just like an ordinary music player. The user supplies a dedicated, revocable OpenSubsonic *user app password* only the first time they connect that device. After server authentication succeeds, the credential is stored in the Linux desktop's **Secret Service** (normally GNOME Keyring on Mint/Pop or KWallet on another desktop), keyed by the exact approved Music service URL. Opening Music on subsequent launches retrieves it asynchronously and loads the library without prompting for another password. If the service URL changes, existing credentials are **never forwarded** to the new destination. An explicit **Forget this device** action revokes the local saved entry; server-side revocation remains available independently.
+
+- The .deb requires `gir1.2-secret-1` and recommends `gnome-keyring`; an actual Secret Service provider must be available and unlocked for persistence. A normal desktop login can unlock the login keyring automatically, but auto-login/alternate PAM setups sometimes require a separate keyring unlock. Do **not** claim "remembered" if storing failed.
+- The app password is never placed in URI query strings, logs, ordinary NOW presets, Docker config, plaintext JSON, process arguments, or environment variables. It is transferred to the local helper only over stdin and stored in the OS-managed credential vault. Do not use DroppedNeedle's administrator login or slskd token.
+- If the keyring is absent, locked, or saving fails, the Music UI explicitly explains why it could not remember the device. Do not quietly fall back to a password prompt every startup as if that were normal operation.
+- A fresh install of NOW still does not automatically install music services or create user access. The native library/browser, keyring flow, and backend transport are staged in **unmerged draft PR #245**. Full end-to-end keyring persistence, playback and 640x500 hardware acceptance are **not yet complete**.
+
 ## Reduce unnecessary manual review (owner-opt-in only)
 
 DroppedNeedle v2.15.0 exposes an **acquisition-scoring threshold** at `Settings → Download clients → Acquisition quality → Download behavior (advanced)`:

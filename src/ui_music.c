@@ -1386,38 +1386,6 @@ static void music_forget_device(GtkWidget *unused,gpointer data){
  music_vault_begin(view,"clear",NULL);
 }
 
-static void music_connect(GtkWidget *unused,gpointer data){
- (void)unused;
- MusicView *view=data;
- if(view->busy || view->closing)return;
- const char *entered=gtk_entry_get_text(GTK_ENTRY(view->password));
- if(!entered || !*entered){
-  status_set(view,"Music needs a one-time app-password from DroppedNeedle Profile → Connect Apps, not your account password.");
-  return;
- }
- if(!*cfg[6]){
-  status_set(view,"Add your Music server URL under NOW Settings.");
-  return;
- }
- /* Connecting a different user or host must end any previous audio
-  * session before changing credentials and resetting the queue. */
- if(view->playback && now_music_playback_active(view->playback))
-  music_stop(view);
- g_free(view->bound_url);
- view->bound_url=g_strdup(cfg[6]);
- g_free(view->vault_attempted_url);
- view->vault_attempted_url=g_strdup(cfg[6]);
- wipe_free(view->app_password);
- view->app_password=g_strdup(entered);
- /* DroppedNeedle's apiKey authenticates the user by itself. An account
-  * username is NOT required and must not be sent alongside the key. */
- g_free(view->username);
- view->username=g_strdup("");
- gtk_entry_set_text(GTK_ENTRY(view->password),"");
- view->remember_pending=TRUE;
- query_start(view,"home",NULL,"Music Home");
-}
-
 static void music_nav(GtkWidget *button,gpointer data){
  MusicView *view=data;
  if(view->busy || view->closing)return;
@@ -1555,21 +1523,17 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_end(GTK_BOX(top),advanced,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->root),top,FALSE,FALSE,0);
 
- /* One compact, first-connection fallback. Once a saved authorization
-  * exists the entire row stays hidden; it is never part of playback UI.
-  * The final product will provision this through approved NOW enrollment. */
+ /* A registered NOW device requests Music through its approved SSH identity.
+  * Never require an end user to handle a DroppedNeedle provider credential. */
  GtkWidget *connect=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
- view->password=gtk_entry_new();
- gtk_entry_set_visibility(GTK_ENTRY(view->password),FALSE);
- gtk_entry_set_max_length(GTK_ENTRY(view->password),1024);
- gtk_entry_set_placeholder_text(GTK_ENTRY(view->password),"Music access key (one-time)");
- gtk_widget_set_tooltip_text(view->password,
-    "Use the separate app-password from DroppedNeedle Profile → Connect Apps, "
-    "not the regular account login password.");
- gtk_widget_set_hexpand(view->password,TRUE);
- gtk_box_pack_start(GTK_BOX(connect),view->password,TRUE,TRUE,0);
- GtkWidget *connect_button=music_button("Connect");
- g_signal_connect(connect_button,"clicked",G_CALLBACK(music_connect),view);
+ GtkWidget *connect_hint=gtk_label_new(
+     "Music isn't enabled for this device yet. Ask the server owner to approve Music.");
+ gtk_label_set_xalign(GTK_LABEL(connect_hint),0);
+ gtk_label_set_line_wrap(GTK_LABEL(connect_hint),TRUE);
+ gtk_widget_set_hexpand(connect_hint,TRUE);
+ gtk_box_pack_start(GTK_BOX(connect),connect_hint,TRUE,TRUE,0);
+ GtkWidget *connect_button=music_button("Retry Access");
+ g_signal_connect(connect_button,"clicked",G_CALLBACK(music_retry_access),view);
  gtk_box_pack_start(GTK_BOX(connect),connect_button,FALSE,FALSE,0);
  view->connect_panel=gtk_revealer_new();
  gtk_revealer_set_transition_type(GTK_REVEALER(view->connect_panel),

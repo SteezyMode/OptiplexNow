@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Private, local music-server snapshots. Import stages data; it never deploys it."""
 import hashlib
+import getpass
 import json
 import os
 from pathlib import Path, PurePosixPath
@@ -9,6 +10,10 @@ import subprocess
 import tarfile
 import tempfile
 import time
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from music_profile_crypto import EncryptedWriter, decrypt_verified, is_encrypted, validate_passphrase
 
 
 def run(args):
@@ -33,11 +38,20 @@ def inventory(roots):
     return files
 
 
-def export_profile(compose, output):
+def export_profile(compose, output, passphrase=None):
     compose = compose.resolve(strict=True)
     output = output.absolute()
     if output.exists():
         raise ValueError('Output already exists; choose a new filename.')
+    if not output.name.endswith('.bmprofile'):
+        raise ValueError('Use a .bmprofile filename for encrypted music backups.')
+    # Validate encryption and owner recovery before stopping any containers.
+    if passphrase is None:
+        passphrase = getpass.getpass('Backup recovery passphrase (16+ characters): ')
+        again = getpass.getpass('Confirm backup recovery passphrase: ')
+        if passphrase != again:
+            raise ValueError('Backup passphrases did not match. Nothing changed.')
+    validate_passphrase(passphrase)
     document = json.loads(compose.read_text())
     services = document.get('services', {})
     required = {'gluetun', 'slskd', 'qbittorrent', 'droppedneedle'}
@@ -96,8 +110,7 @@ def export_profile(compose, output):
     running = run(command + ['ps', '--status', 'running', '--services']).splitlines()
     if not running:
         running = []
-    ids = run(command + ['ps', '-aq']).splitlines()
-    metadata = json.loads(run(['docker', 'inspect', *ids])) if ids else []
+    # Never collect raw Docker inspection/environment data into backups.
     output.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix='.profile-', dir=output.parent)
     os.close(fd)
@@ -106,7 +119,7 @@ def export_profile(compose, output):
             if running:
                 subprocess.run(command + ['stop', *running], check=True)
             files = inventory(roots)
-            manifest = {'format': 'optiplex-now-music-profile', 'version': 1,
+            manifest = {'format': 'optiplex-now-music-profile', 'version': 2,
                         'created': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
                         'mounts': mapping, 'files': {n: digest(p) for n, p in files.items()},
                         'directories': [f'data/{label}' for label,p in roots.items() if p.is_dir()],
@@ -114,12 +127,14 @@ def export_profile(compose, output):
             with tempfile.TemporaryDirectory() as tmp:
                 info = Path(tmp)
                 (info / 'manifest.json').write_text(json.dumps(manifest, indent=2))
-                (info / 'containers.json').write_text(json.dumps(metadata, indent=2))
-                with tarfile.open(temporary, 'w:gz') as archive:
-                    archive.add(info / 'manifest.json', arcname='manifest.json')
-                    archive.add(info / 'containers.json', arcname='containers.json')
-                    for name, path in files.items():
-                        archive.add(path, arcname=name, recursive=False)
+                with open(temporary, 'wb') as outfile:
+                    with EncryptedWriter(outfile, passphrase) as encrypted:
+                        with tarfile.open(fileobj=encrypted, mode='w|gz') as archive:
+                            archive.add(info / 'manifest.json', arcname='manifest.json')
+                            for name, path in files.items():
+                                archive.add(path, arcname=name, recursive=False)
+                    outfile.flush()
+                    os.fsync(outfile.fileno())
             # Hard link commits without replacing another snapshot.
             os.link(temporary, output)
         finally:
@@ -127,11 +142,12 @@ def export_profile(compose, output):
                 subprocess.run(command + ['start', *running], check=True)
     finally:
         Path(temporary).unlink(missing_ok=True)
-    print(f'Saved private profile: {output}')
-    print('Keep this archive private. It is not encrypted. Media/download mounts are not included.')
+    print(f'Saved encrypted music profile: {output}')
+    print('Keep the recovery passphrase separately in a password manager.')
+    print('Media/download mounts are not included.')
 
 
-def import_profile(source, destination):
+def _import_plain_archive(source, destination, *, expected_version):
     destination = destination.absolute()
     if destination.exists():
         raise ValueError('Destination must be a new folder. Existing files will not be overwritten.')
@@ -147,10 +163,11 @@ def import_profile(source, destination):
         if 'manifest.json' not in names or archive.getmember('manifest.json').size > 10*1024**2:
             raise ValueError('Missing or oversized profile manifest.')
         manifest = json.load(archive.extractfile('manifest.json'))
-        if manifest.get('format') != 'optiplex-now-music-profile' or manifest.get('version') != 1:
+        if manifest.get('format') != 'optiplex-now-music-profile' or manifest.get('version') != expected_version:
             raise ValueError('Unsupported profile format.')
         expected = manifest['files']
-        if names != set(expected) | {'manifest.json', 'containers.json'}:
+        metadata_files = {'manifest.json', 'containers.json'} if expected_version == 1 else {'manifest.json'}
+        if names != set(expected) | metadata_files:
             raise ValueError('Archive does not match its manifest.')
         directories = manifest.get('directories', [])
         for name in directories:
@@ -182,6 +199,30 @@ def import_profile(source, destination):
     print('No services installed or started. Paths, permissions and networking still need deployment setup.')
 
 
+
+def import_profile(source, destination, passphrase=None, *, allow_legacy_plaintext=False):
+    """Stage only verified encrypted profiles by default.
+
+    Legacy v1 plaintext archives can be recovered with an explicit unsafe
+    compatibility flag. No existing archive is changed, upgraded, or deleted.
+    """
+    source = Path(source)
+    destination = Path(destination)
+    if is_encrypted(source):
+        if passphrase is None:
+            passphrase = getpass.getpass('Backup recovery passphrase: ')
+        validate_passphrase(passphrase)
+        destination_parent = destination.absolute().parent
+        destination_parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix='.verified-music-', dir=destination_parent) as tmp:
+            verified_tar = Path(tmp) / 'verified.tar.gz'
+            decrypt_verified(source, verified_tar, passphrase)
+            return _import_plain_archive(verified_tar, destination, expected_version=2)
+    if not allow_legacy_plaintext:
+        raise ValueError('This is an unencrypted legacy profile. Explicit legacy recovery required.')
+    return _import_plain_archive(source, destination, expected_version=1)
+
+
 def main():
     os.umask(0o077)
     print('OptiPlex Now — music server profiles (THIS COMPUTER)')
@@ -191,7 +232,7 @@ def main():
         if os.geteuid() != 0:
             raise ValueError('Export requires sudo on the server.')
         compose = input('Compose JSON path: ').strip()
-        output = input('Save archive as (full path ending .tar.gz): ').strip()
+        output = input('Save ENCRYPTED archive as (full path ending .bmprofile): ').strip()
         if not compose or not output:
             return
         export_profile(Path(compose), Path(output))
@@ -199,7 +240,14 @@ def main():
         source = input('Profile archive path: ').strip()
         dest = input('New destination folder: ').strip()
         if source and dest:
-            import_profile(Path(source), Path(dest))
+            old = not is_encrypted(Path(source))
+            legacy_ok = False
+            if old:
+                print('WARNING: this is an OLD UNENCRYPTED backup containing account secrets.')
+                legacy_ok = input('Type IMPORT LEGACY to recover this old file: ').strip() == 'IMPORT LEGACY'
+                if not legacy_ok:
+                    return
+            import_profile(Path(source), Path(dest), allow_legacy_plaintext=legacy_ok)
 
 
 if __name__ == '__main__':

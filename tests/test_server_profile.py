@@ -29,24 +29,87 @@ class Profiles(unittest.TestCase):
 
     def test_roundtrip_and_refuse_overwrite(self):
         with tempfile.TemporaryDirectory() as td:
-            b=Path(td); compose=self.fixture(b); output=b/'profile.tar.gz'
+            b=Path(td); compose=self.fixture(b); output=b/'profile.bmprofile'
             calls=[]
             with patch('builtins.input', return_value='EXPORT'), patch.object(m,'run',side_effect=['slskd\ndroppedneedle','id','[]']), patch.object(m.subprocess,'run',side_effect=lambda args,**kw:calls.append(args)):
-                m.export_profile(compose,output)
+                m.export_profile(compose,output,passphrase='fixture-recovery-passphrase-123456')
             self.assertEqual(calls[0][-3:],['stop','slskd','droppedneedle'])
             self.assertEqual(calls[1][-3:],['start','slskd','droppedneedle'])
-            dest=b/'imported'; m.import_profile(output,dest)
+            dest=b/'imported'; m.import_profile(output,dest,passphrase='fixture-recovery-passphrase-123456')
             self.assertEqual((dest/'data/droppedneedle-app-config/.env').read_text(),'DATA_ENC_KEY=test-only')
             self.assertEqual(output.stat().st_mode & 0o777,0o600)
-            with self.assertRaises(ValueError): m.import_profile(output,dest)
+            self.assertTrue(m.is_encrypted(output))
+            ciphertext=output.read_bytes()
+            self.assertNotIn(b'test database bytes',ciphertext)
+            self.assertNotIn(b'PRIVATE_KEY=test-only',ciphertext)
+            self.assertNotIn(b'DATA_ENC_KEY=test-only',ciphertext)
+            self.assertNotIn(b'containers.json',ciphertext)
+            with self.assertRaises(ValueError): m.import_profile(output,dest,passphrase='fixture-recovery-passphrase-123456')
+
+    def test_wrong_passphrase_and_corruption_never_stage_plaintext(self):
+        with tempfile.TemporaryDirectory() as td:
+            b = Path(td)
+            compose = self.fixture(b)
+            output = b/'safe.bmprofile'
+            with patch('builtins.input',return_value='EXPORT'), \
+                 patch.object(m,'run',return_value=''), \
+                 patch.object(m.subprocess,'run'):
+                m.export_profile(compose,output,passphrase='fixture-recovery-passphrase-123456')
+            for name, wrong, corrupt in (
+                ('wrong',True,False), ('tampered',False,True)
+            ):
+                candidate = b/(name+'.bmprofile')
+                candidate.write_bytes(output.read_bytes())
+                if corrupt:
+                    data=bytearray(candidate.read_bytes())
+                    data[-20] ^= 0xFF
+                    candidate.write_bytes(data)
+                dest=b/('import-'+name)
+                with self.assertRaises(ValueError):
+                    m.import_profile(candidate,dest,passphrase=(
+                        'incorrect-recovery-passphrase-123' if wrong
+                        else 'fixture-recovery-passphrase-123456'))
+                self.assertFalse(dest.exists())
+                self.assertFalse(list(b.glob('.verified-music-*')))
+
+    def test_legacy_import_explicit_only_and_does_not_convert_existing_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            b=Path(td)
+            archive=b/'legacy.tar.gz'
+            manifest={'format':'optiplex-now-music-profile','version':1,
+                      'files':{'data/example':m.hashlib.sha256(b'old').hexdigest()},
+                      'directories':[]}
+            with tarfile.open(archive,'w:gz') as tar:
+                for name,payload in (
+                    ('manifest.json',json.dumps(manifest).encode()),
+                    ('containers.json',b'[]'),
+                    ('data/example',b'old'),
+                ):
+                    member=tarfile.TarInfo(name)
+                    member.size=len(payload)
+                    tar.addfile(member,io.BytesIO(payload))
+            with self.assertRaisesRegex(ValueError,'Explicit legacy recovery'):
+                m.import_profile(archive,b/'out')
+            m.import_profile(archive,b/'out',allow_legacy_plaintext=True)
+            self.assertEqual((b/'out/data/example').read_bytes(),b'old')
+            self.assertTrue(archive.read_bytes().startswith(b'\x1f\x8b'))
+
+    def test_export_requires_encrypted_extension_before_any_docker_action(self):
+        with tempfile.TemporaryDirectory() as td:
+            b=Path(td); compose=self.fixture(b)
+            with patch.object(m,'run') as docker:
+                with self.assertRaisesRegex(ValueError,'bmprofile'):
+                    m.export_profile(compose,b/'unsafe.tar.gz',
+                                     passphrase='fixture-recovery-passphrase-123456')
+                docker.assert_not_called()
 
     def test_restart_after_export_error(self):
         with tempfile.TemporaryDirectory() as td:
             b=Path(td); compose=self.fixture(b); calls=[]
             with patch('builtins.input',return_value='EXPORT'), patch.object(m,'run',side_effect=['slskd','id','[]']), patch.object(m.subprocess,'run',side_effect=lambda args,**kw:calls.append(args)), patch.object(m,'digest',side_effect=OSError('disk failure')):
-                with self.assertRaises(OSError): m.export_profile(compose,b/'archive')
+                with self.assertRaises(OSError): m.export_profile(compose,b/'archive.bmprofile',passphrase='fixture-recovery-passphrase-123456')
             self.assertEqual(calls[-1][-2:],['start','slskd'])
-            self.assertFalse((b/'archive').exists())
+            self.assertFalse((b/'archive.bmprofile').exists())
 
     def test_reject_traversal_and_symlink(self):
         for name,link in [('../outside',False),('link',True)]:
@@ -56,7 +119,7 @@ class Profiles(unittest.TestCase):
                     member=tarfile.TarInfo(name)
                     if link: member.type=tarfile.SYMTYPE; member.linkname='/etc'
                     t.addfile(member,io.BytesIO())
-                with self.assertRaises(ValueError): m.import_profile(archive,b/'dest')
+                with self.assertRaises(ValueError): m.import_profile(archive,b/'dest',allow_legacy_plaintext=True)
                 self.assertFalse((b/'dest').exists())
 
     def test_reject_checksum_mismatch(self):
@@ -66,7 +129,7 @@ class Profiles(unittest.TestCase):
             with tarfile.open(archive,'w:gz') as t:
                 for name,value in {'manifest.json':json.dumps(manifest).encode(),'containers.json':b'[]','data/file':b'changed'}.items():
                     member=tarfile.TarInfo(name); member.size=len(value); t.addfile(member,io.BytesIO(value))
-            with self.assertRaises(ValueError): m.import_profile(archive,b/'dest')
+            with self.assertRaises(ValueError): m.import_profile(archive,b/'dest',allow_legacy_plaintext=True)
             self.assertFalse((b/'dest').exists())
 
 if __name__=='__main__': unittest.main()

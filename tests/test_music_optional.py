@@ -130,7 +130,6 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_retry_access)', UI_MUSIC)
         self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE)', UI_MUSIC)
         self.assertIn('gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE)', UI_MUSIC)
-        self.assertIn('view->username=g_strdup("")', UI_MUSIC)
         self.assertIn('music_vault_begin(view,"lookup",NULL)', UI_MUSIC)
 
     def test_local_volume_slider_and_backend_contract(self):

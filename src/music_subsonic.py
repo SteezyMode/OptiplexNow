@@ -179,8 +179,12 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
     def items(source: object) -> list[dict[str, Any]]:
         return [x for x in source if isinstance(x, dict)][:1000] if isinstance(source, list) else []
 
-    if operation == "albums":
+    if operation in ("albums", "home", "recent", "new"):
         found = [("album", x) for x in items(result.get("albums"))]
+    elif operation == "liked":
+        saved = result.get("starred") or {}
+        found = [(kind, item) for kind in ("album", "song", "artist")
+                 for item in items(saved.get(kind))][:1000]
     elif operation == "artists":
         found = [("artist", artist) for index in items(result.get("indexes"))
                  for artist in items(index.get("artist"))][:1000]
@@ -217,7 +221,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "albums", "artists", "search", "album", "artist", "playlists", "playlist", "stream"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -234,9 +238,19 @@ def main(argv: list[str] | None = None) -> int:
         if args.operation == "ping":
             data = query(args.base_url, "ping", auth)
             result = {"ok": True, "version": data.get("version", "")}
-        elif args.operation == "albums":
-            data = query(args.base_url, "getAlbumList2", auth, {"type": "alphabeticalByName", "size": "100", "offset": "0"})
+        elif args.operation in ("home", "albums", "recent", "new"):
+            sort = {
+                "home": "recent",
+                "albums": "alphabeticalByName",
+                "recent": "recent",
+                "new": "newest",
+            }[args.operation]
+            data = query(args.base_url, "getAlbumList2", auth,
+                         {"type": sort, "size": "100", "offset": "0"})
             result = {"albums": data.get("albumList2", {}).get("album", [])}
+        elif args.operation == "liked":
+            data = query(args.base_url, "getStarred2", auth)
+            result = {"starred": data.get("starred2", {})}
         elif args.operation == "artists":
             data = query(args.base_url, "getArtists", auth)
             result = {"indexes": data.get("artists", {}).get("index", [])}

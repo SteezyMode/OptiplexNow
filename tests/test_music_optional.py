@@ -62,6 +62,24 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('gir1.2-secret-1', package)
         self.assertIn("music_keyring.py", package)
 
+    def test_standard_music_navigation_and_advanced_are_separate(self):
+        # Match familiar Home, Search, Your Library and player navigation.
+        self.assertIn('gtk_label_new(i==2?"YOUR LIBRARY":"BROWSE")', UI_MUSIC)
+        self.assertIn('const char *ops[]={"home",NULL,"playlists","artists","albums",', UI_MUSIC)
+        self.assertIn('const char *titles[]={"Home","Search","Playlists","Artists",', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_focus_search)', UI_MUSIC)
+        self.assertIn('gtk_widget_grab_focus(view->search);', UI_MUSIC)
+        self.assertIn('gtk_menu_button_set_popup(GTK_MENU_BUTTON(advanced),menu);', UI_MUSIC)
+        self.assertIn('gtk_menu_item_new_with_label("Advanced · DroppedNeedle")', UI_MUSIC)
+        self.assertIn('gtk_menu_item_new_with_label("Forget this device")', UI_MUSIC)
+        self.assertNotIn('gtk_box_pack_end(GTK_BOX(sidebar),forget', UI_MUSIC)
+        self.assertNotIn('gtk_box_pack_end(GTK_BOX(sidebar),settings', UI_MUSIC)
+        self.assertIn('"#music-library-label', MAIN)
+        contract = (ROOT / "docs" / "MUSIC-UX.md").read_text(encoding="utf-8")
+        self.assertIn("Your Library", contract)
+        self.assertIn("Downloads", contract)
+        self.assertIn("contextual", contract.lower())
+
     def test_real_music_feeds_and_private_cover_art_in_ui(self):
         transport = (ROOT / "src/music_subsonic.py").read_text(encoding="utf-8")
         for kind in ('"home"', '"albums"', '"recent"', '"new"', '"liked"',

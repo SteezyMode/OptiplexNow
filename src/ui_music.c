@@ -934,7 +934,10 @@ static void query_start(MusicView *view,const char *operation,
   status_set(view,"Music playback is not connected on this device.");
   return;
  }
- if((!g_strcmp0(operation,"search") || catalog) && (!value || !*value)){
+ /* Only text search needs a query. Discover is a standalone page:
+  * DroppedNeedle GET /discover has no query parameter. */
+ if((!g_strcmp0(operation,"search") || !g_strcmp0(operation,"catalog")) &&
+    (!value || !*value)){
   status_set(view,"Enter an artist, album, or song to search.");
   return;
  }

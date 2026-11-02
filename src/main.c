@@ -159,6 +159,7 @@ static const char *CSS =
 "#music-sidebar {background:#1b211d;border:1px solid #313a32;border-radius:9px;padding:7px;}"
 "#music-sidebar button#music-nav.now-action {background:transparent;border:0;border-radius:6px;padding:8px 11px;min-height:32px;}"
 "#music-sidebar button#music-nav.now-action:hover {background:#303a32;border:0;}"
+"#music-library-label {font-size:10px;font-weight:700;color:#b3bcb5;padding-left:9px;}"
 "#music-main {background:#1a211c;border-radius:9px;padding:12px;}"
 "#music-section-title {font-size:19px;font-weight:700;color:#f0eee9;}"
 "#music-hero {background:#273029;border-radius:9px;padding:11px;}"

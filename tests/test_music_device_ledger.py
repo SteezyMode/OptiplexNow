@@ -47,7 +47,10 @@ class LedgerTests(unittest.TestCase):
             self.assertIsNotNone(get_device_locked(fd,"1002"))
         path=Path(self.tmp.name)/"private"/"owner-music-grants.json"
         self.assertEqual(stat.S_IMODE(path.stat().st_mode),0o600)
-        self.assertNotIn("password",path.read_text())
+        # Identifier keys are expected (app_password_id); actual values
+        # and bearer secrets must never be present in the revocation ledger.
+        self.assertNotIn("client-app-secret",path.read_text())
+        self.assertNotIn("host-admin-password",path.read_text())
         self.assertNotIn("rest_token",path.read_text())
         self.assertNotIn("secret",path.read_text())
 

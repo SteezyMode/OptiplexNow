@@ -3181,6 +3181,7 @@ int main(int argc,char**argv) {
  main_pages=gtk_stack_new();
  /* A hidden Settings/Downloads page must not define the minimum window width. */
  gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE);
  /* Top navigation is tab-like: avoid a sliding offscreen surface during
   * the first allocation of the nested Downloads GTK stacks. */
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE);

@@ -157,6 +157,10 @@ def revoke_device(data, client_id):
     validate(data)
     for device in data["devices"]:
         if device["client_id"] == client_id and not device["revoked"]:
+            if "music" in device["services"]:
+                # Require the host-owned upstream revoke path FIRST so a
+                # DroppedNeedle app-password cannot outlive a NOW revoke.
+                raise PolicyError("Revoke Music provider credentials before device")
             device["revoked"] = True
             return
     raise PolicyError("No active grant for device")
@@ -186,9 +190,15 @@ def grant_music(data, client_id, clients_reply, *, owner_confirmed=False):
     raise PolicyError("Music device has no active NOW owner approval")
 
 
-def revoke_music(data, client_id):
-    """Host owner removes Music without revoking unrelated Games access."""
+def revoke_music(data, client_id, *, upstream_revoked=False):
+    """Remove Music only AFTER its upstream app/session keys were revoked.
+
+    Otherwise a locally revoked NOW device can still use a valid direct
+    DroppedNeedle token outside NOW, bypassing the revoked policy.
+    """
     validate(data)
+    if upstream_revoked is not True:
+        raise PolicyError("Revoke DroppedNeedle credentials before removing Music access")
     for device in data["devices"]:
         if device["client_id"] == client_id and not device["revoked"]:
             if "music" not in device["services"]:

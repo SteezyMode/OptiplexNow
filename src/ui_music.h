@@ -4,8 +4,9 @@
 #include <gtk/gtk.h>
 
 /* Optional user-only library browser. No music service is required by Alpha 1.
- * It uses a dedicated per-user OpenSubsonic app password, held in memory
- * for the session only, and delegates HTTP to music_subsonic.py over stdin.
+ * It uses a dedicated per-user OpenSubsonic app password, remembered in
+ * the user's OS Secret Service after one successful connection and loaded
+ * automatically on later runs. Live API requests use stdin only.
  * No slskd/admin credentials are ever needed by this widget.
  */
 GtkWidget *now_music_build(void (*open_url)(const char *),

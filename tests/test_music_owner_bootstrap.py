@@ -100,17 +100,29 @@ class BootstrapTests(unittest.TestCase):
         self.assertFalse(self.account.exists())
         self.assertEqual(self.api.calls,[])
 
-    def test_upstream_setup_failure_preserves_recovery_credential(self):
+    def test_upstream_setup_failure_retries_with_the_same_recovery_credential(self):
         self.api.fail_create=True
         with self.assertRaises(ProvisionError):
             self.bootstrap()
-        data=read_owner_music_account(self.account)
-        self.assertEqual(data["password"],self.api.created[1] if self.api.created else data["password"])
+        prepared=read_owner_music_account(self.account)
         self.assertEqual(self.account.stat().st_mode & 0o777,0o600)
+        self.api.fail_create=False
+        self.assertEqual(self.bootstrap(),"created")
+        saved=read_owner_music_account(self.account)
+        self.assertEqual(saved,prepared,"Retry must not generate a new password")
+        self.assertEqual(self.api.created,(saved["username"],saved["password"]))
+        self.assertEqual(self.bootstrap(),"already-linked")
+        self.assertEqual(self.api.calls.count(("POST","/auth/setup")),2)
+
+    def test_incomplete_config_must_not_replace_existing_upstream_account(self):
+        self.api.fail_create=True
         with self.assertRaises(ProvisionError):
             self.bootstrap()
-        # Owner must explicitly resolve this ambiguous state; never reset
-        # the credential or create a second account accidentally.
+        prepared=read_owner_music_account(self.account)
+        self.api.required=False  # Another user may have completed setup.
+        with self.assertRaisesRegex(ProvisionError,"needs recovery"):
+            self.bootstrap()
+        self.assertEqual(read_owner_music_account(self.account),prepared)
         self.assertEqual(self.api.calls.count(("POST","/auth/setup")),1)
 
     def test_existing_config_for_another_owner_is_rejected(self):

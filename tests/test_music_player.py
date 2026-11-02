@@ -59,6 +59,17 @@ class MusicPlaybackContract(unittest.TestCase):
                 with self.subTest(invalid=invalid):
                     self.assertFalse(player.socket_volume("/private/control.sock", invalid))
 
+    def test_absolute_seek_is_bounded_and_only_uses_private_mpv_ipc(self):
+        with mock.patch.object(player.socket,"socket",return_value=FakeSocket()):
+            self.assertTrue(player.socket_seek("/private/control.sock",0))
+            self.assertEqual(FakeSocket.sent,b'{"command":["seek",0,"absolute"]}\n')
+            self.assertTrue(player.socket_seek("/private/control.sock",300))
+            self.assertEqual(FakeSocket.sent,b'{"command":["seek",300,"absolute"]}\n')
+            for bad in (-1,604801,True,1.5,"42",None):
+                with self.subTest(bad=bad):
+                    self.assertFalse(player.socket_seek("/private/control.sock",bad))
+            self.assertIsNone(player._mpv_query("/private/control.sock","password"))
+
     def test_invalid_startup_volume_fails_before_decoder_launch(self):
         out = io.StringIO()
         with mock.patch.object(player.subprocess, "Popen") as launched:
@@ -69,7 +80,10 @@ class MusicPlaybackContract(unittest.TestCase):
 
     def test_mpv_commands_do_not_contain_keys_or_urls(self):
         content = (ROOT / "src" / "music_player.py").read_text()
-        self.assertIn('stdin=subprocess.PIPE', content)
+        self.assertIn('stdin=subprocess.DEVNULL', content)
+        self.assertIn('MusicStreamGateway(server,auth["apiKey"],track_id)',content)
+        self.assertIn('local_url=gateway.start()',content)
+        self.assertIn('gateway.close()',content)
         self.assertIn('stdout=subprocess.DEVNULL', content)
         self.assertIn('stderr=subprocess.DEVNULL', content)
         self.assertIn('close_fds=True', content)

@@ -32,7 +32,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('view->open_url(cfg[6])', UI_MUSIC)
         self.assertIn('wipe_free(view->app_password);', UI_MUSIC)
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)
-        self.assertIn('view->bound_url=g_strdup(cfg[6]);', UI_MUSIC)
+        self.assertIn('view->bound_url=g_strdup(job->url);', UI_MUSIC)
         self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE', UI_MUSIC)
         self.assertIn("music_play_visible(view,selected);", UI_MUSIC)
         self.assertIn("now_music_playback_start(view->playback", UI_MUSIC)

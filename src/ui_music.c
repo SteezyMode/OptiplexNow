@@ -449,6 +449,8 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  gtk_box_pack_start(GTK_BOX(content),primary,FALSE,FALSE,0);
  char *detail=g_strdup_printf("%s%s%s",!g_strcmp0(kind,"song")?"Track · ":
                                !g_strcmp0(kind,"artist")?"Artist · ":
+                               !g_strcmp0(kind,"catalog_artist")?"Discover artist · ":
+                               !g_strcmp0(kind,"catalog_album")?"Discover album · ":
                                !g_strcmp0(kind,"playlist")?"Playlist · ":"Album · ",
                                artist && *artist?artist:"",
                                "");
@@ -475,7 +477,15 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
                     GINT_TO_POINTER(view->visible_tracks->len+1));
   g_ptr_array_add(view->visible_tracks,song);
  }
- g_signal_connect(button,"clicked",G_CALLBACK(music_item_clicked),button);
+ if(g_str_has_prefix(kind,"catalog_")){
+  /* Read-only discovery until the owner-approved REST request grant exists.
+   * Never offer an inoperative Add to Library button. */
+  gtk_widget_set_sensitive(button,FALSE);
+  gtk_widget_set_tooltip_text(button,
+      "Music request access will be enabled after owner device approval.");
+ }else{
+  g_signal_connect(button,"clicked",G_CALLBACK(music_item_clicked),button);
+ }
  gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1);
 }
 
@@ -500,7 +510,8 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
    char *cover=decode_field(parts[4]);
    if(kind && id && title && artist && cover &&
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
-       !strcmp(kind,"artist") || !strcmp(kind,"playlist"))){
+       !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
+       !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist"))){
     music_add_item(view,kind,id,title,artist,cover);
     ++count;
    }

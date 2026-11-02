@@ -17,6 +17,7 @@ gboolean now_music_playback_start(NowMusicPlayback *playback,
                                   const char *app_password, const char *track_id,
                                   int initial_volume);
 void now_music_playback_volume(NowMusicPlayback *playback, int level);
+void now_music_playback_seek(NowMusicPlayback *playback, int seconds);
 void now_music_playback_pause(NowMusicPlayback *playback, gboolean paused);
 void now_music_playback_stop(NowMusicPlayback *playback);
 gboolean now_music_playback_active(const NowMusicPlayback *playback);

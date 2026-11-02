@@ -31,6 +31,7 @@
 #include "downloads_flow.h"
 #include "ui_navigation.h"
 #include "ui_games.h"
+#include "ui_music.h"
 #include "ui_settings.h"
 #include "ui_wizard.h"
 #include "ui_state.h"
@@ -89,7 +90,6 @@ static GtkWidget *tray_menu = NULL;
 static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static GtkWidget *games_page_status = NULL;
 static GtkWidget *videos_status=NULL;
-static GtkWidget *music_status=NULL;
 static int tray_restoring = 0;
 static guint geometry_save_timer=0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
@@ -1440,23 +1440,7 @@ static void on_videos_tab(GtkWidget*w,gpointer data){
  * credentials through NOW or assume that it exists on a fresh alpha host. */
 static void on_music_tab(GtkWidget*w,gpointer data){
  (void)w;(void)data;
- if(music_status)
-  gtk_label_set_text(GTK_LABEL(music_status),*cfg[6]
-   ? "Use your DroppedNeedle sign-in to discover and request music."
-   : "Music is optional. Configure its URL under Settings to enable it.");
  now_nav_show_page(main_pages,"music");
-}
-static void music_open_browser(GtkWidget*w,gpointer data){
- (void)w;(void)data;
- if(!*cfg[6] || !now_safe_preset_url(cfg[6])){
-  if(music_status)
-   gtk_label_set_text(GTK_LABEL(music_status),
-    "Music URL missing or invalid. Open Settings to configure it.");
-  say("ADD A VERIFIED MUSIC URL IN SETTINGS");
-  return;
- }
- browser_open(cfg[6]);
- say("OPENING MUSIC DISCOVERY");
 }
 
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
@@ -3228,36 +3212,11 @@ int main(int argc,char**argv) {
  add(videos_home,video_advanced,0);
  gtk_stack_add_named(GTK_STACK(main_pages),videos_home,"videos");
  gtk_widget_show_all(videos_home);
- /* Post-alpha optional music companion. The upstream service remains
-  * responsible for login, search, requesting, downloads and imports. */
- GtkWidget*music_home=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);
- gtk_widget_set_name(music_home,"music-home");
- gtk_widget_set_vexpand(music_home,TRUE);
- gtk_container_set_border_width(GTK_CONTAINER(music_home),20);
- add(music_home,label("MUSIC","modalheading"),0);
- GtkWidget*music_intro=label(
-   "Discover artists and releases, request music, and manage your library "
-   "through your configured DroppedNeedle server.","helper");
- gtk_label_set_line_wrap(GTK_LABEL(music_intro),TRUE);
- add(music_home,music_intro,0);
- music_status=label("Music is optional. Configure its URL under Settings to enable it.","helper");
- gtk_label_set_line_wrap(GTK_LABEL(music_status),TRUE);
- add(music_home,music_status,0);
- GtkWidget*music_browser=button("DISCOVER MUSIC  ↗","tile");
- gtk_widget_set_size_request(music_browser,-1,56);
- g_signal_connect(music_browser,"clicked",G_CALLBACK(music_open_browser),NULL);
- add(music_home,music_browser,0);
- GtkWidget*music_help=label(
-   "Amperfy continues to handle listening on your phone. "
-   "Advanced discovery, requests and download management open in the "
-   "authenticated DroppedNeedle web interface.","helper");
- gtk_label_set_line_wrap(GTK_LABEL(music_help),TRUE);
- add(music_home,music_help,0);
- GtkWidget*music_settings=button("MUSIC & SERVER SETTINGS","setupaction");
- g_signal_connect(music_settings,"clicked",G_CALLBACK(on_settings),NULL);
- add(music_home,music_settings,0);
+ /* A separate, optional GTK library view; no new host privileges.
+  * Real catalog browsing uses the upstream OpenSubsonic app-password API.
+  * Native playback and tray controls are gated on later physical tests. */
+ GtkWidget*music_home=now_music_build(browser_open,on_settings);
  gtk_stack_add_named(GTK_STACK(main_pages),music_home,"music");
- gtk_widget_show_all(music_home);
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);

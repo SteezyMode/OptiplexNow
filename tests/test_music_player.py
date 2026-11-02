@@ -47,6 +47,26 @@ class MusicPlaybackContract(unittest.TestCase):
             self.assertEqual(FakeSocket.sent,
                 b'{"command":["set_property","pause",false]}\n')
 
+    def test_volume_ipc_only_allows_integer_0_to_100(self):
+        with mock.patch.object(player.socket, "socket", return_value=FakeSocket()):
+            self.assertTrue(player.socket_volume("/private/control.sock", 0))
+            self.assertEqual(FakeSocket.sent,
+                             b'{"command":["set_property","volume",0]}\n')
+            self.assertTrue(player.socket_volume("/private/control.sock", 100))
+            self.assertEqual(FakeSocket.sent,
+                             b'{"command":["set_property","volume",100]}\n')
+            for invalid in (-1, 101, 1000, True, "75", 50.5):
+                with self.subTest(invalid=invalid):
+                    self.assertFalse(player.socket_volume("/private/control.sock", invalid))
+
+    def test_invalid_startup_volume_fails_before_decoder_launch(self):
+        out = io.StringIO()
+        with mock.patch.object(player.subprocess, "Popen") as launched:
+            self.assertEqual(player.run("http://127.0.0.1:8688","track",
+                io.BytesIO(b"api_key=secret&username=\n"),io.BytesIO(),out,
+                mpv_binary="/bin/false",initial_volume=101),2)
+            launched.assert_not_called()
+
     def test_mpv_commands_do_not_contain_keys_or_urls(self):
         content = (ROOT / "src" / "music_player.py").read_text()
         self.assertIn('stdin=subprocess.PIPE', content)
@@ -58,6 +78,8 @@ class MusicPlaybackContract(unittest.TestCase):
         self.assertIn('_post(server, "stream", auth, {"id": track_id, "format": "raw"})', content)
         self.assertIn('if action == "STOP":', content)
         self.assertIn('action not in ("PAUSE", "RESUME")', content)
+        self.assertIn('if action.startswith("VOLUME "):', content)
+        self.assertIn('"--volume=" + str(initial_volume)', content)
         self.assertNotIn('apiKey=', content)
         self.assertNotIn('subprocess.run("', content)
 

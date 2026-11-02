@@ -12,9 +12,13 @@ import os
 from pathlib import Path
 import stat
 
-from owner_access import OwnerStore, PolicyError, resolve_music
-from music_device_ledger import get_device_locked, record_issued_locked
-from music_device_provision import issue_approved_music_access, ProvisionError
+from owner_access import OwnerStore, PolicyError, resolve_music, revoke_music
+from music_device_ledger import (
+    get_device_locked, record_issued_locked, remove_device_locked
+)
+from music_device_provision import (
+    issue_approved_music_access, DroppedNeedleAPI, ProvisionError
+)
 
 ACCOUNT_FILE = Path.home() / ".config/optiplex-now/owner-music-host.json"
 MAX_ACCOUNT = 4096
@@ -85,3 +89,54 @@ def issue_ssh_music_access(*, request, verified_client_id, config, wolf_api,
                 set(result)!={"app_password","rest_token"}):
             raise ProvisionError("Invalid newly issued Music credentials")
         return {"success":True,"service":"music","credentials":result}
+
+
+
+def revoke_owner_music_device(*, client_id, state_dir, confirmed=False,
+                              account_reader=read_owner_music_account,
+                              api_factory=DroppedNeedleAPI):
+    """LOCAL host-owner-only upstream revoke, never a remotely callable action.
+
+    Revoke the two DroppedNeedle credentials BEFORE removing NOW Music access.
+    A failed or partial upstream revoke retains the ledger identifiers for
+    retry; the owner is told cleanup remains outstanding.
+    """
+    if confirmed is not True:
+        raise PolicyError("Local host-owner confirmation required")
+    store=OwnerStore(state_dir)
+    with store.locked() as fd:
+        policy=store.read(fd)
+        if policy is None:
+            raise PolicyError("NOW owner policy unavailable")
+        record=get_device_locked(fd,client_id)
+        if record is None:
+            raise PolicyError("Music device has no active credential record")
+        if record["host_id"]!=policy["host_id"]:
+            raise PolicyError("Music grant belongs to a different host")
+        account=account_reader()
+        if account.get("owner_principal_id")!=policy["principals"][0]["id"]:
+            raise PolicyError("Music account does not match the NOW owner")
+        api=api_factory(account["base_url"])
+        standard, dn_user=api.login(account["username"],account["password"])
+        if record["dn_user_id"]!=dn_user:
+            raise ProvisionError("Music credential ownership changed")
+        # Idempotent upstream delete permits recovering interrupted revocation.
+        api.revoke(standard,app_id=record["app_password_id"],
+                   session_id=record["companion_session_id"])
+
+        # FIRST deny the authorization in the owner policy. If a disk write
+        # fails now, the external credentials have already been revoked.
+        for device in policy["devices"]:
+            if device["client_id"] == client_id:
+                if not device["revoked"] and "music" in device["services"]:
+                    revoke_music(policy,client_id,upstream_revoked=True)
+                elif "music" in device["services"]:
+                    device["services"]=["games"]
+                    from owner_access import validate
+                    validate(policy)
+                break
+        store.write(fd,policy)
+        # THEN erase the metadata. If this last write fails, no new Music
+        # grant is possible and the stale IDs can be safely retried.
+        remove_device_locked(fd,client_id)
+        return {"success":True,"status":"music_revoked","client_id":client_id}

@@ -34,7 +34,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
- GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *load_more, *load_more_songs, *shuffle_all;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
  GQueue *pending_art;
  guint art_inflight;
@@ -53,6 +53,8 @@ typedef struct {
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
+ gboolean song_has_more, album_has_more;
+ guint page_idle;
  gboolean auto_enroll_busy, auto_enroll_attempted;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
@@ -79,6 +81,7 @@ static void music_next_clicked(GtkWidget *unused,gpointer data);
 static void music_play_visible(MusicView *view,int index);
 static void music_notify_tray(MusicView *view);
 static void music_card_queue_pump(MusicView *view);
+static void music_schedule_next_page(MusicView *view);
 static gboolean music_status_tick(gpointer data);
 
 static void wipe_free(char *value){
@@ -112,6 +115,7 @@ static void music_view_destroy(GtkWidget *unused,gpointer data){
  if(view->volume_debounce)g_source_remove(view->volume_debounce);
  if(view->seek_debounce)g_source_remove(view->seek_debounce);
  if(view->status_timer)g_source_remove(view->status_timer);
+ if(view->page_idle)g_source_remove(view->page_idle);
  view->status_timer=0;
  view->volume_debounce=view->seek_debounce=0;
  if(active_music_view==view)active_music_view=NULL;
@@ -682,6 +686,7 @@ static void music_card_queue_pump(MusicView *view){
 static void music_card_scroll_changed(GtkAdjustment *unused,gpointer data){
  (void)unused;
  music_card_queue_pump(data);
+ music_schedule_next_page(data);
 }
 
 /* A single queue action is shared by row selection and the album Play
@@ -1426,8 +1431,10 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
  gboolean ok=g_subprocess_communicate_utf8_finish(job->process,result,
                                                 &output,NULL,&error);
  if(view && !view->closing){
-  view->busy=FALSE;
+  /* Keep paging locked during row insertion and adjustment signals. */
   if(!ok || !g_subprocess_get_successful(job->process)){
+   view->song_has_more=FALSE;
+   view->album_has_more=FALSE;
    view->hero_art_serial++;
    if(view->hero_row)gtk_widget_hide(view->hero_row);
    status_set(view,(!g_strcmp0(job->operation,"catalog") ||
@@ -1456,24 +1463,16 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
        !g_strcmp0(job->operation,"random_songs"))gtk_widget_show(view->shuffle_all);
     else gtk_widget_hide(view->shuffle_all);
    }
-   if(view->load_more_songs){
-    if(!g_strcmp0(job->operation,"songs")){
-     view->song_offset=job->offset+count;
-     gtk_widget_set_sensitive(view->load_more_songs,TRUE);
-     if(count==200 && view->song_offset<=1000000)
-      gtk_widget_show(view->load_more_songs);
-     else gtk_widget_hide(view->load_more_songs);
-    }else gtk_widget_hide(view->load_more_songs);
-   }
-   if(view->load_more){
-    if(!g_strcmp0(job->operation,"albums")){
-     view->album_offset=job->offset+count;
-     gtk_widget_set_sensitive(view->load_more,TRUE);
-     if(count==200 && view->album_offset<=1000000)
-      gtk_widget_show(view->load_more);
-     else gtk_widget_hide(view->load_more);
-    }else gtk_widget_hide(view->load_more);
-   }
+   /* A full batch means more may exist. Only scroll near the bottom
+    * launches the next bounded, authenticated 200-item request. */
+   if(!g_strcmp0(job->operation,"songs")){
+    view->song_offset=job->offset+count;
+    view->song_has_more=count==200 && view->song_offset<=1000000;
+   }else view->song_has_more=FALSE;
+   if(!g_strcmp0(job->operation,"albums")){
+    view->album_offset=job->offset+count;
+    view->album_has_more=count==200 && view->album_offset<=1000000;
+   }else view->album_has_more=FALSE;
    if(view->hero_play){
     gboolean playable=(!g_strcmp0(job->operation,"album") ||
                        !g_strcmp0(job->operation,"playlist")) &&
@@ -1485,7 +1484,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                           !g_strcmp0(job->operation,"discover"))
         ? g_strdup_printf("%d music discovery items",count)
         : g_strdup_printf("%d items · Connected to your music library",
-            !g_strcmp0(job->operation,"albums")?view->album_offset:count);
+            !g_strcmp0(job->operation,"albums")?view->album_offset:
+            !g_strcmp0(job->operation,"songs")?view->song_offset:count);
    status_set(view,message);
    g_free(message);
    /* Shuffle All uses an authenticated, server-randomized song selection. */
@@ -1503,6 +1503,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     wipe_free(form);
    }
   }
+  view->busy=FALSE;
+  music_schedule_next_page(view);
  }
  g_clear_error(&error);
  g_free(output);
@@ -1575,13 +1577,11 @@ static void query_start(MusicView *view,const char *operation,
  job->append_albums=append_albums;
  job->append_songs=append_songs;
  job->offset=(append_albums || append_songs)?atoi(value):0;
- if(view->load_more){
-  if(!append_albums)gtk_widget_hide(view->load_more);
-  else gtk_widget_set_sensitive(view->load_more,FALSE);
- }
- if(view->load_more_songs){
-  if(!append_songs)gtk_widget_hide(view->load_more_songs);
-  else gtk_widget_set_sensitive(view->load_more_songs,FALSE);
+ if(!append_albums && !append_songs){
+  view->song_has_more=FALSE;
+  view->album_has_more=FALSE;
+  if(view->page_idle)g_source_remove(view->page_idle);
+  view->page_idle=0;
  }
  job->input=catalog?g_strdup(""):g_strdup_printf(
      "api_key=%s&username=%s",encoded_key,encoded_user);
@@ -1910,7 +1910,10 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  /* Search is a first-class Music destination, not a new admin page. */
  view->hero_art_serial++;
  if(view->hero_row)gtk_widget_hide(view->hero_row);
- if(view->load_more)gtk_widget_hide(view->load_more);
+ view->song_has_more=FALSE;
+ view->album_has_more=FALSE;
+ if(view->page_idle)g_source_remove(view->page_idle);
+ view->page_idle=0;
  view->grid_mode=FALSE;
  render_rows(view,"",FALSE);
  gtk_widget_hide(view->cards_scroll);
@@ -1921,24 +1924,44 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
 }
 
-static void music_load_more(GtkWidget *unused,gpointer data){
- (void)unused;
+/* Keep every library view within its existing scroll area, without a
+ * footer button or a sentinel row occupying valuable viewport space. */
+static gboolean music_fetch_next_page(gpointer data){
  MusicView *view=data;
- if(view->busy || view->closing || view->album_offset<=0 ||
-    view->album_offset>1000000)return;
- char *value=g_strdup_printf("%d",view->album_offset);
- query_start(view,"albums",value,"All albums");
+ view->page_idle=0;
+ if(view->busy || view->closing)return G_SOURCE_REMOVE;
+ gboolean albums=view->album_has_more && gtk_widget_get_visible(view->cards_scroll);
+ gboolean songs=view->song_has_more && gtk_widget_get_visible(view->list_scroll);
+ if(!albums && !songs)return G_SOURCE_REMOVE;
+ int offset=albums?view->album_offset:view->song_offset;
+ if(offset<=0 || offset>1000000)return G_SOURCE_REMOVE;
+ /* Clear before launching; an unsuccessful subprocess should not
+  * start a network retry loop from the same scroll position. */
+ if(albums)view->album_has_more=FALSE;
+ else view->song_has_more=FALSE;
+ char *value=g_strdup_printf("%d",offset);
+ query_start(view,albums?"albums":"songs",value,albums?"All albums":"All songs");
  g_free(value);
+ return G_SOURCE_REMOVE;
 }
-
-static void music_load_more_songs(GtkWidget *unused,gpointer data){
+static void music_schedule_next_page(MusicView *view){
+ if(view->closing || view->busy || view->page_idle)return;
+ GtkWidget *scroller=NULL;
+ if(view->song_has_more && gtk_widget_get_visible(view->list_scroll))
+  scroller=view->list_scroll;
+ else if(view->album_has_more && gtk_widget_get_visible(view->cards_scroll))
+  scroller=view->cards_scroll;
+ if(!scroller)return;
+ GtkAdjustment *a=gtk_scrolled_window_get_vadjustment(GTK_SCROLLED_WINDOW(scroller));
+ double viewport=gtk_adjustment_get_page_size(a);
+ double total=gtk_adjustment_get_upper(a);
+ if(viewport<=0 || total<=viewport+60)return;
+ if(gtk_adjustment_get_value(a)+viewport >= total-MAX(200.0,viewport*0.4))
+  view->page_idle=g_idle_add(music_fetch_next_page,view);
+}
+static void music_list_scroll_changed(GtkAdjustment *unused,gpointer data){
  (void)unused;
- MusicView *view=data;
- if(view->busy || view->closing || view->song_offset<=0 ||
-    view->song_offset>1000000)return;
- char *value=g_strdup_printf("%d",view->song_offset);
- query_start(view,"songs",value,"All songs");
- g_free(value);
+ music_schedule_next_page(data);
 }
 static void music_shuffle_all(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -2198,6 +2221,12 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(view->list_scroll),view->list);
  gtk_box_pack_start(GTK_BOX(maincol),view->list_scroll,TRUE,TRUE,0);
+ GtkAdjustment *song_scroll=gtk_scrolled_window_get_vadjustment(
+                              GTK_SCROLLED_WINDOW(view->list_scroll));
+ g_signal_connect(song_scroll,"value-changed",
+                  G_CALLBACK(music_list_scroll_changed),view);
+ g_signal_connect(song_scroll,"changed",
+                  G_CALLBACK(music_list_scroll_changed),view);
  view->cards_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(view->cards_scroll),
      GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
@@ -2219,14 +2248,6 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                   G_CALLBACK(music_card_scroll_changed),view);
  gtk_widget_set_no_show_all(view->cards_scroll,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->cards_scroll,TRUE,TRUE,0);
- view->load_more=music_button("Load more albums");
- gtk_widget_set_no_show_all(view->load_more,TRUE);
- g_signal_connect(view->load_more,"clicked",G_CALLBACK(music_load_more),view);
- gtk_box_pack_start(GTK_BOX(maincol),view->load_more,FALSE,FALSE,0);
- view->load_more_songs=music_button("Load more songs");
- gtk_widget_set_no_show_all(view->load_more_songs,TRUE);
- g_signal_connect(view->load_more_songs,"clicked",G_CALLBACK(music_load_more_songs),view);
- gtk_box_pack_start(GTK_BOX(maincol),view->load_more_songs,FALSE,FALSE,0);
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
@@ -2322,7 +2343,5 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_hide(view->cards_scroll);
  gtk_widget_hide(view->player_bar);
  gtk_widget_hide(view->shuffle_all);
- gtk_widget_hide(view->load_more_songs);
- gtk_widget_hide(view->load_more);
  return view->root;
 }

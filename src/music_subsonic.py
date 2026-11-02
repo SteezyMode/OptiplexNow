@@ -24,6 +24,7 @@ from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler, HTTP
 CLIENT = "bruiser-music"
 VERSION = "1.16.1"
 MAX_REPLY = 8 * 1024 * 1024
+MAX_COVER = 3 * 1024 * 1024
 MAX_STDIN = 8192
 MAX_TEXT = 512
 
@@ -174,6 +175,24 @@ def stream(base: str, auth: dict[str, str], song_id: str) -> None:
         return
 
 
+def cover_art(base: str, auth: dict[str, str], cover_id: str) -> None:
+    """Fetch a small authenticated raster cover by POST without exposing a URL.
+
+    Do not accept SVG/HTML, redirect responses or unbounded image payloads.
+    Missing artwork fails harmlessly; the native UI uses a local placeholder.
+    """
+    cover_id = _bounded_text(cover_id, "cover art ID")
+    with _post(base, "getCoverArt", auth, {"id": cover_id, "size": "220"}) as response:
+        mime = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
+        if mime not in ("image/jpeg", "image/png", "image/webp"):
+            raise MusicTransportError("Music server returned no supported cover art.")
+        data = response.read(MAX_COVER + 1)
+        if not data or len(data) > MAX_COVER:
+            raise MusicTransportError("Music cover image is empty or too large.")
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+
+
 def _rows(operation: str, result: dict[str, Any]) -> str:
     """Base64-tabbed, bounded GTK transport; music titles never become delimiters."""
     def items(source: object) -> list[dict[str, Any]]:
@@ -212,7 +231,10 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
             title = "Untitled"
         if not isinstance(artist, str):
             artist = ""
-        fields = (kind, identifier[:512], title[:2048], artist[:1024])
+        cover_id = item.get("coverArt") or item.get("id") or ""
+        if not isinstance(cover_id, str):
+            cover_id = ""
+        fields = (kind, identifier[:512], title[:2048], artist[:1024], cover_id[:512])
         lines.append("\t".join(base64.b64encode(x.encode("utf-8")).decode("ascii")
                                for x in fields))
     return "\n".join(lines) + ("\n" if lines else "")
@@ -221,7 +243,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "search", "album", "artist", "playlists", "playlist", "stream", "art"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -230,10 +252,13 @@ def main(argv: list[str] | None = None) -> int:
         auth = _auth_from_stdin(args.auth_format)
         # Authenticate and validate before making any outbound request.
         endpoint_for(args.base_url, "ping")
-        if args.operation in ("album", "artist", "playlist", "stream", "search") and not args.value:
+        if args.operation in ("album", "artist", "playlist", "stream", "art", "search") and not args.value:
             raise MusicTransportError("This music operation needs a selection.")
         if args.operation == "stream":
             stream(args.base_url, auth, args.value)
+            return 0
+        if args.operation == "art":
+            cover_art(args.base_url, auth, args.value)
             return 0
         if args.operation == "ping":
             data = query(args.base_url, "ping", auth)

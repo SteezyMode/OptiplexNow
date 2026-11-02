@@ -109,6 +109,16 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_advanced)', UI_MUSIC)
         self.assertNotIn('getCoverArt?id=', UI_MUSIC)
 
+    def test_library_count_is_in_heading_not_a_dashboard_row(self):
+        self.assertNotIn("Connected to your music library", UI_MUSIC)
+        self.assertIn('g_strdup_printf("%s · %d %s",job->heading,', UI_MUSIC)
+        self.assertIn('gtk_label_set_text(GTK_LABEL(view->heading),heading);', UI_MUSIC)
+        self.assertIn('view->status=gtk_label_new("");', UI_MUSIC)
+        self.assertIn('gtk_widget_set_no_show_all(view->status,TRUE);', UI_MUSIC)
+        self.assertIn('status_clear(view);', UI_MUSIC)
+        self.assertIn('gtk_widget_show(view->status);', UI_MUSIC)
+        self.assertIn('"songs"', UI_MUSIC)
+
     def test_library_auto_pagination_keeps_previous_rows_without_footer(self):
         self.assertIn("album_offset", UI_MUSIC)
         self.assertIn("song_offset", UI_MUSIC)

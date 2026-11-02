@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.21.14"
+DEFAULT_VERSION = "1.21.15"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")
@@ -23,6 +23,15 @@ shutil.copy2(root/'src/open-remote-files.sh',pkg/'usr/lib/optiplex-now/open-remo
 shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-web-gaming-admin')
 (pkg/'usr/lib/optiplex-now/open-web-gaming-admin').chmod(0o755)
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
+# Optional user-authenticated OpenSubsonic read/stream transport (inert until used).
+shutil.copy2(root/'src/music_subsonic.py',pkg/'usr/lib/optiplex-now/music_subsonic.py')
+shutil.copy2(root/'src/music_art_audit.py',pkg/'usr/lib/optiplex-now/music_art_audit.py')
+shutil.copy2(root/'src/music_keyring.py',pkg/'usr/lib/optiplex-now/music_keyring.py')
+shutil.copy2(root/'src/music_player.py',pkg/'usr/lib/optiplex-now/music_player.py')
+shutil.copy2(root/'src/music_http_stream.py',pkg/'usr/lib/optiplex-now/music_http_stream.py')
+shutil.copy2(root/'src/music_rest.py',pkg/'usr/lib/optiplex-now/music_rest.py')
+shutil.copy2(root/'src/music_device_client.py',pkg/'usr/lib/optiplex-now/music_device_client.py')
+shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
 # Shared theme used by main GTK UI and owner/host Python dialogs.
 shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
 shutil.copy2(root/'src/now_theme.py',pkg/'usr/lib/optiplex-now/now_theme.py')
@@ -66,7 +75,7 @@ bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 (bridge/'src').mkdir(parents=True,exist_ok=True)
 (bridge/'server').mkdir(parents=True,exist_ok=True)
 for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py',
-             'wolf-pair-local.py'):
+             'wolf-pair-local.py', 'music_subsonic.py'):
  shutil.copy2(root/'src'/name,bridge/'src'/name)
 # The same .deb carries the narrow, authenticated host service implementation.
 # It is inert until the owner explicitly adopts the packaged handler. After
@@ -74,7 +83,10 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
  shutil.copy2(root/'src'/name, bridge/'src'/name)
 for name in ('owner_games_ssh.py', 'owner_games_request.py',
-             'owner_games_enroll.py', 'download_inventory.py',
+             'owner_games_enroll.py', 'owner_music_ssh.py',
+             'music_device_provision.py', 'music_device_ledger.py',
+             'music_owner_bootstrap.py', 'music_link_existing.py',
+             'download_inventory.py',
              'download_queue.py', 'download_search.py', 'download_manage.py',
              'download_files.py',
              'download_destinations.py', 'media_endpoint.py'):
@@ -156,8 +168,8 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: OptiPlex Now <local@localhost>
-Depends: python3, python3-gi, qrencode, python3-cryptography, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
-Recommends: libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
+Depends: python3, python3-gi, gir1.2-secret-1, qrencode, python3-cryptography, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
+Recommends: mpv, gnome-keyring, libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, owner-managed Steam streaming, live hardware info and encrypted backup.
 ''')

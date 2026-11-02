@@ -110,7 +110,8 @@ def validate(data):
                 set(device) != {"client_id", "principal_id", "services", "revoked"} or
                 not _valid_client_id(device["client_id"]) or
                 device["client_id"] in seen or device["principal_id"] != p["id"] or
-                device["services"] != ["games"] or type(device["revoked"]) is not bool):
+                device["services"] not in (["games"], ["games", "music"]) or
+                type(device["revoked"]) is not bool):
             raise PolicyError("Invalid or conflicting device grant")
         seen.add(device["client_id"])
     return data
@@ -139,7 +140,10 @@ def approve_device(data, client_id, clients_reply):
     for device in data["devices"]:
         if device["client_id"] == client_id:
             if device["revoked"]:
+                # Reapproving Games does not resurrect a revoked Music grant.
+                device["services"] = ["games"]
                 device["revoked"] = False
+                validate(data)
                 return
             raise PolicyError("Device already approved")
     data["devices"].append({
@@ -153,9 +157,74 @@ def revoke_device(data, client_id):
     validate(data)
     for device in data["devices"]:
         if device["client_id"] == client_id and not device["revoked"]:
+            if "music" in device["services"]:
+                # Require the host-owned upstream revoke path FIRST so a
+                # DroppedNeedle app-password cannot outlive a NOW revoke.
+                raise PolicyError("Revoke Music provider credentials before device")
             device["revoked"] = True
             return
     raise PolicyError("No active grant for device")
+
+
+def grant_music(data, client_id, clients_reply, *, owner_confirmed=False):
+    """Host-owner-only action after separate, explicit Music consent.
+
+    Do not expose this mutation as an unverified client request or infer Music
+    permission from Wolf pairing, Tailnet presence or a Games grant.
+    This alone issues NO DroppedNeedle account/session credentials.
+    """
+    validate(data)
+    if owner_confirmed is not True:
+        raise PolicyError("Explicit host-owner Music approval required")
+    if not _valid_client_id(client_id) or client_id not in paired_client_ids(clients_reply):
+        raise PolicyError("Music device is not paired to this Wolf host")
+    for device in data["devices"]:
+        if device["client_id"] == client_id:
+            if device["revoked"] or "games" not in device["services"]:
+                raise PolicyError("Music device has no active NOW owner approval")
+            if "music" in device["services"]:
+                raise PolicyError("Music access is already approved")
+            device["services"] = ["games", "music"]
+            validate(data)
+            return
+    raise PolicyError("Music device has no active NOW owner approval")
+
+
+def revoke_music(data, client_id, *, upstream_revoked=False):
+    """Remove Music only AFTER its upstream app/session keys were revoked.
+
+    Otherwise a locally revoked NOW device can still use a valid direct
+    DroppedNeedle token outside NOW, bypassing the revoked policy.
+    """
+    validate(data)
+    if upstream_revoked is not True:
+        raise PolicyError("Revoke DroppedNeedle credentials before removing Music access")
+    for device in data["devices"]:
+        if device["client_id"] == client_id and not device["revoked"]:
+            if "music" not in device["services"]:
+                raise PolicyError("No active Music grant for device")
+            device["services"] = ["games"]
+            validate(data)
+            return
+    raise PolicyError("No active Music grant for device")
+
+
+def resolve_music(data, client_id, clients_reply):
+    """Read-only grant resolution for independently SSH-authenticated devices.
+
+    This checks Music owner entitlement, not identity of the *caller*. A
+    trusted forced-command transport must supply pinned verified_client_id.
+    """
+    validate(data)
+    if not _valid_client_id(client_id) or client_id not in paired_client_ids(clients_reply):
+        raise PolicyError("Music device is not paired with this Wolf host")
+    for device in data["devices"]:
+        if (device["client_id"] == client_id and not device["revoked"]
+                and "music" in device["services"]):
+            return {"host_id": data["host_id"],
+                    "principal_id": device["principal_id"],
+                    "client_id": client_id}
+    raise PolicyError("Device has no owner Music authorization")
 
 
 def resolve_games(data, client_id, clients_reply):

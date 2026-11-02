@@ -24,7 +24,7 @@ Protected NOW-native file organization, download search, queue operations and pe
 
 **Immediate Games integration step within Private Alpha 1:** On the existing reference server, the owner can authorize multiple **owner-operated devices** to open the **same explicitly approved owner Steam workspace** and existing Jellyfin service without terminal commands, manual symlinks or repeated device pairing. Private Alpha 1 approves **only owner-operated devices**. Delegating the owner's Steam workspace to a separate household person requires a later explicitly gated sharing decision and server-side isolation review; approving a laptop is not automatically approving its user as a host administrator. This alpha is **not** a general invitation feature for colleagues or unrelated people. A new NOW member must never inherit owner Steam, host files or SSH rights merely from pairing. Do not rebuild, replace or migrate the working host stack. This is a closed-beta acceptance target, not public-alpha readiness.
 
-Linux hosts/clients are first. Windows **client** builds are planned; Windows **host** support is a later technical and licensing project, particularly for sessions independent of the host display. Music (including DroppedNeedle), books, comics and extensive user-specific desktops are optional future research, not public-alpha prerequisites.
+Linux hosts/clients are first. Windows **client** builds are planned; Windows **host** support is a later technical and licensing project, particularly for sessions independent of the host display. Music is now an **optional, first-class destination** backed by DroppedNeedle/slskd. The owner physically tested the native library player on existing approved MacBook/Mac mini clients, but clean-host Music installation, account setup and mobile discovery remain incomplete. Music is not a fourth Private Alpha 1 or public-alpha release gate. Books, comics and extensive user-specific desktops remain optional future research.
 
 ## Engineering and product principles
 
@@ -59,7 +59,8 @@ A simple owner-only `Wake / Sleep / Shut Down` surface and guided host capabilit
 | **Product hardening** | First-run usability, owned-service repair, upgrades, removal, diagnostics, real external testers | Not yet accepted |
 | **Windows client** | Access the same Linux host without requiring a Linux client | Planned, not implemented |
 | **Windows host** | Comparable independent game session on a Windows PC | Longer-term feasibility/licensing work |
-| **Optional modules/business** | Music, books, comics, referrals and potentially an optional branded VPN | Research only; none is a prerequisite for public alpha |
+| **Optional Music module** | DroppedNeedle-backed discovery, requests, mobile view and reproducible optional host install | Native browse/playback and owner-device access pilot verified by owner on existing server; clean-host setup, phone UX and broader acceptance open. Not a public-alpha prerequisite ([#244](https://github.com/SteezyMode/OptiplexNow/issues/244)) |
+| **Other optional modules/business** | Books, comics, referrals and potentially a branded VPN | Research only; none is a prerequisite for public alpha |
 | **Deferred shared-server gaming** | Separate Steam accounts and simultaneous isolated sessions, with an optional central Steam installation pool so licensed users do not download the same game twice | **Parked**, pending profile isolation and physical tests; [#153](https://github.com/SteezyMode/OptiplexNow/issues/153) and [#157](https://github.com/SteezyMode/OptiplexNow/issues/157) |
 | **Deferred private workspaces** | Optional user XFCE desktops, personal non-Steam games, suitably licensed shared files, private media/music/download mini-servers | **Parked**, not an alpha or closed-beta deliverable; [#155](https://github.com/SteezyMode/OptiplexNow/issues/155) |
 
@@ -95,7 +96,7 @@ The first three gates may be tested as **existing-host integration evidence** wi
 4. **Integration P3:** One Host/Client graphical setup across these three opt-in components. Support an explicitly narrow initial Linux hardware matrix, safe recovery/upgrade, and a separate clean disposable-host installation. Do not overwrite existing services. [#98](https://github.com/SteezyMode/OptiplexNow/issues/98).
 5. **Release sign-off:** One independent owner-operated clean client plus disposable clean host, physical test evidence for all three pillars, denial of unapproved restricted operations (not a full guest-role system), recorded setup/first-stream time (~15 minutes for first authenticated game on OS-ready supported machines), and an immutable checksummed installer. No alpha label based on CI alone.
 
-**Scope freeze:** No Windows host, separate member Steam accounts, pooled game installations, music/books/comics, commercial VPN billing, new UI embellishments or unrelated Studio work in this milestone. See [Private Alpha 1](PRIVATE-ALPHA.md).
+**Scope freeze:** No Windows host, separate member Steam accounts, pooled game installations, mandatory Music deployment, books/comics, commercial VPN billing, new UI embellishments or unrelated Studio work in this milestone. The optional Music tab can advance on its own unmerged branch but must not delay or expand Private Alpha 1 acceptance. See [Private Alpha 1](PRIVATE-ALPHA.md).
 
 ## Deferred shared-server gaming: pooled Steam installations
 

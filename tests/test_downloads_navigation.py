@@ -28,7 +28,7 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn("now_downloads_refresh(host,user);", opening)
 
     def test_tray_navigates_to_app_downloads_page(self):
-        self.assertIn("} else if (action == 4) {", TRAY)
+        self.assertIn("} else if (action == 2 || action == 4) {", TRAY)
         self.assertIn("handlers->show_window(context);", TRAY)
         self.assertIn("handlers->launch_service(context, action);", TRAY)
         self.assertIn("else if(n==4)launch_torrents();", SHELL)

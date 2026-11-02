@@ -1,0 +1,47 @@
+# OPTIONAL post-Private-Alpha-1 reference stack for new, disposable hosts.
+# Do not apply over existing DroppedNeedle, slskd, or media containers.
+# Copy .env.example to .env and set the paths/UID/GID before first run.
+# Both image tags are release-pinned; production deployments can additionally
+# pin verified multi-platform digests and record them in the local inventory.
+name: bruiser-music
+services:
+  slskd:
+    image: slskd/slskd:0.26.2
+    user: "${HOST_UID:?Set HOST_UID}:${HOST_GID:?Set HOST_GID}"
+    environment:
+      SLSKD_REMOTE_CONFIGURATION: "true"
+    ports:
+      - "127.0.0.1:5030:5030"
+      # Soulseek peer transfer listener, not the slskd admin HTTP interface.
+      # Review firewall/NAT policy before permitting peers to connect.
+      - "50300:50300/tcp"
+    volumes:
+      - "${MUSIC_STATE_ROOT:?Set MUSIC_STATE_ROOT}/slskd:/app"
+      - "${MUSIC_MEDIA_ROOT:?Set MUSIC_MEDIA_ROOT}:/data:rw"
+    restart: unless-stopped
+
+  droppedneedle:
+    image: droppedneedle/droppedneedle:v2.15.0
+    environment:
+      PUID: "${HOST_UID:?Set HOST_UID}"
+      PGID: "${HOST_GID:?Set HOST_GID}"
+      UMASK: "027"
+      PORT: "8688"
+      TZ: "${TZ:-Etc/UTC}"
+      SLSKD_DOWNLOADS_PATH: "/data/slskd/complete"
+    ports:
+      - "127.0.0.1:8688:8688"
+    volumes:
+      - "${MUSIC_STATE_ROOT:?Set MUSIC_STATE_ROOT}/droppedneedle/config:/app/config"
+      - "${MUSIC_STATE_ROOT:?Set MUSIC_STATE_ROOT}/droppedneedle/cache:/app/cache"
+      - "${MUSIC_STATE_ROOT:?Set MUSIC_STATE_ROOT}/droppedneedle/plugins:/app/plugins"
+      # One common parent for imported music and completed slskd files.
+      # Do not nest a second bind mount under /data.
+      - "${MUSIC_MEDIA_ROOT:?Set MUSIC_MEDIA_ROOT}:/data:rw"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8688/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 10m
+      retries: 3

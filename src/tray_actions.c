@@ -21,10 +21,11 @@ int now_tray_dispatch_action(int action, const NowTrayActions *handlers,
             if (!handlers->moonlight_available(context)) {
                 handlers->show_window(context);
             }
-        } else if (action == 4) {
-            /* Downloads is an embedded GTK stack page, unlike external
-             * services. Restore the window before switching the stack.
-             * Keep this rule in the tray dispatcher, not the UI monolith. */
+        } else if (action == 2 || action == 4) {
+            /* Both Music (2) and Downloads (4) are native GTK pages.
+             * Selecting them from the tray must restore the window before
+             * switching its visible stack child, not silently change a
+             * hidden window. Keep persisted service IDs untouched. */
             if (!handlers->show_window) {
                 return 0;
             }

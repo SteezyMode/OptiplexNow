@@ -31,6 +31,7 @@
 #include "downloads_flow.h"
 #include "ui_navigation.h"
 #include "ui_games.h"
+#include "ui_music.h"
 #include "ui_settings.h"
 #include "ui_wizard.h"
 #include "ui_state.h"
@@ -118,6 +119,7 @@ static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
 static void open_games_settings(GtkWidget*w,gpointer data);
 static void on_videos_tab(GtkWidget*w,gpointer data);
+static void on_music_tab(GtkWidget*w,gpointer data);
 static void tray_show_window(void);
 static void videos_status_message(const char *message);
 static void on_system_info(void*w,void*p);
@@ -151,6 +153,56 @@ static const char *CSS =
  "#navback:focus,#navtab:focus,#tile:focus,#setupaction:focus,#power:focus,#danger:focus {border-color:#d39579;}"
 /* Unified NOW dark controls: never use the platform's white GTK defaults
  * for ordinary Videos/Downloads buttons. No functional changes. */
+/* Music player: distinct navigation, legible song rows and compact controls. */
+"#music-home {background:#101111;color:#ece8e0;}"
+"#music-sidebar-rail {background:#181b19;border-radius:9px;padding:5px;}"
+"#music-sidebar {background:transparent;border:0;padding:0;}"
+"#music-sidebar button#music-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:12px;font-weight:600;color:#ece8e0;}"
+"#music-sidebar button#music-nav.now-action:hover {background:#303331;border:0;}"
+"#music-sidebar button#music-nav.now-action.music-active {background:#39302b;color:#fff;}"
+"#music-sidebar button#music-library-root.now-action {background:transparent;border:0;border-radius:6px;padding:7px 7px;min-height:34px;color:#ece8e0;}"
+"#music-sidebar button#music-library-root.now-action:hover {background:#303331;}"
+"#music-sidebar button#music-library-root.now-action.music-active {background:#39302b;color:#fff;}"
+"#music-library-title {font-size:12px;font-weight:750;color:#ece8e0;}"
+"#music-library-filters {background:transparent;padding:1px 0;}"
+"#music-library-filters button#music-filter.now-action {background:transparent;border:0;border-radius:5px;padding:4px 6px 4px 15px;min-height:27px;color:#bbb7ae;font-size:11px;font-weight:500;}"
+"#music-library-filters button#music-filter.now-action:hover {background:#303331;color:#fff;}"
+"#music-library-filters button#music-filter.now-action.music-active {background:#39302b;color:#fff;font-weight:700;}"
+"#music-main {background:#1d201f;border-radius:8px;padding:4px;}"
+"#music-header-row {padding:0 2px;min-height:32px;}"
+"#music-home button#music-shuffle-all.music-transport,#music-home button#music-search-toggle.music-transport {background:transparent;border:1px solid transparent;border-radius:17px;padding:3px;min-height:32px;min-width:32px;color:#ece8e0;}"
+"#music-home button#music-shuffle-all.music-transport:hover,#music-home button#music-search-toggle.music-transport:hover {background:#303831;border-color:#c47d65;}"
+"#music-section-title {font-size:14px;font-weight:700;color:#ece8e0;}"
+"#music-home button#music-settings-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:11px;color:#bbb7ae;}"
+"#music-home button#music-settings-nav.now-action:hover {background:#39302b;color:#fff;}"
+"#music-hero {background:#222724;border-radius:9px;padding:7px;}"
+"#music-hero label {font-size:16px;font-weight:700;color:#ece8e0;}"
+"#music-library {background:transparent;border:0;}"
+"#music-card-grid {background:transparent;border:0;}"
+"#music-card-grid flowboxchild {background:transparent;border:0;padding:3px;}"
+"#music-card-grid button#music-card.now-action {background:#222724;border:1px solid #414743;border-radius:11px;padding:5px;}"
+"#music-card-grid button#music-card.now-action:hover {background:#303831;border-color:#c47d65;}"
+"#music-card-grid #music-card-title {font-size:13px;font-weight:750;color:#ece8e0;}"
+"#music-card-grid #music-card-subtitle {font-size:11px;color:#bdb7b0;}"
+"#music-library row {background:transparent;border:0;padding:0;}"
+"#music-library button#music-row.now-action {background:#222724;border:1px solid transparent;border-radius:7px;padding:5px 10px;min-height:44px;}"
+"#music-library button#music-song-row.now-action {background:#222724;border:1px solid transparent;border-radius:5px;padding:1px 6px;min-height:30px;}"
+"#music-library button#music-song-row.now-action:hover,#music-library button#music-song-row.now-action:focus {background:#303831;border-color:#c47d65;}"
+"#music-library button#music-row.now-action:hover,#music-library button#music-row.now-action:focus {background:#303831;border-color:#c47d65;}"
+"#music-library #music-row-title {font-size:15px;font-weight:700;color:#ece8e0;}"
+"#music-library #music-row-detail {font-size:12px;color:#bdb7b0;}"
+"#music-library button#music-song-row #music-row-title {font-size:13px;font-weight:600;}"
+"#music-library button#music-song-row #music-row-detail {font-size:11px;}"
+"#music-library button#music-song-action.music-transport {background:transparent;border:1px solid transparent;border-radius:6px;padding:1px;min-width:28px;min-height:28px;}"
+"#music-library button#music-song-action.music-transport:hover {background:#303831;border-color:#c47d65;}"
+"#music-player {background:#1d201f;border:1px solid #414743;border-radius:11px;padding:7px 11px;}"
+"#music-player #music-now-title {font-size:13px;font-weight:800;color:#fff;}"
+"#music-player #music-now-artist {font-size:11px;color:#bdb7b0;}"
+"#music-player button.music-transport {background:transparent;color:#ece8e0;border:1px solid transparent;border-radius:20px;min-height:38px;min-width:38px;padding:5px;}"
+"#music-player button.music-transport:hover {background:#303831;border-color:#c47d65;}"
+"#music-player button.music-transport:checked {color:#c47d65;background:#39302b;border-color:#c47d65;}"
+"#music-player button#music-primary-play.music-transport {background:#ece8e0;color:#101111;border-radius:22px;min-height:42px;min-width:42px;}"
+"#music-player button#music-primary-play.music-transport:hover {background:#fff;}"
 "button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
 "button.now-action label {color:#ece8e0;}"
 "button.now-action:hover,button.now-action:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"
@@ -1434,6 +1486,12 @@ static void on_videos_tab(GtkWidget*w,gpointer data){
  (void)w;(void)data;
  now_nav_show_page(main_pages,"videos");
 }
+/* Music is an optional, browser-authenticated service. Never pass its
+ * credentials through NOW or assume that it exists on a fresh alpha host. */
+static void on_music_tab(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ now_nav_show_page(main_pages,"music");
+}
 
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){open_downloads_page();}
@@ -2084,7 +2142,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else open_games_settings(NULL,NULL);
  }else if(n==1)on_videos_tab(NULL,NULL);
- else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
+ else if(n==2)on_music_tab(NULL,NULL);
  else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
@@ -2970,6 +3028,34 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
+/* Music controls are a separate, transient section. Never repurpose the
+ * eight persisted NOW tray service-action IDs, order, or visibility mask. */
+static void tray_music_previous(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_previous();
+}
+static void tray_music_pause(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_toggle_pause();
+}
+static void tray_music_next(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_next();
+}
+/* Collapse quick BUFFERING/PLAYING/PAUSED updates into one idle rebuild.
+ * Rebuilding and destroying the old GTK/AppIndicator menu repeatedly during
+ * playback event delivery is avoidable and can race menu activation. */
+static guint music_tray_rebuild_pending=0;
+static gboolean music_tray_rebuild_idle(gpointer unused){
+ (void)unused;
+ music_tray_rebuild_pending=0;
+ if(tray_menu)tray_build_menu();
+ return G_SOURCE_REMOVE;
+}
+static void music_tray_changed(void){
+ if(tray_menu && !music_tray_rebuild_pending)
+  music_tray_rebuild_pending=g_idle_add(music_tray_rebuild_idle,NULL);
+}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -3003,6 +3089,30 @@ static void tray_build_menu(void){
  tray_menu_item("System Info",NOW_TRAY_OPEN_SYSTEM_INFO);
  tray_menu_item("Settings",NOW_TRAY_OPEN_SETTINGS);
  tray_separator();tray_menu_item("Quit",NOW_TRAY_QUIT);
+ /* Transient playback belongs at the very end of the menu. Use native
+  * menu actions so XFCE and AppIndicator remain compatible. */
+ if(now_music_is_playing_session()){
+  tray_separator();
+  const char *caption=now_music_caption();
+  char *short_title=g_utf8_strlen(caption,-1)>46?
+      g_strconcat(g_utf8_substring(caption,0,45),"…",NULL):
+      g_strdup(caption);
+  GtkWidget *playing=gtk_menu_item_new_with_label(short_title);
+  gtk_widget_set_sensitive(playing,FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
+  g_free(short_title);
+  GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous");
+  g_signal_connect(prev,"activate",G_CALLBACK(tray_music_previous),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),prev);
+  GtkWidget *pause=gtk_menu_item_new_with_label(
+                        now_music_is_paused()?"▶  Play":"⏸  Pause");
+  g_signal_connect(pause,"activate",G_CALLBACK(tray_music_pause),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),pause);
+  GtkWidget *next=gtk_menu_item_new_with_label("⏭  Next");
+  gtk_widget_set_sensitive(next,now_music_can_next());
+  g_signal_connect(next,"activate",G_CALLBACK(tray_music_next),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),next);
+ }
  gtk_widget_show_all(tray_menu);
  if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
  if(old)gtk_widget_destroy(old);
@@ -3108,11 +3218,22 @@ int main(int argc,char**argv) {
  /* Keep navigation visible while only the active page body changes. */
  GtkWidget*window_root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  gtk_container_add(GTK_CONTAINER(win),window_root);
+ /* Six destinations must not enlarge the minimum window on older
+  * small-screen clients. Keep native GTK tab highlighting on the inner box
+  * and make overflow visibly scrollable when the window is narrow. */
+ GtkWidget*nav_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nav_scroll),
+   GTK_POLICY_AUTOMATIC,GTK_POLICY_NEVER);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(nav_scroll),320);
+ gtk_widget_set_hexpand(nav_scroll,TRUE);
+ add(window_root,nav_scroll,0);
  GtkWidget*nav=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- gtk_widget_set_name(nav,"mainnav");add(window_root,nav,0);
+ gtk_widget_set_name(nav,"mainnav");
+ gtk_container_add(GTK_CONTAINER(nav_scroll),nav);
  main_pages=gtk_stack_new();
  /* A hidden Settings/Downloads page must not define the minimum window width. */
  gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);
+ gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE);
  /* Top navigation is tab-like: avoid a sliding offscreen surface during
   * the first allocation of the nested Downloads GTK stacks. */
  gtk_stack_set_transition_type(GTK_STACK(main_pages),GTK_STACK_TRANSITION_TYPE_NONE);
@@ -3123,10 +3244,6 @@ int main(int argc,char**argv) {
  now_nav_bind_link(dashboard_tab,main_pages,"dashboard");
  now_nav_mark_tab(dashboard_tab,"dashboard");
  add(nav,dashboard_tab,0);
- GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
- g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
- now_nav_mark_tab(downloads_tab,"downloads");
- add(nav,downloads_tab,0);
  GtkWidget*games_tab=button("GAMES","navtab");
  now_nav_bind_link(games_tab,main_pages,"games");
  now_nav_mark_tab(games_tab,"games");
@@ -3135,6 +3252,14 @@ int main(int argc,char**argv) {
  g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);
  now_nav_mark_tab(videos_tab,"videos");
  add(nav,videos_tab,0);
+ GtkWidget*music_tab=button("MUSIC","navtab");
+ g_signal_connect(music_tab,"clicked",G_CALLBACK(on_music_tab),NULL);
+ now_nav_mark_tab(music_tab,"music");
+ add(nav,music_tab,0);
+ GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
+ g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
+ now_nav_mark_tab(downloads_tab,"downloads");
+ add(nav,downloads_tab,0);
  GtkWidget*settings_tab=button("SETTINGS","navtab");
  g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
  now_nav_mark_tab(settings_tab,"settings");
@@ -3161,7 +3286,7 @@ int main(int argc,char**argv) {
  gtk_widget_set_name(videos_home,"videos-home");
  gtk_widget_set_vexpand(videos_home,TRUE);
  gtk_container_set_border_width(GTK_CONTAINER(videos_home),20);
- add(videos_home,label("VIDEOS","modalheading"),0);
+ /* No duplicate VIDEOS page title: the active application tab identifies it. */
  GtkWidget*videos_intro=label(
     "Your personal Jellyfin library on your approved server.","helper");
  gtk_label_set_line_wrap(GTK_LABEL(videos_intro),TRUE);
@@ -3190,6 +3315,11 @@ int main(int argc,char**argv) {
  add(videos_home,video_advanced,0);
  gtk_stack_add_named(GTK_STACK(main_pages),videos_home,"videos");
  gtk_widget_show_all(videos_home);
+ /* A separate, optional GTK library view; no new host privileges.
+  * Real catalog browsing uses the upstream OpenSubsonic app-password API.
+  * Native playback and tray controls are gated on later physical tests. */
+ GtkWidget*music_home=now_music_build(browser_open,on_settings,music_tray_changed);
+ gtk_stack_add_named(GTK_STACK(main_pages),music_home,"music");
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);

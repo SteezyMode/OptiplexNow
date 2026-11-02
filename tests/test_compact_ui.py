@@ -22,6 +22,7 @@ class CompactUiTests(unittest.TestCase):
 
     def test_hidden_pages_and_cap_do_not_force_full_width(self):
         self.assertIn('gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
+        self.assertIn('gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
         self.assertIn('gtk_stack_set_hhomogeneous(GTK_STACK(stack),FALSE)', SETTINGS)
         self.assertIn('gtk_label_set_ellipsize(GTK_LABEL(metric_gpu),PANGO_ELLIPSIZE_END)', MAIN)
         self.assertIn('  ·  cap %s', MAIN)
@@ -34,6 +35,13 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('g_object_ref(storage)', MAIN)
         self.assertIn('g_object_unref(storage)', MAIN)
         self.assertIn('gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1)', MAIN)
+
+    def test_optional_music_sidebar_cannot_force_larger_alpha_window(self):
+        music = (ROOT / "src" / "ui_music.c").read_text(encoding="utf-8")
+        self.assertIn('gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140)', music)
+        self.assertIn('gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sidebar_scroll)', music)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(sidebar_rail),sidebar_scroll,TRUE,TRUE,0);', music)
+        self.assertIn('gtk_stack_set_vhomogeneous(GTK_STACK(main_pages),FALSE)', MAIN)
 
     def test_settings_home_uses_balanced_responsive_navigation_tiles(self):
         self.assertIn('gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(menu),1)', SETTINGS)
@@ -48,16 +56,14 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('"#settingscard {background:#222724', MAIN)
         self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_FILL)', SETTINGS)
 
-    def test_downloads_vpn_is_on_own_row_at_minimum_width(self):
+    def test_downloads_vpn_inline_with_refresh_at_minimum_width(self):
         flow = (ROOT / "src" / "downloads_flow.c").read_text(encoding="utf-8")
-        self.assertIn('GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6)', flow)
-        self.assertIn('gtk_box_pack_end(GTK_BOX(status_row),vpn_button,FALSE,FALSE,0)', flow)
-        self.assertIn('gtk_box_pack_start(GTK_BOX(status_row),title,TRUE,TRUE,0)', flow)
+        self.assertIn('GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6)',flow)
+        self.assertIn('GtkWidget *actions_row=toolbar;',flow)
+        self.assertIn('gtk_box_pack_end(GTK_BOX(actions_row),vpn_button,FALSE,FALSE,0)',flow)
+        self.assertNotIn('gtk_label_new("DOWNLOADS")',flow)
         for action in ("refresh", "advanced_button"):
             self.assertIn(f'gtk_box_pack_start(GTK_BOX(actions_row),{action},FALSE,FALSE,0)',flow)
-            self.assertNotIn(f'gtk_box_pack_start(GTK_BOX(toolbar),{action},FALSE,FALSE,0)',flow)
-        # Advanced VueTorrent now has a separate full-height page and
-        # its Back button stays there, clear of native Downloads controls.
         self.assertIn('gtk_box_pack_start(GTK_BOX(web_header),back_button,FALSE,FALSE,0)',flow)
         self.assertNotIn('gtk_box_pack_start(GTK_BOX(actions_row),back_button',flow)
         self.assertIn('g_signal_connect(vpn_button,"clicked",G_CALLBACK(on_vpn_clicked),NULL)',flow)

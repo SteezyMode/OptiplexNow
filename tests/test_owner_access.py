@@ -80,6 +80,76 @@ class OwnerAccessTests(unittest.TestCase):
         policy.approve_device(self.data, "1001", self.wolf)
         self.assertEqual(policy.resolve_games(self.data, "1001", self.wolf)["wolf_profile_id"], "user")
 
+    def test_music_requires_explicit_owner_consent_and_separate_grant(self):
+        # Wolf pairing and an approved Games session alone are not Music auth.
+        with self.assertRaisesRegex(policy.PolicyError, "no owner Music"):
+            policy.resolve_music(self.data, "1001", self.wolf)
+        policy.approve_device(self.data, "1001", self.wolf)
+        self.assertEqual(self.data["devices"][0]["services"], ["games"])
+        with self.assertRaisesRegex(policy.PolicyError, "no owner Music"):
+            policy.resolve_music(self.data, "1001", self.wolf)
+        with self.assertRaisesRegex(policy.PolicyError, "Explicit host-owner"):
+            policy.grant_music(self.data, "1001", self.wolf)
+        with self.assertRaisesRegex(policy.PolicyError, "Music device is not paired"):
+            policy.grant_music(self.data, "9999", self.wolf,
+                               owner_confirmed=True)
+        policy.grant_music(self.data, "1001", self.wolf,
+                           owner_confirmed=True)
+        self.assertEqual(self.data["devices"][0]["services"], ["games", "music"])
+        self.assertEqual(policy.resolve_music(self.data, "1001", self.wolf),
+                         {"host_id": self.data["host_id"],
+                          "principal_id": self.data["principals"][0]["id"],
+                          "client_id": "1001"})
+        with self.assertRaisesRegex(policy.PolicyError, "already approved"):
+            policy.grant_music(self.data, "1001", self.wolf,
+                               owner_confirmed=True)
+        self.assertEqual(policy.resolve_games(self.data, "1001", self.wolf)
+                         ["wolf_profile_id"], "user")
+        with self.assertRaisesRegex(policy.PolicyError, "not paired"):
+            policy.resolve_music(self.data, "1001",
+                                 clients(("1002", "1002")))
+
+    def test_music_revocation_and_games_reapproval_never_restore_access(self):
+        policy.approve_device(self.data, "1001", self.wolf)
+        policy.grant_music(self.data, "1001", self.wolf,
+                           owner_confirmed=True)
+        with self.assertRaisesRegex(policy.PolicyError, "Revoke DroppedNeedle"):
+            policy.revoke_music(self.data, "1001")
+        policy.revoke_music(self.data, "1001", upstream_revoked=True)
+        with self.assertRaises(policy.PolicyError):
+            policy.resolve_music(self.data, "1001", self.wolf)
+        self.assertEqual(policy.resolve_games(self.data, "1001", self.wolf)
+                         ["wolf_profile_id"], "user")
+        policy.grant_music(self.data, "1001", self.wolf,
+                           owner_confirmed=True)
+        with self.assertRaisesRegex(policy.PolicyError, "Revoke Music provider"):
+            policy.revoke_device(self.data, "1001")
+        # Host upstream revoke must complete before generic NOW revoke.
+        policy.revoke_music(self.data, "1001", upstream_revoked=True)
+        policy.revoke_device(self.data, "1001")
+        with self.assertRaises(policy.PolicyError):
+            policy.resolve_music(self.data, "1001", self.wolf)
+        with self.assertRaisesRegex(policy.PolicyError, "no active"):
+            policy.grant_music(self.data, "1001", self.wolf,
+                               owner_confirmed=True)
+        policy.approve_device(self.data, "1001", self.wolf)
+        self.assertEqual(self.data["devices"][0]["services"], ["games"])
+        with self.assertRaises(policy.PolicyError):
+            policy.resolve_music(self.data, "1001", self.wolf)
+        policy.grant_music(self.data, "1001", self.wolf,
+                           owner_confirmed=True)
+        self.assertIn("music", self.data["devices"][0]["services"])
+
+    def test_music_policy_rejects_unknown_or_reordered_service_grants(self):
+        policy.approve_device(self.data, "1001", self.wolf)
+        for invalid in (["music"], ["music", "games"],
+                        ["games", "downloads", "music"],
+                        ["games", "music", "music"]):
+            damaged=copy.deepcopy(self.data)
+            damaged["devices"][0]["services"]=invalid
+            with self.subTest(invalid=invalid),self.assertRaises(policy.PolicyError):
+                policy.validate(damaged)
+
     def test_only_devices_still_paired_may_resolve(self):
         policy.approve_device(self.data, "1001", self.wolf)
         with self.assertRaisesRegex(policy.PolicyError, "not paired"):

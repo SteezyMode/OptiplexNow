@@ -663,22 +663,16 @@ GtkWidget *now_downloads_page(void){
  gtk_container_set_border_width(GTK_CONTAINER(downloads_content),8);
  gtk_container_add(GTK_CONTAINER(downloads_scroll),downloads_content);
  gtk_stack_add_named(GTK_STACK(queue_stack),downloads_scroll,"queue");
- /* A dedicated VPN/status row prevents long Advanced actions from
-  * colliding with the right-anchored VPN badge at minimum window width. */
- GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
+ /* The Downloads tab already identifies the page. Share one toolbar row
+  * between actions on the left and VPN state on the right. */
+ GtkWidget *toolbar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
  gtk_box_pack_start(GTK_BOX(downloads_content),toolbar,FALSE,FALSE,0);
- GtkWidget *status_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- GtkWidget *actions_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- gtk_box_pack_start(GTK_BOX(toolbar),status_row,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(toolbar),actions_row,FALSE,FALSE,0);
- GtkWidget *title=gtk_label_new("DOWNLOADS");
- gtk_label_set_xalign(GTK_LABEL(title),0);
- gtk_box_pack_start(GTK_BOX(status_row),title,TRUE,TRUE,0);
+ GtkWidget *actions_row=toolbar;
  vpn_button=gtk_button_new_with_label("VPN: UNKNOWN");
  gtk_widget_set_name(vpn_button,"vpnstatus");
  gtk_widget_set_tooltip_text(vpn_button,
      "Gluetun health on the approved download host; click for details");
- gtk_box_pack_end(GTK_BOX(status_row),vpn_button,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(actions_row),vpn_button,FALSE,FALSE,0);
  GtkWidget *popover=gtk_popover_new(vpn_button);
  GtkWidget *panel=gtk_box_new(GTK_ORIENTATION_VERTICAL,8);
  gtk_container_set_border_width(GTK_CONTAINER(panel),12);

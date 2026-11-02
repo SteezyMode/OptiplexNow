@@ -25,6 +25,7 @@ CLIENT = "bruiser-music"
 VERSION = "1.16.1"
 MAX_REPLY = 8 * 1024 * 1024
 MAX_COVER = 3 * 1024 * 1024
+MAX_CATALOG = 1024 * 1024
 MAX_STDIN = 8192
 MAX_TEXT = 512
 ALBUM_PAGE_SIZE = 200
@@ -156,6 +157,49 @@ def query(base: str, method: str, auth: dict[str, str],
     return body
 
 
+def catalog_search(base: str, text: str) -> dict[str, Any]:
+    """Read DroppedNeedle's existing artist/album search results.
+
+    Discovery is NOT another download service. This route in DroppedNeedle
+    v2.15.0 does not accept OpenSubsonic app keys, and the app key is NEVER
+    attached here. Album requests require separately authorized REST access.
+    """
+    text = _bounded_text(text, "music discovery query", 200)
+    # Reuse the strict network/address/path checks from the authenticated
+    # transport, but DO NOT attach streaming app credentials to the REST API.
+    validated = urlsplit(endpoint_for(base, "ping"))
+    suffix = "/subsonic/rest/ping"
+    if not validated.path.endswith(suffix):
+        raise MusicTransportError("Invalid music discovery base path.")
+    prefix = validated.path[:-len(suffix)]
+    path = prefix + "/api/v1/search"
+    uri = urlunsplit((
+        validated.scheme, validated.netloc, path,
+        urlencode({"q": text, "limit_artists": "10", "limit_albums": "25"}), ""
+    ))
+    req = Request(uri, method="GET", headers={"Accept": "application/json"})
+    opener = build_opener(ProxyHandler({}), DenyRedirects(), HTTPHandler(),
+                          HTTPSHandler(context=ssl.create_default_context()))
+    try:
+        with opener.open(req, timeout=12) as response:
+            data = response.read(MAX_CATALOG + 1)
+    except MusicTransportError:
+        raise
+    except HTTPError:
+        raise MusicTransportError("Music discovery is not available on this server.") from None
+    except (URLError, OSError, socket.timeout):
+        raise MusicTransportError("Music discovery is temporarily unavailable.") from None
+    if len(data) > MAX_CATALOG:
+        raise MusicTransportError("Music discovery results exceeded the size limit.")
+    try:
+        result = json.loads(data)
+    except (UnicodeError, ValueError) as exc:
+        raise MusicTransportError("Music discovery returned invalid results.") from exc
+    if not isinstance(result, dict):
+        raise MusicTransportError("Music discovery returned unexpected results.")
+    return result
+
+
 def stream(base: str, auth: dict[str, str], song_id: str) -> None:
     song_id = _bounded_text(song_id, "track ID")
     with _post(base, "stream", auth, {"id": song_id, "format": "raw"}) as response:
@@ -221,6 +265,19 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
         payload = result.get("results") or {}
         found = [(kind, x) for kind in ("artist", "album", "song")
                  for x in items(payload.get(kind))][:1000]
+        # Existing DroppedNeedle search is used verbatim for missing music.
+        # Exclude already-owned albums; they are available above via search3.
+        catalog = result.get("catalog") or {}
+        found += [("catalog_" + kind, {
+            "id": item.get("musicbrainz_id", ""),
+            "title": item.get("title", ""),
+            "artist": (
+                (item.get("artist") or "") +
+                (" · Requested" if item.get("requested") else " · Not in library")
+            ),
+        }) for kind in ("artist", "album")
+            for item in items(catalog.get(kind + "s"))
+            if item.get("in_library") is not True][:1000]
     else:
         found = []
     lines = []
@@ -302,6 +359,12 @@ def main(argv: list[str] | None = None) -> int:
             value = _bounded_text(args.value, "search query", 200)
             data = query(args.base_url, "search3", auth, {"query": value})
             result = {"results": data.get("searchResult3", {})}
+            try:
+                result["catalog"] = catalog_search(args.base_url, value)
+            except MusicTransportError:
+                # An unavailable acquisition catalog must never break access
+                # to owned songs. Do not use the player app key as REST auth.
+                result["catalog"] = {}
         elif args.operation == "album":
             data = query(args.base_url, "getAlbum", auth, {"id": _bounded_text(args.value, "album ID")})
             result = {"album": data.get("album", {})}

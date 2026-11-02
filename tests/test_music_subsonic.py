@@ -323,6 +323,19 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(parts[6],"1")
         self.assertEqual(parts[2],"曲名")
 
+    def test_album_metadata_has_separate_header_not_a_fake_song(self):
+        import base64
+        rows=music._rows("album",{"album":{
+            "id":"album:a1","name":"Example Album","artist":"Artist",
+            "year":2025,"genre":"Rock","starred":None,
+            "song":[{"id":"track:t1","title":"Track 1"}]}}).splitlines()
+        self.assertEqual(len(rows),2)
+        values=[[base64.b64decode(p).decode("utf-8") for p in row.split("\t")]
+                for row in rows]
+        self.assertEqual(values[0][0],"album_meta")
+        self.assertEqual(values[0][5],"2025 · Rock")
+        self.assertEqual(values[1][0],"song")
+
     def test_like_and_playlist_actions_use_authenticated_subsonic(self):
         from unittest import mock
         calls=[]

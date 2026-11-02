@@ -70,7 +70,7 @@ int main(int argc, char **argv) {
   GtkWidget *nav = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 4);
   GtkWidget *tabs[6] = {NULL};
   const char *pages[] = {"dashboard", "games", "videos", "music", "downloads", "settings"};
-  for (unsigned i = 0; i < 5; i++) {
+  for (unsigned i = 0; i < 6; i++) {
     tabs[i] = gtk_button_new_with_label(pages[i]);
     now_nav_mark_tab(tabs[i], pages[i]);
     gtk_box_pack_start(GTK_BOX(nav), tabs[i], FALSE, FALSE, 0);

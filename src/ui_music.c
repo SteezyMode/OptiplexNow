@@ -752,7 +752,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
   if(!ok || !g_subprocess_get_successful(job->process)){
    view->hero_art_serial++;
    if(view->hero_row)gtk_widget_hide(view->hero_row);
-   status_set(view,"Music library unavailable. Check URL, app password, and server access.");
+   status_set(view,!g_strcmp0(job->operation,"catalog")
+      ? "Music discovery needs an approved device connection."
+      : "Music library unavailable. Check server access and Music connection.");
   }else{
    int count=render_rows(view,output,job->append_albums);
    if(count==0 && !job->append_albums)music_show_empty(view,job->operation);
@@ -773,7 +775,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    }
    gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
    char *message=!g_strcmp0(job->operation,"catalog")
-        ? g_strdup_printf("%d catalog results · Add to Library requires device approval",count)
+        ? g_strdup_printf("%d results from your music discovery catalog",count)
         : g_strdup_printf("%d items · Connected to your music library",
             !g_strcmp0(job->operation,"albums")?view->album_offset:count);
    status_set(view,message);

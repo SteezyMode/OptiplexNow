@@ -861,7 +861,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  if(!append){
   ++view->card_art_serial;
   view->card_art_count=0;
-  GList *cards=g_list_copy(gtk_container_get_children(GTK_CONTAINER(view->cards)));
+  GList *cards=gtk_container_get_children(GTK_CONTAINER(view->cards));
   for(GList *p=cards;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
   g_list_free(cards);
   g_hash_table_remove_all(view->album_buttons);

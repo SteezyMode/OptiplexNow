@@ -6,6 +6,7 @@
 #include "music_playback.h"
 #include <gio/gio.h>
 #include <string.h>
+#include <stdio.h>
 
 struct NowMusicPlayback {
  gint refs;
@@ -90,8 +91,17 @@ static void event_read_complete(GObject *source,GAsyncResult *result,gpointer us
   }else if(length<80){
    if(!strcmp(line,"BUFFERING")||!strcmp(line,"PLAYING")||
       !strcmp(line,"PAUSED")||!strcmp(line,"ENDED")||
-      !strcmp(line,"STOPPED")||!strcmp(line,"ERROR"))
+      !strcmp(line,"STOPPED")||!strcmp(line,"ERROR")||
+      !strcmp(line,"SEEK_UNAVAILABLE"))
     notify_event(j,line);
+   else if(g_str_has_prefix(line,"POSITION ")){
+    unsigned position=0,duration=0;
+    char extra=0;
+    /* Reject malformed or injected worker lines before handing to GTK. */
+    if(sscanf(line,"POSITION %u %u %c",&position,&duration,&extra)==2 &&
+       duration>0 && duration<=604800 && position<=duration)
+     notify_event(j,line);
+   }
   }
   if(line && !j->stopped && j->owner->current==j)
    read_event(j);
@@ -213,6 +223,23 @@ void now_music_playback_volume(NowMusicPlayback *m,int level){
                                         &written,NULL,&error);
  g_free(command);
  if(!ok){
+  MusicJob *j=m->current;
+  job_ref(j);
+  notify_event(j,"ERROR");
+  job_unref(j);
+ }
+ g_clear_error(&error);
+}
+void now_music_playback_seek(NowMusicPlayback *m,int seconds){
+ if(!m || m->closing || !m->current || seconds<0 || seconds>604800)return;
+ GOutputStream *out=g_subprocess_get_stdin_pipe(m->current->proc);
+ char *line=g_strdup_printf("SEEK %d\n",seconds);
+ gsize written=0;
+ GError *error=NULL;
+ gboolean sent=g_output_stream_write_all(out,line,strlen(line),
+                                          &written,NULL,&error);
+ g_free(line);
+ if(!sent){
   MusicJob *j=m->current;
   job_ref(j);
   notify_event(j,"ERROR");

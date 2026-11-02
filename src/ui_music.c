@@ -2013,20 +2013,20 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->volume=75;
  view->playback=now_music_playback_new(music_player_event,view);
  active_music_view=view;
- view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
+ view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
  gtk_widget_set_name(view->root,"music-home");
- gtk_container_set_border_width(GTK_CONTAINER(view->root),12);
+ gtk_container_set_border_width(GTK_CONTAINER(view->root),7);
  g_object_set_data_full(G_OBJECT(view->root),"music-view",view,music_view_free);
  g_signal_connect(view->root,"destroy",G_CALLBACK(music_view_destroy),view);
 
- GtkWidget *top=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
- GtkWidget *title=gtk_label_new("MUSIC");
- gtk_widget_set_halign(title,GTK_ALIGN_START);
- gtk_style_context_add_class(gtk_widget_get_style_context(title),"now-heading");
- gtk_box_pack_start(GTK_BOX(top),title,TRUE,TRUE,0);
- /* Keep rarely needed server management out of the everyday music rail. */
+ /* Keep server management accessible but out of the track viewport:
+  * the pinned bottom-of-sidebar menu remains available when nav scrolls. */
  GtkWidget *advanced=gtk_menu_button_new();
- gtk_button_set_label(GTK_BUTTON(advanced),"More");
+ gtk_button_set_label(GTK_BUTTON(advanced),"Music settings");
+ gtk_widget_set_name(advanced,"music-settings-nav");
+ gtk_button_set_image(GTK_BUTTON(advanced),
+     gtk_image_new_from_icon_name("emblem-system-symbolic",GTK_ICON_SIZE_MENU));
+ gtk_button_set_always_show_image(GTK_BUTTON(advanced),TRUE);
  gtk_style_context_add_class(gtk_widget_get_style_context(advanced),"now-action");
  GtkWidget *menu=gtk_menu_new();
  GtkWidget *manage=gtk_menu_item_new_with_label("Advanced · DroppedNeedle");
@@ -2043,8 +2043,6 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_menu_shell_append(GTK_MENU_SHELL(menu),forget_item);
  gtk_widget_show_all(menu);
  gtk_menu_button_set_popup(GTK_MENU_BUTTON(advanced),menu);
- gtk_box_pack_end(GTK_BOX(top),advanced,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(view->root),top,FALSE,FALSE,0);
 
  /* A registered NOW device requests Music through its approved SSH identity.
   * Never require an end user to handle a DroppedNeedle provider credential. */
@@ -2126,7 +2124,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140);
  gtk_widget_set_vexpand(sidebar_scroll,TRUE);
  gtk_container_add(GTK_CONTAINER(sidebar_scroll),sidebar);
- gtk_box_pack_start(GTK_BOX(content),sidebar_scroll,FALSE,TRUE,0);
+ GtkWidget *sidebar_rail=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_widget_set_size_request(sidebar_rail,154,-1);
+ gtk_box_pack_start(GTK_BOX(content),sidebar_rail,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(sidebar_rail),sidebar_scroll,TRUE,TRUE,0);
+ GtkWidget *sidebar_separator=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);
+ gtk_box_pack_end(GTK_BOX(sidebar_rail),advanced,FALSE,FALSE,0);
+ gtk_box_pack_end(GTK_BOX(sidebar_rail),sidebar_separator,FALSE,FALSE,0);
 
  GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
  gtk_widget_set_name(maincol,"music-main");

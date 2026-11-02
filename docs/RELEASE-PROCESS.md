@@ -4,12 +4,14 @@
 
 **Completed one-time exception for v1.20.0:** The GitHub Actions publisher recognized the PR #184 main-branch squash merge *only* if it changes `docs/releases/v1.20.0.md` and the merge commit contains the exact marker `[publish-v1.20.0]`. The job checks that `package.py` says 1.20.0, builds/validates that source and explicitly creates tag `v1.20.0` at that exact commit before publishing. No other main push or version can use this exception. Its purpose is to publish the specifically requested closed beta without interactive tag access; the regular future release path remains explicit tags.
 
+**Authorized v1.21.15 exception (PR #245):** The owner explicitly requested the tested Music build become the new official main .deb. The publish workflow may create exactly one immutable `v1.21.15` tag from a CI-verified main merge only when `docs/releases/v1.21.15.md` is part of that merge, `package.py` declares `1.21.15`, and the merge commit includes `[publish-v1.21.15]`. An ordinary main push, other version or unmarked merge cannot publish. This matches the exact-version guard used for prior official alpha releases; do not reuse the marker for later versions.
+
 ## Validation and publication
 
 1. Choose the exact code to ship. Update the Debian package version in `package.py`, release notes, and any current-status references.
 2. Run PR CI; merge approved code into `main`. CI runs build, C/Python tests, GTK smoke checks, package metadata checks and installed-package validation.
 3. For a **closed-beta prerelease intended for device testing**, finish CI and document every untested live flow in [Beta acceptance](BETA-ACCEPTANCE.md); do not call the beta accepted. For any release described as validated, first perform manual device tests of changed UI, networking, and streaming behavior.
-4. Add curated notes in `docs/releases/vX.Y.Z.md`. Normally create a **new** `vX.Y.Z` Git tag at the intended `main` commit using local `git tag` and `git push` or authenticated GitHub CLI/API. Never repoint an existing release tag. The specifically named v1.20.0 exception above creates that tag in its isolated, version-checked CI job.
+4. Add curated notes in `docs/releases/vX.Y.Z.md`. Normally create a **new** `vX.Y.Z` Git tag at the intended `main` commit using local `git tag` and `git push` or authenticated GitHub CLI/API. Never repoint an existing release tag. The specifically named main-merge exceptions above create their tags in isolated, version-checked CI jobs.
 5. `.github/workflows/release.yml` rebuilds the tagged source, verifies that tag/version/package match, and publishes immutable GitHub assets:
    - `OptiPlex-Now_X.Y.Z_amd64.deb`
    - `OptiPlex-Now_amd64.deb`
@@ -23,6 +25,6 @@ Tag-triggered publishing uses `--prerelease --latest=false` so the unvalidated b
 - CI is not a streaming acceptance test. A green workflow does not prove login, Moonlight certificate exchange, host connectivity or user data preservation.
 - The release pipeline must not touch the owner's server or deployed containers.
 - Reversion is installing an older versioned `.deb` while preserving compatible settings and identity; verify migrations before relying on rollback.
-- No workflow may publish from a PR or ordinary `main` push. The one-time exact-marker v1.20.0 release is a deliberate approved exception; remove its inert branch trigger at the next routine release to return to tags only.
+- No workflow may publish from a PR or ordinary `main` push. A named, approved, exact-marker main merge is an exception only for its stated immutable version; return to tag-only triggering after v1.21.15.
 
 See [Contributing](../CONTRIBUTING.md) and [Current status](CURRENT-STATUS.md).

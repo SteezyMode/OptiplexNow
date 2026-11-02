@@ -65,7 +65,7 @@ int main(void)
         memset(ui.trace, 0, sizeof ui.trace);
         ui.service = -1;
         EXPECT(now_tray_dispatch_action(index, &handlers, &ui) == 1);
-        EXPECT(strcmp(ui.trace, index == 4 ? "WL" : "L") == 0);
+        EXPECT(strcmp(ui.trace, (index == 2 || index == 4) ? "WL" : "L") == 0);
         EXPECT(ui.service == index);
     }
 
@@ -108,6 +108,9 @@ int main(void)
     missing.show_window = NULL;
     memset(ui.trace, 0, sizeof ui.trace);
     EXPECT(now_tray_dispatch_action(4, &missing, &ui) == 0);
+    EXPECT(ui.trace[0] == '\0');
+    memset(ui.trace, 0, sizeof ui.trace);
+    EXPECT(now_tray_dispatch_action(2, &missing, &ui) == 0);
     EXPECT(ui.trace[0] == '\0');
 
     missing = handlers;

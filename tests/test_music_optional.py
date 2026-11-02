@@ -141,7 +141,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('g_strdup_printf("%d",initial_volume)', transport)
 
     def test_catalog_search_can_work_before_music_password_setup(self):
-        self.assertIn('const gboolean catalog=!g_strcmp0(operation,"catalog")',UI_MUSIC)
+        self.assertIn('const gboolean catalog=!g_strcmp0(operation,"catalog") ||',UI_MUSIC)
         self.assertIn('const char *server_url=catalog?cfg[6]:view->bound_url;',UI_MUSIC)
         self.assertIn('job->input=catalog?g_strdup(""):g_strdup_printf(',UI_MUSIC)
         self.assertIn('query_start(view,connected?"search":"catalog",value,',UI_MUSIC)
@@ -150,6 +150,15 @@ class OptionalMusicContract(unittest.TestCase):
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
         self.assertIn('if args.operation == "catalog":',transport)
         self.assertIn('catalog_search(args.base_url',transport)
+
+    def test_discover_is_a_page_not_a_text_query(self):
+        self.assertIn('!g_strcmp0(operation,"discover")', UI_MUSIC)
+        self.assertIn('!g_strcmp0(operation,"catalog")) &&', UI_MUSIC)
+        self.assertIn('(!value || !*value)', UI_MUSIC)
+        self.assertIn('g_strdup(""):g_strdup_printf(', UI_MUSIC)
+        transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
+        self.assertIn('if args.operation in ("catalog", "discover"):', transport)
+        self.assertIn('rest_request(args.base_url, "discover"', transport)
 
     def test_real_discover_sections_and_request_buttons(self):
         self.assertIn('!strcmp(kind,"section")', UI_MUSIC)

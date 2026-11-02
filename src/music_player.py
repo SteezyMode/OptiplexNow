@@ -163,134 +163,183 @@ def stream_audio(server: str, auth: dict[str, str], track_id: str, decoder,
         done.set()
 
 
+def _mpv_query(path: str, name: str) -> float | None:
+    """Read ONLY the approved timing properties from local mpv IPC."""
+    if name not in ("time-pos", "duration"):
+        return None
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as conn:
+            conn.settimeout(0.3)
+            conn.connect(path)
+            conn.sendall(json.dumps(
+                {"command":["get_property",name]},separators=(",",":")
+            ).encode()+b"\n")
+            response=b""
+            while b"\n" not in response and len(response)<4096:
+                data=conn.recv(4096-len(response))
+                if not data:
+                    break
+                response+=data
+            value=json.loads(response.split(b"\n",1)[0])
+            result=value.get("data")
+            if value.get("error") != "success" or type(result) not in (int,float):
+                return None
+            import math
+            if not math.isfinite(result) or result<0 or result>604800:
+                return None
+            return float(result)
+    except (OSError,ValueError,TypeError):
+        return None
+
+
+def socket_seek(path: str, seconds: int) -> bool:
+    """mpv seeks the short-lived local HTTP byte-range stream, not a pipe."""
+    if type(seconds) is not int or seconds<0 or seconds>604800:
+        return False
+    try:
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as conn:
+            conn.settimeout(.8)
+            conn.connect(path)
+            conn.sendall(json.dumps(
+                {"command":["seek",seconds,"absolute"]},separators=(",",":")
+            ).encode()+b"\n")
+            answer=b""
+            while b"\n" not in answer and len(answer)<4096:
+                chunk=conn.recv(4096-len(answer))
+                if not chunk:
+                    break
+                answer+=chunk
+            return json.loads(answer.split(b"\n",1)[0]).get("error")=="success"
+    except (OSError,ValueError,TypeError):
+        return False
+
+
 def run(server: str, track_id: str, credential_stream, command_stream, output,
         *, mpv_binary: str | None = None, initial_volume: int = 75) -> int:
-    # A configured server address and track ID only; no secrets in argv.
+    # Keep real music credentials exclusively on this worker's stdin.
     if type(initial_volume) is not int or not 0 <= initial_volume <= 100:
-        output.write("ERROR\n")
-        output.flush()
+        output.write("ERROR\n");output.flush()
         return 2
     try:
         endpoint_for(server, "stream")
         _bounded_text(track_id, "track ID", 512)
-        auth = read_auth(credential_stream)
+        auth=read_auth(credential_stream)
     except (MusicTransportError, PlaybackError):
-        output.write("ERROR\n")
-        output.flush()
+        output.write("ERROR\n");output.flush()
         return 2
-    mpv = mpv_binary or shutil.which("mpv")
+    mpv=mpv_binary or shutil.which("mpv")
     if not mpv:
-        output.write("ERROR\n")
-        output.flush()
+        output.write("ERROR\n");output.flush()
         return 3
 
-    output_lock = threading.Lock()
-    def send(value: str):
-        with output_lock:
-            output.write(value + "\n")
-            output.flush()
+    from music_http_stream import MusicStreamGateway, GatewayError
+    gateway=MusicStreamGateway(server,auth["apiKey"],track_id)
+    try:
+        local_url=gateway.start()
+    except GatewayError:
+        output.write("ERROR\n");output.flush()
+        return 3
 
-    done = threading.Event()
-    failure: list[str] = []
-    stopped = False
-    paused = False
-    pause_state = threading.Event()
-    pause_guard = threading.Lock()
+    lock=threading.Lock()
+    def send(event):
+        with lock:
+            output.write(event+"\n");output.flush()
 
-    # mkdtemp uses mode 0700, so no other user can reach mpv's IPC socket.
-    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    runtime=os.environ.get("XDG_RUNTIME_DIR")
     if runtime:
         try:
-            st = os.stat(runtime)
-            if st.st_uid != os.getuid() or (st.st_mode & 0o077):
-                runtime = None
+            st=os.stat(runtime)
+            if st.st_uid!=os.getuid() or (st.st_mode & 0o077):
+                runtime=None
         except OSError:
-            runtime = None
-    with tempfile.TemporaryDirectory(prefix="bruiser-music-", dir=runtime) as directory:
-        ipc = os.path.join(directory, "control.sock")
-        argv = [
-            mpv, "--no-config", "--no-video", "--no-terminal",
-            "--really-quiet", "--audio-display=no",
-            "--volume=" + str(initial_volume),
-            "--input-ipc-server=" + ipc, "--", "-"
-        ]
-        try:
-            decoder = subprocess.Popen(
-                argv, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL, close_fds=True,
-                preexec_fn=_parent_exit_signal if sys.platform.startswith("linux") else None
-            )
-        except (OSError, ValueError):
-            send("ERROR")
-            return 3
-
-        sender = threading.Thread(target=stream_audio,
-            args=(server, auth, track_id, decoder, send, done, failure,
-                  pause_state, pause_guard),
-            daemon=True)
-        try:
-            send("BUFFERING")
-            sender.start()
-            started = time.monotonic()
-            while True:
-                if decoder.poll() is not None:
-                    if stopped:
-                        send("STOPPED")
-                    elif failure or decoder.returncode != 0:
-                        send("ERROR")
-                    else:
-                        send("ENDED")
-                    return 0 if stopped or (not failure and decoder.returncode == 0) else 2
-                if failure and done.is_set():
-                    send("ERROR")
-                    return 2
-                if not os.path.exists(ipc) and time.monotonic() - started > MPV_START_TIMEOUT:
-                    send("ERROR")
-                    return 3
-                ready, _, _ = select.select([command_stream], [], [], 0.15)
-                if not ready:
-                    continue
-                command = command_stream.readline(CONTROL_MAX + 1)
-                if not command:
-                    stopped = True
-                    send("STOPPED")
-                    return 0
-                if len(command) > CONTROL_MAX:
-                    continue
-                action = command.strip().decode("ascii", errors="ignore")
-                if action == "STOP":
-                    stopped = True
-                    send("STOPPED")
-                    return 0
-                if action.startswith("VOLUME "):
-                    digits = action[7:]
-                    if digits.isascii() and digits.isdecimal() and len(digits) <= 3:
-                        level = int(digits)
-                        if level <= 100 and os.path.exists(ipc):
-                            socket_volume(ipc, level)
-                    continue
-                if action not in ("PAUSE", "RESUME") or not os.path.exists(ipc):
-                    continue
-                wanted_paused = action == "PAUSE"
-                if wanted_paused != paused and socket_command(ipc, wanted_paused):
-                    with pause_guard:
-                        paused = wanted_paused
-                        if paused:
-                            pause_state.set()
-                        else:
-                            pause_state.clear()
+            runtime=None
+    try:
+        with tempfile.TemporaryDirectory(prefix="bruiser-music-",dir=runtime) as directory:
+            ipc=os.path.join(directory,"control.sock")
+            # mpv receives only a one-use *loopback capability*, NEVER the
+            # DroppedNeedle host URL, account key or admin session.
+            argv=[
+                mpv,"--no-config","--no-video","--no-terminal",
+                "--really-quiet","--audio-display=no",
+                "--volume="+str(initial_volume),
+                "--input-ipc-server="+ipc,"--",local_url,
+            ]
+            try:
+                decoder=subprocess.Popen(
+                    argv,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,close_fds=True,
+                    preexec_fn=_parent_exit_signal if sys.platform.startswith("linux") else None)
+            except (OSError,ValueError):
+                send("ERROR")
+                return 3
+            try:
+                send("BUFFERING")
+                started=time.monotonic()
+                last_position=0.0
+                playing=False
+                stopped=False
+                paused=False
+                while True:
+                    if decoder.poll() is not None:
+                        if stopped:send("STOPPED")
+                        elif decoder.returncode!=0:send("ERROR")
+                        else:send("ENDED")
+                        return 0 if stopped or decoder.returncode==0 else 2
+                    now=time.monotonic()
+                    if not os.path.exists(ipc) and now-started>MPV_START_TIMEOUT:
+                        send("ERROR");return 3
+                    if now-last_position>=0.55 and os.path.exists(ipc):
+                        last_position=now
+                        position=_mpv_query(ipc,"time-pos")
+                        duration=_mpv_query(ipc,"duration")
+                        if position is not None:
+                            if not playing:
+                                send("PLAYING")
+                                playing=True
+                            if duration is not None and duration>0:
+                                send("POSITION %d %d" % (int(position),int(duration)))
+                    ready,_,_=select.select([command_stream],[],[],0.13)
+                    if not ready:
+                        continue
+                    command=command_stream.readline(CONTROL_MAX+1)
+                    if not command:
+                        stopped=True;send("STOPPED");return 0
+                    if len(command)>CONTROL_MAX:
+                        continue
+                    action=command.strip().decode("ascii",errors="ignore")
+                    if action=="STOP":
+                        stopped=True;send("STOPPED");return 0
+                    if action.startswith("VOLUME "):
+                        digits=action[7:]
+                        if digits.isascii() and digits.isdecimal() and len(digits)<=3:
+                            level=int(digits)
+                            if level<=100 and os.path.exists(ipc):
+                                socket_volume(ipc,level)
+                        continue
+                    if action.startswith("SEEK "):
+                        digits=action[5:]
+                        if digits.isascii() and digits.isdecimal() and len(digits)<=6:
+                            second=int(digits)
+                            if second<=604800 and os.path.exists(ipc) and socket_seek(ipc,second):
+                                last_position=0  # refresh immediately on next tick
+                            else:
+                                send("SEEK_UNAVAILABLE")
+                        continue
+                    if action not in ("PAUSE","RESUME") or not os.path.exists(ipc):
+                        continue
+                    wanted=action=="PAUSE"
+                    if wanted!=paused and socket_command(ipc,wanted):
+                        paused=wanted
                         send("PAUSED" if paused else "PLAYING")
-        finally:
-            done.set()
-            if decoder.poll() is None:
-                decoder.terminate()
-                try:
-                    decoder.wait(timeout=2.0)
-                except subprocess.TimeoutExpired:
-                    decoder.kill()
-                    decoder.wait(timeout=2.0)
-            # Stream thread is daemonized to avoid prolonged shutdown after a
-            # network stall; no credentials remain in a persistent process.
+            finally:
+                if decoder.poll() is None:
+                    decoder.terminate()
+                    try:decoder.wait(timeout=2)
+                    except subprocess.TimeoutExpired:
+                        decoder.kill()
+                        decoder.wait(timeout=2)
+    finally:
+        gateway.close()
 
 
 def main(argv: list[str] | None = None) -> int:

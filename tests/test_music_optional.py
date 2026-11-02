@@ -109,16 +109,28 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_advanced)', UI_MUSIC)
         self.assertNotIn('getCoverArt?id=', UI_MUSIC)
 
-    def test_album_pagination_keeps_previous_rows(self):
+    def test_library_auto_pagination_keeps_previous_rows_without_footer(self):
         self.assertIn("album_offset", UI_MUSIC)
+        self.assertIn("song_offset", UI_MUSIC)
         self.assertIn("job->append_albums", UI_MUSIC)
+        self.assertIn("job->append_songs", UI_MUSIC)
         self.assertIn("render_rows(view,output,job->append_albums || job->append_songs)", UI_MUSIC)
-        self.assertIn('music_button("Load more albums")', UI_MUSIC)
-        self.assertIn('query_start(view,"albums",value,"All albums")', UI_MUSIC)
-        self.assertIn('gtk_widget_set_sensitive(view->load_more,TRUE)', UI_MUSIC)
+        self.assertIn('query_start(view,albums?"albums":"songs",value,albums?"All albums":"All songs")', UI_MUSIC)
+        self.assertIn("music_schedule_next_page(view);", UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_list_scroll_changed)', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_card_scroll_changed)', UI_MUSIC)
+        self.assertIn("view->page_idle=g_idle_add(music_fetch_next_page,view)", UI_MUSIC)
+        self.assertIn("if(view->busy || view->closing)return G_SOURCE_REMOVE;", UI_MUSIC)
+        self.assertIn('view->song_has_more=count==200', UI_MUSIC)
+        self.assertIn('view->album_has_more=count==200', UI_MUSIC)
+        self.assertIn("if(view->page_idle)g_source_remove(view->page_idle);", UI_MUSIC)
+        self.assertNotIn('music_button("Load more songs")', UI_MUSIC)
+        self.assertNotIn('music_button("Load more albums")', UI_MUSIC)
         transport = (ROOT / "src" / "music_subsonic.py").read_text(encoding="utf-8")
         self.assertIn('ALBUM_PAGE_SIZE = 200', transport)
+        self.assertIn('SONG_PAGE_SIZE = 200', transport)
         self.assertIn('offset % ALBUM_PAGE_SIZE', transport)
+        self.assertIn('offset % SONG_PAGE_SIZE', transport)
 
     def test_one_time_music_setup_is_compact_and_never_asks_username(self):
         self.assertNotIn('Username (optional)', UI_MUSIC)

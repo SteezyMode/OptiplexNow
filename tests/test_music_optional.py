@@ -67,6 +67,12 @@ class OptionalMusicContract(unittest.TestCase):
         for kind in ('"home"', '"albums"', '"recent"', '"new"', '"liked"',
                      '"artists"', '"playlists"'):
             self.assertIn(kind, UI_MUSIC)
+        self.assertIn('gtk_widget_set_name(view->root,"music-home");', UI_MUSIC)
+        self.assertIn('gtk_widget_set_name(sidebar,"music-sidebar");', UI_MUSIC)
+        self.assertIn('gtk_widget_set_name(view->player_bar,"music-player");', UI_MUSIC)
+        self.assertIn('gtk_widget_set_name(view->list,"music-library");', UI_MUSIC)
+        self.assertIn('"#music-sidebar button#music-nav.now-action', MAIN)
+        self.assertIn('"#music-player {background:', MAIN)
         self.assertIn('"getStarred2"', transport)
         self.assertIn('"getAlbumList2"', transport)
         self.assertIn('"newest"', transport)

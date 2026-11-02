@@ -90,10 +90,10 @@ class MusicPlaybackContract(unittest.TestCase):
         self.assertIn('TemporaryDirectory(prefix="bruiser-music-"', content)
         self.assertIn('preexec_fn=_parent_exit_signal', content)
         self.assertIn('_post(server, "stream", auth, {"id": track_id, "format": "raw"})', content)
-        self.assertIn('if action == "STOP":', content)
-        self.assertIn('action not in ("PAUSE", "RESUME")', content)
+        self.assertIn('if action=="STOP":', content)
+        self.assertIn('action not in ("PAUSE","RESUME")', content)
         self.assertIn('if action.startswith("VOLUME "):', content)
-        self.assertIn('"--volume=" + str(initial_volume)', content)
+        self.assertIn('"--volume="+str(initial_volume)', content)
         self.assertNotIn('apiKey=', content)
         self.assertNotIn('subprocess.run("', content)
 

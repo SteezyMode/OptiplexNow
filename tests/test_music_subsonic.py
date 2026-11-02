@@ -39,7 +39,7 @@ class MockHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "audio/mpeg")
         elif self.path.endswith("/getCoverArt"):
-            payload = b"\\x89PNG\\r\\n\\x1a\\n" + b"fixture"
+            payload = b"\x89PNG\r\n\x1a\n" + b"fixture"
             self.send_response(200)
             self.send_header("Content-Type", "image/png")
         elif self.path.endswith("/stream_error"):
@@ -187,7 +187,7 @@ class MusicSubsonicTests(unittest.TestCase):
                          "Album\nwith\tcontrols")
         self.assertEqual(b64decode(lines[0].split("\t")[3]).decode(), "歌手")
         self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
-        self.assertEqual(b64decode(lines[0].split("\\t")[4]), b"a1")
+        self.assertEqual(b64decode(lines[0].split("\t")[4]), b"a1")
 
     def test_real_recent_new_and_liked_endpoint_contracts(self):
         for kind in ("recent", "newest", "alphabeticalByName"):

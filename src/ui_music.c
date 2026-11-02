@@ -590,6 +590,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
+ const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
  if(!*cfg[6]){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;

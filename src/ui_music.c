@@ -596,6 +596,15 @@ static void music_request_album(GtkWidget *button,gpointer data){
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover){
+ if(!g_strcmp0(kind,"section")){
+  GtkWidget *heading=gtk_label_new(title);
+  gtk_widget_set_name(heading,"music-section-title");
+  gtk_label_set_xalign(GTK_LABEL(heading),0);
+  gtk_widget_set_margin_top(heading,18);
+  gtk_widget_set_margin_bottom(heading,7);
+  gtk_list_box_insert(GTK_LIST_BOX(view->list),heading,-1);
+  return;
+ }
  GtkWidget *row=gtk_list_box_row_new();
  GtkWidget *button=gtk_button_new();
  gtk_widget_set_name(button,"music-row");
@@ -688,7 +697,8 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
    if(kind && id && title && artist && cover &&
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
-       !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist"))){
+       !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
+       !strcmp(kind,"section"))){
     music_add_item(view,kind,id,title,artist,cover);
     ++count;
    }
@@ -709,6 +719,8 @@ static void music_show_empty(MusicView *view,const char *operation){
   message="No recently played albums yet. Browse Albums or New additions.";
  else if(!g_strcmp0(operation,"liked"))
   message="Nothing in Liked yet. Favorites from your music library will appear here.";
+ else if(!g_strcmp0(operation,"discover"))
+  message="No music suggestions are available right now.";
  else if(!g_strcmp0(operation,"playlists"))
   message="No playlists yet. Existing server playlists will appear here.";
  GtkWidget *empty=gtk_label_new(message);
@@ -753,7 +765,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    view->hero_art_serial++;
    if(view->hero_row)gtk_widget_hide(view->hero_row);
    status_set(view,!g_strcmp0(job->operation,"catalog")
-      ? "Music discovery needs an approved device connection."
+      ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
    int count=render_rows(view,output,job->append_albums);
@@ -774,8 +786,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     gtk_widget_set_sensitive(view->hero_play,playable);
    }
    gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
-   char *message=!g_strcmp0(job->operation,"catalog")
-        ? g_strdup_printf("%d results from your music discovery catalog",count)
+   char *message=(!g_strcmp0(job->operation,"catalog") ||
+                          !g_strcmp0(job->operation,"discover"))
+        ? g_strdup_printf("%d music discovery items",count)
         : g_strdup_printf("%d items · Connected to your music library",
             !g_strcmp0(job->operation,"albums")?view->album_offset:count);
    status_set(view,message);
@@ -802,7 +815,8 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
- const gboolean catalog=!g_strcmp0(operation,"catalog");
+ const gboolean catalog=!g_strcmp0(operation,"catalog") ||
+                        !g_strcmp0(operation,"discover");
  if(!*cfg[6]){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
@@ -1255,17 +1269,16 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_size_request(sidebar,135,-1);
  /* Established Spotify-style grouping: Home + Search, then
   * Your Library filters. Never put downloads/admin workflow in this rail. */
- const char *ops[]={"home",NULL,"playlists","artists","albums",
+ const char *ops[]={"home",NULL,"discover","playlists","artists","albums",
                     "liked","recent","new"};
- const char *titles[]={"Home","Search","Playlists","Artists",
-                       "Albums","Liked Songs","Recently played",
-                       "New additions"};
- const char *headings[]={"Music Home","Search","Your playlists",
+ const char *titles[]={"Home","Search","Discover","Playlists","Artists",
+                       "Albums","Liked Songs","Recently played","New additions"};
+ const char *headings[]={"Music Home","Search","Discover","Your playlists",
                          "Artists","All albums","Liked music",
                          "Recently played albums","New additions"};
  for(guint i=0;i<G_N_ELEMENTS(ops);i++){
-  if(i==2 || i==6){
-   GtkWidget *heading=gtk_label_new(i==2?"YOUR LIBRARY":"BROWSE");
+  if(i==3 || i==7){
+   GtkWidget *heading=gtk_label_new(i==3?"YOUR LIBRARY":"BROWSE");
    gtk_widget_set_name(heading,"music-library-label");
    gtk_label_set_xalign(GTK_LABEL(heading),0);
    gtk_widget_set_margin_top(heading,12);

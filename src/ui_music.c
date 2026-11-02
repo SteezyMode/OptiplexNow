@@ -142,9 +142,18 @@ static void music_view_free(gpointer data){
  g_free(view);
 }
 
-static void status_set(MusicView *view,const char *message){
+/* The Music viewport is not a connection-status dashboard. Only display
+ * this row for actionable errors or explicit action feedback; a healthy
+ * library keeps the space available for actual tracks. */
+static void status_clear(MusicView *view){
  if(!view->closing && GTK_IS_LABEL(view->status))
+  gtk_widget_hide(view->status);
+}
+static void status_set(MusicView *view,const char *message){
+ if(!view->closing && GTK_IS_LABEL(view->status)){
   gtk_label_set_text(GTK_LABEL(view->status),message);
+  gtk_widget_show(view->status);
+ }
 }
 
 static char *helper_path(void){
@@ -309,7 +318,7 @@ static void music_stop(MusicView *view){
  view->playing_art_serial++;
  if(!view->closing){
   if(view->player_bar)gtk_widget_hide(view->player_bar);
-  status_set(view,"Playback stopped.");
+  status_clear(view);
   music_notify_tray(view);
  }
 }
@@ -344,9 +353,9 @@ static void music_player_event(const char *event,void *data){
  }
  if(!strcmp(event,"PAUSED"))view->paused=TRUE;
  else if(!strcmp(event,"PLAYING"))view->paused=FALSE;
- if(!strcmp(event,"BUFFERING"))status_set(view,"Buffering music...");
- else if(!strcmp(event,"PAUSED"))status_set(view,"Music paused.");
- else if(!strcmp(event,"PLAYING"))status_set(view,"Playing music locally.");
+ if(!strcmp(event,"BUFFERING"))status_clear(view);
+ else if(!strcmp(event,"PAUSED"))status_clear(view);
+ else if(!strcmp(event,"PLAYING"))status_clear(view);
  music_update_controls(view);
 }
 static void music_start_track(MusicView *view,int index){
@@ -827,7 +836,7 @@ static void music_request_album(GtkWidget *button,gpointer data){
  job->process=proc;
  job->cancel=g_cancellable_new();
  gtk_widget_set_sensitive(button,FALSE);
- status_set(view,"Sending album request...");
+ status_clear(view);
  job->deadline=g_timeout_add_seconds(25,music_request_timeout,job);
  g_subprocess_communicate_utf8_async(proc,"",job->cancel,
                                      music_request_complete,job);
@@ -1479,15 +1488,26 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                        view->visible_tracks->len>0;
     gtk_widget_set_sensitive(view->hero_play,playable);
    }
-   gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
-   char *message=(!g_strcmp0(job->operation,"catalog") ||
-                          !g_strcmp0(job->operation,"discover"))
-        ? g_strdup_printf("%d music discovery items",count)
-        : g_strdup_printf("%d items · Connected to your music library",
-            !g_strcmp0(job->operation,"albums")?view->album_offset:
-            !g_strcmp0(job->operation,"songs")?view->song_offset:count);
-   status_set(view,message);
-   g_free(message);
+   /* Use the existing heading for relevant library information.
+    * No separate "Connected to your music library" status row. */
+   int displayed=!g_strcmp0(job->operation,"albums")?view->album_offset:
+                 !g_strcmp0(job->operation,"songs")?view->song_offset:count;
+   const char *noun=!g_strcmp0(job->operation,"songs") ||
+                    !g_strcmp0(job->operation,"random_songs") ||
+                    !g_strcmp0(job->operation,"liked") ||
+                    !g_strcmp0(job->operation,"album") ||
+                    !g_strcmp0(job->operation,"playlist")?"songs":
+                    !g_strcmp0(job->operation,"albums") ||
+                    !g_strcmp0(job->operation,"home") ||
+                    !g_strcmp0(job->operation,"recent") ||
+                    !g_strcmp0(job->operation,"new")?"albums":
+                    !g_strcmp0(job->operation,"artists")?"artists":
+                    !g_strcmp0(job->operation,"playlists")?"playlists":"items";
+   char *heading=g_strdup_printf("%s · %d %s",job->heading,
+                                  displayed,noun);
+   gtk_label_set_text(GTK_LABEL(view->heading),heading);
+   g_free(heading);
+   status_clear(view);
    /* Shuffle All uses an authenticated, server-randomized song selection. */
    if(!g_strcmp0(job->operation,"random_songs") &&
       view->visible_tracks->len>0)music_play_visible(view,0);
@@ -1588,9 +1608,7 @@ static void query_start(MusicView *view,const char *operation,
  wipe_free(encoded_key);
  g_free(encoded_user);
  view->busy=TRUE;
- status_set(view,!g_strcmp0(operation,"discover")
-      ? "Loading music discoveries..."
-      : catalog?"Searching the music catalog...":"Loading your library...");
+ status_clear(view);
  job->deadline=g_timeout_add_seconds(27,query_timeout,job);
  g_subprocess_communicate_utf8_async(process,job->input,job->cancel,
                                     query_complete,job);
@@ -1705,7 +1723,7 @@ static void music_enroll_complete(GObject *unused,GAsyncResult *result,gpointer 
   if(done && g_subprocess_get_successful(job->process) &&
      g_strcmp0(job->server_url,cfg[6])==0 &&
      !g_strcmp0(output,"connected\n")){
-   status_set(view,"Music device approved. Opening your library...");
+   status_clear(view);
    music_vault_begin(view,"lookup",NULL);
   }else{
    status_set(view,"Music requires owner approval on this host. "
@@ -1744,7 +1762,7 @@ static void music_auto_enroll(MusicView *view){
  job->deadline=g_timeout_add_seconds(75,music_enroll_timeout,job);
  view->auto_enroll_busy=TRUE;
  gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
- status_set(view,"Checking approved Music access...");
+ status_clear(view);
  g_subprocess_communicate_utf8_async(proc,"",job->cancel,
                                       music_enroll_complete,job);
 }
@@ -1789,7 +1807,7 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
   }else if(!g_strcmp0(job->action,"store")){
    if(exit_code==0){
     gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
-    status_set(view,"Music connected. This device will sign in automatically.");
+    status_clear(view);
    }else{
     status_set(view,"Music connected for this session, but device sign-in could not be saved to the OS keyring.");
     gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
@@ -1919,7 +1937,7 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  gtk_widget_hide(view->cards_scroll);
  gtk_widget_show(view->list_scroll);
  gtk_label_set_text(GTK_LABEL(view->heading),"Search");
- status_set(view,"Search your collection or find new music by artist or album.");
+ status_clear(view);
  gtk_widget_grab_focus(view->search);
  gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
 }
@@ -1992,7 +2010,7 @@ static void music_retry_access(GtkWidget *unused,gpointer data){
  if(view->closing || view->auto_enroll_busy || view->busy)return;
  if(view->app_password && view->bound_url &&
     !g_strcmp0(view->bound_url,cfg[6])){
-  status_set(view,"This device already has Music playback access.");
+  status_clear(view);
   return;
  }
  /* The owner may have approved Music after the initial automatic attempt.
@@ -2086,7 +2104,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_container_add(GTK_CONTAINER(view->connect_panel),connect);
  gtk_box_pack_start(GTK_BOX(view->root),view->connect_panel,FALSE,FALSE,0);
 
- view->status=gtk_label_new("Checking saved Music connection on this device...");
+ view->status=gtk_label_new("");
+ gtk_widget_set_no_show_all(view->status,TRUE);
  gtk_label_set_xalign(GTK_LABEL(view->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view->root),view->status,FALSE,FALSE,0);

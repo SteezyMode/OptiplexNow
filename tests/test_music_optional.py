@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 COMPOSE = (ROOT / "deploy" / "music" / "compose.yaml").read_text(encoding="utf-8")
 README = (ROOT / "deploy" / "music" / "README.md").read_text(encoding="utf-8")
+UI_MUSIC = (ROOT / "src" / "ui_music.c").read_text(encoding="utf-8")
 
 
 class OptionalMusicContract(unittest.TestCase):
@@ -17,16 +18,20 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('now_nav_mark_tab(music_tab,"music");', MAIN)
         self.assertIn('G_CALLBACK(on_music_tab)', MAIN)
         self.assertIn('gtk_stack_add_named(GTK_STACK(main_pages),music_home,"music");', MAIN)
-        self.assertIn('GtkWidget*music_browser=button("DISCOVER MUSIC  ↗","tile");', MAIN)
-        self.assertIn('G_CALLBACK(music_open_browser)', MAIN)
+        self.assertIn('GtkWidget*music_home=now_music_build(browser_open,on_settings);', MAIN)
+        self.assertIn('gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1);', UI_MUSIC)
+        self.assertIn('g_subprocess_communicate_utf8_async', UI_MUSIC)
+        self.assertIn('music_advanced', UI_MUSIC)
+        self.assertIn('Advanced · DroppedNeedle', UI_MUSIC)
 
     def test_existing_dashboard_music_action_opens_the_new_tab(self):
         self.assertIn('else if(n==2)on_music_tab(NULL,NULL);', MAIN)
         self.assertIn('on_music_tab(GtkWidget*w,gpointer data)', MAIN)
         self.assertIn('now_nav_show_page(main_pages,"music");', MAIN)
-        self.assertIn('now_safe_preset_url(cfg[6])', MAIN)
-        self.assertIn('browser_open(cfg[6]);', MAIN)
-        self.assertIn('if(!*cfg[6] || !now_safe_preset_url(cfg[6]))', MAIN)
+        self.assertIn('query_start(view,"albums",NULL,"Your albums");', UI_MUSIC)
+        self.assertIn('view->open_url(cfg[6])', UI_MUSIC)
+        self.assertIn('wipe_free(view->app_password);', UI_MUSIC)
+        self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE', UI_MUSIC)
 
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)

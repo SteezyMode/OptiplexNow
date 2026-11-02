@@ -640,6 +640,8 @@ static void music_opened(GtkWidget *unused,gpointer data){
  if(view->bound_url && !g_strcmp0(view->bound_url,cfg[6]) &&
     view->app_password)return;
  if(view->bound_url && g_strcmp0(view->bound_url,cfg[6])){
+  /* Stop streaming before a different server can become selected. */
+  music_stop(view);
   /* Credentials are strictly scoped to the originally authorized server. */
   wipe_free(view->app_password);
   view->app_password=NULL;
@@ -657,6 +659,7 @@ static void music_forget_device(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  if(view->closing || view->vault_busy || view->busy)return;
+ music_stop(view);
  view->remember_pending=FALSE;
  wipe_free(view->app_password);view->app_password=NULL;
  g_free(view->vault_attempted_url);view->vault_attempted_url=g_strdup(cfg[6]);
@@ -723,10 +726,17 @@ static GtkWidget *music_button(const char *text){
 }
 
 GtkWidget *now_music_build(void (*open_url)(const char *),
-                           void (*open_settings)(void *, void *)){
+                           void (*open_settings)(void *, void *),
+                           void (*tray_changed)(void)){
  MusicView *view=g_new0(MusicView,1);
  view->open_url=open_url;
  view->open_settings=open_settings;
+ view->tray_changed=tray_changed;
+ view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
+ view->queue=g_ptr_array_new_with_free_func(track_free);
+ view->queue_index=-1;
+ view->playback=now_music_playback_new(music_player_event,view);
+ active_music_view=view;
  view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
  gtk_container_set_border_width(GTK_CONTAINER(view->root),12);
  g_object_set_data_full(G_OBJECT(view->root),"music-view",view,music_view_free);
@@ -813,7 +823,41 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(scroll),view->list);
  gtk_box_pack_start(GTK_BOX(maincol),scroll,TRUE,TRUE,0);
+
+ /* Persistent bottom player only while NOW has an active local stream.
+  * It does not play/control phone audio, or fake a progress bar/seek support. */
+ view->player_bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
+ gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
+                             "music-player-bar");
+ view->playing_label=gtk_label_new("");
+ gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
+ gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_hexpand(view->playing_label,TRUE);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),view->playing_label,TRUE,TRUE,0);
+ view->previous_button=music_button("Previous");
+ g_signal_connect(view->previous_button,"clicked",
+                  G_CALLBACK(music_prev_clicked),view);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),
+                    view->previous_button,FALSE,FALSE,0);
+ view->pause_button=music_button("Pause");
+ g_signal_connect(view->pause_button,"clicked",
+                  G_CALLBACK(music_pause_clicked),view);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),
+                    view->pause_button,FALSE,FALSE,0);
+ view->next_button=music_button("Next");
+ g_signal_connect(view->next_button,"clicked",
+                  G_CALLBACK(music_next_clicked),view);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),
+                    view->next_button,FALSE,FALSE,0);
+ GtkWidget *stop_button=music_button("Stop");
+ g_signal_connect(stop_button,"clicked",
+                  G_CALLBACK(music_stop_clicked),view);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),stop_button,FALSE,FALSE,0);
+ gtk_widget_set_no_show_all(view->player_bar,TRUE);
+ gtk_box_pack_end(GTK_BOX(view->root),view->player_bar,FALSE,FALSE,0);
  g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view);
  gtk_widget_show_all(view->root);
+ gtk_widget_hide(view->player_bar);
  return view->root;
 }

@@ -1125,6 +1125,27 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
+ if(!g_strcmp0(kind,"album_meta")){
+  if(view->hero_title && title && *title)
+   gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+  if(view->hero_subtitle){
+   char *description=album && *album?
+       g_strdup_printf("%s · %s",artist?artist:"",album):
+       g_strdup(artist?artist:"");
+   gtk_label_set_text(GTK_LABEL(view->hero_subtitle),description);
+   g_free(description);
+  }
+  if(view->hero_like){
+   g_object_set_data_full(G_OBJECT(view->hero_like),"music-id",
+                          g_strdup(id),g_free);
+   g_object_set_data(G_OBJECT(view->hero_like),"music-liked",
+                     GINT_TO_POINTER(liked?2:1));
+   gtk_button_set_image(GTK_BUTTON(view->hero_like),
+      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
+          "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+  }
+  return;
+ }
  if(view->grid_mode && (!g_strcmp0(kind,"album") ||
       !g_strcmp0(kind,"artist") || !g_strcmp0(kind,"playlist"))){
   /* Familiar square-art library tiles, not a second navigation model. */
@@ -1309,7 +1330,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
        !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
-       !strcmp(kind,"section"))){
+       !strcmp(kind,"album_meta") || !strcmp(kind,"section"))){
     music_add_item(view,kind,id,title,artist,cover,album,!strcmp(liked,"1"));
     ++count;
    }

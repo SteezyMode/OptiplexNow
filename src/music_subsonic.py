@@ -165,46 +165,20 @@ def query(base: str, method: str, auth: dict[str, str],
 
 
 def catalog_search(base: str, text: str) -> dict[str, Any]:
-    """Read DroppedNeedle's existing artist/album search results.
+    """Use DroppedNeedle's *authenticated* native catalog, never a guest API.
 
-    Discovery is NOT another download service. This route in DroppedNeedle
-    v2.15.0 does not accept OpenSubsonic app keys, and the app key is NEVER
-    attached here. Album requests require separately authorized REST access.
+    An OpenSubsonic playback key is NOT a DroppedNeedle REST bearer.
+    The separate, owner-authorized per-device companion session must be in
+    the local OS keyring; missing/expired permission fails closed.
     """
     text = _bounded_text(text, "music discovery query", 200)
-    # Reuse the strict network/address/path checks from the authenticated
-    # transport, but DO NOT attach streaming app credentials to the REST API.
-    validated = urlsplit(endpoint_for(base, "ping"))
-    suffix = "/subsonic/rest/ping"
-    if not validated.path.endswith(suffix):
-        raise MusicTransportError("Invalid music discovery base path.")
-    prefix = validated.path[:-len(suffix)]
-    path = prefix + "/api/v1/search"
-    uri = urlunsplit((
-        validated.scheme, validated.netloc, path,
-        urlencode({"q": text, "limit_artists": "10", "limit_albums": "25"}), ""
-    ))
-    req = Request(uri, method="GET", headers={"Accept": "application/json"})
-    opener = build_opener(ProxyHandler({}), DenyRedirects(), HTTPHandler(),
-                          HTTPSHandler(context=ssl.create_default_context()))
+    from music_rest import get_session, request, MusicRESTError
     try:
-        with opener.open(req, timeout=12) as response:
-            data = response.read(MAX_CATALOG + 1)
-    except MusicTransportError:
-        raise
-    except HTTPError:
-        raise MusicTransportError("Music discovery is not available on this server.") from None
-    except (URLError, OSError, socket.timeout):
-        raise MusicTransportError("Music discovery is temporarily unavailable.") from None
-    if len(data) > MAX_CATALOG:
-        raise MusicTransportError("Music discovery results exceeded the size limit.")
-    try:
-        result = json.loads(data)
-    except (UnicodeError, ValueError) as exc:
-        raise MusicTransportError("Music discovery returned invalid results.") from exc
-    if not isinstance(result, dict):
-        raise MusicTransportError("Music discovery returned unexpected results.")
-    return result
+        token = get_session(base)
+        return request(base, "search", token=token, value=text)
+    except MusicRESTError as exc:
+        raise MusicTransportError(str(exc)) from None
+
 
 
 def stream(base: str, auth: dict[str, str], song_id: str) -> None:

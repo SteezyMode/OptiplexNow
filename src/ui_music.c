@@ -906,6 +906,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->playback=now_music_playback_new(music_player_event,view);
  active_music_view=view;
  view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);
+ gtk_widget_set_name(view->root,"music-home");
  gtk_container_set_border_width(GTK_CONTAINER(view->root),12);
  g_object_set_data_full(G_OBJECT(view->root),"music-view",view,music_view_free);
  g_signal_connect(view->root,"destroy",G_CALLBACK(music_view_destroy),view);
@@ -949,6 +950,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_vexpand(content,TRUE);
  gtk_box_pack_start(GTK_BOX(view->root),content,TRUE,TRUE,0);
  GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
+ gtk_widget_set_name(sidebar,"music-sidebar");
  gtk_widget_set_size_request(sidebar,135,-1);
  /* Familiar, functional library destinations: no unsupported
   * recommendation placeholders or hidden DroppedNeedle admin controls. */
@@ -959,6 +961,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                          "New additions","Liked music","Artists","Your playlists"};
  for(guint i=0;i<G_N_ELEMENTS(ops);i++){
   GtkWidget *b=music_button(titles[i]);
+  gtk_widget_set_name(b,"music-nav");
+  GtkWidget *nav_label=gtk_bin_get_child(GTK_BIN(b));
+  if(GTK_IS_LABEL(nav_label))gtk_label_set_xalign(GTK_LABEL(nav_label),0);
   g_object_set_data(G_OBJECT(b),"music-operation",(gpointer)ops[i]);
   g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)headings[i]);
   g_signal_connect(b,"clicked",G_CALLBACK(music_nav),view);
@@ -973,6 +978,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_start(GTK_BOX(content),sidebar,FALSE,FALSE,0);
 
  GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
+ gtk_widget_set_name(maincol,"music-main");
  gtk_widget_set_hexpand(maincol,TRUE);
  gtk_box_pack_start(GTK_BOX(content),maincol,TRUE,TRUE,0);
  GtkWidget *searchrow=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
@@ -986,11 +992,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_start(GTK_BOX(searchrow),search_button,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(maincol),searchrow,FALSE,FALSE,0);
  view->heading=gtk_label_new("Music Home");
+ gtk_widget_set_name(view->heading,"music-section-title");
  gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
  /* Album/artist/playlist art is fetched on demand, not through an
   * unbounded request fan-out for every visible library item. */
  view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,12);
+ gtk_widget_set_name(view->hero_row,"music-hero");
  view->hero_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
  gtk_widget_set_size_request(view->hero_art,120,120);
  gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_art,FALSE,FALSE,0);
@@ -1012,6 +1020,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
      GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
  gtk_widget_set_vexpand(scroll,TRUE);
  view->list=gtk_list_box_new();
+ gtk_widget_set_name(view->list,"music-library");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(scroll),view->list);
  gtk_box_pack_start(GTK_BOX(maincol),scroll,TRUE,TRUE,0);
@@ -1022,6 +1031,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
                              "music-player-bar");
+ gtk_widget_set_name(view->player_bar,"music-player");
  view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
  gtk_widget_set_size_request(view->playing_art,44,44);
  gtk_box_pack_start(GTK_BOX(view->player_bar),view->playing_art,FALSE,FALSE,0);

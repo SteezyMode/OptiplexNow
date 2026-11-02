@@ -145,6 +145,12 @@ class ProvisionTests(unittest.TestCase):
     def test_revoked_or_wrong_owner_never_calls_music_account(self):
         approve_device(self.policy,"1001",paired())
         grant_music(self.policy,"1001",paired(),owner_confirmed=True)
+        # A policy-only revoke is explicitly prohibited while upstream
+        # app-password and REST sessions could still be valid.
+        with self.assertRaisesRegex(PolicyError,"Revoke Music provider"):
+            revoke_device(self.policy,"1001")
+        from owner_access import revoke_music
+        revoke_music(self.policy,"1001",upstream_revoked=True)
         revoke_device(self.policy,"1001")
         with self.assertRaises(PolicyError):self.provision()
         self.assertFalse(FakeDN.observed)

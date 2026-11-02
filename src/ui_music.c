@@ -816,6 +816,200 @@ static gboolean music_status_tick(gpointer data){
  return G_SOURCE_CONTINUE;
 }
 
+/* Favorites and playlists use OpenSubsonic, on a separate async channel.
+ * They do not block playback or clear the current library view. */
+typedef struct {
+ GtkWidget *root,*button;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+ char *operation,*song_id,*input;
+} MusicActionJob;
+
+static gboolean music_action_timeout(gpointer data){
+ MusicActionJob *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+static void music_action_free(MusicActionJob *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_clear_object(&job->cancel);
+ g_clear_object(&job->process);
+ g_clear_object(&job->root);
+ g_clear_object(&job->button);
+ g_free(job->operation);
+ g_free(job->song_id);
+ wipe_free(job->input);
+ g_free(job);
+}
+static void music_action_start(MusicView *view,const char *operation,
+                               const char *value,GtkWidget *button,
+                               const char *song_id);
+static void music_playlist_dialog(MusicView *view,const char *song_id,
+                                  const char *output,GtkWidget *button){
+ GtkWidget *parent=gtk_widget_get_toplevel(view->root);
+ GtkWidget *dialog=gtk_dialog_new_with_buttons("Add to playlist",
+   GTK_IS_WINDOW(parent)?GTK_WINDOW(parent):NULL,
+   GTK_DIALOG_MODAL|GTK_DIALOG_DESTROY_WITH_PARENT,
+   "Cancel",GTK_RESPONSE_CANCEL,"Add",GTK_RESPONSE_OK,NULL);
+ gtk_window_set_default_size(GTK_WINDOW(dialog),420,-1);
+ GtkWidget *content=gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+ gtk_container_set_border_width(GTK_CONTAINER(content),18);
+ gtk_box_set_spacing(GTK_BOX(content),12);
+ GtkWidget *intro=gtk_label_new("Choose an existing playlist or enter a new name.");
+ gtk_label_set_xalign(GTK_LABEL(intro),0);
+ gtk_label_set_line_wrap(GTK_LABEL(intro),TRUE);
+ gtk_box_pack_start(GTK_BOX(content),intro,FALSE,FALSE,0);
+ GtkWidget *combo=gtk_combo_box_text_new();
+ gtk_widget_set_hexpand(combo,TRUE);
+ int count=0;
+ char **lines=g_strsplit(output?output:"","\n",-1);
+ for(int k=0;lines[k] && count<200;k++){
+  char **fields=g_strsplit(lines[k],"\t",8);
+  if(g_strv_length(fields)>=5){
+   char *kind=decode_field(fields[0]);
+   char *id=decode_field(fields[1]);
+   char *title=decode_field(fields[2]);
+   if(kind && !strcmp(kind,"playlist") && id && *id &&
+      title && *title){
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(combo),id,title);
+    count++;
+   }
+   g_free(kind);g_free(id);g_free(title);
+  }
+  g_strfreev(fields);
+ }
+ g_strfreev(lines);
+ if(count)gtk_combo_box_set_active(GTK_COMBO_BOX(combo),0);
+ gtk_widget_set_sensitive(combo,count>0);
+ GtkWidget *existing=gtk_label_new("Existing playlist");
+ gtk_label_set_xalign(GTK_LABEL(existing),0);
+ gtk_box_pack_start(GTK_BOX(content),existing,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(content),combo,FALSE,FALSE,0);
+ GtkWidget *create=gtk_label_new("Or create a playlist");
+ gtk_label_set_xalign(GTK_LABEL(create),0);
+ gtk_box_pack_start(GTK_BOX(content),create,FALSE,FALSE,0);
+ GtkWidget *entry=gtk_entry_new();
+ gtk_entry_set_placeholder_text(GTK_ENTRY(entry),"New playlist name (optional)");
+ gtk_entry_set_max_length(GTK_ENTRY(entry),100);
+ gtk_box_pack_start(GTK_BOX(content),entry,FALSE,FALSE,0);
+ gtk_widget_show_all(content);
+ if(gtk_dialog_run(GTK_DIALOG(dialog))==GTK_RESPONSE_OK){
+  const char *name=gtk_entry_get_text(GTK_ENTRY(entry));
+  const char *selected=gtk_combo_box_get_active_id(GTK_COMBO_BOX(combo));
+  const char *target=(name && *name)?name:selected;
+  const char *action=(name && *name)?"playlist_create":"playlist_add";
+  if(target && *target && !strchr(song_id,'|')){
+   char *value=g_strdup_printf("%s|%s",target,song_id);
+   music_action_start(view,action,value,button,song_id);
+   g_free(value);
+  }else status_set(view,"Select a playlist or enter a name.");
+ }
+ gtk_widget_destroy(dialog);
+}
+static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicActionJob *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ gchar *output=NULL;
+ GError *error=NULL;
+ gboolean done=g_subprocess_communicate_utf8_finish(job->process,result,
+                                                    &output,NULL,&error);
+ gboolean ok=done && g_subprocess_get_successful(job->process);
+ if(view && !view->closing){
+  if(job->button && gtk_widget_get_parent(job->button))
+   gtk_widget_set_sensitive(job->button,TRUE);
+  if(!ok){
+   status_set(view,"Could not update Music library. Try again.");
+  }else if(!strcmp(job->operation,"playlist_options")){
+   music_playlist_dialog(view,job->song_id,output,job->button);
+  }else if(!strcmp(job->operation,"like") ||
+           !strcmp(job->operation,"unlike")){
+   gboolean liked=!strcmp(job->operation,"like");
+   if(job->button && gtk_widget_get_parent(job->button)){
+    gtk_button_set_image(GTK_BUTTON(job->button),
+      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
+                                   "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+    gtk_widget_set_tooltip_text(job->button,liked?"Unlike song":"Like song");
+    g_object_set_data(G_OBJECT(job->button),"music-liked",
+                      GINT_TO_POINTER(liked?2:1));
+   }
+   for(guint i=0;i<view->visible_tracks->len;i++){
+    MusicTrack *t=g_ptr_array_index(view->visible_tracks,i);
+    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+   }
+   for(guint i=0;i<view->queue->len;i++){
+    MusicTrack *t=g_ptr_array_index(view->queue,i);
+    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+   }
+   status_set(view,liked?"Added to Liked Songs.":"Removed from Liked Songs.");
+  }else{
+   status_set(view,"Song added to playlist.");
+  }
+ }
+ g_clear_error(&error);
+ g_free(output);
+ music_action_free(job);
+}
+static void music_action_start(MusicView *view,const char *operation,
+                               const char *value,GtkWidget *button,
+                               const char *song_id){
+ if(view->closing || !view->app_password || !view->bound_url ||
+    g_strcmp0(view->bound_url,cfg[6])!=0)return;
+ char *helper=helper_path();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  g_free(helper);
+  status_set(view,"Music helper is missing.");
+  return;
+ }
+ const char *argv_with_value[]={"/usr/bin/python3",helper,view->bound_url,
+                  operation,value,"--format=rows","--auth-format=form",NULL};
+ const char *argv_without_value[]={"/usr/bin/python3",helper,view->bound_url,
+                  operation,"--format=rows","--auth-format=form",NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(value?argv_with_value:argv_without_value,
+      G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){
+  g_clear_error(&error);
+  status_set(view,"Could not start Music action.");
+  return;
+ }
+ MusicActionJob *job=g_new0(MusicActionJob,1);
+ job->root=g_object_ref(view->root);
+ job->button=button?g_object_ref(button):NULL;
+ job->process=proc;
+ job->cancel=g_cancellable_new();
+ job->operation=g_strdup(operation);
+ job->song_id=g_strdup(song_id?song_id:"");
+ char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
+ char *user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+ job->input=g_strdup_printf("api_key=%s&username=%s",key,user);
+ wipe_free(key);g_free(user);
+ if(button)gtk_widget_set_sensitive(button,FALSE);
+ job->deadline=g_timeout_add_seconds(27,music_action_timeout,job);
+ g_subprocess_communicate_utf8_async(proc,job->input,job->cancel,
+                                     music_action_complete,job);
+}
+static void music_like_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ GtkWidget *button=GTK_WIDGET(data);
+ MusicView *view=g_object_get_data(G_OBJECT(button),"music-view");
+ const char *id=g_object_get_data(G_OBJECT(button),"music-id");
+ gboolean liked=GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button),"music-liked"))==2;
+ if(view && id)music_action_start(view,liked?"unlike":"like",id,button,id);
+}
+static void music_playlist_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ GtkWidget *button=GTK_WIDGET(data);
+ MusicView *view=g_object_get_data(G_OBJECT(button),"music-view");
+ const char *id=g_object_get_data(G_OBJECT(button),"music-id");
+ if(view && id)music_action_start(view,"playlist_options",NULL,button,id);
+}
+
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){

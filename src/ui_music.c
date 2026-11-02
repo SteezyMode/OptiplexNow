@@ -595,9 +595,10 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     gtk_widget_set_sensitive(view->hero_play,playable);
    }
    gtk_label_set_text(GTK_LABEL(view->heading),job->heading);
-   char *message=g_strdup_printf("%d items · Connected to your music library",
-                                 !g_strcmp0(job->operation,"albums")
-                                   ? view->album_offset : count);
+   char *message=!g_strcmp0(job->operation,"catalog")
+        ? g_strdup_printf("%d catalog results · Add to Library requires device approval",count)
+        : g_strdup_printf("%d items · Connected to your music library",
+            !g_strcmp0(job->operation,"albums")?view->album_offset:count);
    status_set(view,message);
    g_free(message);
    if(view->remember_pending){
@@ -622,21 +623,22 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
+ const gboolean catalog=!g_strcmp0(operation,"catalog");
  if(!*cfg[6]){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
  }
- if(!view->bound_url || g_strcmp0(view->bound_url,cfg[6])){
+ if(!catalog && (!view->bound_url || g_strcmp0(view->bound_url,cfg[6]))){
   wipe_free(view->app_password);
   view->app_password=NULL;
   status_set(view,"Music server changed. Reconnect with its app password.");
   return;
  }
- if(!view->app_password || !*view->app_password){
-  status_set(view,"Enter your OpenSubsonic app password and connect first.");
+ if(!catalog && (!view->app_password || !*view->app_password)){
+  status_set(view,"Music playback is not connected on this device.");
   return;
  }
- if(!g_strcmp0(operation,"search") && (!value || !*value)){
+ if((!g_strcmp0(operation,"search") || catalog) && (!value || !*value)){
   status_set(view,"Enter an artist, album, or song to search.");
   return;
  }
@@ -646,10 +648,11 @@ static void query_start(MusicView *view,const char *operation,
   g_free(helper);
   return;
  }
- const gchar *argv[]={"/usr/bin/python3",helper,view->bound_url,operation,
+ const char *server_url=catalog?cfg[6]:view->bound_url;
+ const gchar *argv[]={"/usr/bin/python3",helper,server_url,operation,
                       value && *value?value:NULL,"--format=rows","--auth-format=form",NULL};
  /* Avoid a NULL gap (the helper needs no arbitrary value for browse calls). */
- const gchar *without_value[]={"/usr/bin/python3",helper,view->bound_url,operation,
+ const gchar *without_value[]={"/usr/bin/python3",helper,server_url,operation,
                               "--format=rows","--auth-format=form",NULL};
  const gchar *const *command=value && *value?argv:without_value;
  GError *error=NULL;
@@ -662,8 +665,12 @@ static void query_start(MusicView *view,const char *operation,
   g_clear_error(&error);
   return;
  }
- char *encoded_user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
- char *encoded_key=g_uri_escape_string(view->app_password,NULL,FALSE);
+ char *encoded_user=NULL;
+ char *encoded_key=NULL;
+ if(!catalog){
+  encoded_user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+  encoded_key=g_uri_escape_string(view->app_password,NULL,FALSE);
+ }
  MusicQuery *job=g_new0(MusicQuery,1);
  job->process=process;
  job->root=g_object_ref(view->root);
@@ -676,11 +683,12 @@ static void query_start(MusicView *view,const char *operation,
   if(!append_albums)gtk_widget_hide(view->load_more);
   else gtk_widget_set_sensitive(view->load_more,FALSE);
  }
- job->input=g_strdup_printf("api_key=%s&username=%s",encoded_key,encoded_user);
+ job->input=catalog?g_strdup(""):g_strdup_printf(
+     "api_key=%s&username=%s",encoded_key,encoded_user);
  wipe_free(encoded_key);
  g_free(encoded_user);
  view->busy=TRUE;
- status_set(view,"Loading music library...");
+ status_set(view,catalog?"Searching the music catalog...":"Loading your library...");
  job->deadline=g_timeout_add_seconds(27,query_timeout,job);
  g_subprocess_communicate_utf8_async(process,job->input,job->cancel,
                                     query_complete,job);
@@ -940,7 +948,7 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  if(view->load_more)gtk_widget_hide(view->load_more);
  render_rows(view,"",FALSE);
  gtk_label_set_text(GTK_LABEL(view->heading),"Search");
- status_set(view,"Search your music library by artist, album, or song.");
+ status_set(view,"Search your collection or find new music by artist or album.");
  gtk_widget_grab_focus(view->search);
  gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
 }
@@ -963,7 +971,10 @@ static void music_search(GtkWidget *unused,gpointer data){
  if(value && *value){
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
-  query_start(view,"search",value,"Search results");
+  gboolean connected=view->app_password && view->bound_url &&
+                       !g_strcmp0(view->bound_url,cfg[6]);
+  query_start(view,connected?"search":"catalog",value,
+              connected?"Search results":"Music catalog");
  }
 }
 

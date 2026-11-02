@@ -36,6 +36,7 @@ typedef struct {
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
+ GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
  GPtrArray *visible_tracks, *queue;
@@ -1905,6 +1906,19 @@ static void music_forget_device(GtkWidget *unused,gpointer data){
  music_vault_begin(view,"clear",NULL);
 }
 
+/* A small, collapsible collection rail. Unlike the former full-height
+ * button stack, filters appear only when the user opens Your Library. */
+static void music_library_expand(MusicView *view,gboolean expanded){
+ if(!view->library_revealer)return;
+ gtk_revealer_set_reveal_child(GTK_REVEALER(view->library_revealer),expanded);
+ if(view->library_arrow)
+  gtk_image_set_from_icon_name(GTK_IMAGE(view->library_arrow),
+      expanded?"pan-down-symbolic":"pan-end-symbolic",GTK_ICON_SIZE_MENU);
+ if(view->library_button)
+  gtk_widget_set_tooltip_text(view->library_button,expanded?
+       "Show all songs; collapse library filters":
+       "Show all songs; expand library filters");
+}
 static void music_nav_selected(MusicView *view,GtkWidget *selected){
  if(!selected || view->active_nav==selected)return;
  if(view->active_nav && GTK_IS_WIDGET(view->active_nav))
@@ -1919,6 +1933,8 @@ static void music_nav(GtkWidget *button,gpointer data){
  const char *operation=g_object_get_data(G_OBJECT(button),"music-operation");
  const char *heading=g_object_get_data(G_OBJECT(button),"music-heading");
  if(operation){
+  if(!g_strcmp0(operation,"home") || !g_strcmp0(operation,"discover"))
+   music_library_expand(view,FALSE);
   music_nav_selected(view,button);
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
@@ -1953,6 +1969,19 @@ static void music_toggle_search(GtkWidget *unused,gpointer data){
 static void music_search_escape(GtkSearchEntry *unused,gpointer data){
  (void)unused;
  music_show_search(data,FALSE);
+}
+/* The Library label itself is useful navigation: it both opens the
+ * All Songs collection and expands/collapses the secondary filters. */
+static void music_library_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ if(view->busy || view->closing)return;
+ gboolean was_open=gtk_revealer_get_reveal_child(
+                                  GTK_REVEALER(view->library_revealer));
+ music_library_expand(view,!was_open);
+ music_nav_selected(view,button);
+ view->hero_art_serial++;
+ if(view->hero_row)gtk_widget_hide(view->hero_row);
+ query_start(view,"songs",NULL,"All songs");
 }
 static void music_focus_search(GtkWidget *unused,gpointer data){
  MusicView *view=data;
@@ -2142,64 +2171,80 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_ellipsize(GTK_LABEL(view->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view->root),view->status,FALSE,FALSE,0);
 
- GtkWidget *content=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+ GtkWidget *content=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
  gtk_widget_set_vexpand(content,TRUE);
  gtk_box_pack_start(GTK_BOX(view->root),content,TRUE,TRUE,0);
- GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
+ GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(sidebar,"music-sidebar");
- gtk_widget_set_size_request(sidebar,154,-1);
- /* Established Spotify-style grouping: Home + Search, then
-  * Your Library filters. Never put downloads/admin workflow in this rail. */
- /* Your Library is a real, prominent destination: it opens All Songs.
-  * Filters beneath it remain regular clickable navigation. */
- const char *ops[]={"home",NULL,"discover","songs","playlists","artists",
-                    "albums","liked","recent","new"};
- const char *titles[]={"Home","Search","Discover","YOUR LIBRARY","Playlists",
-                       "Artists","Albums","Liked Songs","Recently played","New additions"};
- const char *headings[]={"Music Home","Search","Discover","All songs",
-                         "Your playlists","Artists","All albums","Liked music",
-                         "Recently played albums","New additions"};
- for(guint i=0;i<G_N_ELEMENTS(ops);i++){
-  if(i==8){
-   GtkWidget *heading=gtk_label_new("RECENT");
-   gtk_widget_set_name(heading,"music-library-label");
-   gtk_label_set_xalign(GTK_LABEL(heading),0);
-   gtk_widget_set_margin_top(heading,12);
-   gtk_box_pack_start(GTK_BOX(sidebar),heading,FALSE,FALSE,0);
-  }
-  GtkWidget *b=music_button(titles[i]);
-  gtk_widget_set_name(b,i==3?"music-library-root":"music-nav");
-  GtkWidget *nav_label=gtk_bin_get_child(GTK_BIN(b));
-  if(GTK_IS_LABEL(nav_label))gtk_label_set_xalign(GTK_LABEL(nav_label),0);
-  if(i==3){
-   gtk_widget_set_tooltip_text(b,"Browse all songs in your library");
-   gtk_widget_set_margin_top(b,12);
-   gtk_button_set_image(GTK_BUTTON(b),
-                        gtk_image_new_from_icon_name("folder-music-symbolic",
-                                                     GTK_ICON_SIZE_MENU));
-   gtk_button_set_always_show_image(GTK_BUTTON(b),TRUE);
-  }
-  if(ops[i]){
-   g_object_set_data(G_OBJECT(b),"music-operation",(gpointer)ops[i]);
-   g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)headings[i]);
-   g_signal_connect(b,"clicked",G_CALLBACK(music_nav),view);
-  }else{
-   g_signal_connect(b,"clicked",G_CALLBACK(music_focus_search),view);
-  }
-  if(i==0)music_nav_selected(view,b);
-  gtk_box_pack_start(GTK_BOX(sidebar),b,FALSE,FALSE,0);
+ gtk_widget_set_size_request(sidebar,126,-1);
+ /* Deliberately sparse: two primary destinations and one expandable
+  * collection. Search lives in the content toolbar, not duplicated here. */
+ GtkWidget *home_button=music_button("Home");
+ gtk_widget_set_name(home_button,"music-nav");
+ g_object_set_data(G_OBJECT(home_button),"music-operation",(gpointer)"home");
+ g_object_set_data(G_OBJECT(home_button),"music-heading",(gpointer)"Music Home");
+ g_signal_connect(home_button,"clicked",G_CALLBACK(music_nav),view);
+ gtk_box_pack_start(GTK_BOX(sidebar),home_button,FALSE,FALSE,0);
+ music_nav_selected(view,home_button);
+
+ GtkWidget *discover_button=music_button("Discover");
+ gtk_widget_set_name(discover_button,"music-nav");
+ g_object_set_data(G_OBJECT(discover_button),"music-operation",(gpointer)"discover");
+ g_object_set_data(G_OBJECT(discover_button),"music-heading",(gpointer)"Discover");
+ g_signal_connect(discover_button,"clicked",G_CALLBACK(music_nav),view);
+ gtk_box_pack_start(GTK_BOX(sidebar),discover_button,FALSE,FALSE,0);
+
+ GtkWidget *library_button=gtk_button_new();
+ view->library_button=library_button;
+ gtk_widget_set_name(library_button,"music-library-root");
+ gtk_style_context_add_class(gtk_widget_get_style_context(library_button),"now-action");
+ gtk_widget_set_margin_top(library_button,4);
+ GtkWidget *library_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+ GtkWidget *library_title=gtk_label_new("Your Library");
+ gtk_widget_set_name(library_title,"music-library-title");
+ gtk_label_set_xalign(GTK_LABEL(library_title),0);
+ gtk_widget_set_hexpand(library_title,TRUE);
+ gtk_box_pack_start(GTK_BOX(library_header),library_title,TRUE,TRUE,0);
+ view->library_arrow=gtk_image_new_from_icon_name("pan-end-symbolic",
+                                                   GTK_ICON_SIZE_MENU);
+ gtk_box_pack_end(GTK_BOX(library_header),view->library_arrow,FALSE,FALSE,0);
+ gtk_container_add(GTK_CONTAINER(library_button),library_header);
+ g_signal_connect(library_button,"clicked",G_CALLBACK(music_library_clicked),view);
+ gtk_box_pack_start(GTK_BOX(sidebar),library_button,FALSE,FALSE,0);
+
+ view->library_revealer=gtk_revealer_new();
+ gtk_revealer_set_transition_type(GTK_REVEALER(view->library_revealer),
+                                   GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+ gtk_revealer_set_transition_duration(GTK_REVEALER(view->library_revealer),140);
+ GtkWidget *filters=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ gtk_widget_set_name(filters,"music-library-filters");
+ const char *filter_ops[]={"playlists","artists","albums","liked","recent","new"};
+ const char *filter_labels[]={"Playlists","Artists","Albums","Liked songs",
+                              "Recently played","New additions"};
+ const char *filter_headings[]={"Your playlists","Artists","All albums",
+                                "Liked music","Recently played albums","New additions"};
+ for(guint i=0;i<G_N_ELEMENTS(filter_ops);i++){
+  GtkWidget *filter=music_button(filter_labels[i]);
+  gtk_widget_set_name(filter,"music-filter");
+  g_object_set_data(G_OBJECT(filter),"music-operation",(gpointer)filter_ops[i]);
+  g_object_set_data(G_OBJECT(filter),"music-heading",(gpointer)filter_headings[i]);
+  g_signal_connect(filter,"clicked",G_CALLBACK(music_nav),view);
+  gtk_box_pack_start(GTK_BOX(filters),filter,FALSE,FALSE,0);
  }
+ gtk_container_add(GTK_CONTAINER(view->library_revealer),filters);
+ gtk_box_pack_start(GTK_BOX(sidebar),view->library_revealer,FALSE,FALSE,0);
+ music_library_expand(view,FALSE);
  /* The sidebar owns its scrolling, so nine nav actions must not
   * enlarge a 640x500 client or the still-hidden Dashboard stack. */
  GtkWidget *sidebar_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(sidebar_scroll),
                                  GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),154);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(sidebar_scroll),126);
  gtk_scrolled_window_set_min_content_height(GTK_SCROLLED_WINDOW(sidebar_scroll),140);
  gtk_widget_set_vexpand(sidebar_scroll,TRUE);
  gtk_container_add(GTK_CONTAINER(sidebar_scroll),sidebar);
  GtkWidget *sidebar_rail=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
- gtk_widget_set_size_request(sidebar_rail,154,-1);
+ gtk_widget_set_size_request(sidebar_rail,126,-1);
  gtk_box_pack_start(GTK_BOX(content),sidebar_rail,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(sidebar_rail),sidebar_scroll,TRUE,TRUE,0);
  GtkWidget *sidebar_separator=gtk_separator_new(GTK_ORIENTATION_HORIZONTAL);

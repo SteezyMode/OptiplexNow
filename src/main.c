@@ -89,6 +89,7 @@ static GtkWidget *tray_menu = NULL;
 static GtkWidget *main_pages = NULL, *settings_view = NULL, *info_view = NULL;
 static GtkWidget *games_page_status = NULL;
 static GtkWidget *videos_status=NULL;
+static GtkWidget *music_status=NULL;
 static int tray_restoring = 0;
 static guint geometry_save_timer=0;
 static GtkWidget *win,*indicator,*status_detail,*footer,*grid,*power_grid,*tailscale_label,*games_notice,*games_state,*games_install;
@@ -118,6 +119,7 @@ static void open_downloads_page(void);
 static void on_settings(void*w,void*p);
 static void open_games_settings(GtkWidget*w,gpointer data);
 static void on_videos_tab(GtkWidget*w,gpointer data);
+static void on_music_tab(GtkWidget*w,gpointer data);
 static void tray_show_window(void);
 static void videos_status_message(const char *message);
 static void on_system_info(void*w,void*p);
@@ -1434,6 +1436,28 @@ static void on_videos_tab(GtkWidget*w,gpointer data){
  (void)w;(void)data;
  now_nav_show_page(main_pages,"videos");
 }
+/* Music is an optional, browser-authenticated service. Never pass its
+ * credentials through NOW or assume that it exists on a fresh alpha host. */
+static void on_music_tab(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ if(music_status)
+  gtk_label_set_text(GTK_LABEL(music_status),*cfg[6]
+   ? "Use your DroppedNeedle sign-in to discover and request music."
+   : "Music is optional. Configure its URL under Settings to enable it.");
+ now_nav_show_page(main_pages,"music");
+}
+static void music_open_browser(GtkWidget*w,gpointer data){
+ (void)w;(void)data;
+ if(!*cfg[6] || !now_safe_preset_url(cfg[6])){
+  if(music_status)
+   gtk_label_set_text(GTK_LABEL(music_status),
+    "Music URL missing or invalid. Open Settings to configure it.");
+  say("ADD A VERIFIED MUSIC URL IN SETTINGS");
+  return;
+ }
+ browser_open(cfg[6]);
+ say("OPENING MUSIC DISCOVERY");
+}
 
 static void launch_desktop(void){launch_wolf_app("OptiPlex Studio Desktop");}
 static void launch_torrents(void){open_downloads_page();}
@@ -2084,7 +2108,7 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
  if(n==0){
    if(has_moonlight())launch_steam();else open_games_settings(NULL,NULL);
  }else if(n==1)on_videos_tab(NULL,NULL);
- else if(n==2){if(!*cfg[6]){say("ADD MUSIC URL IN SETTINGS");return;}browser_open(cfg[6]);}
+ else if(n==2)on_music_tab(NULL,NULL);
  else if(n==4)launch_torrents();
  else if(n==3)open_remote_files();
  else if(n==5)launch_ssh(0);
@@ -3123,10 +3147,6 @@ int main(int argc,char**argv) {
  now_nav_bind_link(dashboard_tab,main_pages,"dashboard");
  now_nav_mark_tab(dashboard_tab,"dashboard");
  add(nav,dashboard_tab,0);
- GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
- g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
- now_nav_mark_tab(downloads_tab,"downloads");
- add(nav,downloads_tab,0);
  GtkWidget*games_tab=button("GAMES","navtab");
  now_nav_bind_link(games_tab,main_pages,"games");
  now_nav_mark_tab(games_tab,"games");
@@ -3135,6 +3155,14 @@ int main(int argc,char**argv) {
  g_signal_connect(videos_tab,"clicked",G_CALLBACK(on_videos_tab),NULL);
  now_nav_mark_tab(videos_tab,"videos");
  add(nav,videos_tab,0);
+ GtkWidget*music_tab=button("MUSIC","navtab");
+ g_signal_connect(music_tab,"clicked",G_CALLBACK(on_music_tab),NULL);
+ now_nav_mark_tab(music_tab,"music");
+ add(nav,music_tab,0);
+ GtkWidget*downloads_tab=button("DOWNLOADS","navtab");
+ g_signal_connect(downloads_tab,"clicked",G_CALLBACK(on_downloads_tab),NULL);
+ now_nav_mark_tab(downloads_tab,"downloads");
+ add(nav,downloads_tab,0);
  GtkWidget*settings_tab=button("SETTINGS","navtab");
  g_signal_connect(settings_tab,"clicked",G_CALLBACK(on_settings),NULL);
  now_nav_mark_tab(settings_tab,"settings");
@@ -3190,6 +3218,36 @@ int main(int argc,char**argv) {
  add(videos_home,video_advanced,0);
  gtk_stack_add_named(GTK_STACK(main_pages),videos_home,"videos");
  gtk_widget_show_all(videos_home);
+ /* Post-alpha optional music companion. The upstream service remains
+  * responsible for login, search, requesting, downloads and imports. */
+ GtkWidget*music_home=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);
+ gtk_widget_set_name(music_home,"music-home");
+ gtk_widget_set_vexpand(music_home,TRUE);
+ gtk_container_set_border_width(GTK_CONTAINER(music_home),20);
+ add(music_home,label("MUSIC","modalheading"),0);
+ GtkWidget*music_intro=label(
+   "Discover artists and releases, request music, and manage your library "
+   "through your configured DroppedNeedle server.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(music_intro),TRUE);
+ add(music_home,music_intro,0);
+ music_status=label("Music is optional. Configure its URL under Settings to enable it.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(music_status),TRUE);
+ add(music_home,music_status,0);
+ GtkWidget*music_browser=button("DISCOVER MUSIC  ↗","tile");
+ gtk_widget_set_size_request(music_browser,-1,56);
+ g_signal_connect(music_browser,"clicked",G_CALLBACK(music_open_browser),NULL);
+ add(music_home,music_browser,0);
+ GtkWidget*music_help=label(
+   "Amperfy continues to handle listening on your phone. "
+   "Advanced discovery, requests and download management open in the "
+   "authenticated DroppedNeedle web interface.","helper");
+ gtk_label_set_line_wrap(GTK_LABEL(music_help),TRUE);
+ add(music_home,music_help,0);
+ GtkWidget*music_settings=button("MUSIC & SERVER SETTINGS","setupaction");
+ g_signal_connect(music_settings,"clicked",G_CALLBACK(on_settings),NULL);
+ add(music_home,music_settings,0);
+ gtk_stack_add_named(GTK_STACK(main_pages),music_home,"music");
+ gtk_widget_show_all(music_home);
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);
  GtkWidget*brandcol=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);gtk_widget_set_hexpand(brandcol,1);add(head,brandcol,1);

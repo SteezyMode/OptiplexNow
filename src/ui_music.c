@@ -548,6 +548,14 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
    g_object_unref(loader);
   }
  }
+ if(job->card_target && view && !view->closing &&
+    job->serial==view->card_art_serial &&
+    gtk_widget_get_parent(job->card_target)){
+   if(!ok || !g_subprocess_get_successful(job->process) || !output)
+    gtk_widget_set_tooltip_text(job->card_target,
+        "This album has no usable artwork from the music server.");
+   else gtk_widget_set_tooltip_text(job->card_target,NULL);
+ }
  if(output)g_bytes_unref(output);
  g_clear_error(&error);
  if(job->card_target && view && view->art_inflight>0){
@@ -1156,6 +1164,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_container_set_border_width(GTK_CONTAINER(contents),7);
   GtkWidget *art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
   gtk_widget_set_size_request(art,128,128);
+  gtk_widget_set_tooltip_text(art,"Loading album artwork when visible…");
   gtk_box_pack_start(GTK_BOX(contents),art,FALSE,FALSE,0);
   GtkWidget *caption=gtk_label_new(title);
   gtk_label_set_xalign(GTK_LABEL(caption),0);

@@ -1208,16 +1208,19 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  }
  GtkWidget *row=gtk_list_box_row_new();
  GtkWidget *button=gtk_button_new();
- gtk_widget_set_name(button,"music-row");
+ gtk_widget_set_name(button,!g_strcmp0(kind,"song")?"music-song-row":"music-row");
  gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
- GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
- gtk_container_set_border_width(GTK_CONTAINER(content),8);
+ gboolean is_song=!g_strcmp0(kind,"song");
+ GtkWidget *content=gtk_box_new(is_song?GTK_ORIENTATION_HORIZONTAL:
+                                  GTK_ORIENTATION_VERTICAL,is_song?9:3);
+ gtk_container_set_border_width(GTK_CONTAINER(content),is_song?1:5);
  gtk_widget_set_hexpand(button,TRUE);
  GtkWidget *primary=gtk_label_new(title);
  gtk_label_set_ellipsize(GTK_LABEL(primary),PANGO_ELLIPSIZE_END);
  gtk_label_set_xalign(GTK_LABEL(primary),0);
  gtk_widget_set_name(primary,"music-row-title");
  gtk_widget_set_hexpand(primary,TRUE);
+ if(is_song)gtk_label_set_single_line_mode(GTK_LABEL(primary),TRUE);
  gtk_box_pack_start(GTK_BOX(content),primary,FALSE,FALSE,0);
  char *detail;
  if(!g_strcmp0(kind,"song")){
@@ -1237,6 +1240,13 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  gtk_label_set_xalign(GTK_LABEL(secondary),0);
  gtk_widget_set_name(secondary,"music-row-detail");
  gtk_label_set_ellipsize(GTK_LABEL(secondary),PANGO_ELLIPSIZE_END);
+ if(is_song){
+  gtk_label_set_max_width_chars(GTK_LABEL(secondary),25);
+  gtk_widget_set_halign(secondary,GTK_ALIGN_END);
+  char *tooltip=g_strdup_printf("%s\n%s",title,detail);
+  gtk_widget_set_tooltip_text(button,tooltip);
+  g_free(tooltip);
+ }
  gtk_style_context_add_class(gtk_widget_get_style_context(secondary),"dim-label");
  gtk_box_pack_start(GTK_BOX(content),secondary,FALSE,FALSE,0);
  gtk_container_add(GTK_CONTAINER(button),content);
@@ -1258,12 +1268,13 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
   gtk_container_add(GTK_CONTAINER(row),line);
  }else if(!g_strcmp0(kind,"song")){
-  GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+  GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
   gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
   GtkWidget *like=music_icon_button(liked?
       "emblem-favorite-symbolic":"non-starred-symbolic",
       liked?"Unlike song":"Like song");
   gtk_widget_set_name(like,"music-song-action");
+  gtk_widget_set_size_request(like,32,32);
   g_object_set_data(G_OBJECT(like),"music-view",view);
   g_object_set_data_full(G_OBJECT(like),"music-id",g_strdup(id),g_free);
   g_object_set_data(G_OBJECT(like),"music-liked",GINT_TO_POINTER(liked?2:1));
@@ -1271,6 +1282,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_box_pack_start(GTK_BOX(line),like,FALSE,FALSE,0);
   GtkWidget *add=music_icon_button("list-add-symbolic","Add to playlist");
   gtk_widget_set_name(add,"music-song-action");
+  gtk_widget_set_size_request(add,32,32);
   g_object_set_data(G_OBJECT(add),"music-view",view);
   g_object_set_data_full(G_OBJECT(add),"music-id",g_strdup(id),g_free);
   g_signal_connect(add,"clicked",G_CALLBACK(music_playlist_clicked),add);

@@ -153,6 +153,21 @@ static const char *CSS =
  "#navback:focus,#navtab:focus,#tile:focus,#setupaction:focus,#power:focus,#danger:focus {border-color:#d39579;}"
 /* Unified NOW dark controls: never use the platform's white GTK defaults
  * for ordinary Videos/Downloads buttons. No functional changes. */
+/* Scoped Music styling: familiar sidebar, spacious library, persistent
+ * dark player. Other alpha pages retain their existing styles. */
+"#music-home {background:#111513;color:#e8eae6;}"
+"#music-sidebar {background:#1b211d;border:1px solid #313a32;border-radius:9px;padding:7px;}"
+"#music-sidebar button#music-nav.now-action {background:transparent;border:0;border-radius:6px;padding:8px 11px;min-height:32px;}"
+"#music-sidebar button#music-nav.now-action:hover {background:#303a32;border:0;}"
+"#music-main {background:#1a211c;border-radius:9px;padding:12px;}"
+"#music-section-title {font-size:19px;font-weight:700;color:#f0eee9;}"
+"#music-hero {background:#273029;border-radius:9px;padding:11px;}"
+"#music-library {background:transparent;border:0;}"
+"#music-library row {background:transparent;border:0;}"
+"#music-library button#music-row.now-action {background:#212922;border:0;border-bottom:1px solid #344038;border-radius:3px;padding:8px;min-height:39px;}"
+"#music-library button#music-row.now-action:hover {background:#303b31;border-color:#c47d65;}"
+"#music-player {background:#1d251f;border-top:1px solid #465348;border-radius:8px;padding:10px;}"
+"#music-player button.now-action {border-radius:7px;min-height:35px;}"
 "button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
 "button.now-action label {color:#ece8e0;}"
 "button.now-action:hover,button.now-action:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"

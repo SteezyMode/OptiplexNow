@@ -285,6 +285,68 @@ class MusicSubsonicTests(unittest.TestCase):
             with self.subTest(operation=operation):
                 self.assertEqual(len(music._rows(operation, result).splitlines()), 1)
 
+    def test_all_songs_paging_and_shuffled_collection(self):
+        from unittest import mock
+        calls = []
+        def fake_query(base, method, auth, params=None):
+            calls.append((method, params))
+            if method == "search3":
+                return {"searchResult3": {"song": [
+                    {"id": "t01", "title": "Alpha", "artist": "Act",
+                     "album": "First", "coverArt": "cover01"}]}}
+            if method == "getRandomSongs":
+                return {"randomSongs": {"song": [
+                    {"id": "t42", "title": "Random"}]}}
+            raise AssertionError("unexpected endpoint")
+        with mock.patch.object(music, "query", side_effect=fake_query), \
+             mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+             mock.patch.object(music.sys, "stdout", io.StringIO()):
+            self.assertEqual(music.main([self.base, "songs", "200"]), 0)
+            self.assertEqual(music.main([self.base, "random_songs"]), 0)
+        self.assertEqual(calls[0],("search3",{
+            "query": "", "artistCount": "0", "albumCount": "0",
+            "songCount": "200", "songOffset": "200"}))
+        self.assertEqual(calls[1],("getRandomSongs",{"size":"200"}))
+        for bad in ("-1","201","1000001","x"):
+            with mock.patch.object(music,"_auth_from_stdin",return_value=self.auth), \
+                 mock.patch.object(music.sys,"stderr",io.StringIO()):
+                self.assertEqual(music.main([self.base,"songs",bad]),2)
+
+    def test_song_metadata_rows_include_album_and_liked_state(self):
+        import base64
+        line=music._rows("songs",{"songs":[{
+            "id":"track:abc","title":"曲名","artist":"演奏者",
+            "album":"First Album","coverArt":"album:xyz","starred":"2026-01-01"}]}).strip()
+        parts=[base64.b64decode(p).decode("utf-8") for p in line.split("\t")]
+        self.assertEqual(len(parts),7)
+        self.assertEqual(parts[5],"First Album")
+        self.assertEqual(parts[6],"1")
+        self.assertEqual(parts[2],"曲名")
+
+    def test_like_and_playlist_actions_use_authenticated_subsonic(self):
+        from unittest import mock
+        calls=[]
+        def fake_query(base, method, auth, params=None):
+            calls.append((method,params))
+            if method=="getPlaylists":
+                return {"playlists":{"playlist":[{"id":"p1","name":"Roadtrip"}]}}
+            return {}
+        with mock.patch.object(music,"query",side_effect=fake_query), \
+             mock.patch.object(music,"_auth_from_stdin",return_value=self.auth), \
+             mock.patch.object(music.sys,"stdout",io.StringIO()):
+            self.assertEqual(music.main([self.base,"like","track:123"]),0)
+            self.assertEqual(music.main([self.base,"unlike","track:123"]),0)
+            self.assertEqual(music.main([self.base,"playlist_options"]),0)
+            self.assertEqual(music.main([self.base,"playlist_add","playlist:1|track:123"]),0)
+            self.assertEqual(music.main([self.base,"playlist_create","Roadtrip|track:123"]),0)
+        self.assertEqual(calls,[
+            ("star",{"id":"track:123"}),
+            ("unstar",{"id":"track:123"}),
+            ("getPlaylists",None),
+            ("updatePlaylist",{"playlistId":"playlist:1","songIdToAdd":"track:123"}),
+            ("createPlaylist",{"name":"Roadtrip","songId":"track:123"}),
+        ])
+
     def test_form_stdin_is_supported_without_exposing_secrets_in_argv(self):
         class Stdin:
             buffer = io.BytesIO(b"api_key=app%2Bsecret&username=listener")

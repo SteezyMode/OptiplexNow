@@ -80,7 +80,9 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
  shutil.copy2(root/'src'/name, bridge/'src'/name)
 for name in ('owner_games_ssh.py', 'owner_games_request.py',
-             'owner_games_enroll.py', 'download_inventory.py',
+             'owner_games_enroll.py', 'owner_music_ssh.py',
+             'music_device_provision.py', 'music_device_ledger.py',
+             'download_inventory.py',
              'download_queue.py', 'download_search.py', 'download_manage.py',
              'download_files.py',
              'download_destinations.py', 'media_endpoint.py'):

@@ -43,6 +43,13 @@ def _text(value, maximum=MAX_TOKEN):
             and all(32 < ord(ch) < 127 for ch in value))
 
 
+def _host_text(value, maximum):
+    # Host-local login details may contain spaces or non-ASCII characters;
+    # only opaque bearer tokens are restricted to printable ASCII.
+    return (isinstance(value, str) and 1 <= len(value) <= maximum
+            and not any(ord(ch) < 32 or ord(ch) == 127 for ch in value))
+
+
 class DroppedNeedleAPI:
     """Fixed-path, no-proxy, no-redirect client for a host-owned DN instance."""
 
@@ -114,7 +121,7 @@ class DroppedNeedleAPI:
         return result
 
     def login(self, username, password):
-        if not _text(username, 256) or not _text(password, 2048):
+        if not _host_text(username, 256) or not _host_text(password, 2048):
             raise ProvisionError("Host Music account is not linked.")
         result = self.call("POST", "/auth/login",
                            data={"username": username, "password": password})

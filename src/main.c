@@ -172,6 +172,8 @@ static const char *CSS =
 "#music-card-grid flowboxchild {background:transparent;border:0;padding:3px;}"
 "#music-card-grid button#music-card.now-action {background:#27352b;border:1px solid #3b4a40;border-radius:11px;padding:5px;}"
 "#music-card-grid button#music-card.now-action:hover {background:#34483b;border-color:#db9b7e;}"
+"#music-card-grid #music-card-title {font-size:13px;font-weight:750;color:#f7f6f2;}"
+"#music-card-grid #music-card-subtitle {font-size:11px;color:#bdc9bf;}"
 "#music-library row {background:transparent;border:0;padding:2px 0;}"
 "#music-library button#music-row.now-action {background:#253329;border:1px solid transparent;border-radius:8px;padding:11px 12px;min-height:62px;}"
 "#music-library button#music-row.now-action:hover,#music-library button#music-row.now-action:focus {background:#35473a;border-color:#7b987d;}"

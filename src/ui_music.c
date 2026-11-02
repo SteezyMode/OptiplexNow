@@ -764,7 +764,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
   if(!ok || !g_subprocess_get_successful(job->process)){
    view->hero_art_serial++;
    if(view->hero_row)gtk_widget_hide(view->hero_row);
-   status_set(view,!g_strcmp0(job->operation,"catalog")
+   status_set(view,(!g_strcmp0(job->operation,"catalog") ||
+                    !g_strcmp0(job->operation,"discover"))
       ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
@@ -881,7 +882,9 @@ static void query_start(MusicView *view,const char *operation,
  wipe_free(encoded_key);
  g_free(encoded_user);
  view->busy=TRUE;
- status_set(view,catalog?"Searching the music catalog...":"Loading your library...");
+ status_set(view,!g_strcmp0(operation,"discover")
+      ? "Loading music discoveries..."
+      : catalog?"Searching the music catalog...":"Loading your library...");
  job->deadline=g_timeout_add_seconds(27,query_timeout,job);
  g_subprocess_communicate_utf8_async(process,job->input,job->cancel,
                                     query_complete,job);

@@ -32,6 +32,7 @@ typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
+ GtkWidget *cards, *cards_scroll, *list_scroll;
  GPtrArray *visible_tracks, *queue;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
@@ -39,7 +40,9 @@ typedef struct {
  guint volume_debounce, seek_debounce, play_duration, status_timer;
  gboolean paused, seek_updating, seek_dragging, status_inflight;
  char *playing_caption;
- guint64 hero_art_serial, playing_art_serial;
+ guint64 hero_art_serial, playing_art_serial, card_art_serial;
+ guint card_art_count;
+ gboolean grid_mode;
  void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
@@ -379,6 +382,7 @@ typedef struct {
  guint deadline;
  guint64 serial;
  gboolean playing;
+ GtkWidget *card_target; /* reference; old cards are ignored after navigation */
  char *server_url;
  char *input; /* wipe after the worker completes */
 } MusicArtJob;
@@ -395,6 +399,7 @@ static void music_art_free(MusicArtJob *job){
  g_object_unref(job->cancel);
  g_object_unref(job->process);
  g_object_unref(job->root);
+ g_clear_object(&job->card_target);
  wipe_free(job->input);
  g_free(job->server_url);
  g_free(job);
@@ -409,20 +414,22 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
  if(view && !view->closing &&
     g_strcmp0(job->server_url,view->bound_url)==0 &&
     g_strcmp0(job->server_url,cfg[6])==0 &&
-    job->serial==(job->playing?view->playing_art_serial:view->hero_art_serial) &&
+    job->serial==(job->card_target?view->card_art_serial:
+        (job->playing?view->playing_art_serial:view->hero_art_serial)) &&
     ok && g_subprocess_get_successful(job->process) && output){
   gsize len=0;
   const guchar *bytes=g_bytes_get_data(output,&len);
   if(len>0 && len<=3*1024*1024){
    GdkPixbufLoader *loader=gdk_pixbuf_loader_new();
-   const int pixels=job->playing?44:120;
+   const int pixels=job->card_target?128:(job->playing?44:120);
    gdk_pixbuf_loader_set_size(loader,pixels,pixels);
    gboolean valid=gdk_pixbuf_loader_write(loader,bytes,len,NULL);
    if(valid)valid=gdk_pixbuf_loader_close(loader,NULL);
    if(valid){
     GdkPixbuf *pixbuf=gdk_pixbuf_loader_get_pixbuf(loader);
     if(pixbuf){
-     GtkWidget *target=job->playing?view->playing_art:view->hero_art;
+     GtkWidget *target=job->card_target?job->card_target:
+         (job->playing?view->playing_art:view->hero_art);
      if(target)gtk_image_set_from_pixbuf(GTK_IMAGE(target),pixbuf);
     }
    }
@@ -472,6 +479,44 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
  g_subprocess_communicate_async(proc,sent,job->cancel,
                                 music_art_complete,job);
+ g_bytes_unref(sent);
+}
+
+/* Bounded asynchronous grid art: only the first 16 visible cards initiate
+ * an art lookup per page. Older/late responses never paint into a new page.
+ * This avoids hundreds of parallel jobs on older Linux clients. */
+static void music_card_art_start(MusicView *view,const char *cover_id,GtkWidget *image){
+ if(view->closing || view->card_art_count>=16 || !image ||
+    !cover_id || !*cover_id || strlen(cover_id)>512 ||
+    !view->app_password || !view->bound_url ||
+    g_strcmp0(cfg[6],view->bound_url)!=0)return;
+ char *helper=helper_path();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  g_free(helper);return;
+ }
+ const char *argv[]={"/usr/bin/python3",helper,view->bound_url,
+                     "art",cover_id,"--auth-format=form",NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+   G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+   G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){g_clear_error(&error);return;}
+ MusicArtJob *job=g_new0(MusicArtJob,1);
+ job->process=proc;
+ job->root=g_object_ref(view->root);
+ job->card_target=g_object_ref(image);
+ job->cancel=g_cancellable_new();
+ job->serial=view->card_art_serial;
+ job->server_url=g_strdup(view->bound_url);
+ char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
+ char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+ job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
+ wipe_free(key);g_free(name);
+ GBytes *sent=g_bytes_new(job->input,strlen(job->input));
+ job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
+ ++view->card_art_count;
+ g_subprocess_communicate_async(proc,sent,job->cancel,music_art_complete,job);
  g_bytes_unref(sent);
 }
 
@@ -698,6 +743,40 @@ static gboolean music_status_tick(gpointer data){
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover){
+ if(view->grid_mode && (!g_strcmp0(kind,"album") ||
+      !g_strcmp0(kind,"artist") || !g_strcmp0(kind,"playlist"))){
+  /* Familiar square-art library tiles, not a second navigation model. */
+  GtkWidget *card=gtk_button_new();
+  gtk_widget_set_name(card,"music-card");
+  gtk_style_context_add_class(gtk_widget_get_style_context(card),"now-action");
+  GtkWidget *contents=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+  gtk_container_set_border_width(GTK_CONTAINER(contents),7);
+  GtkWidget *art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
+  gtk_widget_set_size_request(art,128,128);
+  gtk_box_pack_start(GTK_BOX(contents),art,FALSE,FALSE,0);
+  GtkWidget *caption=gtk_label_new(title);
+  gtk_label_set_xalign(GTK_LABEL(caption),0);
+  gtk_label_set_ellipsize(GTK_LABEL(caption),PANGO_ELLIPSIZE_END);
+  gtk_label_set_max_width_chars(GTK_LABEL(caption),19);
+  gtk_box_pack_start(GTK_BOX(contents),caption,FALSE,FALSE,0);
+  GtkWidget *subtitle=gtk_label_new(artist && *artist?artist:kind);
+  gtk_label_set_xalign(GTK_LABEL(subtitle),0);
+  gtk_label_set_ellipsize(GTK_LABEL(subtitle),PANGO_ELLIPSIZE_END);
+  gtk_label_set_max_width_chars(GTK_LABEL(subtitle),19);
+  gtk_style_context_add_class(gtk_widget_get_style_context(subtitle),"dim-label");
+  gtk_box_pack_start(GTK_BOX(contents),subtitle,FALSE,FALSE,0);
+  gtk_container_add(GTK_CONTAINER(card),contents);
+  gtk_widget_set_size_request(card,150,190);
+  g_object_set_data(G_OBJECT(card),"music-view",view);
+  g_object_set_data_full(G_OBJECT(card),"music-kind",g_strdup(kind),g_free);
+  g_object_set_data_full(G_OBJECT(card),"music-id",g_strdup(id),g_free);
+  g_object_set_data_full(G_OBJECT(card),"music-title",g_strdup(title),g_free);
+  g_object_set_data_full(G_OBJECT(card),"music-cover",g_strdup(cover),g_free);
+  g_signal_connect(card,"clicked",G_CALLBACK(music_item_clicked),card);
+  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
+  music_card_art_start(view,cover,art);
+  return;
+ }
  if(!g_strcmp0(kind,"section")){
   GtkWidget *heading=gtk_label_new(title);
   gtk_widget_set_name(heading,"music-section-title");
@@ -780,6 +859,11 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
 
 static int render_rows(MusicView *view,const char *output,gboolean append){
  if(!append){
+  ++view->card_art_serial;
+  view->card_art_count=0;
+  GList *cards=g_list_copy(gtk_container_get_children(GTK_CONTAINER(view->cards)));
+  for(GList *p=cards;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
+  g_list_free(cards);
   g_hash_table_remove_all(view->album_buttons);
   g_ptr_array_set_size(view->visible_tracks,0);
   GList *children=gtk_container_get_children(GTK_CONTAINER(view->list));
@@ -812,6 +896,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  }
  g_strfreev(lines);
  gtk_widget_show_all(view->list);
+ gtk_widget_show_all(view->cards);
  return count;
 }
 
@@ -832,8 +917,13 @@ static void music_show_empty(MusicView *view,const char *operation){
  gtk_widget_set_margin_top(empty,22);
  gtk_widget_set_margin_bottom(empty,22);
  gtk_label_set_xalign(GTK_LABEL(empty),0);
- gtk_list_box_insert(GTK_LIST_BOX(view->list),empty,-1);
- gtk_widget_show_all(view->list);
+ if(view->grid_mode){
+  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),empty,-1);
+  gtk_widget_show_all(view->cards);
+ }else{
+  gtk_list_box_insert(GTK_LIST_BOX(view->list),empty,-1);
+  gtk_widget_show_all(view->list);
+ }
 }
 
 static gboolean query_timeout(gpointer data){
@@ -873,7 +963,20 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
       ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
+   view->grid_mode=(!g_strcmp0(job->operation,"home") ||
+                    !g_strcmp0(job->operation,"albums") ||
+                    !g_strcmp0(job->operation,"recent") ||
+                    !g_strcmp0(job->operation,"new") ||
+                    !g_strcmp0(job->operation,"artists") ||
+                    !g_strcmp0(job->operation,"playlists"));
    int count=render_rows(view,output,job->append_albums);
+   if(view->grid_mode){
+    gtk_widget_show(view->cards_scroll);
+    gtk_widget_hide(view->list_scroll);
+   }else{
+    gtk_widget_hide(view->cards_scroll);
+    gtk_widget_show(view->list_scroll);
+   }
    if(count==0 && !job->append_albums)music_show_empty(view,job->operation);
    if(view->load_more){
     if(!g_strcmp0(job->operation,"albums")){
@@ -1563,15 +1666,30 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_show_all(view->hero_row);
  gtk_widget_set_no_show_all(view->hero_row,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->hero_row,FALSE,FALSE,0);
- GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
- gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+ view->list_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(view->list_scroll),
      GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
- gtk_widget_set_vexpand(scroll,TRUE);
+ gtk_widget_set_vexpand(view->list_scroll,TRUE);
  view->list=gtk_list_box_new();
  gtk_widget_set_name(view->list,"music-library");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
- gtk_container_add(GTK_CONTAINER(scroll),view->list);
- gtk_box_pack_start(GTK_BOX(maincol),scroll,TRUE,TRUE,0);
+ gtk_container_add(GTK_CONTAINER(view->list_scroll),view->list);
+ gtk_box_pack_start(GTK_BOX(maincol),view->list_scroll,TRUE,TRUE,0);
+ view->cards_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(view->cards_scroll),
+     GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_vexpand(view->cards_scroll,TRUE);
+ view->cards=gtk_flow_box_new();
+ gtk_widget_set_name(view->cards,"music-card-grid");
+ gtk_flow_box_set_selection_mode(GTK_FLOW_BOX(view->cards),GTK_SELECTION_NONE);
+ gtk_flow_box_set_min_children_per_line(GTK_FLOW_BOX(view->cards),2);
+ gtk_flow_box_set_max_children_per_line(GTK_FLOW_BOX(view->cards),6);
+ gtk_flow_box_set_column_spacing(GTK_FLOW_BOX(view->cards),10);
+ gtk_flow_box_set_row_spacing(GTK_FLOW_BOX(view->cards),10);
+ gtk_container_set_border_width(GTK_CONTAINER(view->cards),6);
+ gtk_container_add(GTK_CONTAINER(view->cards_scroll),view->cards);
+ gtk_widget_set_no_show_all(view->cards_scroll,TRUE);
+ gtk_box_pack_start(GTK_BOX(maincol),view->cards_scroll,TRUE,TRUE,0);
  view->load_more=music_button("Load more albums");
  gtk_widget_set_no_show_all(view->load_more,TRUE);
  g_signal_connect(view->load_more,"clicked",G_CALLBACK(music_load_more),view);
@@ -1651,6 +1769,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->status_timer=g_timeout_add_seconds(15,music_status_tick,view);
  gtk_widget_show_all(view->root);
  gtk_widget_hide(view->hero_row);
+ gtk_widget_hide(view->cards_scroll);
  gtk_widget_hide(view->player_bar);
  return view->root;
 }

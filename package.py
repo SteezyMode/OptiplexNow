@@ -74,7 +74,7 @@ bridge=pkg/'usr/lib/optiplex-now/owner-bridge'
 (bridge/'src').mkdir(parents=True,exist_ok=True)
 (bridge/'server').mkdir(parents=True,exist_ok=True)
 for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py',
-             'wolf-pair-local.py'):
+             'wolf-pair-local.py', 'music_subsonic.py'):
  shutil.copy2(root/'src'/name,bridge/'src'/name)
 # The same .deb carries the narrow, authenticated host service implementation.
 # It is inert until the owner explicitly adopts the packaged handler. After

@@ -561,7 +561,9 @@ static void music_request_album(GtkWidget *button,gpointer data){
  const char *mbid=g_object_get_data(G_OBJECT(button),"music-request-mbid");
  if(!mbid || strlen(mbid)!=36)return;
  /* No credential ever enters argv, environment or a GUI entry field. */
- char *dir=g_path_get_dirname(helper_path());
+ char *source=helper_path();
+ char *dir=g_path_get_dirname(source);
+ g_free(source);
  char *helper=g_build_filename(dir,"music_rest.py",NULL);
  g_free(dir);
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){

@@ -10,6 +10,17 @@
  * No slskd/admin credentials are ever needed by this widget.
  */
 GtkWidget *now_music_build(void (*open_url)(const char *),
-                           void (*open_settings)(void *, void *));
+                           void (*open_settings)(void *, void *),
+                           void (*tray_changed)(void));
+
+/* Existing NOW tray actions remain intact; these are an ephemeral,
+ * single-client-local subsection only when Music owns a live session. */
+gboolean now_music_is_playing_session(void);
+gboolean now_music_is_paused(void);
+gboolean now_music_can_next(void);
+const char *now_music_caption(void);
+void now_music_previous(void);
+void now_music_toggle_pause(void);
+void now_music_next(void);
 
 #endif

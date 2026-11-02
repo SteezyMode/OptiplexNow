@@ -227,7 +227,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"updatePlaylist"', transport)
         self.assertIn('"createPlaylist"', transport)
         self.assertIn('SONG_PAGE_SIZE = 200', transport)
-        self.assertIn('const char *headings[]={"Music Home"', UI_MUSIC)
+        self.assertIn('g_object_set_data(G_OBJECT(home_button),"music-heading",(gpointer)"Music Home")', UI_MUSIC)
         self.assertIn('"#music-library #music-row-title', MAIN)
         self.assertIn('"#music-sidebar button#music-library-root', MAIN)
         self.assertIn('"#music-player button.music-transport', MAIN)

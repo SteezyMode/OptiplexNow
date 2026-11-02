@@ -121,6 +121,16 @@ static void wait_finished(GObject *source,GAsyncResult *result,gpointer user){
  MusicJob *j=user;
  GError *error=NULL;
  gboolean waited=g_subprocess_wait_finish(j->proc,result,&error);
+ if(waited && !j->stopped && !j->owner->closing &&
+    !g_subprocess_get_successful(j->proc)){
+  /* Log process result only. No URL, track identifier, or credentials. */
+  if(g_subprocess_get_if_signaled(j->proc))
+   g_warning("Music playback helper ended on signal %d",
+             g_subprocess_get_term_sig(j->proc));
+  else if(g_subprocess_get_if_exited(j->proc))
+   g_warning("Music playback helper exited with status %d",
+             g_subprocess_get_exit_status(j->proc));
+ }
  if(j->owner->current==j && !j->stopped){
   /* A helper disappearing without ENDED/ERROR is not a working session. */
   notify_event(j,waited&&g_subprocess_get_successful(j->proc)?"ENDED":"ERROR");

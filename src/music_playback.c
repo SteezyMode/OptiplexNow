@@ -136,21 +136,25 @@ NowMusicPlayback *now_music_playback_new(NowMusicPlaybackEvent cb,void *data){
  return m;
 }
 gboolean now_music_playback_start(NowMusicPlayback *m,const char *server,
-                         const char *username,const char *key,const char *id){
+                         const char *username,const char *key,const char *id,
+                         int initial_volume){
  if(!m || m->closing || !server || !*server ||
-    !key || !*key || !id || !*id || strlen(id)>512)
+    !key || !*key || !id || !*id || strlen(id)>512 ||
+    initial_volume<0 || initial_volume>100)
   return FALSE;
  now_music_playback_stop(m);
  char *helper=helper_path();
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
   g_free(helper);return FALSE;
  }
- const gchar *argv[]={"/usr/bin/python3",helper,server,id,NULL};
+ char *volume_arg=g_strdup_printf("%d",initial_volume);
+ const gchar *argv[]={"/usr/bin/python3",helper,server,id,volume_arg,NULL};
  GError *error=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,
    G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
    G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
  g_free(helper);
+ g_free(volume_arg);
  if(!proc){
   g_clear_error(&error);
   return FALSE;
@@ -192,6 +196,23 @@ void now_music_playback_pause(NowMusicPlayback *m,gboolean paused){
  if(!g_output_stream_write_all(out,cmd,strlen(cmd),
                                &written,NULL,&error)){
   /* A dead player cannot be shown as paused/playing. */
+  MusicJob *j=m->current;
+  job_ref(j);
+  notify_event(j,"ERROR");
+  job_unref(j);
+ }
+ g_clear_error(&error);
+}
+void now_music_playback_volume(NowMusicPlayback *m,int level){
+ if(!m || m->closing || !m->current || level<0 || level>100)return;
+ GOutputStream *out=g_subprocess_get_stdin_pipe(m->current->proc);
+ char *command=g_strdup_printf("VOLUME %d\n",level);
+ gsize written=0;
+ GError *error=NULL;
+ gboolean ok=g_output_stream_write_all(out,command,strlen(command),
+                                        &written,NULL,&error);
+ g_free(command);
+ if(!ok){
   MusicJob *j=m->current;
   job_ref(j);
   notify_event(j,"ERROR");

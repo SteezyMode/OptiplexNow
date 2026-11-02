@@ -28,7 +28,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('else if(n==2)on_music_tab(NULL,NULL);', MAIN)
         self.assertIn('on_music_tab(GtkWidget*w,gpointer data)', MAIN)
         self.assertIn('now_nav_show_page(main_pages,"music");', MAIN)
-        self.assertIn('query_start(view,"albums",NULL,"Your albums");', UI_MUSIC)
+        self.assertIn('query_start(view,"home",NULL,"Recently played albums");', UI_MUSIC)
         self.assertIn('view->open_url(cfg[6])', UI_MUSIC)
         self.assertIn('wipe_free(view->app_password);', UI_MUSIC)
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)
@@ -61,6 +61,25 @@ class OptionalMusicContract(unittest.TestCase):
         package = (ROOT / 'package.py').read_text(encoding='utf-8')
         self.assertIn('gir1.2-secret-1', package)
         self.assertIn("music_keyring.py", package)
+
+    def test_real_music_feeds_and_private_cover_art_in_ui(self):
+        transport = (ROOT / "src/music_subsonic.py").read_text(encoding="utf-8")
+        for kind in ('"home"', '"albums"', '"recent"', '"new"', '"liked"',
+                     '"artists"', '"playlists"'):
+            self.assertIn(kind, UI_MUSIC)
+        self.assertIn('"getStarred2"', transport)
+        self.assertIn('"getAlbumList2"', transport)
+        self.assertIn('"newest"', transport)
+        self.assertIn('"getCoverArt"', transport)
+        self.assertIn('"image/jpeg", "image/png", "image/webp"', transport)
+        self.assertIn('MAX_COVER = 3 * 1024 * 1024', transport)
+        self.assertIn('g_subprocess_communicate_async(proc,sent,job->cancel,', UI_MUSIC)
+        self.assertIn('gdk_pixbuf_loader_set_size(loader,pixels,pixels);', UI_MUSIC)
+        self.assertIn('g_strcmp0(job->server_url,cfg[6])==0', UI_MUSIC)
+        self.assertIn('gtk_widget_set_no_show_all(view->hero_row,TRUE);', UI_MUSIC)
+        self.assertIn('music_art_start(view,song->cover_id,TRUE);', UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_advanced)', UI_MUSIC)
+        self.assertNotIn('getCoverArt?id=', UI_MUSIC)
 
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)

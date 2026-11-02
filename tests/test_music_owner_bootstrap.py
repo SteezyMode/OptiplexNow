@@ -13,7 +13,7 @@ sys.path.insert(0,str(ROOT/"src"))
 sys.path.insert(0,str(ROOT/"server"))
 from owner_access import OwnerStore,new_owner,PolicyError
 from music_device_provision import ProvisionError
-from music_owner_bootstrap import bootstrap_owner_account
+from music_owner_bootstrap import bootstrap_owner_account, _write_once
 from owner_music_ssh import read_owner_music_account
 
 
@@ -134,6 +134,17 @@ class BootstrapTests(unittest.TestCase):
         with self.assertRaises(PolicyError):
             self.bootstrap()
         self.assertEqual(self.api.calls.count(("POST","/auth/setup")),1)
+
+    def test_atomic_creation_cannot_overwrite_or_leave_partial_credentials(self):
+        self.account.parent.mkdir(mode=0o700)
+        fixture={"owner":"first","password":"mock-only"}
+        _write_once(self.account,fixture)
+        self.assertEqual(self.account.stat().st_mode & 0o777,0o600)
+        original=self.account.read_bytes()
+        with self.assertRaises(FileExistsError):
+            _write_once(self.account,{"owner":"second","password":"new-value"})
+        self.assertEqual(self.account.read_bytes(),original)
+        self.assertEqual(list(self.account.parent.glob(".owner-music-*")),[])
 
     def test_existing_account_symlink_is_rejected(self):
         target=self.account.parent/"redirect"

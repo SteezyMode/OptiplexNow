@@ -91,7 +91,9 @@ def _parent_exit_signal():
 
 
 def stream_audio(server: str, auth: dict[str, str], track_id: str, decoder,
-                 send, done: threading.Event, failure: list[str]):
+                 send, done: threading.Event, failure: list[str],
+                 pause_state: threading.Event | None = None,
+                 pause_guard: threading.Lock | None = None):
     try:
         with _post(server, "stream", auth, {"id": track_id, "format": "raw"}) as response:
             mime = response.headers.get("Content-Type", "").split(";", 1)[0].strip().lower()
@@ -111,7 +113,16 @@ def stream_audio(server: str, auth: dict[str, str], track_id: str, decoder,
                 except (BrokenPipeError, OSError) as exc:
                     raise PlaybackError("Audio decoder rejected the stream.") from exc
                 if first:
-                    send("PLAYING")
+                    # Serialize first-audio and command-state notifications.
+                    # Otherwise a rapid PAUSE during buffering could be
+                    # followed by a stale PLAYING event.
+                    if pause_guard is not None:
+                        with pause_guard:
+                            send("PAUSED" if pause_state and pause_state.is_set()
+                                 else "PLAYING")
+                    else:
+                        send("PAUSED" if pause_state and pause_state.is_set()
+                             else "PLAYING")
                     first = False
             if first:
                 raise PlaybackError("Music stream was empty.")
@@ -152,6 +163,8 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
     failure: list[str] = []
     stopped = False
     paused = False
+    pause_state = threading.Event()
+    pause_guard = threading.Lock()
 
     # mkdtemp uses mode 0700, so no other user can reach mpv's IPC socket.
     runtime = os.environ.get("XDG_RUNTIME_DIR")
@@ -180,7 +193,8 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
             return 3
 
         sender = threading.Thread(target=stream_audio,
-            args=(server, auth, track_id, decoder, send, done, failure),
+            args=(server, auth, track_id, decoder, send, done, failure,
+                  pause_state, pause_guard),
             daemon=True)
         try:
             send("BUFFERING")
@@ -220,8 +234,13 @@ def run(server: str, track_id: str, credential_stream, command_stream, output,
                     continue
                 wanted_paused = action == "PAUSE"
                 if wanted_paused != paused and socket_command(ipc, wanted_paused):
-                    paused = wanted_paused
-                    send("PAUSED" if paused else "PLAYING")
+                    with pause_guard:
+                        paused = wanted_paused
+                        if paused:
+                            pause_state.set()
+                        else:
+                            pause_state.clear()
+                        send("PAUSED" if paused else "PLAYING")
         finally:
             done.set()
             if decoder.poll() is None:

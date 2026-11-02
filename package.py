@@ -26,6 +26,7 @@ shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profi
 # Optional user-authenticated OpenSubsonic read/stream transport (inert until used).
 shutil.copy2(root/'src/music_subsonic.py',pkg/'usr/lib/optiplex-now/music_subsonic.py')
 shutil.copy2(root/'src/music_keyring.py',pkg/'usr/lib/optiplex-now/music_keyring.py')
+shutil.copy2(root/'src/music_player.py',pkg/'usr/lib/optiplex-now/music_player.py')
 # Shared theme used by main GTK UI and owner/host Python dialogs.
 shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
 shutil.copy2(root/'src/now_theme.py',pkg/'usr/lib/optiplex-now/now_theme.py')
@@ -160,7 +161,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: OptiPlex Now <local@localhost>
 Depends: python3, python3-gi, gir1.2-secret-1, qrencode, python3-cryptography, gir1.2-gtk-3.0, libc6 (>= 2.34), libgtk-3-0t64 | libgtk-3-0, libfontconfig1, openssh-client, xdg-utils, gvfs-backends, gvfs-fuse, libglib2.0-bin, libssl3t64 | libssl3
-Recommends: gnome-keyring, libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
+Recommends: mpv, gnome-keyring, libayatana-appindicator3-1, flatpak, curl, gvfs-backends, pkexec, libwebkit2gtk-4.1-0
 Description: OptiPlex Now remote server launcher
  Native GTK client with native tray quick actions, owner-managed Steam streaming, live hardware info and encrypted backup.
 ''')

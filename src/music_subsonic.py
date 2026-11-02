@@ -27,6 +27,7 @@ MAX_REPLY = 8 * 1024 * 1024
 MAX_COVER = 3 * 1024 * 1024
 MAX_STDIN = 8192
 MAX_TEXT = 512
+ALBUM_PAGE_SIZE = 200
 
 
 class MusicTransportError(Exception):
@@ -270,8 +271,17 @@ def main(argv: list[str] | None = None) -> int:
                 "recent": "recent",
                 "new": "newest",
             }[args.operation]
+            offset = 0
+            if args.operation == "albums" and args.value is not None:
+                if not args.value.isascii() or not args.value.isdecimal():
+                    raise MusicTransportError("Invalid album page offset.")
+                offset = int(args.value)
+                if offset > 1_000_000 or offset % ALBUM_PAGE_SIZE:
+                    raise MusicTransportError("Invalid album page offset.")
             data = query(args.base_url, "getAlbumList2", auth,
-                         {"type": sort, "size": "100", "offset": "0"})
+                         {"type": sort,
+                          "size": str(ALBUM_PAGE_SIZE if args.operation == "albums" else 100),
+                          "offset": str(offset)})
             albums = data.get("albumList2", {}).get("album", [])
             # A freshly installed player has no history yet. Populate Home
             # with real library additions, not a fabricated recommendation.

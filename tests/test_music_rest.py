@@ -119,11 +119,14 @@ class RestAccessTests(unittest.TestCase):
         activity=rest.request(self.base,"activity",token=TOKEN)
         self.assertEqual(activity["active_count"],1)
         downloads=rest.request(self.base,"downloads",token=TOKEN,value=ALBUM)
+        all_downloads=rest.request(self.base,"downloads",token=TOKEN)
+        self.assertEqual(all_downloads["tasks"][0]["status"],"downloading")
         self.assertEqual(downloads["tasks"][0]["status"],"downloading")
         observed=FakeDroppedNeedle.observed
         self.assertEqual([r[1] for r in observed],[
            "/api/v1/search","/api/v1/requests/new",
-           "/api/v1/downloads/activity-summary","/api/v1/downloads"])
+           "/api/v1/downloads/activity-summary","/api/v1/downloads",
+           "/api/v1/downloads"])
         self.assertEqual(observed[0][2]["q"],["dream pop"])
         self.assertEqual(observed[1][0],"POST")
         self.assertEqual(json.loads(observed[1][5]),{"musicbrainz_id":ALBUM})
@@ -150,6 +153,32 @@ class RestAccessTests(unittest.TestCase):
             with self.subTest(bad=bad),self.assertRaises(Exception):
                 rest.request(self.base,"search",token=TOKEN,value=bad)
         self.assertFalse(FakeDroppedNeedle.observed)
+
+    def test_real_download_queue_states_are_sanitized_and_not_equated_to_library(self):
+        rows=rest._download_rows({"items":[
+            {"release_group_mbid":ALBUM,"status":"queued","progress_percent":0},
+            {"release_group_mbid":ALBUM,"status":"downloading","progress_percent":42},
+            {"release_group_mbid":ALBUM,"status":"completed","progress_percent":100},
+            {"release_group_mbid":"not-a-uuid","status":"downloading","progress_percent":100},
+        ]})
+        self.assertEqual(rows,ALBUM+"\tDownloading 42%\n")
+        self.assertNotIn("Ready",rows)
+        self.assertEqual(rest._download_rows({"items":[
+            {"release_group_mbid":ALBUM,"status":"completed",
+             "progress_percent":100}]}),
+             ALBUM+"\tDownloaded — check library\n")
+        self.assertEqual(rest._download_rows({"items":[
+            {"release_group_mbid":ALBUM,"status":"held_for_review",
+             "progress_percent":0}]}),
+             ALBUM+"\tNeeds review\n")
+        self.assertEqual(rest._download_rows({"items":[
+            {"release_group_mbid":ALBUM,"status":"downloading",
+             "progress_percent":0,"held_for_review":True}]}),
+             ALBUM+"\tNeeds review\n")
+        self.assertEqual(rest._download_rows({"items":[
+            {"release_group_mbid":ALBUM,"status":"downloading",
+             "progress_percent":"oops"}]}),
+             ALBUM+"\tDownloading 0%\n")
 
     def test_upstream_discover_sections_become_real_card_groups(self):
         album_id="9c1a1111-2dd3-4000-8111-7e9000010000"

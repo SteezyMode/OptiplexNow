@@ -3132,8 +3132,18 @@ int main(int argc,char**argv) {
  /* Keep navigation visible while only the active page body changes. */
  GtkWidget*window_root=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  gtk_container_add(GTK_CONTAINER(win),window_root);
+ /* Six destinations must not enlarge the minimum window on older
+  * small-screen clients. Keep native GTK tab highlighting on the inner box
+  * and make overflow visibly scrollable when the window is narrow. */
+ GtkWidget*nav_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nav_scroll),
+   GTK_POLICY_AUTOMATIC,GTK_POLICY_NEVER);
+ gtk_scrolled_window_set_min_content_width(GTK_SCROLLED_WINDOW(nav_scroll),320);
+ gtk_widget_set_hexpand(nav_scroll,TRUE);
+ add(window_root,nav_scroll,0);
  GtkWidget*nav=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- gtk_widget_set_name(nav,"mainnav");add(window_root,nav,0);
+ gtk_widget_set_name(nav,"mainnav");
+ gtk_container_add(GTK_CONTAINER(nav_scroll),nav);
  main_pages=gtk_stack_new();
  /* A hidden Settings/Downloads page must not define the minimum window width. */
  gtk_stack_set_hhomogeneous(GTK_STACK(main_pages),FALSE);

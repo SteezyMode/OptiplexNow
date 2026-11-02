@@ -798,7 +798,12 @@ static void music_vault_begin(MusicView *view,const char *action,
 static void music_opened(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
- if(view->closing || view->vault_busy || view->busy || !*cfg[6])return;
+ if(view->closing || view->vault_busy || view->busy)return;
+ if(!*cfg[6]){
+  status_set(view,"Music server is not configured. Set it once in NOW Settings.");
+  gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
+  return;
+ }
  if(view->bound_url && !g_strcmp0(view->bound_url,cfg[6]) &&
     view->app_password)return;
  if(view->bound_url && g_strcmp0(view->bound_url,cfg[6])){
@@ -841,6 +846,10 @@ static void music_connect(GtkWidget *unused,gpointer data){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
  }
+ /* Connecting a different user or host must end any previous audio
+  * session before changing credentials and resetting the queue. */
+ if(view->playback && now_music_playback_active(view->playback))
+  music_stop(view);
  g_free(view->bound_url);
  view->bound_url=g_strdup(cfg[6]);
  g_free(view->vault_attempted_url);

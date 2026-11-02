@@ -14,7 +14,7 @@ typedef struct {
  char *username, *app_password;
  gboolean busy, closing;
  void (*open_url)(const char *);
- void (*open_settings)(GtkWidget *, gpointer);
+ void (*open_settings)(void *, void *);
 } MusicView;
 
 typedef struct {
@@ -319,7 +319,7 @@ static GtkWidget *music_button(const char *text){
 }
 
 GtkWidget *now_music_build(void (*open_url)(const char *),
-                           void (*open_settings)(GtkWidget *, gpointer)){
+                           void (*open_settings)(void *, void *)){
  MusicView *view=g_new0(MusicView,1);
  view->open_url=open_url;
  view->open_settings=open_settings;

@@ -6,11 +6,34 @@
 #define _GNU_SOURCE
 #include "ui_music.h"
 #include "config.h"
+#include "music_playback.h"
 #include <gio/gio.h>
 #include <string.h>
 
 typedef struct {
+ char *id, *title, *artist;
+} MusicTrack;
+static void track_free(gpointer data){
+ MusicTrack *t=data;
+ if(!t)return;
+ g_free(t->id);g_free(t->title);g_free(t->artist);g_free(t);
+}
+static MusicTrack *track_copy(const MusicTrack *source){
+ MusicTrack *t=g_new0(MusicTrack,1);
+ t->id=g_strdup(source->id);
+ t->title=g_strdup(source->title);
+ t->artist=g_strdup(source->artist);
+ return t;
+}
+typedef struct {
  GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
+ GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
+ GPtrArray *visible_tracks, *queue;
+ NowMusicPlayback *playback;
+ int queue_index;
+ gboolean paused;
+ char *playing_caption;
+ void (*tray_changed)(void);
  char *username, *app_password, *bound_url, *vault_attempted_url;
  gboolean busy, closing, vault_busy, remember_pending;
  void (*open_url)(const char *);
@@ -27,6 +50,10 @@ typedef struct {
  char *input;                /* securely wiped on completion */
 } MusicQuery;
 
+static MusicView *active_music_view=NULL;
+static void music_stop(MusicView *view);
+static void music_start_track(MusicView *view,int index);
+
 static void wipe_free(char *value){
  if(!value)return;
  volatile char *ptr=(volatile char *)value;
@@ -39,6 +66,11 @@ static void music_view_destroy(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  view->closing=TRUE;
+ if(active_music_view==view)active_music_view=NULL;
+ if(view->playback){
+  now_music_playback_free(view->playback);
+  view->playback=NULL;
+ }
  wipe_free(view->app_password);
  view->app_password=NULL;
 }
@@ -49,6 +81,9 @@ static void music_view_free(gpointer data){
  g_free(view->username);
  g_free(view->bound_url);
  g_free(view->vault_attempted_url);
+ g_free(view->playing_caption);
+ if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
+ if(view->queue)g_ptr_array_unref(view->queue);
  g_free(view);
 }
 

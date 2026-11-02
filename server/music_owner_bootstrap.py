@@ -105,7 +105,9 @@ def bootstrap_owner_account(*, state_dir: str, base_url: str,
                     or stat.S_IMODE(meta.st_mode)!=0o600):
                 raise PolicyError("Unsafe Music bootstrap lock")
             fcntl.flock(lockfd,fcntl.LOCK_EX)
-            if account_path.exists() or account_path.is_symlink():
+            if account_path.is_symlink():
+                raise PolicyError("Music owner account file must not be a symlink.")
+            if account_path.exists():
                 from owner_music_ssh import read_owner_music_account
                 existing=read_owner_music_account(account_path)
                 if (existing["owner_principal_id"]!=principal or

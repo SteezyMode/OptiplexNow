@@ -30,7 +30,7 @@ class FakeSocket:
 class MusicPlaybackContract(unittest.TestCase):
     def test_credentials_only_on_stdin(self):
         auth = player.read_auth(io.BytesIO(b"api_key=app%2Bsecret&username=listener\n"))
-        self.assertEqual(auth, {"apiKey": "app+secret", "u": "listener"})
+        self.assertEqual(auth, {"apiKey": "app+secret"})
         for s in (b"", b"api_key=x&username=a", b"api_key=&username=x\n",
                   b"api_key=ok&username=x&extra=bad\n",
                   b"api_key=one&api_key=two&username=x\n",

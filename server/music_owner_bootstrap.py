@@ -113,10 +113,26 @@ def bootstrap_owner_account(*, state_dir: str, base_url: str,
                 if (existing["owner_principal_id"]!=principal or
                         existing["base_url"]!=base_url):
                     raise PolicyError("Music owner account belongs to another host.")
-                # A successfully initialized account is idempotent. A
-                # prepared-but-failed account must NOT be blindly replaced.
-                api.login(existing["username"],existing["password"])
-                return "already-linked"
+                # Reuse the exact durable generated credential after a
+                # crash/timeout. If setup already succeeded, login validates
+                # it. If not, ONLY retry on an explicitly empty DN database.
+                try:
+                    api.login(existing["username"],existing["password"])
+                    return "already-linked"
+                except ProvisionError:
+                    status=api.call("GET","/auth/setup/status")
+                    if status.get("required") is not True:
+                        raise ProvisionError(
+                            "Existing Music owner needs recovery; no account changed.")
+                    response=api.call("POST","/auth/setup",data={
+                        "display_name":"Bruiser Owner",
+                        "username":existing["username"],
+                        "password":existing["password"],
+                    })
+                    user=response.get("user")
+                    if not isinstance(user,dict) or user.get("role")!="admin":
+                        raise ProvisionError("Music recovery returned an unexpected owner.")
+                    return "created"
             status=api.call("GET","/auth/setup/status")
             if status.get("required") is not True:
                 raise ProvisionError(

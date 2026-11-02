@@ -187,6 +187,24 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('args.operation=="downloads"',transport)
         self.assertIn('"Downloaded — check library"',transport)
 
+    def test_approved_owner_music_auto_enrollment_is_noninteractive(self):
+        self.assertIn('static void music_auto_enroll(MusicView *view)',UI_MUSIC)
+        self.assertIn('music_auto_enroll(view);',UI_MUSIC)
+        self.assertIn('view->auto_enroll_attempted=TRUE;',UI_MUSIC)
+        self.assertIn('view->auto_enroll_busy=TRUE;',UI_MUSIC)
+        self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE',UI_MUSIC)
+        self.assertIn('g_strcmp0(job->server_url,cfg[6])==0',UI_MUSIC)
+        self.assertIn('music_vault_begin(view,"lookup",NULL);',UI_MUSIC)
+        self.assertIn('"Checking approved Music access..."',UI_MUSIC)
+        package=(ROOT/"package.py").read_text()
+        for helper in ("music_device_client.py","owner_music_ssh.py",
+                       "music_device_provision.py","music_device_ledger.py"):
+            self.assertIn(helper,package)
+        self.assertIn("'wolf-pair-local.py', 'music_subsonic.py'",package)
+        ssh=(ROOT/"server"/"owner_games_ssh.py").read_text()
+        self.assertIn('request.get("action") == "music_access"',ssh)
+        self.assertIn('verified_client_id=verified_client_id',ssh)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

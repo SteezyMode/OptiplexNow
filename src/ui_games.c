@@ -10,10 +10,7 @@ GtkWidget *now_games_page_new(GCallback on_play, GCallback on_settings,
     GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,14);
     gtk_container_set_border_width(GTK_CONTAINER(content),14);
     gtk_container_add(GTK_CONTAINER(scroll),content);
-    GtkWidget *title=gtk_label_new("GAMES");
-    gtk_widget_set_name(title,"section");
-    gtk_label_set_xalign(GTK_LABEL(title),0);
-    gtk_box_pack_start(GTK_BOX(content),title,FALSE,FALSE,0);
+    /* Active GAMES tab identifies this page. */
     GtkWidget *heading=gtk_label_new("Steam Big Picture");
     gtk_widget_set_name(heading,"modalheading");
     gtk_label_set_xalign(GTK_LABEL(heading),0);

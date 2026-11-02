@@ -113,13 +113,19 @@ class OwnerAccessTests(unittest.TestCase):
         policy.approve_device(self.data, "1001", self.wolf)
         policy.grant_music(self.data, "1001", self.wolf,
                            owner_confirmed=True)
-        policy.revoke_music(self.data, "1001")
+        with self.assertRaisesRegex(policy.PolicyError, "Revoke DroppedNeedle"):
+            policy.revoke_music(self.data, "1001")
+        policy.revoke_music(self.data, "1001", upstream_revoked=True)
         with self.assertRaises(policy.PolicyError):
             policy.resolve_music(self.data, "1001", self.wolf)
         self.assertEqual(policy.resolve_games(self.data, "1001", self.wolf)
                          ["wolf_profile_id"], "user")
         policy.grant_music(self.data, "1001", self.wolf,
                            owner_confirmed=True)
+        with self.assertRaisesRegex(policy.PolicyError, "Revoke Music provider"):
+            policy.revoke_device(self.data, "1001")
+        # Host upstream revoke must complete before generic NOW revoke.
+        policy.revoke_music(self.data, "1001", upstream_revoked=True)
         policy.revoke_device(self.data, "1001")
         with self.assertRaises(policy.PolicyError):
             policy.resolve_music(self.data, "1001", self.wolf)

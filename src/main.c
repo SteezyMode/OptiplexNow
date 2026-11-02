@@ -3032,9 +3032,19 @@ static void tray_music_next(GtkWidget *unused,gpointer data){
  (void)unused;(void)data;
  now_music_next();
 }
+/* Collapse quick BUFFERING/PLAYING/PAUSED updates into one idle rebuild.
+ * Rebuilding and destroying the old GTK/AppIndicator menu repeatedly during
+ * playback event delivery is avoidable and can race menu activation. */
+static guint music_tray_rebuild_pending=0;
+static gboolean music_tray_rebuild_idle(gpointer unused){
+ (void)unused;
+ music_tray_rebuild_pending=0;
+ if(tray_menu)tray_build_menu();
+ return G_SOURCE_REMOVE;
+}
 static void music_tray_changed(void){
- /* Do not destroy an active GTK menu in the middle of its activation. */
- if(tray_menu)g_idle_add(tray_rebuild_after_settings,NULL);
+ if(tray_menu && !music_tray_rebuild_pending)
+  music_tray_rebuild_pending=g_idle_add(music_tray_rebuild_idle,NULL);
 }
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;

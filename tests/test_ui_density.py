@@ -20,7 +20,7 @@ class DenseLayoutContract(unittest.TestCase):
         self.assertIn("is_song?GTK_ORIENTATION_HORIZONTAL",MUSIC)
         self.assertIn("gtk_label_set_single_line_mode(GTK_LABEL(primary),TRUE)",MUSIC)
         self.assertIn('gtk_label_set_max_width_chars(GTK_LABEL(secondary),25)',MUSIC)
-        self.assertIn('min-height:34px;',MAIN)
+        self.assertIn('min-height:30px;',MAIN)
         self.assertIn('button#music-song-action.music-transport',MAIN)
         self.assertNotIn('min-height:62px;',MAIN)
 

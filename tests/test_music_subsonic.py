@@ -50,6 +50,9 @@ class MockHandler(BaseHTTPRequestHandler):
                 item = {"album": {"id": "a1", "song": [{"id": "t1"}]}}
             elif method == "getPlaylists":
                 item = {"playlists": {"playlist": [{"id": "p1"}]}}
+            elif method == "getStarred2":
+                item = {"starred2": {"album": [{"id": "a2", "name": "Liked Album"}],
+                                      "song": [{"id": "t9", "title": "Liked Song"}]}}
             else:
                 item = {}
             payload = json.dumps({"subsonic-response": {"status": "ok", "version": "1.16.1", **item}}).encode()
@@ -161,6 +164,21 @@ class MusicSubsonicTests(unittest.TestCase):
                          "Album\nwith\tcontrols")
         self.assertEqual(b64decode(lines[0].split("\t")[3]).decode(), "歌手")
         self.assertEqual(b64decode(lines[1].split("\t")[0]), b"album")
+
+    def test_real_recent_new_and_liked_endpoint_contracts(self):
+        for kind in ("recent", "newest", "alphabeticalByName"):
+            with self.subTest(kind=kind):
+                music.query(self.base, "getAlbumList2", self.auth,
+                            {"type": kind, "size": "100", "offset": "0"})
+                path, fields = self.server.requests[-1]
+                self.assertEqual(path, "/subsonic/rest/getAlbumList2")
+                self.assertEqual(fields["type"], [kind])
+        liked = music.query(self.base, "getStarred2", self.auth)
+        rows = music._rows("liked", {"starred": liked["starred2"]}).splitlines()
+        self.assertEqual(len(rows), 2)
+        from base64 import b64decode
+        self.assertEqual(b64decode(rows[0].split("\t")[0]), b"album")
+        self.assertEqual(b64decode(rows[1].split("\t")[0]), b"song")
 
     def test_readonly_row_shapes(self):
         cases = {

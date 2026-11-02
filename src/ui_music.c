@@ -28,7 +28,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
  return t;
 }
 typedef struct {
- GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
+ GtkWidget *root, *status, *heading, *list, *password, *search, *connect_panel;
  GtkWidget *player_bar, *playing_label, *pause_button, *previous_button, *next_button;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_play, *playing_art, *load_more;
  GPtrArray *visible_tracks, *queue;
@@ -757,7 +757,7 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
      wipe_free(key);wipe_free(username);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
      status_set(view,exit_code==3
-       ? "Connect your music library once; this device will remember you."
+       ? "Music access is not linked on this device. Connect once or wait for NOW owner enrollment support."
        : "OS keyring unavailable or locked. Check keyring setup to enable automatic sign-in.");
     }
    }
@@ -862,7 +862,7 @@ static void music_connect(GtkWidget *unused,gpointer data){
  if(view->busy || view->closing)return;
  const char *entered=gtk_entry_get_text(GTK_ENTRY(view->password));
  if(!entered || !*entered){
-  status_set(view,"Enter your user app password from DroppedNeedle.");
+  status_set(view,"Music needs a one-time app-password from DroppedNeedle Profile → Connect Apps, not your account password.");
   return;
  }
  if(!*cfg[6]){
@@ -879,8 +879,10 @@ static void music_connect(GtkWidget *unused,gpointer data){
  view->vault_attempted_url=g_strdup(cfg[6]);
  wipe_free(view->app_password);
  view->app_password=g_strdup(entered);
+ /* DroppedNeedle's apiKey authenticates the user by itself. An account
+  * username is NOT required and must not be sent alongside the key. */
  g_free(view->username);
- view->username=g_strdup(gtk_entry_get_text(GTK_ENTRY(view->user)));
+ view->username=g_strdup("");
  gtk_entry_set_text(GTK_ENTRY(view->password),"");
  view->remember_pending=TRUE;
  query_start(view,"home",NULL,"Music Home");
@@ -967,14 +969,17 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_end(GTK_BOX(top),advanced,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->root),top,FALSE,FALSE,0);
 
+ /* One compact, first-connection fallback. Once a saved authorization
+  * exists the entire row stays hidden; it is never part of playback UI.
+  * The final product will provision this through approved NOW enrollment. */
  GtkWidget *connect=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
- view->user=gtk_entry_new();
- gtk_entry_set_placeholder_text(GTK_ENTRY(view->user),"Username (optional)");
- gtk_widget_set_size_request(view->user,125,-1);
- gtk_box_pack_start(GTK_BOX(connect),view->user,FALSE,FALSE,0);
  view->password=gtk_entry_new();
  gtk_entry_set_visibility(GTK_ENTRY(view->password),FALSE);
- gtk_entry_set_placeholder_text(GTK_ENTRY(view->password),"OpenSubsonic app password");
+ gtk_entry_set_max_length(GTK_ENTRY(view->password),1024);
+ gtk_entry_set_placeholder_text(GTK_ENTRY(view->password),"Music access key (one-time)");
+ gtk_widget_set_tooltip_text(view->password,
+    "Use the separate app-password from DroppedNeedle Profile → Connect Apps, "
+    "not the regular account login password.");
  gtk_widget_set_hexpand(view->password,TRUE);
  gtk_box_pack_start(GTK_BOX(connect),view->password,TRUE,TRUE,0);
  GtkWidget *connect_button=music_button("Connect");

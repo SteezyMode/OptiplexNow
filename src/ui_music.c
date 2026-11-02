@@ -818,14 +818,22 @@ static void music_nav(GtkWidget *button,gpointer data){
  MusicView *view=data;
  const char *operation=g_object_get_data(G_OBJECT(button),"music-operation");
  const char *heading=g_object_get_data(G_OBJECT(button),"music-heading");
- if(operation)query_start(view,operation,NULL,heading);
+ if(operation){
+  view->hero_art_serial++;
+  if(view->hero_row)gtk_widget_hide(view->hero_row);
+  query_start(view,operation,NULL,heading);
+ }
 }
 
 static void music_search(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
  const char *value=gtk_entry_get_text(GTK_ENTRY(view->search));
- if(value && *value)query_start(view,"search",value,"Search results");
+ if(value && *value){
+  view->hero_art_serial++;
+  if(view->hero_row)gtk_widget_hide(view->hero_row);
+  query_start(view,"search",value,"Search results");
+ }
 }
 
 static void music_advanced(GtkWidget *unused,gpointer data){
@@ -942,6 +950,21 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->heading=gtk_label_new("Recently played albums");
  gtk_widget_set_halign(view->heading,GTK_ALIGN_START);
  gtk_box_pack_start(GTK_BOX(maincol),view->heading,FALSE,FALSE,0);
+ /* Album/artist/playlist art is fetched on demand, not through an
+  * unbounded request fan-out for every visible library item. */
+ view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,12);
+ view->hero_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
+ gtk_widget_set_size_request(view->hero_art,120,120);
+ gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_art,FALSE,FALSE,0);
+ view->hero_title=gtk_label_new("");
+ gtk_label_set_xalign(GTK_LABEL(view->hero_title),0);
+ gtk_label_set_line_wrap(GTK_LABEL(view->hero_title),TRUE);
+ gtk_label_set_ellipsize(GTK_LABEL(view->hero_title),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_hexpand(view->hero_title,TRUE);
+ gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_title,TRUE,TRUE,0);
+ gtk_widget_show_all(view->hero_row);
+ gtk_widget_set_no_show_all(view->hero_row,TRUE);
+ gtk_box_pack_start(GTK_BOX(maincol),view->hero_row,FALSE,FALSE,0);
  GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
      GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
@@ -957,6 +980,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
                              "music-player-bar");
+ view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
+ gtk_widget_set_size_request(view->playing_art,44,44);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),view->playing_art,FALSE,FALSE,0);
  view->playing_label=gtk_label_new("");
  gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
@@ -988,6 +1014,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_end(GTK_BOX(view->root),view->player_bar,FALSE,FALSE,0);
  g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view);
  gtk_widget_show_all(view->root);
+ gtk_widget_hide(view->hero_row);
  gtk_widget_hide(view->player_bar);
  return view->root;
 }

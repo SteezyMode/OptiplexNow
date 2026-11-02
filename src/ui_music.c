@@ -1236,7 +1236,6 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
       artist && *artist?artist:"");
  }
  GtkWidget *secondary=gtk_label_new(detail);
- g_free(detail);
  gtk_label_set_xalign(GTK_LABEL(secondary),0);
  gtk_widget_set_name(secondary,"music-row-detail");
  gtk_label_set_ellipsize(GTK_LABEL(secondary),PANGO_ELLIPSIZE_END);
@@ -1247,6 +1246,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_widget_set_tooltip_text(button,tooltip);
   g_free(tooltip);
  }
+ g_free(detail);
  gtk_style_context_add_class(gtk_widget_get_style_context(secondary),"dim-label");
  gtk_box_pack_start(GTK_BOX(content),secondary,FALSE,FALSE,0);
  gtk_container_add(GTK_CONTAINER(button),content);

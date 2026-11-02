@@ -1367,6 +1367,22 @@ static void music_search(GtkWidget *unused,gpointer data){
  }
 }
 
+static void music_retry_access(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->closing || view->auto_enroll_busy || view->busy)return;
+ if(view->app_password && view->bound_url &&
+    !g_strcmp0(view->bound_url,cfg[6])){
+  status_set(view,"This device already has Music playback access.");
+  return;
+ }
+ /* The owner may have approved Music after the initial automatic attempt.
+  * Retry the SAME restricted, already enrolled NOW device identity; do not
+  * create keys or invent a new pairing flow. */
+ view->auto_enroll_attempted=FALSE;
+ music_auto_enroll(view);
+}
+
 static void music_advanced(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
@@ -1422,6 +1438,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *settings_item=gtk_menu_item_new_with_label("Music settings");
  g_signal_connect(settings_item,"activate",G_CALLBACK(music_settings),view);
  gtk_menu_shell_append(GTK_MENU_SHELL(menu),settings_item);
+ GtkWidget *retry_item=gtk_menu_item_new_with_label("Retry Music Access");
+ g_signal_connect(retry_item,"activate",G_CALLBACK(music_retry_access),view);
+ gtk_menu_shell_append(GTK_MENU_SHELL(menu),retry_item);
  GtkWidget *forget_item=gtk_menu_item_new_with_label("Forget this device");
  g_signal_connect(forget_item,"activate",G_CALLBACK(music_forget_device),view);
  gtk_menu_shell_append(GTK_MENU_SHELL(menu),forget_item);

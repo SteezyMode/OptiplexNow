@@ -1505,8 +1505,14 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                     !g_strcmp0(job->operation,"new")?"albums":
                     !g_strcmp0(job->operation,"artists")?"artists":
                     !g_strcmp0(job->operation,"playlists")?"playlists":"items";
-   char *heading=g_strdup_printf("%s · %d %s",job->heading,
-                                  displayed,noun);
+   /* OpenSubsonic search3 supplies a page, not a total. Showing the
+    * first 200 loaded tracks as "200 songs" wrongly implies the entire
+    * library contains exactly 200 songs. While more pages remain, show
+    * the destination only; publish the actual total after the last page. */
+   gboolean partial=(!g_strcmp0(job->operation,"songs") && view->song_has_more) ||
+                    (!g_strcmp0(job->operation,"albums") && view->album_has_more);
+   char *heading=partial?g_strdup(job->heading):
+       g_strdup_printf("%s · %d %s",job->heading,displayed,noun);
    gtk_label_set_text(GTK_LABEL(view->heading),heading);
    g_free(heading);
    status_clear(view);

@@ -34,7 +34,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)
         self.assertIn('view->bound_url=g_strdup(cfg[6]);', UI_MUSIC)
         self.assertIn('G_SUBPROCESS_FLAGS_STDERR_SILENCE', UI_MUSIC)
-        self.assertIn("music_start_track(view,selected);", UI_MUSIC)
+        self.assertIn("music_play_visible(view,selected);", UI_MUSIC)
         self.assertIn("now_music_playback_start(view->playback", UI_MUSIC)
         self.assertIn("gtk_widget_set_no_show_all(view->player_bar,TRUE);", UI_MUSIC)
         self.assertIn('now_music_is_playing_session()', MAIN)

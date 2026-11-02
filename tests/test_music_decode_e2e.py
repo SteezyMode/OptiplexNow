@@ -34,8 +34,24 @@ class Stream(BaseHTTPRequestHandler):
             audio.setframerate(22050)
             audio.writeframes(b"\x00\x00" * 33075)
         data=sound.getvalue()
-        self.send_response(200)
+        header=self.headers.get("Range")
+        if header:
+            import re
+            m=re.fullmatch(r"bytes=(\\d+)-(\\d*)",header)
+            if not m:
+                self.send_response(416);self.end_headers();return
+            start=int(m.group(1))
+            end=int(m.group(2)) if m.group(2) else len(data)-1
+            if start>=len(data) or end<start:
+                self.send_response(416);self.end_headers();return
+            end=min(end,len(data)-1)
+            self.send_response(206)
+            self.send_header("Content-Range","bytes %d-%d/%d"%(start,end,len(data)))
+            data=data[start:end+1]
+        else:
+            self.send_response(200)
         self.send_header("Content-Type","audio/wav")
+        self.send_header("Accept-Ranges","bytes")
         self.send_header("Content-Length",str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -74,6 +90,8 @@ class PlaybackSmoke(unittest.TestCase):
                     self.assertIn("PLAYING",events)
                     self.assertIn("ENDED",events)
                     self.assertNotIn("ERROR",events)
+                    self.assertTrue(any(x.startswith("POSITION ") for x in events),
+                                    "mpv must report real elapsed/duration")
                     self.assertEqual(proc.wait(timeout=2),0)
                     path,params=Stream.requests[-1]
                     self.assertEqual(path,"/subsonic/rest/stream")

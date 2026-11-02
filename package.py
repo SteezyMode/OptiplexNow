@@ -25,6 +25,7 @@ shutil.copy2(root/'src/open-web-gaming-admin.py',pkg/'usr/lib/optiplex-now/open-
 shutil.copy2(root/'src/server-profile.py',pkg/'usr/lib/optiplex-now/server-profile.py')
 # Optional user-authenticated OpenSubsonic read/stream transport (inert until used).
 shutil.copy2(root/'src/music_subsonic.py',pkg/'usr/lib/optiplex-now/music_subsonic.py')
+shutil.copy2(root/'src/music_art_audit.py',pkg/'usr/lib/optiplex-now/music_art_audit.py')
 shutil.copy2(root/'src/music_keyring.py',pkg/'usr/lib/optiplex-now/music_keyring.py')
 shutil.copy2(root/'src/music_player.py',pkg/'usr/lib/optiplex-now/music_player.py')
 shutil.copy2(root/'src/music_http_stream.py',pkg/'usr/lib/optiplex-now/music_http_stream.py')

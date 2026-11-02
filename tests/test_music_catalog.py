@@ -59,6 +59,20 @@ class MusicCatalogTests(unittest.TestCase):
         cls.srv.server_close()
         cls.thread.join(timeout=2)
 
+    def test_catalog_cli_never_reads_playback_credentials(self):
+        import io
+        class NoCredentialStdin:
+            @property
+            def buffer(self):
+                raise AssertionError("Catalog search must not read app-password stdin")
+        out=io.StringIO()
+        with patch.object(music,"catalog_search",return_value=FakeCatalog.result), \
+             patch.object(music.sys,"stdin",NoCredentialStdin()), \
+             patch.object(music.sys,"stdout",out):
+            rc=music.main([self.base,"catalog","dream pop","--format=rows"])
+        self.assertEqual(rc,0)
+        self.assertGreaterEqual(len(out.getvalue().splitlines()),2)
+
     def test_search_uses_exact_upstream_route_and_no_secret(self):
         FakeCatalog.observed.clear()
         found=music.catalog_search(self.base,"new album")

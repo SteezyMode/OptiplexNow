@@ -205,6 +205,13 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('request.get("action") == "music_access"',ssh)
         self.assertIn('verified_client_id=verified_client_id',ssh)
 
+    def test_retry_access_after_owner_approval_does_not_force_restart(self):
+        self.assertIn('gtk_menu_item_new_with_label("Retry Music Access")',UI_MUSIC)
+        self.assertIn('G_CALLBACK(music_retry_access)',UI_MUSIC)
+        self.assertIn('view->auto_enroll_attempted=FALSE;',UI_MUSIC)
+        self.assertIn('music_auto_enroll(view);',UI_MUSIC)
+        self.assertIn('This device already has Music playback access.',UI_MUSIC)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

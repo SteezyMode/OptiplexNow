@@ -13,12 +13,10 @@ No secret is included in argv, environment, logs or normal stdout.
 from __future__ import annotations
 
 import argparse
-import importlib.machinery
-import importlib.util
-import ipaddress
 import json
 from pathlib import Path
 import stat
+import os
 import subprocess
 import sys
 from urllib.parse import urlencode
@@ -62,7 +60,7 @@ def request(host: str, user: str, *, key_dir=KEY_DIR,
     if private.is_symlink() or not private.is_file():
         raise EnrollmentError("Bruiser device enrollment is incomplete.")
     info = private.stat()
-    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 + __import__("os").geteuid()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
             or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1):
         raise EnrollmentError("Bruiser device key is not private.")
     argv = [

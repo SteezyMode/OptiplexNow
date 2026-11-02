@@ -10,9 +10,9 @@
 #include <string.h>
 
 typedef struct {
- GtkWidget *root, *status, *heading, *list, *user, *password, *search;
- char *username, *app_password, *bound_url;
- gboolean busy, closing;
+ GtkWidget *root, *status, *heading, *list, *user, *password, *search, *connect_panel;
+ char *username, *app_password, *bound_url, *vault_attempted_url;
+ gboolean busy, closing, vault_busy, remember_pending;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
 } MusicView;
@@ -48,6 +48,7 @@ static void music_view_free(gpointer data){
  wipe_free(view->app_password);
  g_free(view->username);
  g_free(view->bound_url);
+ g_free(view->vault_attempted_url);
  g_free(view);
 }
 
@@ -90,6 +91,8 @@ static char *decode_field(const char *encoded){
 
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading);
+static void music_vault_begin(MusicView *view,const char *action,
+                              const char *input);
 
 static void music_item_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -207,6 +210,17 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    char *message=g_strdup_printf("%d items · Connected to your music library",count);
    status_set(view,message);
    g_free(message);
+   if(view->remember_pending){
+    view->remember_pending=FALSE;
+    /* Credentials are saved only AFTER the OpenSubsonic API accepted them. */
+    char *escaped_key=g_uri_escape_string(view->app_password,NULL,FALSE);
+    char *escaped_user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+    char *form=g_strdup_printf("api_key=%s&username=%s",escaped_key,escaped_user);
+    wipe_free(escaped_key);
+    g_free(escaped_user);
+    music_vault_begin(view,"store",form);
+    wipe_free(form);
+   }
   }
  }
  g_clear_error(&error);
@@ -275,6 +289,191 @@ static void query_start(MusicView *view,const char *operation,
                                     query_complete,job);
 }
 
+
+/* GNOME Keyring / KWallet Secret Service work happens off the GTK main loop.
+ * It is intentionally separate from the OpenSubsonic network transport. */
+typedef struct {
+ GtkWidget *root;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+ char *action, *url, *input;
+} MusicVault;
+
+static char *keyring_helper_path(void){
+ char *music=helper_path();
+ char *dir=g_path_get_dirname(music);
+ char *keyring=g_build_filename(dir,"music_keyring.py",NULL);
+ g_free(dir);
+ g_free(music);
+ return keyring;
+}
+
+static char *form_unescape(const char *encoded){
+ if(!encoded || strlen(encoded)>4096)return NULL;
+ char *plus=g_strdup(encoded);
+ for(char *p=plus;*p;p++)if(*p=='+')*p=' ';
+ char *decoded=g_uri_unescape_string(plus,NULL);
+ g_free(plus);
+ return decoded;
+}
+
+/* The keyring stores only "api_key=...&username=..." form data.
+ * Parse exactly two fields, never interpret arbitrary keyring text as a URL. */
+static gboolean form_unpack(const char *form,char **api_key,char **username){
+ *api_key=NULL;
+ *username=NULL;
+ if(!form || strlen(form)>4096)return FALSE;
+ char **fields=g_strsplit(form,"&",3);
+ gboolean ok=fields[0] && fields[1] && !fields[2] &&
+    g_str_has_prefix(fields[0],"api_key=") &&
+    g_str_has_prefix(fields[1],"username=");
+ if(ok){
+  *api_key=form_unescape(fields[0]+8);
+  *username=form_unescape(fields[1]+9);
+  ok=*api_key && **api_key && strlen(*api_key)<=1024 &&
+     *username && strlen(*username)<=128 &&
+     !strchr(*api_key,'\n') && !strchr(*username,'\n');
+ }
+ if(!ok){
+  wipe_free(*api_key);*api_key=NULL;
+  wipe_free(*username);*username=NULL;
+ }
+ g_strfreev(fields);
+ return ok;
+}
+
+static gboolean vault_timeout(gpointer data){
+ MusicVault *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+
+static void vault_free(MusicVault *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_object_unref(job->cancel);
+ g_object_unref(job->process);
+ g_object_unref(job->root);
+ wipe_free(job->input);
+ g_free(job->action);
+ g_free(job->url);
+ g_free(job);
+}
+
+static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicVault *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ gchar *reply=NULL;
+ GError *error=NULL;
+ gboolean completed=g_subprocess_communicate_utf8_finish(
+                        job->process,result,&reply,NULL,&error);
+ int exit_code=completed?g_subprocess_get_exit_status(job->process):-1;
+ if(view && !view->closing){
+  view->vault_busy=FALSE;
+  if(!g_strcmp0(job->action,"lookup")){
+   if(g_strcmp0(cfg[6],job->url)==0 &&
+      !view->app_password && !view->busy){
+    char *key=NULL,*username=NULL;
+    if(exit_code==0 && form_unpack(reply,&key,&username)){
+     wipe_free(view->app_password);
+     view->app_password=key;
+     g_free(view->username);
+     view->username=username;
+     g_free(view->bound_url);
+     view->bound_url=g_strdup(job->url);
+     gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
+     query_start(view,"albums",NULL,"Your albums");
+    }else{
+     wipe_free(key);wipe_free(username);
+     gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+     status_set(view,exit_code==3
+       ? "Connect your music library once; this device will remember you."
+       : "OS keyring unavailable or locked. Check keyring setup to enable automatic sign-in.");
+    }
+   }
+  }else if(!g_strcmp0(job->action,"store")){
+   if(exit_code==0){
+    gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
+    status_set(view,"Music connected. This device will sign in automatically.");
+   }else{
+    status_set(view,"Music connected for this session, but device sign-in could not be saved to the OS keyring.");
+    gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+   }
+  }else if(!g_strcmp0(job->action,"clear")){
+   status_set(view,exit_code==0
+     ? "Music sign-in removed from this device."
+     : "Could not remove Music sign-in; check your OS keyring.");
+   gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+  }
+ }
+ g_clear_error(&error);
+ wipe_free(reply);
+ vault_free(job);
+}
+
+static void music_vault_begin(MusicView *view,const char *action,
+                              const char *input){
+ if(view->closing || view->vault_busy)return;
+ const char *url=!g_strcmp0(action,"lookup")?cfg[6]:
+                  (view->bound_url?view->bound_url:cfg[6]);
+ if(!url || !*url)return;
+ char *helper=keyring_helper_path();
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  status_set(view,"OS keyring integration is missing; Music sign-in cannot be remembered.");
+  gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+  g_free(helper);return;
+ }
+ const char *argv[]={"/usr/bin/python3",helper,action,url,NULL};
+ GError *error=NULL;
+ GSubprocess *process=g_subprocess_newv(argv,
+   G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+   G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!process){
+  status_set(view,"Could not access the OS keyring.");
+  gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),TRUE);
+  g_clear_error(&error);
+  return;
+ }
+ MusicVault *job=g_new0(MusicVault,1);
+ job->root=g_object_ref(view->root);
+ job->process=process;
+ job->cancel=g_cancellable_new();
+ job->action=g_strdup(action);
+ job->url=g_strdup(url);
+ job->input=g_strdup(input?input:"");
+ view->vault_busy=TRUE;
+ job->deadline=g_timeout_add_seconds(20,vault_timeout,job);
+ g_subprocess_communicate_utf8_async(process,job->input,job->cancel,
+                                     vault_complete,job);
+}
+
+static void music_opened(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->closing || view->vault_busy || view->busy || !*cfg[6])return;
+ if(view->bound_url && !g_strcmp0(view->bound_url,cfg[6]) &&
+    view->app_password)return;
+ if(view->vault_attempted_url &&
+    !g_strcmp0(view->vault_attempted_url,cfg[6]))return;
+ g_free(view->vault_attempted_url);
+ view->vault_attempted_url=g_strdup(cfg[6]);
+ music_vault_begin(view,"lookup",NULL);
+}
+
+static void music_forget_device(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->closing || view->vault_busy || view->busy)return;
+ view->remember_pending=FALSE;
+ wipe_free(view->app_password);view->app_password=NULL;
+ g_free(view->vault_attempted_url);view->vault_attempted_url=g_strdup(cfg[6]);
+ music_vault_begin(view,"clear",NULL);
+}
+
 static void music_connect(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
@@ -290,11 +489,14 @@ static void music_connect(GtkWidget *unused,gpointer data){
  }
  g_free(view->bound_url);
  view->bound_url=g_strdup(cfg[6]);
+ g_free(view->vault_attempted_url);
+ view->vault_attempted_url=g_strdup(cfg[6]);
  wipe_free(view->app_password);
  view->app_password=g_strdup(entered);
  g_free(view->username);
  view->username=g_strdup(gtk_entry_get_text(GTK_ENTRY(view->user)));
  gtk_entry_set_text(GTK_ENTRY(view->password),"");
+ view->remember_pending=TRUE;
  query_start(view,"albums",NULL,"Your albums");
 }
 
@@ -364,9 +566,14 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *connect_button=music_button("Connect");
  g_signal_connect(connect_button,"clicked",G_CALLBACK(music_connect),view);
  gtk_box_pack_start(GTK_BOX(connect),connect_button,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(view->root),connect,FALSE,FALSE,0);
+ view->connect_panel=gtk_revealer_new();
+ gtk_revealer_set_transition_type(GTK_REVEALER(view->connect_panel),
+                                  GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN);
+ gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
+ gtk_container_add(GTK_CONTAINER(view->connect_panel),connect);
+ gtk_box_pack_start(GTK_BOX(view->root),view->connect_panel,FALSE,FALSE,0);
 
- view->status=gtk_label_new("Connect with a dedicated music app password. Nothing is saved to disk.");
+ view->status=gtk_label_new("Checking saved Music connection on this device...");
  gtk_label_set_xalign(GTK_LABEL(view->status),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->status),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(view->root),view->status,FALSE,FALSE,0);
@@ -388,6 +595,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *settings=music_button("Settings");
  g_signal_connect(settings,"clicked",G_CALLBACK(music_settings),view);
  gtk_box_pack_end(GTK_BOX(sidebar),settings,FALSE,FALSE,0);
+ GtkWidget *forget=music_button("Forget this device");
+ g_signal_connect(forget,"clicked",G_CALLBACK(music_forget_device),view);
+ gtk_box_pack_end(GTK_BOX(sidebar),forget,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(content),sidebar,FALSE,FALSE,0);
 
  GtkWidget *maincol=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
@@ -414,6 +624,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(view->list),GTK_SELECTION_NONE);
  gtk_container_add(GTK_CONTAINER(scroll),view->list);
  gtk_box_pack_start(GTK_BOX(maincol),scroll,TRUE,TRUE,0);
+ g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view);
  gtk_widget_show_all(view->root);
  return view->root;
 }

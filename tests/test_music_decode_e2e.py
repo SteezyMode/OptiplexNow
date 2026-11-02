@@ -37,7 +37,7 @@ class Stream(BaseHTTPRequestHandler):
         header=self.headers.get("Range")
         if header:
             import re
-            m=re.fullmatch(r"bytes=(\\d+)-(\\d*)",header)
+            m=re.fullmatch(r"bytes=(\d+)-(\d*)",header)
             if not m:
                 self.send_response(416);self.end_headers();return
             start=int(m.group(1))

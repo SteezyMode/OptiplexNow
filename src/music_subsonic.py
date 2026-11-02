@@ -241,8 +241,12 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
     elif operation in ("playlists", "playlist_options"):
         found = [("playlist", x) for x in items(result.get("playlists"))]
     elif operation in ("album", "playlist"):
+        payload = result.get(operation, {})
         key = "song" if operation == "album" else "entry"
-        found = [("song", x) for x in items(result.get(operation, {}).get(key))]
+        found = [("song", x) for x in items(payload.get(key))]
+        # Album header metadata gets its own row, separate from playable tracks.
+        if operation == "album" and payload.get("id"):
+            found.insert(0, ("album_meta", payload))
     elif operation == "artist":
         found = [("album", x) for x in items(result.get("artist", {}).get("album"))]
     elif operation in ("search", "catalog"):
@@ -279,6 +283,12 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
         if not isinstance(cover_id, str):
             cover_id = ""
         album = item.get("album") or ""
+        if kind == "album_meta":
+            year = item.get("year")
+            genre = item.get("genre")
+            album = " · ".join(part for part in (
+                str(year) if isinstance(year, int) else "",
+                genre if isinstance(genre, str) else "") if part)
         if not isinstance(album, str):
             album = ""
         starred = ("1" if (operation == "liked" and kind == "song") or

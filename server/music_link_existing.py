@@ -17,6 +17,9 @@ import socket
 import sys
 from urllib.parse import urlsplit
 
+# Packaged host scripts are invoked directly; add their sibling src modules.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'src'))
+
 from owner_access import OwnerStore, PolicyError
 from owner_games_ssh import _read_private_config
 from owner_music_ssh import ACCOUNT_FILE, read_owner_music_account

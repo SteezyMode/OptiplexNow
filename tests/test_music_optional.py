@@ -96,7 +96,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"newest"', transport)
         self.assertIn('if args.operation == "home" and not albums:', transport)
         self.assertIn('music_show_empty(view,job->operation)', UI_MUSIC)
-        self.assertIn('view->hero_play=music_button("Play");', UI_MUSIC)
+        self.assertIn('view->hero_play=music_icon_button("media-playback-start-symbolic","Play album");', UI_MUSIC)
         self.assertIn('music_play_visible(data,0);', UI_MUSIC)
         self.assertIn('"getCoverArt"', transport)
         self.assertIn('"image/jpeg", "image/png", "image/webp"', transport)

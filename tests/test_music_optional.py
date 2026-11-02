@@ -91,6 +91,17 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('G_CALLBACK(music_advanced)', UI_MUSIC)
         self.assertNotIn('getCoverArt?id=', UI_MUSIC)
 
+    def test_album_pagination_keeps_previous_rows(self):
+        self.assertIn("album_offset", UI_MUSIC)
+        self.assertIn("job->append_albums", UI_MUSIC)
+        self.assertIn("render_rows(view,output,job->append_albums)", UI_MUSIC)
+        self.assertIn('music_button("Load more albums")', UI_MUSIC)
+        self.assertIn('query_start(view,"albums",value,"All albums")', UI_MUSIC)
+        self.assertIn('gtk_widget_set_sensitive(view->load_more,TRUE)', UI_MUSIC)
+        transport = (ROOT / "src" / "music_subsonic.py").read_text(encoding="utf-8")
+        self.assertIn('ALBUM_PAGE_SIZE = 200', transport)
+        self.assertIn('offset % ALBUM_PAGE_SIZE', transport)
+
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)
         self.assertIn('127.0.0.1:5030:5030', COMPOSE)

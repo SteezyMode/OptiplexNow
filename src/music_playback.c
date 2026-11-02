@@ -7,6 +7,7 @@
 #include <gio/gio.h>
 #include <string.h>
 #include <stdio.h>
+#include <signal.h>
 
 struct NowMusicPlayback {
  gint refs;
@@ -139,6 +140,15 @@ static char *helper_path(void){
  return g_strdup("/usr/lib/optiplex-now/music_player.py");
 }
 NowMusicPlayback *now_music_playback_new(NowMusicPlaybackEvent cb,void *data){
+ /* GLib before 2.82 does not suppress SIGPIPE for GSubprocess pipes.
+  * The music helper can exit between spawn and a credential/PAUSE/SEEK
+  * write. Without this, the kernel may terminate the entire GTK app,
+  * instead of letting GOutputStream return a normal broken-pipe error.
+  * Match modern GLib's process-wide behavior; the worker uses its own
+  * Python subprocess with normal SIGPIPE defaults. */
+#ifdef SIGPIPE
+ signal(SIGPIPE,SIG_IGN);
+#endif
  NowMusicPlayback *m=g_new0(NowMusicPlayback,1);
  m->refs=1;
  m->notify=cb;

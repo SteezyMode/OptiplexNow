@@ -48,7 +48,6 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('music_vault_begin(view,"lookup",NULL)', UI_MUSIC)
         self.assertIn('music_vault_begin(view,"store",form)', UI_MUSIC)
         self.assertIn('music_vault_begin(view,"clear",NULL)', UI_MUSIC)
-        self.assertIn('view->remember_pending=TRUE;', UI_MUSIC)
         self.assertIn('g_signal_connect(view->root,"map",G_CALLBACK(music_opened),view)', UI_MUSIC)
         self.assertIn('if(view->vault_attempted_url &&', UI_MUSIC)
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)

@@ -2978,6 +2978,24 @@ static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
 }
+/* Music controls are a separate, transient section. Never repurpose the
+ * eight persisted NOW tray service-action IDs, order, or visibility mask. */
+static void tray_music_previous(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_previous();
+}
+static void tray_music_pause(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_toggle_pause();
+}
+static void tray_music_next(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ now_music_next();
+}
+static void music_tray_changed(void){
+ /* Do not destroy an active GTK menu in the middle of its activation. */
+ if(tray_menu)g_idle_add(tray_rebuild_after_settings,NULL);
+}
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
  tray_menu=gtk_menu_new();
@@ -3004,6 +3022,23 @@ static void tray_build_menu(void){
                             (void *)(long)action, NULL, 0);
       gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), item);
   }
+ }
+ if(now_music_is_playing_session()){
+  tray_separator();
+  GtkWidget *playing=gtk_menu_item_new_with_label(now_music_caption());
+  gtk_widget_set_sensitive(playing,FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
+  GtkWidget *prev=gtk_menu_item_new_with_label("Previous track");
+  g_signal_connect(prev,"activate",G_CALLBACK(tray_music_previous),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),prev);
+  GtkWidget *pause=gtk_menu_item_new_with_label(
+                              now_music_is_paused()?"Resume music":"Pause music");
+  g_signal_connect(pause,"activate",G_CALLBACK(tray_music_pause),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),pause);
+  GtkWidget *next=gtk_menu_item_new_with_label("Next track");
+  gtk_widget_set_sensitive(next,now_music_can_next());
+  g_signal_connect(next,"activate",G_CALLBACK(tray_music_next),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),next);
  }
  tray_separator();
  tray_menu_item("Restart streaming service…",NOW_TRAY_RESTART_STREAMING);
@@ -3215,7 +3250,7 @@ int main(int argc,char**argv) {
  /* A separate, optional GTK library view; no new host privileges.
   * Real catalog browsing uses the upstream OpenSubsonic app-password API.
   * Native playback and tray controls are gated on later physical tests. */
- GtkWidget*music_home=now_music_build(browser_open,on_settings);
+ GtkWidget*music_home=now_music_build(browser_open,on_settings,music_tray_changed);
  gtk_stack_add_named(GTK_STACK(main_pages),music_home,"music");
  GtkWidget*body=gtk_box_new(GTK_ORIENTATION_VERTICAL,9);gtk_container_set_border_width(GTK_CONTAINER(body),14);add(shell,body,1);
  GtkWidget*head=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,15);add(body,head,0);

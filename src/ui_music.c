@@ -507,6 +507,90 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
  }
 }
 
+/* DroppedNeedle owns acquisition. Bruiser only sends an authorized album
+ * request to its existing API; there is no separate download manager.
+ * The REST device session lives in Secret Service, never in GTK memory.
+ */
+typedef struct {
+ GtkWidget *root, *button;
+ GSubprocess *process;
+ GCancellable *cancel;
+ guint deadline;
+} MusicAlbumRequest;
+
+static gboolean music_request_timeout(gpointer data){
+ MusicAlbumRequest *job=data;
+ job->deadline=0;
+ g_cancellable_cancel(job->cancel);
+ g_subprocess_force_exit(job->process);
+ return G_SOURCE_REMOVE;
+}
+static void music_request_free(MusicAlbumRequest *job){
+ if(job->deadline)g_source_remove(job->deadline);
+ g_clear_object(&job->cancel);
+ g_clear_object(&job->process);
+ g_object_unref(job->root);
+ g_object_unref(job->button);
+ g_free(job);
+}
+static void music_request_complete(GObject *unused,GAsyncResult *result,gpointer data){
+ (void)unused;
+ MusicAlbumRequest *job=data;
+ MusicView *view=g_object_get_data(G_OBJECT(job->root),"music-view");
+ gchar *output=NULL;
+ GError *error=NULL;
+ gboolean done=g_subprocess_communicate_utf8_finish(
+     job->process,result,&output,NULL,&error);
+ if(view && !view->closing){
+  if(done && g_subprocess_get_successful(job->process)){
+   gtk_button_set_label(GTK_BUTTON(job->button),"Requested");
+   gtk_widget_set_sensitive(job->button,FALSE);
+   status_set(view,"Album requested. DroppedNeedle handles downloading and import.");
+  }else{
+   gtk_widget_set_sensitive(job->button,TRUE);
+   status_set(view,"Music request unavailable. Approve this device for Music in NOW.");
+  }
+ }
+ g_free(output);
+ g_clear_error(&error);
+ music_request_free(job);
+}
+static void music_request_album(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ if(view->closing || !*cfg[6])return;
+ const char *mbid=g_object_get_data(G_OBJECT(button),"music-request-mbid");
+ if(!mbid || strlen(mbid)!=36)return;
+ /* No credential ever enters argv, environment or a GUI entry field. */
+ char *dir=g_path_get_dirname(helper_path());
+ char *helper=g_build_filename(dir,"music_rest.py",NULL);
+ g_free(dir);
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  status_set(view,"Music request integration is not installed.");
+  g_free(helper);return;
+ }
+ const gchar *argv[]={"/usr/bin/python3",helper,cfg[6],"request",mbid,NULL};
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+      G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){
+  g_clear_error(&error);
+  status_set(view,"Cannot start the Music request.");
+  return;
+ }
+ MusicAlbumRequest *job=g_new0(MusicAlbumRequest,1);
+ job->root=g_object_ref(view->root);
+ job->button=g_object_ref(button);
+ job->process=proc;
+ job->cancel=g_cancellable_new();
+ gtk_widget_set_sensitive(button,FALSE);
+ status_set(view,"Sending album request...");
+ job->deadline=g_timeout_add_seconds(25,music_request_timeout,job);
+ g_subprocess_communicate_utf8_async(proc,"",job->cancel,
+                                     music_request_complete,job);
+}
+
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover){
@@ -534,7 +618,25 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  gtk_style_context_add_class(gtk_widget_get_style_context(secondary),"dim-label");
  gtk_box_pack_start(GTK_BOX(content),secondary,FALSE,FALSE,0);
  gtk_container_add(GTK_CONTAINER(button),content);
- gtk_container_add(GTK_CONTAINER(row),button);
+ if(!g_strcmp0(kind,"catalog_album")){
+  /* The request is contextual and real: one existing DroppedNeedle POST.
+   * No separate queue, target folder or upload dashboard in Music. */
+  GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,8);
+  gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
+  GtkWidget *request=gtk_button_new_with_label("Add to Library");
+  gtk_style_context_add_class(gtk_widget_get_style_context(request),"now-action");
+  g_object_set_data_full(G_OBJECT(request),"music-request-mbid",g_strdup(id),g_free);
+  if(g_str_has_suffix(artist?artist:""," · Requested")){
+   gtk_button_set_label(GTK_BUTTON(request),"Requested");
+   gtk_widget_set_sensitive(request,FALSE);
+  }else{
+   g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
+  }
+  gtk_box_pack_end(GTK_BOX(line),request,FALSE,FALSE,0);
+  gtk_container_add(GTK_CONTAINER(row),line);
+ }else{
+  gtk_container_add(GTK_CONTAINER(row),button);
+ }
  g_object_set_data(G_OBJECT(button),"music-view",view);
  g_object_set_data_full(G_OBJECT(button),"music-kind",g_strdup(kind),g_free);
  g_object_set_data_full(G_OBJECT(button),"music-id",g_strdup(id),g_free);
@@ -551,11 +653,11 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   g_ptr_array_add(view->visible_tracks,song);
  }
  if(g_str_has_prefix(kind,"catalog_")){
-  /* Read-only discovery until the owner-approved REST request grant exists.
-   * Never offer an inoperative Add to Library button. */
+  /* Catalog rows aren't playable before DroppedNeedle imports an album.
+   * The separate Add to Library button makes a real authorized REST POST. */
   gtk_widget_set_sensitive(button,FALSE);
   gtk_widget_set_tooltip_text(button,
-      "Music request access will be enabled after owner device approval.");
+      "Search result is not in your library yet.");
  }else{
   g_signal_connect(button,"clicked",G_CALLBACK(music_item_clicked),button);
  }

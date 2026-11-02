@@ -129,6 +129,137 @@ static void query_start(MusicView *view,const char *operation,
 static void music_vault_begin(MusicView *view,const char *action,
                               const char *input);
 
+static void music_notify_tray(MusicView *view){
+ if(view->tray_changed)view->tray_changed();
+}
+static void music_update_controls(MusicView *view){
+ if(!view->player_bar)return;
+ gboolean active=view->playback && now_music_playback_active(view->playback);
+ if(!active){
+  gtk_widget_hide(view->player_bar);
+  music_notify_tray(view);
+  return;
+ }
+ gtk_label_set_text(GTK_LABEL(view->playing_label),
+                    view->playing_caption?view->playing_caption:"Now playing");
+ gtk_button_set_label(GTK_BUTTON(view->pause_button),
+                      view->paused?"Resume":"Pause");
+ gtk_widget_set_sensitive(view->previous_button,TRUE);
+ gtk_widget_set_sensitive(view->next_button,
+                  view->queue_index+1<(int)view->queue->len);
+ gtk_widget_show(view->player_bar);
+ music_notify_tray(view);
+}
+static void music_stop(MusicView *view){
+ if(view->playback)now_music_playback_stop(view->playback);
+ view->queue_index=-1;
+ view->paused=FALSE;
+ g_clear_pointer(&view->playing_caption,g_free);
+ if(!view->closing){
+  if(view->player_bar)gtk_widget_hide(view->player_bar);
+  status_set(view,"Playback stopped.");
+  music_notify_tray(view);
+ }
+}
+static void music_player_event(const char *event,void *data){
+ MusicView *view=data;
+ if(view->closing)return;
+ if(!strcmp(event,"ENDED")){
+  if(view->queue_index+1<(int)view->queue->len)
+   music_start_track(view,view->queue_index+1);
+  else music_stop(view);
+  return;
+ }
+ if(!strcmp(event,"ERROR") || !strcmp(event,"STOPPED")){
+  music_stop(view);
+  status_set(view,"Playback stopped or failed. Check audio output and mpv installation.");
+  return;
+ }
+ if(!strcmp(event,"PAUSED"))view->paused=TRUE;
+ else if(!strcmp(event,"PLAYING"))view->paused=FALSE;
+ if(!strcmp(event,"BUFFERING"))status_set(view,"Buffering music...");
+ else if(!strcmp(event,"PAUSED"))status_set(view,"Music paused.");
+ else if(!strcmp(event,"PLAYING"))status_set(view,"Playing music locally.");
+ music_update_controls(view);
+}
+static void music_start_track(MusicView *view,int index){
+ if(view->closing || index<0 || index>=(int)view->queue->len)return;
+ if(!view->app_password || !view->bound_url ||
+    g_strcmp0(view->bound_url,cfg[6])!=0){
+  music_stop(view);
+  status_set(view,"Reconnect to your approved music server.");
+  return;
+ }
+ MusicTrack *song=g_ptr_array_index(view->queue,index);
+ if(!now_music_playback_start(view->playback,view->bound_url,
+                             view->username,view->app_password,song->id)){
+  music_stop(view);
+  status_set(view,"Cannot start local audio. Check music helper and mpv installation.");
+  return;
+ }
+ view->queue_index=index;
+ view->paused=FALSE;
+ g_free(view->playing_caption);
+ char *full=g_strdup_printf("%s — %s",song->title,song->artist);
+ g_strdelimit(full,"\r\n\t",' ');
+ view->playing_caption=g_utf8_substring(full,0,
+                            MIN(72,(int)g_utf8_strlen(full,-1)));
+ g_free(full);
+ status_set(view,"Buffering music...");
+ music_update_controls(view);
+}
+static void music_prev_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view->playback || !now_music_playback_active(view->playback))return;
+ music_start_track(view,MAX(0,view->queue_index-1));
+}
+static void music_next_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view->playback || !now_music_playback_active(view->playback))return;
+ if(view->queue_index+1<(int)view->queue->len)
+  music_start_track(view,view->queue_index+1);
+ else music_stop(view);
+}
+static void music_pause_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->playback && now_music_playback_active(view->playback))
+  now_music_playback_pause(view->playback,!view->paused);
+}
+static void music_stop_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ music_stop(data);
+}
+/* Tray actions intentionally operate only this local NOW music session.
+ * They never reach Amperfy or a remote DroppedNeedle browser instance. */
+gboolean now_music_is_playing_session(void){
+ return active_music_view && !active_music_view->closing &&
+        active_music_view->playback &&
+        now_music_playback_active(active_music_view->playback);
+}
+gboolean now_music_is_paused(void){
+ return now_music_is_playing_session() && active_music_view->paused;
+}
+gboolean now_music_can_next(void){
+ return now_music_is_playing_session() &&
+    active_music_view->queue_index+1<(int)active_music_view->queue->len;
+}
+const char *now_music_caption(void){
+ return now_music_is_playing_session() && active_music_view->playing_caption
+       ? active_music_view->playing_caption:"Now playing";
+}
+void now_music_previous(void){
+ if(now_music_is_playing_session())music_prev_clicked(NULL,active_music_view);
+}
+void now_music_toggle_pause(void){
+ if(now_music_is_playing_session())music_pause_clicked(NULL,active_music_view);
+}
+void now_music_next(void){
+ if(now_music_is_playing_session())music_next_clicked(NULL,active_music_view);
+}
+
 static void music_item_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
  GtkWidget *button=GTK_WIDGET(data);

@@ -77,10 +77,10 @@ class DroppedNeedleAPI:
             "/connect-apps/app-passwords",
         ) or (
             resource.startswith("/connect-apps/app-passwords/")
-            and ID.fullmatch(resource.rsplit("/", 1)[-1])
+            and ID.fullmatch(resource[len("/connect-apps/app-passwords/"):])
         ) or (
             resource.startswith("/auth/sessions/")
-            and ID.fullmatch(resource.rsplit("/", 1)[-1])
+            and ID.fullmatch(resource[len("/auth/sessions/"):])
         ))
         if not valid:
             raise ProvisionError("Unexpected Music authorization endpoint.")

@@ -1438,7 +1438,10 @@ static void music_focus_search(GtkWidget *unused,gpointer data){
  view->hero_art_serial++;
  if(view->hero_row)gtk_widget_hide(view->hero_row);
  if(view->load_more)gtk_widget_hide(view->load_more);
+ view->grid_mode=FALSE;
  render_rows(view,"",FALSE);
+ gtk_widget_hide(view->cards_scroll);
+ gtk_widget_show(view->list_scroll);
  gtk_label_set_text(GTK_LABEL(view->heading),"Search");
  status_set(view,"Search your collection or find new music by artist or album.");
  gtk_widget_grab_focus(view->search);

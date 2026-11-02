@@ -900,6 +900,21 @@ static void music_nav(GtkWidget *button,gpointer data){
  }
 }
 
+static void music_focus_search(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(view->busy || view->closing)return;
+ /* Search is a first-class Music destination, not a new admin page. */
+ view->hero_art_serial++;
+ if(view->hero_row)gtk_widget_hide(view->hero_row);
+ if(view->load_more)gtk_widget_hide(view->load_more);
+ render_rows(view,"",FALSE);
+ gtk_label_set_text(GTK_LABEL(view->heading),"Search");
+ status_set(view,"Search your music library by artist, album, or song.");
+ gtk_widget_grab_focus(view->search);
+ gtk_editable_select_region(GTK_EDITABLE(view->search),0,-1);
+}
+
 static void music_load_more(GtkWidget *unused,gpointer data){
  (void)unused;
  MusicView *view=data;
@@ -964,8 +979,22 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_halign(title,GTK_ALIGN_START);
  gtk_style_context_add_class(gtk_widget_get_style_context(title),"now-heading");
  gtk_box_pack_start(GTK_BOX(top),title,TRUE,TRUE,0);
- GtkWidget *advanced=music_button("Advanced · DroppedNeedle ↗");
- g_signal_connect(advanced,"clicked",G_CALLBACK(music_advanced),view);
+ /* Keep rarely needed server management out of the everyday music rail. */
+ GtkWidget *advanced=gtk_menu_button_new();
+ gtk_button_set_label(GTK_BUTTON(advanced),"More");
+ gtk_style_context_add_class(gtk_widget_get_style_context(advanced),"now-action");
+ GtkWidget *menu=gtk_menu_new();
+ GtkWidget *manage=gtk_menu_item_new_with_label("Advanced · DroppedNeedle");
+ g_signal_connect(manage,"activate",G_CALLBACK(music_advanced),view);
+ gtk_menu_shell_append(GTK_MENU_SHELL(menu),manage);
+ GtkWidget *settings_item=gtk_menu_item_new_with_label("Music settings");
+ g_signal_connect(settings_item,"activate",G_CALLBACK(music_settings),view);
+ gtk_menu_shell_append(GTK_MENU_SHELL(menu),settings_item);
+ GtkWidget *forget_item=gtk_menu_item_new_with_label("Forget this device");
+ g_signal_connect(forget_item,"activate",G_CALLBACK(music_forget_device),view);
+ gtk_menu_shell_append(GTK_MENU_SHELL(menu),forget_item);
+ gtk_widget_show_all(menu);
+ gtk_menu_button_set_popup(GTK_MENU_BUTTON(advanced),menu);
  gtk_box_pack_end(GTK_BOX(top),advanced,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->root),top,FALSE,FALSE,0);
 
@@ -1003,29 +1032,38 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,6);
  gtk_widget_set_name(sidebar,"music-sidebar");
  gtk_widget_set_size_request(sidebar,135,-1);
- /* Familiar, functional library destinations: no unsupported
-  * recommendation placeholders or hidden DroppedNeedle admin controls. */
- const char *ops[]={"home","albums","recent","new","liked","artists","playlists"};
- const char *titles[]={"Home","Albums","Recently played",
-                       "New additions","Liked","Artists","Playlists"};
- const char *headings[]={"Music Home","All albums","Recently played albums",
-                         "New additions","Liked music","Artists","Your playlists"};
+ /* Established Spotify-style grouping: Home + Search, then
+  * Your Library filters. Never put downloads/admin workflow in this rail. */
+ const char *ops[]={"home",NULL,"playlists","artists","albums",
+                    "liked","recent","new"};
+ const char *titles[]={"Home","Search","Playlists","Artists",
+                       "Albums","Liked Songs","Recently played",
+                       "New additions"};
+ const char *headings[]={"Music Home","Search","Your playlists",
+                         "Artists","All albums","Liked music",
+                         "Recently played albums","New additions"};
  for(guint i=0;i<G_N_ELEMENTS(ops);i++){
+  if(i==2 || i==6){
+   GtkWidget *heading=gtk_label_new(i==2?"YOUR LIBRARY":"BROWSE");
+   gtk_widget_set_name(heading,"music-library-label");
+   gtk_label_set_xalign(GTK_LABEL(heading),0);
+   gtk_widget_set_margin_top(heading,12);
+   gtk_widget_set_margin_bottom(heading,3);
+   gtk_box_pack_start(GTK_BOX(sidebar),heading,FALSE,FALSE,0);
+  }
   GtkWidget *b=music_button(titles[i]);
   gtk_widget_set_name(b,"music-nav");
   GtkWidget *nav_label=gtk_bin_get_child(GTK_BIN(b));
   if(GTK_IS_LABEL(nav_label))gtk_label_set_xalign(GTK_LABEL(nav_label),0);
-  g_object_set_data(G_OBJECT(b),"music-operation",(gpointer)ops[i]);
-  g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)headings[i]);
-  g_signal_connect(b,"clicked",G_CALLBACK(music_nav),view);
+  if(ops[i]){
+   g_object_set_data(G_OBJECT(b),"music-operation",(gpointer)ops[i]);
+   g_object_set_data(G_OBJECT(b),"music-heading",(gpointer)headings[i]);
+   g_signal_connect(b,"clicked",G_CALLBACK(music_nav),view);
+  }else{
+   g_signal_connect(b,"clicked",G_CALLBACK(music_focus_search),view);
+  }
   gtk_box_pack_start(GTK_BOX(sidebar),b,FALSE,FALSE,0);
  }
- GtkWidget *settings=music_button("Settings");
- g_signal_connect(settings,"clicked",G_CALLBACK(music_settings),view);
- gtk_box_pack_end(GTK_BOX(sidebar),settings,FALSE,FALSE,0);
- GtkWidget *forget=music_button("Forget this device");
- g_signal_connect(forget,"clicked",G_CALLBACK(music_forget_device),view);
- gtk_box_pack_end(GTK_BOX(sidebar),forget,FALSE,FALSE,0);
  /* The sidebar owns its scrolling, so nine nav actions must not
   * enlarge a 640x500 client or the still-hidden Dashboard stack. */
  GtkWidget *sidebar_scroll=gtk_scrolled_window_new(NULL,NULL);

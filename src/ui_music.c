@@ -705,7 +705,7 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
                           g_strdup(id),g_free);
    g_object_set_data(G_OBJECT(view->hero_like),"music-liked",
                           GINT_TO_POINTER(liked?2:1));
-   g_object_set_data(G_OBJECT(view->hero_like),"music-kind",(gpointer)kind);
+   g_object_set_data_full(G_OBJECT(view->hero_like),"music-kind",g_strdup(kind),g_free);
    gtk_button_set_image(GTK_BUTTON(view->hero_like),
       gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
       "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
@@ -909,7 +909,7 @@ typedef struct {
  GSubprocess *process;
  GCancellable *cancel;
  guint deadline;
- char *operation,*song_id,*input;
+ char *operation,*song_id,*kind,*input;
 } MusicActionJob;
 
 static gboolean music_action_timeout(gpointer data){
@@ -927,6 +927,7 @@ static void music_action_free(MusicActionJob *job){
  g_clear_object(&job->button);
  g_free(job->operation);
  g_free(job->song_id);
+ g_free(job->kind);
  wipe_free(job->input);
  g_free(job);
 }
@@ -1014,7 +1015,9 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
   }else if(!strcmp(job->operation,"like") ||
            !strcmp(job->operation,"unlike")){
    gboolean liked=!strcmp(job->operation,"like");
-   if(job->button && gtk_widget_get_parent(job->button)){
+   if(job->button && gtk_widget_get_parent(job->button) &&
+      !g_strcmp0(g_object_get_data(G_OBJECT(job->button),"music-id"),
+                 job->song_id)){
     gtk_button_set_image(GTK_BUTTON(job->button),
       gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
                                    "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
@@ -1030,8 +1033,7 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
     MusicTrack *t=g_ptr_array_index(view->queue,i);
     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
    }
-   const char *kind=job->button?g_object_get_data(
-      G_OBJECT(job->button),"music-kind"):NULL;
+   const char *kind=job->kind;
    status_set(view,!g_strcmp0(kind,"album")?
        (liked?"Album liked.":"Album unliked."):
        !g_strcmp0(kind,"artist")?
@@ -1077,6 +1079,8 @@ static void music_action_start(MusicView *view,const char *operation,
  job->cancel=g_cancellable_new();
  job->operation=g_strdup(operation);
  job->song_id=g_strdup(song_id?song_id:"");
+ job->kind=g_strdup(button?g_object_get_data(
+        G_OBJECT(button),"music-kind"):NULL);
  char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
  char *user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
  job->input=g_strdup_printf("api_key=%s&username=%s",key,user);

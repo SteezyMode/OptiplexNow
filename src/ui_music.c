@@ -1341,7 +1341,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
        !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
        !strcmp(kind,"album_meta") || !strcmp(kind,"section"))){
     music_add_item(view,kind,id,title,artist,cover,album,!strcmp(liked,"1"));
-    ++count;
+    if(strcmp(kind,"album_meta"))++count;
    }
    g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
    g_free(album);g_free(liked);

@@ -3057,29 +3057,36 @@ static void tray_build_menu(void){
       gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), item);
   }
  }
- if(now_music_is_playing_session()){
-  tray_separator();
-  GtkWidget *playing=gtk_menu_item_new_with_label(now_music_caption());
-  gtk_widget_set_sensitive(playing,FALSE);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
-  GtkWidget *prev=gtk_menu_item_new_with_label("Previous track");
-  g_signal_connect(prev,"activate",G_CALLBACK(tray_music_previous),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),prev);
-  GtkWidget *pause=gtk_menu_item_new_with_label(
-                              now_music_is_paused()?"Resume music":"Pause music");
-  g_signal_connect(pause,"activate",G_CALLBACK(tray_music_pause),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),pause);
-  GtkWidget *next=gtk_menu_item_new_with_label("Next track");
-  gtk_widget_set_sensitive(next,now_music_can_next());
-  g_signal_connect(next,"activate",G_CALLBACK(tray_music_next),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),next);
- }
  tray_separator();
  tray_menu_item("Restart streaming service…",NOW_TRAY_RESTART_STREAMING);
  tray_separator();
  tray_menu_item("System Info",NOW_TRAY_OPEN_SYSTEM_INFO);
  tray_menu_item("Settings",NOW_TRAY_OPEN_SETTINGS);
  tray_separator();tray_menu_item("Quit",NOW_TRAY_QUIT);
+ /* Transient playback belongs at the very end of the menu. Use native
+  * menu actions so XFCE and AppIndicator remain compatible. */
+ if(now_music_is_playing_session()){
+  tray_separator();
+  const char *caption=now_music_caption();
+  char *short_title=g_utf8_strlen(caption,-1)>46?
+      g_strconcat(g_utf8_substring(caption,0,45),"…",NULL):
+      g_strdup(caption);
+  GtkWidget *playing=gtk_menu_item_new_with_label(short_title);
+  gtk_widget_set_sensitive(playing,FALSE);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
+  g_free(short_title);
+  GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous");
+  g_signal_connect(prev,"activate",G_CALLBACK(tray_music_previous),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),prev);
+  GtkWidget *pause=gtk_menu_item_new_with_label(
+                        now_music_is_paused()?"▶  Play":"⏸  Pause");
+  g_signal_connect(pause,"activate",G_CALLBACK(tray_music_pause),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),pause);
+  GtkWidget *next=gtk_menu_item_new_with_label("⏭  Next");
+  gtk_widget_set_sensitive(next,now_music_can_next());
+  g_signal_connect(next,"activate",G_CALLBACK(tray_music_next),NULL);
+  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),next);
+ }
  gtk_widget_show_all(tray_menu);
  if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
  if(old)gtk_widget_destroy(old);

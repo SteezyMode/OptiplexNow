@@ -84,6 +84,7 @@ for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
 for name in ('owner_games_ssh.py', 'owner_games_request.py',
              'owner_games_enroll.py', 'owner_music_ssh.py',
              'music_device_provision.py', 'music_device_ledger.py',
+             'music_owner_bootstrap.py',
              'download_inventory.py',
              'download_queue.py', 'download_search.py', 'download_manage.py',
              'download_files.py',

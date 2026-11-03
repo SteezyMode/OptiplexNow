@@ -123,6 +123,8 @@ shutil.copy2(root/'server/search_plugins/bruiser_bitsearch.py',
              search_dir/'bruiser_bitsearch.py')
 shutil.copy2(root/'tools/manage_apibay_search.py',
              search_dir/'manage_apibay_search.py')
+shutil.copy2(root/'tools/manage_dual_search.py',
+             search_dir/'manage_dual_search.py')
 shutil.copy2(root/'server/search_plugins/README.md',
              pkg/'usr/share/doc/optiplex-now/search-providers.md')
 shutil.copy2(root/'src/download-operations-client.py',pkg/'usr/lib/optiplex-now/download-operations-client.py')

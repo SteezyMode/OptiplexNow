@@ -44,13 +44,14 @@ test -x /usr/lib/optiplex-now/owner-host-upgrade.py
 test -r /usr/share/optiplex-now/search/bruiser_apibay.py
 test -r /usr/share/optiplex-now/search/bruiser_bitsearch.py
 test -r /usr/share/optiplex-now/search/manage_apibay_search.py
+test -r /usr/share/optiplex-now/search/manage_dual_search.py
 test -r /usr/share/doc/optiplex-now/search-providers.md
 python3 - <<'PY'
 from pathlib import Path
 import hashlib
 root=Path("/usr/share/optiplex-now/search")
 for name in ("bruiser_apibay.py", "bruiser_bitsearch.py",
-             "manage_apibay_search.py"):
+             "manage_apibay_search.py","manage_dual_search.py")
     source=(root/name).read_bytes()
     compile(source,name,"exec")
 # Legacy API Bay-only manager remains bundled as a historical fallback.
@@ -60,6 +61,11 @@ assert 'SOURCE_GIT_BLOB = "871a80678abdbd302a98722811171c446e4f7e62"' in legacy
 for name, expected in (("bruiser_apibay.py","class bruiser_apibay"),
                        ("bruiser_bitsearch.py","class bruiser_bitsearch")):
     assert expected in (root/name).read_text()
+manager=(root/"manage_dual_search.py").read_text()
+for name in ("bruiser_apibay","bruiser_bitsearch"):
+    data=(root/(name+".py")).read_bytes()
+    source_hash=hashlib.sha1(b"blob "+str(len(data)).encode()+b"\0"+data).hexdigest()
+    assert f'"{name}": "{source_hash}"' in manager, "Dual-search manager/source mismatch"
 
 PY
 for f in owner_games_ssh.py owner_games_request.py owner_games_enroll.py download_inventory.py download_queue.py download_search.py download_manage.py download_destinations.py media_endpoint.py; do

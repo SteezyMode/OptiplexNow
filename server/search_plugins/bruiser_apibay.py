@@ -47,7 +47,7 @@ def _magnet(infohash, title):
     link = "magnet:?xt=urn:btih:" + infohash.lower() + "&dn=" + quote(title, safe="")
     for tracker in TRACKERS:
         link += "&tr=" + quote(tracker, safe="")
-    return link if len(link) <= 1024 else None
+    return link if len(link) <= 1024 and set(infohash.lower()) != {"0"} else None
 
 
 def _fetch(url):
@@ -73,15 +73,19 @@ def _fetch(url):
 class bruiser_apibay:
     name = "Bruiser - API Bay"
     url = "https://apibay.org"
-    # Nova category keys map to API Bay category IDs; filtering happens
-    # before the provider's 100-result response limit.
+    # Keep the *proven* cat=0 video search. Filter the returned category
+    # metadata locally rather than passing comma-separated categories, which
+    # API Bay rejected in the reference-host tests. Its 100-result cap applies
+    # before local category selection; All has no filtering or regression.
+    CATEGORIES = {
+        "movies": frozenset((201, 202, 207, 209, 210, 211)),
+        "tv": frozenset((205, 208, 212)),
+        "music": frozenset((101, 104)),
+        "software": frozenset((300, 301, 302, 303, 304, 305, 306, 399)),
+    }
     supported_categories = {
-        "all": "0",
-        "movies": "201,202,207,209,210,211",
-        "tv": "205,208,212",
-        "games": "401",
-        "music": "101,104",
-        "software": "301,302,303,304,305,306,399",
+        "all": "0", "movies": "0", "tv": "0",
+        "music": "0", "software": "0",
     }
 
     def search(self, what, cat="all"):
@@ -96,6 +100,8 @@ class bruiser_apibay:
 
         for item in rows[:100]:
             if not isinstance(item, dict):
+                continue
+            if cat != "all" and _int(item.get("category")) not in self.CATEGORIES[cat]:
                 continue
             name = item.get("name")
             if not isinstance(name, str):

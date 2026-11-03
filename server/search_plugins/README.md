@@ -63,3 +63,25 @@ change existing users' provider selections. This keeps the accepted personal
 alpha baseline intact while preparing a reproducible, owner-approved host
 setup integration. A managed fresh downloader installer remains a separate
 milestone: the current host installer principally covers Wolf and adoption.
+
+## Dual-source category strategy (follow-on draft)
+
+- **All (default):** both the reviewed API Bay and Bitsearch plugins are
+  explicitly selected in one qBittorrent search job. qBittorrent starts
+  engines concurrently; stream results are presented incrementally.
+- **PC Games:** Bitsearch only (`category=6&subCategory=1`). This source
+  returned Resident Evil Requiem torrents with up to 2,871 reported seeders,
+  compared with much lower counts in the reference API Bay PC Games search.
+- **Movies, TV, Music, Software:** API Bay only. On API Bay the category is
+  filtered from its returned `category` metadata, using proven `cat=0`
+  because comma-separated API Bay categories returned no matches on the
+  reference host. This means its **100-result upstream cap precedes** category
+  filtering; we do not claim exhaustive category coverage.
+- Bitsearch's documented unauthenticated quota is **200 requests/day/IP**;
+  All and Games searches consume one request each, other categories do not.
+- The host validates a strict route allowlist, never runs `plugins=enabled`,
+  and deduplicates valid magnets by infohash across successive result pages.
+  It never queues a torrent as part of a search.
+- This routing requires both reviewed plugins installed before upgrading the
+  host broker and client. The in-service API Bay-only baseline remains the
+  rollback target until host acceptance.

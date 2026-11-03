@@ -125,6 +125,28 @@ def _api(runner, gateway, port, action, *, fields=None, session=None):
     return completed.stdout, match.group(1).decode("ascii")
 
 
+def _unique_results(results, seen):
+    """Suppress duplicate infohashes while preserving result order.
+
+    The caller must continue pagination using the *raw* result count.
+    Only magnet hashes are deduplicated: releases with different infohashes
+    must remain independently available.
+    """
+    unique = []
+    for item in results:
+        magnet = item.get("magnet")
+        if magnet:
+            xt = parse_qs(urlsplit(magnet).query).get("xt", [])
+            key = next((v.lower() for v in xt
+                        if re.fullmatch(r"urn:btih:[0-9a-fA-F]{40}", v)), None)
+            if key:
+                if key in seen:
+                    continue
+                seen.add(key)
+        unique.append(item)
+    return unique
+
+
 def _results(raw):
     try:
         payload = json.loads(raw)
@@ -205,6 +227,7 @@ def search_once(query, *, category="all", full=False, runner=subprocess.run, sle
                 break
         if last is None:
             raise SearchError("Search produced no response")
+        last["results"] = _unique_results(last["results"], set())
         last["partial"] = last["status"] == "Running"
         return last
     finally:
@@ -244,6 +267,7 @@ def stream_search(query, emit, *, category="all", runner=subprocess.run, sleeper
         raise SearchError("Invalid search job ID")
     job_id=started["id"]
     received=0
+    seen_hashes=set()
     last=None
     sent_initial=False
     stopped_empty_polls=0
@@ -258,10 +282,13 @@ def stream_search(query, emit, *, category="all", runner=subprocess.run, sleeper
                                  "offset":received},session=session)
             last=_results(reply)
             rows=last["results"]
+            # qBittorrent's total/offset count raw records, but the UI should
+            # see each magnet hash only once across both engines and pages.
+            last["results"]=_unique_results(rows,seen_hashes)
             # First frame resets the GTK list; subsequent frames append
             # only actual new rows. Avoid spamming empty Stopped frames while
             # draining delayed pages (or waiting on slower plugins).
-            if rows or not sent_initial:
+            if last["results"] or not sent_initial:
                 frame={**last,"partial":last["status"]=="Running",
                        "append":sent_initial}
                 emit(frame)

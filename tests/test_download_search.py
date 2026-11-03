@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from download_inventory import InventoryError
 from download_search import (SearchError, checked_magnet, checked_query,
+                              checked_category, search_route, _unique_results,
                              search_once, stream_search, _results)
 
 VPN = "a" * 64
@@ -63,7 +64,7 @@ class FakeAPI:
         if command[-1].endswith("/start"):
             assert "-S" in command
             assert not any(c.startswith("Cookie:") for c in command)
-            assert "--post-data=pattern=Ubuntu+ISO&plugins=bruiser_apibay&category=all" in command
+            assert "--post-data=pattern=Ubuntu+ISO&plugins=bruiser_apibay%7Cbruiser_bitsearch&category=all" in command
             out = b'{"id":42}'
             headers = b"  HTTP/1.1 200 OK\r\n  set-cookie: SID=test+search/42=; HttpOnly\r\n"
         else:
@@ -91,6 +92,31 @@ class FakeAPI:
 
 
 class DownloadSearchTests(unittest.TestCase):
+    def test_all_routes_both_but_other_categories_choose_one(self):
+        self.assertEqual(search_route("all"),"bruiser_apibay|bruiser_bitsearch")
+        self.assertEqual(search_route("games"),"bruiser_bitsearch")
+        for category in ("movies","tv","music","software"):
+            self.assertEqual(search_route(category),"bruiser_apibay")
+        for invalid in ("201", "Games", None, 401, "", "all|games"):
+            with self.subTest(invalid=invalid), self.assertRaises(SearchError):
+                checked_category(invalid)
+
+    def test_dedupe_same_magnet_hash_without_mixing_distinct_releases(self):
+        one="magnet:?xt=urn:btih:"+"a"*40
+        another="magnet:?xt=urn:btih:"+"b"*40
+        seen=set()
+        first=_unique_results([
+            {"name":"Film release","magnet":one},
+            {"name":"Other","magnet":another},
+        ],seen)
+        second=_unique_results([
+            {"name":"Film mirrored","magnet":one.upper().replace("MAGNET","magnet")
+             .replace("URN","urn").replace("BTIH","btih")},
+            {"name":"New","magnet":"magnet:?xt=urn:btih:"+"c"*40},
+        ],seen)
+        self.assertEqual([x["name"] for x in first],["Film release","Other"])
+        self.assertEqual([x["name"] for x in second],["New"])
+
     def test_search_magnet_and_unsupported_html_result(self):
         fake = FakeAPI()
         data = search_once("Ubuntu ISO", runner=fake, sleeper=lambda x: None)

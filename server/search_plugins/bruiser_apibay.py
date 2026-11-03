@@ -91,7 +91,7 @@ class bruiser_apibay:
 
     def search(self, what, cat="all"):
         query = _query(what)
-        if query is None or cat not in self.supported_categories:
+        if query is None or not isinstance(cat, str) or cat not in self.supported_categories:
             return
 
         endpoint = self.url + "/q.php?" + urlencode({"q": query, "cat": self.supported_categories[cat]})

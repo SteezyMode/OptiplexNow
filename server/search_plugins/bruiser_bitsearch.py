@@ -96,7 +96,7 @@ class bruiser_bitsearch:
     }
 
     def search(self, what, cat="all"):
-        if cat not in self.supported_categories:
+        if not isinstance(cat, str) or cat not in self.supported_categories:
             return
         query = _query(what)
         if query is None:

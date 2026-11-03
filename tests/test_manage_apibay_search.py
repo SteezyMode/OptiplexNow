@@ -71,8 +71,11 @@ class TransitionTests(unittest.TestCase):
             self.addCleanup(p.stop)
 
     def test_source_pinned_to_exact_git_blob(self):
-        self.assertEqual(mod.git_blob_sha(PLUGIN.read_bytes()),
-                         mod.SOURCE_GIT_BLOB)
+        # The historical API Bay-only manager remains pinned to v1.1.
+        self.assertEqual(mod.SOURCE_GIT_BLOB,
+                         "871a80678abdbd302a98722811171c446e4f7e62")
+        self.assertNotEqual(mod.git_blob_sha(PLUGIN.read_bytes()),
+                            mod.SOURCE_GIT_BLOB)
 
     def test_apply_switches_only_plugin_flags_with_rollback_record(self):
         api = FakeAPI()

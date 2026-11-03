@@ -43,8 +43,14 @@ def checked_category(value):
 
 
 def search_route(category):
-    """Use exactly one provider per search; never search all enabled plugins."""
+    """Explicitly route only the reviewed sources, not all installed engines.
+
+    In All mode qBittorrent runs both plugins concurrently and streams results
+    as soon as either has any. Narrow types use exactly one provider.
+    """
     checked_category(category)
+    if category == "all":
+        return "bruiser_apibay|bruiser_bitsearch"
     return "bruiser_bitsearch" if category == "games" else "bruiser_apibay"
 
 

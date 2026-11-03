@@ -1,6 +1,6 @@
-# VERSION: 1.0
+# VERSION: 1.1
 # AUTHORS: Bruiser contributors
-"""Game-only Bitsearch qBittorrent Nova engine; no other searches are routed here.
+"""Bitsearch qBittorrent Nova engine for All and PC Games searches.
 
 One bounded public API request. No tracker scraping, browser automation, API
 key, torrent download, local files, or changing qBittorrent configuration.
@@ -66,7 +66,7 @@ def _query(what):
 def _fetch(url):
     try:
         request = Request(url, headers={
-            "User-Agent": "BruiserGames/1.0", "Accept": "application/json",
+            "User-Agent": "BruiserGames/1.1", "Accept": "application/json",
         })
         with urlopen(request, timeout=TIMEOUT) as response:
             final = urlsplit(response.geturl())
@@ -85,21 +85,23 @@ def _fetch(url):
 
 
 class bruiser_bitsearch:
-    name = "Bruiser - Bitsearch Games"
+    name = "Bruiser - Bitsearch"
     url = "https://bitsearch.eu"
-    supported_categories = {"games": "6"}
+    # All returns a broad source sample; Games uses Bitsearch's own PC
+    # subcategory instead of including movie releases.
+    supported_categories = {"all": "0", "games": "6"}
 
     def search(self, what, cat="all"):
-        # Deliberate: Bitsearch is not invoked for All, Movies, TV or Music.
-        if cat != "games":
+        # Other category searches use API Bay only.
+        if cat not in self.supported_categories:
             return
         query = _query(what)
         if query is None:
             return
-        endpoint = self.url + "/api/v1/search?" + urlencode({
-            "q": query, "category": 6, "subCategory": 1,
-            "sort": "seeders", "limit": 100,
-        })
+        params = {"q": query, "sort": "seeders", "limit": 100}
+        if cat == "games":
+            params.update({"category": 6, "subCategory": 1})
+        endpoint = self.url + "/api/v1/search?" + urlencode(params)
         entries = _fetch(endpoint)
         if entries is None:
             return

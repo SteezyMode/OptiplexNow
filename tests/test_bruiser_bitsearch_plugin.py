@@ -1,4 +1,4 @@
-"""No-network tests for safe, games-only Bitsearch Nova integration."""
+"""No-network tests for safe, selective Bitsearch Nova integration."""
 import importlib.util
 import json
 from pathlib import Path
@@ -74,9 +74,23 @@ class BitsearchTests(unittest.TestCase):
         self.assertLessEqual(len(result["link"]),1024)
         self.assertGreater(result["pub_date"],0)
 
-    def test_all_and_video_categories_do_no_network(self):
+    def test_all_queries_without_game_filter(self):
+        requests=[]
+        def opener(request, timeout):
+            requests.append(request.full_url)
+            return Response({"success":True,"results":[
+                {"title":"Movie","infohash":H,"size":123,"seeders":4}
+            ]})
+        with patch.object(self.module,"urlopen",side_effect=opener):
+            self.engine.search("resident evil","all")
+        self.assertEqual(len(requests),1)
+        self.assertNotIn("category=",requests[0])
+        self.assertNotIn("subCategory=",requests[0])
+        self.assertEqual(len(self.received),1)
+
+    def test_other_categories_do_no_network(self):
         with patch.object(self.module,"urlopen") as network:
-            for category in ("all","movies","tv","music","software",
+            for category in ("movies","tv","music","software",
                              "401",None,"",[]):
                 self.engine.search("resident evil",category)
             network.assert_not_called()

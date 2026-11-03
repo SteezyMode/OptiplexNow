@@ -1,6 +1,6 @@
 ## 2026-11-03 — Isolate GTK tray presentation (draft refactor)
 
-On the v1.21.15 mainline, tray preferences and action routing were already separated, but menu item construction still lived in the application coordinator. Extract only the GTK menu constructor to \`src/tray_menu.c/.h\`, with a borrowed snapshot and app-owned callbacks. Preserve the existing service mask/order/IDs, disabled Next behavior, Music caption truncation, XFCE/AppIndicator menu lifecycle and deferred refresh. Add an Xvfb presentation test and an isolated strict-compile check. This is a source-only draft; no deployed host, live downloader, authentication, or Music server changes, and no claim of installed-client acceptance.
+On the v1.21.15 mainline, tray preferences and action routing were already separated, but menu item construction still lived in the application coordinator. Extract only the GTK menu constructor to `src/tray_menu.c/.h`, with a borrowed snapshot and app-owned callbacks. Preserve the existing service mask/order/IDs, disabled Next behavior, Music caption truncation, XFCE/AppIndicator menu lifecycle and deferred refresh. Add an Xvfb presentation test and an isolated strict-compile check. This is a source-only draft; no deployed host, live downloader, authentication, or Music server changes, and no claim of installed-client acceptance.
 
 ## 2026-11-03 — Owner-selected Music UI pilot for v1.21.15
 

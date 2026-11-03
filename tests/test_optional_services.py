@@ -15,6 +15,7 @@ CONFIG_SOURCE = (ROOT / "src" / "config.c").read_text()
 CONFIG_HEADER = (ROOT / "src" / "config.h").read_text()
 TRAY_HEADER = (ROOT / "src" / "tray_prefs.h").read_text()
 TRAY_SOURCE = (ROOT / "src" / "tray_prefs.c").read_text()
+TRAY_MENU = (ROOT / "src" / "tray_menu.c").read_text()
 WIZARD_SOURCE = (ROOT / "src" / "wizard_services.c").read_text()
 
 
@@ -31,8 +32,8 @@ class OptionalServiceTests(unittest.TestCase):
         # by compiled tests/test_tray_prefs.c, including malformed input.
         self.assertIn("#define NOW_TRAY_DEFAULT_MASK 255u", TRAY_HEADER)
         self.assertIn("now_tray_parse_mask(cfg[TRAY_MASK_SETTING])", SOURCE)
-        self.assertIn("now_tray_service_caption(action, desktop, caption", SOURCE)
-        self.assertIn("now_tray_order_load(order)", SOURCE)
+        self.assertIn("now_tray_service_caption(action, model->desktop_caption,", TRAY_MENU)
+        self.assertIn("now_tray_order_load(model.service_order)", SOURCE)
         self.assertIn("now_tray_order_save(draft->order)", PERSISTENCE)
         self.assertIn("now_tray_desktop_caption_save(draft->desktop_caption)", PERSISTENCE)
         # Checkbox widgets now live in the long-lived in-window Settings form.
@@ -47,7 +48,7 @@ class OptionalServiceTests(unittest.TestCase):
         self.assertIn("G_CALLBACK(tray_order_move)", SETTINGS)
         self.assertIn("gtk_list_box_get_row_at_index(", SETTINGS)
         self.assertIn("GTK_LIST_BOX(form->order_list)", SETTINGS)
-        self.assertIn("gtk_menu_item_new_with_label(caption)", SOURCE)
+        self.assertIn("gtk_menu_item_new_with_label(caption)", TRAY_MENU)
         self.assertNotIn("else if(action==8)on_bruiser_ai(NULL,NULL);", SOURCE)
         self.assertNotIn("static void tray_order_load(", SOURCE)
 

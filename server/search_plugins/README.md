@@ -64,24 +64,24 @@ alpha baseline intact while preparing a reproducible, owner-approved host
 setup integration. A managed fresh downloader installer remains a separate
 milestone: the current host installer principally covers Wolf and adoption.
 
-## Dual-source category strategy (follow-on draft)
+## Dual-source category strategy (draft)
 
-- **All (default):** both the reviewed API Bay and Bitsearch plugins are
-  explicitly selected in one qBittorrent search job. qBittorrent starts
-  engines concurrently; stream results are presented incrementally.
-- **PC Games:** Bitsearch only (`category=6&subCategory=1`). This source
-  returned Resident Evil Requiem torrents with up to 2,871 reported seeders,
-  compared with much lower counts in the reference API Bay PC Games search.
-- **Movies, TV, Music, Software:** API Bay only. On API Bay the category is
-  filtered from its returned `category` metadata, using proven `cat=0`
-  because comma-separated API Bay categories returned no matches on the
-  reference host. This means its **100-result upstream cap precedes** category
-  filtering; we do not claim exhaustive category coverage.
-- Bitsearch's documented unauthenticated quota is **200 requests/day/IP**;
-  All and Games searches consume one request each, other categories do not.
-- The host validates a strict route allowlist, never runs `plugins=enabled`,
-  and deduplicates valid magnets by infohash across successive result pages.
-  It never queues a torrent as part of a search.
-- This routing requires both reviewed plugins installed before upgrading the
-  host broker and client. The in-service API Bay-only baseline remains the
-  rollback target until host acceptance.
+- **All (default) and every named category** search API Bay and Bitsearch
+  concurrently within one qBittorrent search job. No category-based provider
+  exclusion; only the two reviewed plugins are ever requested.
+- Bitsearch's API applies first-party category filtering for movies, TV, PC
+  games, music and software. Its **PC Games** filter sends `category=6` and
+  `subCategory=1`. Its free API allowance is 200 requests/day per egress IP;
+  every search consumes *one* Bitsearch request regardless of other provider.
+- API Bay uses `cat=0` for its proven fast, broad index query, then filters by
+  returned `category` on named categories. Its first 100 matches may exclude
+  less-seeded entries in a particular category; Bitsearch provides complementary
+  first-party category filtering.
+- The host validates a strict category and provider allowlist, never relies on
+  unrelated installed engines, and deduplicates direct magnets by 40-hex
+  infohash across result pages. It never queues torrents during search.
+- **Install and validate both reviewed engines before installing the matching
+  owner-broker and client update**. This reference host currently runs the
+  accepted API Bay-only version and must not be modified by packaging.
+- Verify the GTK search UI can find both regular video and games, and that
+  the existing download queue, destinations, VPN and owner restrictions survive.

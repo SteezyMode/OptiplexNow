@@ -88,10 +88,30 @@ class BitsearchTests(unittest.TestCase):
         self.assertNotIn("subCategory=",requests[0])
         self.assertEqual(len(self.received),1)
 
-    def test_other_categories_do_no_network(self):
+    def test_each_supported_category_filters_at_bitsearch(self):
+        expected={
+            "movies":2,"tv":3,"games":6,"music":7,"software":5,
+        }
+        for category,number in expected.items():
+            self.received.clear()
+            seen=[]
+            def fake_open(req,timeout):
+                seen.append(req.full_url)
+                return Response({"success":True,"results":[
+                    {"title":"Result","infohash":H,"seeders":14}]})
+            with patch.object(self.module,"urlopen",side_effect=fake_open):
+                self.engine.search("resident evil",category)
+            self.assertEqual(len(seen),1)
+            self.assertIn(f"category={number}",seen[0])
+            if category=="games":
+                self.assertIn("subCategory=1",seen[0])
+            else:
+                self.assertNotIn("subCategory=",seen[0])
+            self.assertEqual(len(self.received),1)
+
+    def test_unsupported_categories_do_no_network(self):
         with patch.object(self.module,"urlopen") as network:
-            for category in ("movies","tv","music","software",
-                             "401",None,"",[]):
+            for category in ("401",None,"",[], "adult"):
                 self.engine.search("resident evil",category)
             network.assert_not_called()
         self.assertFalse(self.received)

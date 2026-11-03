@@ -92,11 +92,10 @@ class FakeAPI:
 
 
 class DownloadSearchTests(unittest.TestCase):
-    def test_all_routes_both_but_other_categories_choose_one(self):
-        self.assertEqual(search_route("all"),"bruiser_apibay|bruiser_bitsearch")
-        self.assertEqual(search_route("games"),"bruiser_bitsearch")
-        for category in ("movies","tv","music","software"):
-            self.assertEqual(search_route(category),"bruiser_apibay")
+    def test_every_valid_category_uses_both_reviewed_engines(self):
+        for category in ("all","games","movies","tv","music","software"):
+            self.assertEqual(search_route(category),
+                "bruiser_apibay|bruiser_bitsearch")
         for invalid in ("201", "Games", None, 401, "", "all|games"):
             with self.subTest(invalid=invalid), self.assertRaises(SearchError):
                 checked_category(invalid)

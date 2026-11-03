@@ -1,9 +1,10 @@
-# VERSION: 1.1
+# VERSION: 1.2
 # AUTHORS: Bruiser contributors
-"""Bitsearch qBittorrent Nova engine for All and PC Games searches.
+"""Bitsearch qBittorrent Nova engine supporting all selected categories.
 
-One bounded public API request. No tracker scraping, browser automation, API
-key, torrent download, local files, or changing qBittorrent configuration.
+One bounded public API request per search; independent of API Bay's request.
+No tracker scraping, browser automation, API key, torrent download, local files
+or changes to qBittorrent configuration.
 """
 import html
 import json
@@ -66,7 +67,7 @@ def _query(what):
 def _fetch(url):
     try:
         request = Request(url, headers={
-            "User-Agent": "BruiserGames/1.1", "Accept": "application/json",
+            "User-Agent": "BruiserSearch/1.2", "Accept": "application/json",
         })
         with urlopen(request, timeout=TIMEOUT) as response:
             final = urlsplit(response.geturl())
@@ -87,20 +88,24 @@ def _fetch(url):
 class bruiser_bitsearch:
     name = "Bruiser - Bitsearch"
     url = "https://bitsearch.eu"
-    # All returns a broad source sample; Games uses Bitsearch's own PC
-    # subcategory instead of including movie releases.
-    supported_categories = {"all": "0", "games": "6"}
+    # qBittorrent's Nova keys. Bitsearch supports these numeric categories
+    # at its API endpoint (https://bitsearch.eu/api).
+    supported_categories = {
+        "all": "0", "movies": "2", "tv": "3",
+        "games": "6", "music": "7", "software": "5",
+    }
 
     def search(self, what, cat="all"):
-        # Other category searches use API Bay only.
         if cat not in self.supported_categories:
             return
         query = _query(what)
         if query is None:
             return
         params = {"q": query, "sort": "seeders", "limit": 100}
+        if cat != "all":
+            params["category"] = int(self.supported_categories[cat])
         if cat == "games":
-            params.update({"category": 6, "subCategory": 1})
+            params["subCategory"] = 1
         endpoint = self.url + "/api/v1/search?" + urlencode(params)
         entries = _fetch(endpoint)
         if entries is None:

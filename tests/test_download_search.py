@@ -63,7 +63,7 @@ class FakeAPI:
         if command[-1].endswith("/start"):
             assert "-S" in command
             assert not any(c.startswith("Cookie:") for c in command)
-            assert "--post-data=pattern=Ubuntu+ISO&plugins=enabled&category=all" in command
+            assert "--post-data=pattern=Ubuntu+ISO&plugins=bruiser_apibay&category=all" in command
             out = b'{"id":42}'
             headers = b"  HTTP/1.1 200 OK\r\n  set-cookie: SID=test+search/42=; HttpOnly\r\n"
         else:

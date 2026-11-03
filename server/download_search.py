@@ -42,6 +42,12 @@ def checked_category(value):
     return value
 
 
+def search_route(category):
+    """Use exactly one provider per search; never search all enabled plugins."""
+    checked_category(category)
+    return "bruiser_bitsearch" if category == "games" else "bruiser_apibay"
+
+
 def checked_magnet(value):
     """Only directly usable magnet URIs; never return search-plugin page links.
 
@@ -167,7 +173,7 @@ def search_once(query, *, category="all", full=False, runner=subprocess.run, sle
     category = checked_category(category)
     gateway, port = locate_verified_downloader(runner=runner)
     raw, session = _api(runner, gateway, port, "start",
-                        fields={"pattern": pattern, "plugins": "enabled",
+                        fields={"pattern": pattern, "plugins": search_route(category),
                                 "category": category})
     try:
         started = json.loads(raw)
@@ -221,7 +227,7 @@ def stream_search(query, emit, *, category="all", runner=subprocess.run, sleeper
     category=checked_category(category)
     gateway,port=locate_verified_downloader(runner=runner)
     raw,session=_api(runner,gateway,port,"start",
-                     fields={"pattern":pattern,"plugins":"enabled",
+                     fields={"pattern":pattern,"plugins":search_route(category),
                              "category":category})
     try:
         started=json.loads(raw)

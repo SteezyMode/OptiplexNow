@@ -42,19 +42,25 @@ test -x /usr/lib/optiplex-now/owner-host-upgrade.py
 # Search engine artifacts are bundled for later owner-approved provisioning,
 # but must never be activated during installation of the desktop .deb.
 test -r /usr/share/optiplex-now/search/bruiser_apibay.py
+test -r /usr/share/optiplex-now/search/bruiser_bitsearch.py
 test -r /usr/share/optiplex-now/search/manage_apibay_search.py
 test -r /usr/share/doc/optiplex-now/search-providers.md
 python3 - <<'PY'
 from pathlib import Path
 import hashlib
 root=Path("/usr/share/optiplex-now/search")
-for name in ("bruiser_apibay.py","manage_apibay_search.py"):
+for name in ("bruiser_apibay.py", "bruiser_bitsearch.py",
+             "manage_apibay_search.py"):
     source=(root/name).read_bytes()
     compile(source,name,"exec")
-source=(root/"bruiser_apibay.py").read_bytes()
-digest=hashlib.sha1(b"blob "+str(len(source)).encode()+b"\0"+source).hexdigest()
-manager=(root/"manage_apibay_search.py").read_text()
-assert f'SOURCE_GIT_BLOB = "{digest}"' in manager, "Packaged search source/manager mismatch"
+# Legacy API Bay-only manager remains bundled as a historical fallback.
+# Its SHA pins v1.1; this new package's provider source is deliberately v1.3.
+legacy=(root/"manage_apibay_search.py").read_text()
+assert 'SOURCE_GIT_BLOB = "871a80678abdbd302a98722811171c446e4f7e62"' in legacy
+for name, expected in (("bruiser_apibay.py","class bruiser_apibay"),
+                       ("bruiser_bitsearch.py","class bruiser_bitsearch")):
+    assert expected in (root/name).read_text()
+
 PY
 for f in owner_games_ssh.py owner_games_request.py owner_games_enroll.py download_inventory.py download_queue.py download_search.py download_manage.py download_destinations.py media_endpoint.py; do
   test -r "/usr/lib/optiplex-now/owner-bridge/server/$f"

@@ -43,13 +43,13 @@ class ApiBayTests(unittest.TestCase):
         spec.loader.exec_module(self.plugin)
         self.engine = self.plugin.bruiser_apibay()
 
-    def run_query(self, query, payload, url="https://apibay.org/q.php"):
+    def run_query(self, query, payload, url="https://apibay.org/q.php", category="all"):
         calls = []
         def fake_open(request, timeout):
             calls.append((request.full_url, timeout))
             return FakeResponse(payload, url)
         with patch.object(self.plugin, "urlopen", side_effect=fake_open):
-            self.engine.search(query)
+            self.engine.search(query, category)
         return calls
 
     def test_query_is_decoded_only_once_and_one_request(self):
@@ -66,6 +66,25 @@ class ApiBayTests(unittest.TestCase):
         self.assertEqual(self.rows[0]["pub_date"], 1793232000)
         self.assertTrue(self.rows[0]["link"].startswith("magnet:?xt=urn:btih:" + HASH))
         self.assertLessEqual(len(self.rows[0]["link"]), 1024)
+
+    def test_category_filters_use_actual_api_bay_metadata(self):
+        item=lambda cat: {"name": f"Torrent category {cat}",
+                          "info_hash": HASH, "category":str(cat)}
+        for category,expected in (("movies",207),("tv",208),
+                                  ("games",401),("music",101),
+                                  ("software",301)):
+            with self.subTest(category=category):
+                self.rows.clear()
+                self.run_query("resident evil",[item(207),item(208),
+                    item(401),item(101),item(301)],category=category)
+                self.assertEqual([x["name"] for x in self.rows],
+                                 [f"Torrent category {expected}"])
+
+    def test_all_ignores_category_for_video_backward_compatibility(self):
+        self.run_query("resident evil",[
+            {"name":"Example","info_hash":HASH,"category":"207"}
+        ])
+        self.assertEqual(len(self.rows),1)
 
     def test_bad_hash_or_webpage_cannot_be_returned(self):
         self.run_query("resident evil", [

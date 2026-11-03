@@ -1,4 +1,4 @@
-# VERSION: 1.2
+# VERSION: 1.3
 # AUTHORS: Bruiser contributors
 """Fast, bounded API Bay search plugin for qBittorrent Nova.
 
@@ -53,7 +53,7 @@ def _magnet(infohash, title):
 def _fetch(url):
     try:
         request = Request(url, headers={
-            "User-Agent": "BruiserSearch/1.2",
+            "User-Agent": "BruiserSearch/1.3",
             "Accept": "application/json",
         })
         with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
@@ -80,11 +80,12 @@ class bruiser_apibay:
     CATEGORIES = {
         "movies": frozenset((201, 202, 207, 209, 210, 211)),
         "tv": frozenset((205, 208, 212)),
+        "games": frozenset((400, 401, 402, 403, 404, 405, 406, 407, 408, 499)),
         "music": frozenset((101, 104)),
         "software": frozenset((300, 301, 302, 303, 304, 305, 306, 399)),
     }
     supported_categories = {
-        "all": "0", "movies": "0", "tv": "0",
+        "all": "0", "movies": "0", "tv": "0", "games": "0",
         "music": "0", "software": "0",
     }
 

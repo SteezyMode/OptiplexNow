@@ -119,6 +119,8 @@ search_dir=pkg/'usr/share/optiplex-now/search'
 search_dir.mkdir(parents=True,exist_ok=True)
 shutil.copy2(root/'server/search_plugins/bruiser_apibay.py',
              search_dir/'bruiser_apibay.py')
+shutil.copy2(root/'server/search_plugins/bruiser_bitsearch.py',
+             search_dir/'bruiser_bitsearch.py')
 shutil.copy2(root/'tools/manage_apibay_search.py',
              search_dir/'manage_apibay_search.py')
 shutil.copy2(root/'server/search_plugins/README.md',

@@ -98,9 +98,9 @@ The first three gates may be tested as **existing-host integration evidence** wi
 
 **Release discipline:** the existing GitHub Latest alias stays on official [v1.21.16](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.16) until another version is deliberately accepted. Docs/issue restructuring does not publish a new `.deb` or change the live host. SubHub is separate experimental work and does not gate Bruiser.
 
-## Immediate work order
+## Physical three-pillar acceptance detail (supports the ship-readiness priorities above)
 
-**Release objective: [Private Alpha 1](PRIVATE-ALPHA.md).** Finish user-visible workflows in this order, preserve the working reference host and do not pursue multiple parallel speculative infrastructure tracks.
+**Release objective: complete the remaining [Private Alpha 1](PRIVATE-ALPHA.md) exit gates.** The ordered checks below are evidence requirements for Games, Video and Downloads, **not a second competing development roadmap**. The November 3 ship-readiness priorities above control daily work, starting with reproducible Host/Client setup and secure account handling. Preserve the working reference host and avoid speculative infrastructure tracks.
 
 1. **Games P0:** Previous real owner Create/Join and RE2R gameplay on the reference host are positive evidence. **Now physically verify** genuinely fresh Wolf/Moonlight pairing and restricted NOW credential approval through the GUI, then the same persistent owner Steam home, audio/input, independent host desktop, reconnect and single-writer safety. [#154](https://github.com/SteezyMode/OptiplexNow/issues/154), [#191](https://github.com/SteezyMode/OptiplexNow/issues/191). No manual symlink workaround or fake auth success.
 2. **Video P1:** Ensure approved clients discover the correct Jellyfin endpoint automatically and play real content without a URL prompt. Then add safe graphical clean-host provisioning or existing-server adoption. [#171](https://github.com/SteezyMode/OptiplexNow/issues/171), [#148](https://github.com/SteezyMode/OptiplexNow/issues/148).

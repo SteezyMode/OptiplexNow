@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prove two candidate qBittorrent Nova engines WITHOUT installing either.
+"""Prove the API Bay qBittorrent Nova engine WITHOUT installing it.
 
 Run this from inside the existing qBittorrent container. It fetches only
 SHA-256-pinned, reviewed plugin sources from an immutable GitHub commit, makes a
@@ -27,7 +27,6 @@ SOURCE_BASE = (
 SOURCES = {
     "_bruiser_source.py": "5a6a0c7c9103a018fb135f8f1dcddb00c1626841b94e2d8d86de63a8037472d8",
     "bruiser_apibay.py": "84b029d799ef403f232d7576a3bcd5d518be5b7bdc82118c755bdfb76338b42e",
-    "bruiser_torrentclaw.py": "f6fcfc6098d4dacb755102583009e7be8d079dc0caddd961eb5e8604f146aa0b",
 }
 SEARCH_PHRASE = "south park s29e04"
 
@@ -56,7 +55,7 @@ def main():
         for name, sha256 in SOURCES.items():
             (directory / name).write_bytes(obtain_source(name, sha256))
 
-        for engine in ("bruiser_apibay", "bruiser_torrentclaw"):
+        for engine in ("bruiser_apibay",):
             started = time.monotonic()
             try:
                 result = subprocess.run(

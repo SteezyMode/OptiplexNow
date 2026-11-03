@@ -1,4 +1,4 @@
-"""Hermetic tests for additional Nova search engines. No DNS/network required."""
+"""Hermetic tests for the API Bay Nova engine. No DNS/network required."""
 import importlib
 import json
 from pathlib import Path
@@ -30,12 +30,10 @@ class _FixtureModules:
         self.patch.__enter__()
         self.common = importlib.import_module("engines._bruiser_source")
         self.apibay = importlib.import_module("engines.bruiser_apibay")
-        self.claw = importlib.import_module("engines.bruiser_torrentclaw")
         return self
 
     def __exit__(self, *args):
-        for key in ("engines._bruiser_source", "engines.bruiser_apibay",
-                    "engines.bruiser_torrentclaw"):
+        for key in ("engines._bruiser_source", "engines.bruiser_apibay"):
             sys.modules.pop(key, None)
         self.patch.__exit__(*args)
 
@@ -65,7 +63,6 @@ class PluginTests(unittest.TestCase):
         self.addCleanup(self.fixture.__exit__, None, None, None)
         self.common = self.fixture.common
         self.apibay = self.fixture.apibay
-        self.claw = self.fixture.claw
         self.results = self.fixture.results
 
     def load(self, engine, query, response):
@@ -102,21 +99,6 @@ class PluginTests(unittest.TestCase):
         self.load(self.apibay.bruiser_apibay(), "south park", rows)
         self.assertEqual(self.results, [])
 
-    def test_torrentclaw_nested_results_and_magnet(self):
-        payload = {"results": [
-            {"title": "Episode", "torrents": [
-                {"infoHash": HASH, "rawTitle": "South Park S29E04 2160p",
-                 "sizeBytes": 9000, "seeders": 10, "leechers": 2,
-                 "uploadedAt": "2026-10-29T03:00:00Z"}]}]}
-        requests = self.load(self.claw.bruiser_torrentclaw(),
-                             "south%20park%20s29e04", payload)
-        self.assertIn("q=south+park+s29e04", requests[0][0])
-        self.assertEqual(len(self.results), 1)
-        self.assertEqual(self.results[0]["name"], "South Park S29E04 2160p")
-        self.assertEqual(self.results[0]["size"], "9000 B")
-        self.assertEqual(self.results[0]["pub_date"], 1793242800)
-        self.assertTrue(self.results[0]["link"].startswith("magnet:?xt=urn:btih:"))
-
     def test_common_http_bounds_and_redirects(self):
         with patch.object(self.common, "urlopen", return_value=Response(
                 "http://apibay.org/q.php", b"{}")):
@@ -129,7 +111,7 @@ class PluginTests(unittest.TestCase):
             self.assertIsNone(self.common.read_json("https://apibay.org/q.php"))
 
     def test_empty_invalid_and_bounded_queries_never_network(self):
-        for eng in (self.apibay.bruiser_apibay(), self.claw.bruiser_torrentclaw()):
+        for eng in (self.apibay.bruiser_apibay(),):
             with patch.object(self.common, "urlopen") as network:
                 eng.search("a")
                 eng.search("test\ncommand")
@@ -138,14 +120,21 @@ class PluginTests(unittest.TestCase):
                 network.assert_not_called()
             self.assertEqual(self.results, [])
 
-    def test_malformed_providers_are_quiet_and_safe(self):
-        with patch.object(self.common, "read_json", return_value={"results": "bad"}):
-            self.claw.bruiser_torrentclaw().search("hello world")
-        with patch.object(self.common, "read_json", return_value={"results": [None, {}]}):
-            self.claw.bruiser_torrentclaw().search("hello world")
-        with patch.object(self.common, "read_json", return_value="bad"):
+    def test_malformed_provider_is_quiet_and_never_calls_network(self):
+        # Patch imported module symbol, not its original provider module.
+        with patch.object(self.apibay, "read_json", return_value="bad") as lookup:
             self.apibay.bruiser_apibay().search("hello world")
+            lookup.assert_called_once()
         self.assertEqual(self.results, [])
+
+    def test_invalid_response_does_not_fabricate_results(self):
+        for response in (None, {}, {"torrents": []},
+                         [{"name": "Nothing", "info_hash": None}]):
+            with self.subTest(response=response):
+                self.results.clear()
+                with patch.object(self.apibay, "read_json", return_value=response):
+                    self.apibay.bruiser_apibay().search("hello world")
+                self.assertEqual(self.results, [])
 
 
 if __name__ == "__main__":

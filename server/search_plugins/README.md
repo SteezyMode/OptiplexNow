@@ -1,30 +1,16 @@
-# Bruiser search-provider candidates (not yet installed)
+# Bruiser API Bay search candidate (not yet installed)
 
-These are small, independent Python/qBittorrent Nova search engines, designed
-for **fast public metadata lookup**, not managing downloads. They are not
-installed by the `.deb` and are not enabled on any host by this directory.
+The API Bay engine makes one bounded HTTPS JSON request and prints only validated direct magnet links through qBittorrent Nova. It uses a shared parser and URL helper, with a four-second per-request timeout, 1 MiB response cap, maximum 100 results, and 40-digit hexadecimal infohash validation. No account, API key, or extra service is required.
 
-- `bruiser_apibay.py`: one API Bay JSON request, up to 100 entries.
-- `bruiser_torrentclaw.py`: one unauthenticated TorrentClaw request, up to 50
-  content groups / 100 torrents. No API key or account.
-- `_bruiser_source.py`: shared bounds, query decoding, magnet normalization,
-  payload validation and short HTTP timeout. The leading underscore keeps it
-  hidden from Nova's engine-discovery scan.
+- `bruiser_apibay.py`: provider adapter
+- `_bruiser_source.py`: shared validation (underscore-prefixed helper is not a Nova search engine)
+- `tools/probe_nova_sources.py`: SHA-256-pinned temporary Nova-runner test for specific episode queries
+- `tools/probe_apibay_results.py`: temporary Nova test of broad search, repeated titles and invalid links
 
-Both use standard Python TLS-verified HTTP. The upstream Nova runner installs
-qBittorrent's optional SOCKS proxy at the socket layer before engine execution,
-which the standard-library HTTP client respects. They must nevertheless be
-validated through the user's actual downloader VPN network namespace before
-installation. This does **not** establish VPN kill-switch correctness.
+**Reference-host evidence:** API Bay returned 12 matching South Park S29E04 titles with 12 usable magnets in 0.42 seconds through the real Nova runner. TorrentClaw is **excluded**: its public unauthenticated API omitted infohash and magnet identifiers for 24 matching results. LimeTorrents is not recommended as a default because its search remained Running beyond 25 seconds. TorrentsCSV remains the existing working fallback; we have not established whether removing it would harm breadth of coverage.
 
-Tests run offline: `python3 -m unittest discover -s tests -p 'test_bruiser_search_plugins.py'`.
+The client, host broker, qBittorrent container, VPN and working existing plugins are untouched by this source-only draft. No plugin installation/activation or default-selection policy is connected yet. A separate release-gated, backup-safe provisioning path is required before promotion.
 
-The separate `tools/probe_nova_sources.py` can run a transient, SHA-256-pinned
-Nova test against the live indexes **without installing any plugin**. It copies
-the existing `nova2.py`, `helpers.py`, and `novaprinter.py` only into a private
-temporary directory, tests both engines there, and removes it. It never calls
-the qBittorrent Web API, modifies a download, or changes registered plugins.
+Standard-library HTTPS is routed through Nova's configured socket-level SOCKS proxy, if present. Testing within the downloader network namespace does **not** establish VPN kill-switch correctness.
 
-No install/update path is connected yet. Future deployment must explicitly
-verify the provider outputs, own only its three plugin files, stage a backup,
-be repeatable and rollback-safe, and avoid changing existing search engines.
+Offline regression test: `python3 -m unittest discover -s tests -p 'test_bruiser_search_plugins.py'`.

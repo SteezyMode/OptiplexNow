@@ -46,6 +46,7 @@
 #include "backup_async.h"
 #include "tray_prefs.h"
 #include "tray_actions.h"
+#include "tray_menu.h"
 #include "moonlight_install.h"
 #include "instance_lock.h"
 #include <gtk/gtk.h>
@@ -3016,14 +3017,6 @@ static void tray_action(void *widget, void *data)
     };
     (void)now_tray_dispatch_action(GPOINTER_TO_INT(data), &handlers, NULL);
 }
-static void tray_menu_item(const char*caption,int action){
- GtkWidget *item=gtk_menu_item_new_with_label(caption);
- g_signal_connect_data(item,"activate",(GCallback)tray_action,(void*)(long)action,NULL,0);
- gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
-}
-static void tray_separator(void){
- GtkWidget*item=gtk_separator_menu_item_new();gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),item);
-}
 static void tray_popup(void *icon,guint button,guint when,void *data){
  (void)data;
  gtk_menu_popup(GTK_MENU(tray_menu),NULL,NULL,(void*)gtk_status_icon_position_menu,icon,button,when);
@@ -3057,65 +3050,31 @@ static void music_tray_changed(void){
   music_tray_rebuild_pending=g_idle_add(music_tray_rebuild_idle,NULL);
 }
 static void tray_build_menu(void){
- GtkWidget*old=tray_menu;
- tray_menu=gtk_menu_new();
- tray_menu_item("Open OptiPlex Now",NOW_TRAY_OPEN_WINDOW);
- unsigned mask=tray_button_mask();
- if(mask){
-  tray_separator();
+  /* The app retains lifecycle and service authority; the GTK presenter owns
+   * only item creation. Keep the old menu until the replacement is complete. */
+  NowTrayMenuModel model={0};
+  model.service_mask=tray_button_mask();
+  now_tray_order_load(model.service_order);
   char desktop[128];
-  now_tray_desktop_caption(desktop, sizeof desktop);
-  int order[NOW_TRAY_ACTIONS];
-  now_tray_order_load(order);
-  for (int position = 0; position < NOW_TRAY_ACTIONS; ++position) {
-      int action = order[position];
-      if (!(mask & (1u << action))) {
-          continue;
-      }
-      /* Standard menu items work with GTK and AppIndicator/DBusMenu. */
-      char caption[256];
-      if (!now_tray_service_caption(action, desktop, caption, sizeof caption)) {
-          continue;
-      }
-      GtkWidget *item = gtk_menu_item_new_with_label(caption);
-      g_signal_connect_data(item, "activate", (GCallback)tray_action,
-                            (void *)(long)action, NULL, 0);
-      gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu), item);
+  now_tray_desktop_caption(desktop,sizeof desktop);
+  model.desktop_caption=desktop;
+  model.on_action=(GCallback)tray_action;
+  model.on_music_previous=(GCallback)tray_music_previous;
+  model.on_music_toggle_pause=(GCallback)tray_music_pause;
+  model.on_music_next=(GCallback)tray_music_next;
+  model.music_session=now_music_is_playing_session();
+  if(model.music_session){
+    model.music_caption=now_music_caption();
+    model.music_paused=now_music_is_paused();
+    model.music_can_next=now_music_can_next();
   }
- }
- tray_separator();
- tray_menu_item("Restart streaming service…",NOW_TRAY_RESTART_STREAMING);
- tray_separator();
- tray_menu_item("System Info",NOW_TRAY_OPEN_SYSTEM_INFO);
- tray_menu_item("Settings",NOW_TRAY_OPEN_SETTINGS);
- tray_separator();tray_menu_item("Quit",NOW_TRAY_QUIT);
- /* Transient playback belongs at the very end of the menu. Use native
-  * menu actions so XFCE and AppIndicator remain compatible. */
- if(now_music_is_playing_session()){
-  tray_separator();
-  const char *caption=now_music_caption();
-  char *short_title=g_utf8_strlen(caption,-1)>46?
-      g_strconcat(g_utf8_substring(caption,0,45),"…",NULL):
-      g_strdup(caption);
-  GtkWidget *playing=gtk_menu_item_new_with_label(short_title);
-  gtk_widget_set_sensitive(playing,FALSE);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
-  g_free(short_title);
-  GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous");
-  g_signal_connect(prev,"activate",G_CALLBACK(tray_music_previous),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),prev);
-  GtkWidget *pause=gtk_menu_item_new_with_label(
-                        now_music_is_paused()?"▶  Play":"⏸  Pause");
-  g_signal_connect(pause,"activate",G_CALLBACK(tray_music_pause),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),pause);
-  GtkWidget *next=gtk_menu_item_new_with_label("⏭  Next");
-  gtk_widget_set_sensitive(next,now_music_can_next());
-  g_signal_connect(next,"activate",G_CALLBACK(tray_music_next),NULL);
-  gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),next);
- }
- gtk_widget_show_all(tray_menu);
- if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
- if(old)gtk_widget_destroy(old);
+  GtkWidget *replacement=now_tray_menu_new(&model);
+  if(!replacement)return;
+  GtkWidget *old=tray_menu;
+  tray_menu=replacement;
+  if(app_indicator && app_indicator_set_menu_fn)
+    app_indicator_set_menu_fn(app_indicator,tray_menu);
+  if(old)gtk_widget_destroy(old);
 }
 static void tray_initialize(void){
  tray_build_menu();

@@ -202,8 +202,10 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
 
     Follow the same offset-based polling model as VueTorrent. The validated
     initial frame replaces the list; following frames APPEND only fresh rows.
-    Bound total work to 120 polls / 150 seconds / 1000 results so slower
-    plugin engines can provide results beyond the initial ~25. Preserve
+    Bound total work to 120 polls / 150 seconds / 1000 results,
+    but stop a completely empty search after 12 polls to avoid waiting
+    for a stalled plugin. This is a partial timeout, not proof that
+    matches do not exist. Preserve
     the job SID and clean up this search job only, never any transfer.
     """
     if not callable(emit):
@@ -225,6 +227,7 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
     last=None
     sent_initial=False
     stopped_empty_polls=0
+    empty_polls=0
     deadline=time.monotonic()+150
     try:
         for _ in range(120):
@@ -245,6 +248,11 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
                 emit(frame)
                 sent_initial=True
             received+=len(rows)
+            # For very specific phrases with zero matches, no provider should
+            # hold the client for the 150s deep-search window.
+            empty_polls = empty_polls+1 if received==0 and last["status"]=="Running" else 0
+            if empty_polls>=12:
+                break
             if received>=1000:
                 break
             if last["status"]=="Stopped":

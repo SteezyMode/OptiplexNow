@@ -2,7 +2,7 @@
 """Prove two candidate qBittorrent Nova engines WITHOUT installing either.
 
 Run this from inside the existing qBittorrent container. It fetches only
-SHA-256-pinned, reviewed plugin sources from a fixed GitHub branch, makes a
+SHA-256-pinned, reviewed plugin sources from an immutable GitHub commit, makes a
 private temporary copy of qBittorrent's Nova runner and runs one search per
 candidate against the public APIs. No WebUI, torrents, plugin registry or
 live configuration is accessed or modified.
@@ -19,10 +19,10 @@ from urllib.parse import unquote
 from urllib.request import Request, urlopen
 
 NOVA_ROOT = Path("/config/qBittorrent/nova3")
-BRANCH = "feature/fast-search-api-plugins-20261103"
+SOURCE_REF = "394def2d9a2eaa3eb6f429fd423f984adab328f1"
 SOURCE_BASE = (
     "https://raw.githubusercontent.com/SteezyMode/OptiplexNow/"
-    + BRANCH + "/server/search_plugins/"
+    + SOURCE_REF + "/server/search_plugins/"
 )
 SOURCES = {
     "_bruiser_source.py": "5a6a0c7c9103a018fb135f8f1dcddb00c1626841b94e2d8d86de63a8037472d8",

@@ -1,18 +1,18 @@
-# OptiPlex NOW
+# Bruiser (currently packaged as OptiPlex NOW)
 
-*Development name — not affiliated with Dell.*
+*Bruiser is the chosen working product name. Repository, Debian package and binary retain the legacy OptiPlex NOW names until a coordinated, compatibility-safe rebrand. Not affiliated with Dell.*
 
 **Play games, watch Jellyfin, manage VPN-isolated downloads, and play music from your own Linux server.** One desktop client; the server and its content remain yours.
 
-## Download NOW — Current Alpha
+## Download Bruiser — Active Private Alpha
 
-**[Download NOW — Current Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
+**[Download current owner-tested Private Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
 
 For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, and install with your normal package installer. No compiling or GitHub Actions required.
 
 [Release details and checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest)
 
-**Who this is for:** Owner-approved devices accessing an **already configured** Linux server. This release is being physically validated. It is not a general-purpose host installer or a multi-user account system.
+**Status: ACTIVE, owner-validated private alpha.** The owner reports working daily household use on the reference OptiPlex, Linux Mint MacBook and Pop!_OS Mac mini. **v1.21.16 is the frozen functional baseline.** The formal Private Alpha 1 exit criteria are still open: supported fresh host/client installation, security/failure testing and independent reproducibility have not been accepted. This download currently targets owner-approved devices accessing an **already configured** Linux server, not new consumers or a general-purpose host installer.
 
 ## What it does
 
@@ -33,7 +33,7 @@ For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, a
 
 ## Project status
 
-**Current work: verify the complete Games, Videos, and Downloads/Files workflows on fresh supported hardware, then harden owner setup and recovery.** Optional Music works on the owner's configured reference setup but is not a fourth alpha acceptance gate.
+**Current phase: make the working v1.21.16 household software shippable.** Freeze new feature expansion and Downloads UI redesign; prioritize graphical zero-prerequisite host setup, internal account/credential provisioning, fresh device approvals, security/recovery checks, and disposable clean-host tests. Extract risky monolithic UI/service code **incrementally where it blocks reliable changes**, with regression tests—no rewrite. Optional Music works on the owner's configured server; SubHub/subtitle localization is independent and not an alpha exit gate.
 
 - [Product roadmap](docs/PRODUCT.md) — scope and delivery order
 - [Current status](docs/CURRENT-STATUS.md) — implemented versus physically verified

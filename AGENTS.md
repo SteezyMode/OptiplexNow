@@ -4,7 +4,7 @@ This repository contains a self-hosted entertainment application under the inter
 
 ## Mission and authority
 
-**Ship Private Alpha 1.** The current, authoritative release gate is [docs/PRIVATE-ALPHA.md](docs/PRIVATE-ALPHA.md): (1) independent games, (2) personal Jellyfin video, and (3) VPN-isolated qBittorrent downloads plus protected admin file management. These must work together on supported hardware. A thin launcher with three external URLs does not meet the gate.
+**Ship a self-service version of the ACTIVE, owner-validated Private Alpha 1; formal acceptance is still open.** The owner declared private alpha active on November 3, 2026, after verifying v1.21.16 on the household reference setup. That is **phase entry**, not end-to-end clean-host or security sign-off. Keep v1.21.16 as the known-good functional baseline. The current, authoritative exit contract remains [docs/PRIVATE-ALPHA.md](docs/PRIVATE-ALPHA.md): (1) independent games, (2) personal Jellyfin video, and (3) VPN-isolated qBittorrent downloads plus protected admin file management. These must work together on supported hardware. A thin launcher with three external URLs does not meet the gate.
 
 Read, in this order, before proposing work:
 1. `docs/PRIVATE-ALPHA.md` for the active release acceptance contract.
@@ -24,17 +24,18 @@ Read, in this order, before proposing work:
 4. Prefer updating the existing owning issue and targeted tests over inventing a parallel module, new framework, issue or PR. Link replacement PRs and record why an old branch is closed or selectively salvaged. Do not close a real hardware/security acceptance gate on mock evidence.
 5. Owner-only **Private Alpha 1** excludes member/viewer account implementation, though unapproved host-service requests must be denied. The product roadmap may include post-alpha roles without adding them to the release gate.
 
-- Pursue one critical path at a time: **Games, then Video, then Downloads/Files, then integrated installation and release acceptance**, with security/regression fixes allowed as necessary.
+- Pursue one ship-readiness critical path at a time: **reproducible Host/Client installation and backend account provisioning; fresh device/Game authorization; automatic Jellyfin setup/discovery; VPN/Downloads fail-closed and root security; recovery and independent disposable clean-host acceptance**. Reuse working Games/Video/Downloads implementation instead of reopening features. Security/regression fixes may interrupt in proportion to proven risk.
 - Every issue/PR must name the end-user outcome, the relevant private-alpha acceptance check, the observed deficiency, and how completion will be demonstrated.
 - Do not build optional music/books/comics, separate member Steam instances, pooled game installs, Windows hosts, custom VPN sales, billing, novelty widgets, or in-stream overlays for Private Alpha 1.
 - New infrastructure, protocols, frameworks, services, or documents require an explicit blocking need. Prefer completing an already-started implementation.
 - Do not create another state machine, adapter, fixture, or manager merely because one would be architecturally interesting. Demonstrate why existing components cannot meet the requirement.
 - Preserve known-good functionality. No broad rewrite, unexplained rename, or mass deletion as an ordinary refactor.
 - No automated GitHub issue/PR proliferation. Consolidate duplicate issues and close only with real acceptance evidence.
+- **Feature freeze:** Downloads UX, streaming and the optional Music integration are functional on the reference household; avoid redesigning them without a demonstrated defect, security blocker or explicit new product decision. Treat SubHub/subtitle translation as independent, never as a Private Alpha 1 release gate.
 
 ## Code and design boundaries
 
-- Follow existing module boundaries; move code out of `src/main.c` incrementally when directly changing that area. Avoid increasing global UI state or creating generic abstractions without reuse.
+- Follow existing module boundaries; move code out of `src/main.c` incrementally when directly changing that area. Avoid increasing global UI state or creating generic abstractions without reuse. **Modularity is a ship-readiness quality criterion:** extract cohesive views/host service modules with explicit ownership and small APIs, protect async/cancellation lifetimes, and add behavior-preserving regression tests. Use [#185](https://github.com/SteezyMode/OptiplexNow/issues/185) to track scoped code hardening. No big-bang rewrite, mandatory architectural framework, or arbitrary line-count goal; prioritize actual setup, recovery, security and shipping risks.
 - Prefer stable upstream interfaces for Wolf/Moonlight, Jellyfin, qBittorrent, Gluetun, Tailscale and Docker. Do not rebuild their media, streaming, VPN, or torrent engines.
 - Keep privileged host operations in a narrow, authenticated host-side boundary. Never give an ordinary NOW client unrestricted Docker, Wolf management socket, host filesystem, or VPN administrative access.
 - Treat Tailscale connectivity, Moonlight pairing, host ownership, service login and gaming authorization as distinct checks. Server-side permissions matter even when a UI button is hidden.

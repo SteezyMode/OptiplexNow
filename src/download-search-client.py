@@ -10,6 +10,13 @@ import sys
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 MAX_RESPONSE = 262144
 MAX_RESULTS = 100
+SEARCH_CATEGORIES = frozenset(("all", "movies", "tv", "games", "music", "software"))
+
+def checked_category(category):
+    if type(category) is not str or category not in SEARCH_CATEGORIES:
+        raise ValueError("Unsupported search category")
+    return category
+
 
 def valid_host(s):
     return (isinstance(s, str) and
@@ -82,15 +89,18 @@ def present(response):
         raise ValueError("Search response too large for UI")
     return wire
 
-def fetch(host, user, query, *, full=False, runner=subprocess.run):
+def fetch(host, user, query, *, category="all", full=False, runner=subprocess.run):
     if type(full) is not bool:
         raise ValueError("Invalid search depth")
+    category=checked_category(category)
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device unavailable")
     if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
             or any(ord(c)<32 or ord(c)==127 for c in query)):
         raise ValueError("Invalid search phrase")
     payload={"version":1,"action":"downloads_search","query":query.strip()}
+    if category!="all":
+        payload["category"]=category
     if full:
         payload["full"]=True
     request=(json.dumps(payload,
@@ -112,7 +122,7 @@ def fetch(host, user, query, *, full=False, runner=subprocess.run):
         raise ValueError("Invalid owner search response") from exc
     return present(data)
 
-def stream_fetch(host, user, query, *, popen=subprocess.Popen):
+def stream_fetch(host, user, query, *, category="all", popen=subprocess.Popen):
     """Forward validated snapshots as one encoded line each for GTK.
 
     One SSH session == one qBittorrent search. The restricted server is solely
@@ -121,12 +131,17 @@ def stream_fetch(host, user, query, *, popen=subprocess.Popen):
     """
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device unavailable")
+    category=checked_category(category)
     if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
             or any(ord(c)<32 or ord(c)==127 for c in query)):
         raise ValueError("Invalid search phrase")
-    request=(json.dumps({"version":1,"action":"downloads_search",
-                         "query":query.strip(),"stream":True},
-                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
+    payload={"version":1,"action":"downloads_search",
+             "query":query.strip(),"stream":True}
+    # Keep the original All-mode request valid on older approved hosts.
+    if category!="all":
+        payload["category"]=category
+    request=(json.dumps(payload,
+                        ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
     cmd=["ssh","-F","/dev/null","-T","-i",str(KEY),
@@ -161,13 +176,16 @@ def stream_fetch(host, user, query, *, popen=subprocess.Popen):
 
 if __name__=="__main__":
     try:
-        if len(sys.argv) not in (4,5) or (len(sys.argv)==5 and
-                sys.argv[4] not in ("--full","--stream")):
-            raise ValueError("Expected host, SSH user, phrase, and optional --stream")
-        if len(sys.argv)==5 and sys.argv[4]=="--stream":
+        if len(sys.argv)==6 and sys.argv[4]=="--stream":
+            stream_fetch(*sys.argv[1:4],category=sys.argv[5])
+        elif len(sys.argv)==5 and sys.argv[4]=="--stream":
             stream_fetch(*sys.argv[1:4])
+        elif len(sys.argv)==5 and sys.argv[4]=="--full":
+            print(fetch(*sys.argv[1:4],full=True))
+        elif len(sys.argv)==4:
+            print(fetch(*sys.argv[1:4]))
         else:
-            print(fetch(*sys.argv[1:4],full=len(sys.argv)==5))
+            raise ValueError("Expected host, SSH user, query and optional category")
     except (ValueError,OSError,subprocess.SubprocessError):
         print("Search unavailable. Check owner approval, VPN and search plugins.",
               file=sys.stderr)

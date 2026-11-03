@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.21.15"
+DEFAULT_VERSION = "1.21.16"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")
@@ -111,6 +111,22 @@ for name in ('owner_enrollment.py','owner_games_enroll.py',
 shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
 shutil.copy2(root/'src/download-queue-client.py',pkg/'usr/lib/optiplex-now/download-queue-client.py')
 shutil.copy2(root/'src/download-search-client.py',pkg/'usr/lib/optiplex-now/download-search-client.py')
+# Ship the reviewed search-provider source and an operator-only migration tool.
+# No postinst, no automatic plugin install, no qBittorrent or VPN mutation.
+# These artifacts are used only from an explicitly approved host maintenance
+# workflow; package installation by itself remains entirely inert.
+search_dir=pkg/'usr/share/optiplex-now/search'
+search_dir.mkdir(parents=True,exist_ok=True)
+shutil.copy2(root/'server/search_plugins/bruiser_apibay.py',
+             search_dir/'bruiser_apibay.py')
+shutil.copy2(root/'server/search_plugins/bruiser_bitsearch.py',
+             search_dir/'bruiser_bitsearch.py')
+shutil.copy2(root/'tools/manage_apibay_search.py',
+             search_dir/'manage_apibay_search.py')
+shutil.copy2(root/'tools/manage_dual_search.py',
+             search_dir/'manage_dual_search.py')
+shutil.copy2(root/'server/search_plugins/README.md',
+             pkg/'usr/share/doc/optiplex-now/search-providers.md')
 shutil.copy2(root/'src/download-operations-client.py',pkg/'usr/lib/optiplex-now/download-operations-client.py')
 (pkg/'usr/lib/optiplex-now/owner-games-client.py').chmod(0o755)
 shutil.copy2(root/'src/restart-streaming.sh',pkg/'usr/lib/optiplex-now/restart-streaming')

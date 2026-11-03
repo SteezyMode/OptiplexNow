@@ -18,7 +18,7 @@ from download_inventory import inspect_download_topology, InventoryError
 from download_queue import inspect_queue
 from download_files import inspect_torrent_files
 from download_manage import manage_torrent, checked_hash, OPERATIONS
-from download_search import search_once, stream_search, checked_query, checked_magnet
+from download_search import search_once, stream_search, checked_query, checked_category, checked_magnet
 from download_destinations import (roots as inspect_download_roots, browse as browse_downloads,
                                    add_magnet as enqueue_download, create_folder as new_download_folder,
                                     checked_folder_name, checked_host_path, add_magnet_host_path, _relative, ROOT_ID)
@@ -34,6 +34,8 @@ def _validated_request(request):
     fields = {"version", "action"}
     if action == "downloads_search":
         fields.add("query")
+        if "category" in request:
+            fields.add("category")
         # Explicit opt-in only; older clients continue to send query alone.
         if "full" in request:
             fields.add("full")
@@ -58,6 +60,8 @@ def _validated_request(request):
     try:
         if action == "downloads_search":
             checked_query(request["query"])
+            if "category" in request:
+                checked_category(request["category"])
             if "full" in request and type(request["full"]) is not bool:
                 raise PolicyError("Invalid search depth")
             if "stream" in request and (request["stream"] is not True
@@ -166,10 +170,20 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
                 def authorized_emit(snapshot):
                     search_emitter({"success": True, "service": "qbittorrent",
                                     **snapshot})
-                stream_search(request["query"], authorized_emit)
+                if "category" in request:
+                    stream_search(request["query"], authorized_emit,
+                                  category=request["category"])
+                else:
+                    stream_search(request["query"], authorized_emit)
                 return None
-            return {"success": True, "service": "qbittorrent",
-                    **search_once(request["query"], full=request.get("full", False))}
+            if "category" in request:
+                searched = search_once(request["query"],
+                                       category=request["category"],
+                                       full=request.get("full", False))
+            else:
+                searched = search_once(request["query"],
+                                       full=request.get("full", False))
+            return {"success": True, "service": "qbittorrent", **searched}
         except InventoryError:
             return {"success": False, "status": "search_unavailable"}
 

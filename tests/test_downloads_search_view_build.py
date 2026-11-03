@@ -42,7 +42,7 @@ class NativeSearchViewTests(unittest.TestCase):
         self.assertNotIn("gtk_widget_set_no_show_all(row",module)
         self.assertIn("gtk_box_pack_start(GTK_BOX(transfers),queue_view",flow)
         self.assertIn('"/usr/bin/python3",s->helper,s->host,s->user,query,',module)
-        self.assertIn('"--stream",NULL',module)
+        self.assertIn('"--stream",category,NULL',module)
         self.assertIn('g_data_input_stream_read_line_async',module)
         self.assertIn('g_subprocess_wait_async',module)
         self.assertNotIn('MORE RESULTS',module)
@@ -51,7 +51,9 @@ class NativeSearchViewTests(unittest.TestCase):
         self.assertIn('gtk_button_set_label(GTK_BUTTON(s->headers[i])',module)
         for header in ('name','size','seeds','leechers','published'):
             self.assertIn('nowsearchheader_'+header,module)
-        self.assertNotIn('gtk_combo_box_text_new()',module)
+        self.assertEqual(module.count('gtk_combo_box_text_new()'),1)
+        self.assertIn('"nowsearchcategory"',module)
+        self.assertIn('gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->category),"all")',module)
         self.assertNotIn("torrents/add",module)
         self.assertNotIn("docker exec",module)
 

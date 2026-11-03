@@ -18,7 +18,7 @@ For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, a
 
 - **Games:** Launch the owner's Steam streaming session through Wolf and Moonlight, while the server remains usable.
 - **Videos:** Open the server's existing Jellyfin media library.
-- **Downloads:** Search for torrents, choose an approved media folder, view transfers, and use approved torrent controls. Only qBittorrent traffic goes through the dedicated Gluetun VPN.
+- **Downloads:** Search API Bay and Bitsearch concurrently (All or a category), browse progressive deduplicated magnet results, choose an approved media folder, and manage transfers. Only qBittorrent traffic goes through the dedicated Gluetun VPN; the existing host needs both reviewed engines enabled.
 - **Music (optional):** Browse, shuffle, play, like and playlist-manage an already configured DroppedNeedle library. Approved devices use per-client Music access; installing the .deb does not provision a new Music server.
 - **Status:** Check connection and VPN health. Advanced VueTorrent remains available under Downloads.
 

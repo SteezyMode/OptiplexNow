@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "server"))
 from download_inventory import InventoryError
 from download_search import (SearchError, checked_magnet, checked_query,
+                              checked_category, search_route, _unique_results,
                              search_once, stream_search, _results)
 
 VPN = "a" * 64
@@ -30,6 +31,9 @@ def topology(*, healthy="healthy", mode="container:" + VPN):
 
 
 MAGNET = "magnet:?xt=urn:btih:" + "f" * 40
+
+def magnet_for(index):
+    return "magnet:?xt=urn:btih:" + f"{index+1:040x}"
 
 
 class FakeAPI:
@@ -63,7 +67,7 @@ class FakeAPI:
         if command[-1].endswith("/start"):
             assert "-S" in command
             assert not any(c.startswith("Cookie:") for c in command)
-            assert "--post-data=pattern=Ubuntu+ISO&plugins=enabled&category=all" in command
+            assert "--post-data=pattern=Ubuntu+ISO&plugins=bruiser_apibay%7Cbruiser_bitsearch&category=all" in command
             out = b'{"id":42}'
             headers = b"  HTTP/1.1 200 OK\r\n  set-cookie: SID=test+search/42=; HttpOnly\r\n"
         else:
@@ -91,6 +95,29 @@ class FakeAPI:
 
 
 class DownloadSearchTests(unittest.TestCase):
+    def test_every_valid_category_uses_both_reviewed_engines(self):
+        for category in ("all","games","movies","tv","music","software"):
+            self.assertEqual(search_route(category),
+                "bruiser_apibay|bruiser_bitsearch")
+        for invalid in ("201", "Games", None, 401, "", "all|games"):
+            with self.subTest(invalid=invalid), self.assertRaises(SearchError):
+                checked_category(invalid)
+
+    def test_dedupe_same_magnet_hash_without_mixing_distinct_releases(self):
+        one="magnet:?xt=urn:btih:"+"a"*40
+        another="magnet:?xt=urn:btih:"+"b"*40
+        seen=set()
+        first=_unique_results([
+            {"name":"Film release","magnet":one},
+            {"name":"Other","magnet":another},
+        ],seen)
+        second=_unique_results([
+            {"name":"Film mirrored","magnet":one[:-40]+"A"*40},
+            {"name":"New","magnet":"magnet:?xt=urn:btih:"+"c"*40},
+        ],seen)
+        self.assertEqual([x["name"] for x in first],["Film release","Other"])
+        self.assertEqual([x["name"] for x in second],["New"])
+
     def test_search_magnet_and_unsupported_html_result(self):
         fake = FakeAPI()
         data = search_once("Ubuntu ISO", runner=fake, sleeper=lambda x: None)
@@ -157,7 +184,7 @@ class DownloadSearchTests(unittest.TestCase):
                         {"fileName":"Large 2160p","fileSize":40_000_000_000,
                          "nbSeeders":12,"fileUrl":MAGNET},
                         {"fileName":"Normal 1080p","fileSize":4_000_000_000,
-                         "nbSeeders":9,"fileUrl":MAGNET}]}
+                         "nbSeeders":9,"fileUrl":magnet_for(2)}]}
             return original(command,**kwargs)
         sleeps=[]
         data=search_once("Ubuntu ISO",full=True,runner=runner,sleeper=sleeps.append)
@@ -202,7 +229,7 @@ class DownloadSearchTests(unittest.TestCase):
                         {"fileName":"Large 2160p","fileSize":40_000_000_000,
                          "nbSeeders":9,"fileUrl":MAGNET},
                         {"fileName":"Smaller 1080p","fileSize":4_000_000_000,
-                         "nbSeeders":17,"fileUrl":MAGNET}]}
+                         "nbSeeders":17,"fileUrl":magnet_for(3)}]}
             return base(command,**kwargs)
         updates=[]
         result=stream_search("Ubuntu ISO",updates.append,runner=runner,
@@ -223,9 +250,9 @@ class DownloadSearchTests(unittest.TestCase):
         # A slower plugin contributes more matches after 60+ one-second polls.
         # No new qBittorrent job or torrent queue action is created.
         initial=[{"fileName":f"Ubuntu seed {i}","fileSize":1024+i,
-                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+                  "nbSeeders":i,"fileUrl":magnet_for(i)} for i in range(25)]
         additional=[{"fileName":f"Ubuntu late {i}","fileSize":4096+i,
-                     "nbSeeders":i,"fileUrl":MAGNET} for i in range(45)]
+                     "nbSeeders":i,"fileUrl":magnet_for(i+100)} for i in range(45)]
         fake=FakeAPI(result={"status":"Running","total":25,"results":initial})
         original=fake.__call__
         polls=[]
@@ -253,7 +280,7 @@ class DownloadSearchTests(unittest.TestCase):
         # Search engines can stop before the client has paged past 25 rows.
         # A completed plugin job is not the same as pagination being complete.
         entries=[{"fileName":f"Game ISO {i:03d}","fileSize":1024+i,
-                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(85)]
+                  "nbSeeders":i,"fileUrl":magnet_for(i)} for i in range(85)]
         fake=FakeAPI(result={"status":"Stopped","total":85,"results":entries})
         base=fake.__call__
         offsets=[]
@@ -280,7 +307,7 @@ class DownloadSearchTests(unittest.TestCase):
 
     def test_stopped_with_inaccurate_total_bounds_retries_and_marks_partial(self):
         entries=[{"fileName":f"Game ISO {i:03d}","fileSize":1024+i,
-                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+                  "nbSeeders":i,"fileUrl":magnet_for(i)} for i in range(25)]
         fake=FakeAPI(result={"status":"Stopped","total":70,"results":entries})
         frames=[]
         outcome=stream_search("Ubuntu ISO",frames.append,runner=fake,
@@ -292,7 +319,7 @@ class DownloadSearchTests(unittest.TestCase):
 
     def test_stream_no_more_results_is_bounded_and_does_not_fabricate(self):
         initial=[{"fileName":f"Ubuntu seed {i}","fileSize":1024+i,
-                  "nbSeeders":i,"fileUrl":MAGNET} for i in range(25)]
+                  "nbSeeders":i,"fileUrl":magnet_for(i)} for i in range(25)]
         fake=FakeAPI(result={"status":"Running","total":25,"results":initial})
         frames=[]
         outcome=stream_search("Ubuntu ISO",frames.append,runner=fake,
@@ -314,7 +341,7 @@ class DownloadSearchTests(unittest.TestCase):
     def test_results_can_fill_multiple_ui_pages(self):
         fake=FakeAPI(result={"status":"Stopped","total":100,
              "results":[{"fileName":f"Linux ISO {i}","fileSize":500+i,
-                         "nbSeeders":i,"fileUrl":MAGNET} for i in range(100)]})
+                         "nbSeeders":i,"fileUrl":magnet_for(i)} for i in range(100)]})
         data=search_once("Ubuntu ISO",runner=fake,sleeper=lambda _:None)
         self.assertEqual(len(data["results"]),100)
         self.assertEqual(data["total"],100)

@@ -8,7 +8,7 @@
 #define RESULT_LIMIT 100
 #define MAX_WIRE 180000
 typedef struct {
- GtkWidget *entry,*button,*headers[5],*status,*list,*results;
+ GtkWidget *entry,*button,*category,*headers[5],*status,*list,*results;
  guint result_count,sort_column;
  gboolean ascending;
  gchar *host,*user,*helper;
@@ -268,6 +268,7 @@ static void stream_finished(GObject *source,GAsyncResult *res,gpointer data){
    }
    s->running=FALSE;
    gtk_widget_set_sensitive(s->entry,TRUE);
+   gtk_widget_set_sensitive(s->category,TRUE);
    gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
  }
  g_clear_error(&err);
@@ -324,8 +325,10 @@ static void start_search(GtkWidget *unused,gpointer data){
    gtk_label_set_text(GTK_LABEL(s->status),"Enter a search of 2–96 characters.");
    return;
  }
+ const char *category=gtk_combo_box_get_active_id(GTK_COMBO_BOX(s->category));
+ if(!category)category="all";
  const gchar *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,query,
-                      "--stream",NULL};
+                      "--stream",category,NULL};
  GError *err=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,G_SUBPROCESS_FLAGS_STDOUT_PIPE|
                                      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&err);
@@ -340,6 +343,7 @@ static void start_search(GtkWidget *unused,gpointer data){
  s->running=TRUE;
  clear_results(s);
  gtk_widget_set_sensitive(s->entry,FALSE);
+ gtk_widget_set_sensitive(s->category,FALSE);
  gtk_widget_set_sensitive(s->button,FALSE);
  gtk_label_set_text(GTK_LABEL(s->status),
      "Searching enabled qBittorrent plugins; results update automatically...");
@@ -357,6 +361,20 @@ GtkWidget *now_downloads_search_view_new(void){
  gtk_entry_set_placeholder_text(GTK_ENTRY(s->entry),"Search downloads");
  gtk_entry_set_max_length(GTK_ENTRY(s->entry),96);
  gtk_box_pack_start(GTK_BOX(bar),s->entry,TRUE,TRUE,0);
+ /* Compact category selector: one request and one provider per search. */
+ s->category=gtk_combo_box_text_new();
+ gtk_widget_set_name(s->category,"nowsearchcategory");
+ gtk_widget_set_tooltip_text(s->category,
+    "API Bay for video; Bitsearch for PC Games");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"all","ALL");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"movies","MOVIES");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"tv","TV");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"games","PC GAMES");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"music","MUSIC");
+ gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(s->category),"software","SOFTWARE");
+ gtk_combo_box_set_active_id(GTK_COMBO_BOX(s->category),"all");
+ gtk_widget_set_size_request(s->category,125,-1);
+ gtk_box_pack_start(GTK_BOX(bar),s->category,FALSE,FALSE,0);
  s->button=gtk_button_new_with_label("SEARCH");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-action");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-primary");

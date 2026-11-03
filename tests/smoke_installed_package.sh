@@ -51,7 +51,7 @@ from pathlib import Path
 import hashlib
 root=Path("/usr/share/optiplex-now/search")
 for name in ("bruiser_apibay.py", "bruiser_bitsearch.py",
-             "manage_apibay_search.py","manage_dual_search.py")
+             "manage_apibay_search.py","manage_dual_search.py"):
     source=(root/name).read_bytes()
     compile(source,name,"exec")
 # Legacy API Bay-only manager remains bundled as a historical fallback.

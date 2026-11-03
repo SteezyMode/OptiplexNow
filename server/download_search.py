@@ -19,6 +19,7 @@ MAX_BYTES = 262144
 MAX_RESULTS = 100
 MAX_MAGNET = 1024
 QUERY_LIMIT = 96
+SEARCH_CATEGORIES = frozenset(("all", "movies", "tv", "games", "music", "software"))
 
 
 class SearchError(InventoryError):
@@ -32,6 +33,13 @@ def checked_query(value):
     if any(ord(c) < 32 or ord(c) == 127 for c in query):
         raise SearchError("Search contains a control character")
     return query
+
+
+def checked_category(value):
+    """Only approved qBittorrent Nova category keys may cross this boundary."""
+    if type(value) is not str or value not in SEARCH_CATEGORIES:
+        raise SearchError("Unsupported download-search category")
+    return value
 
 
 def checked_magnet(value):
@@ -146,7 +154,7 @@ def _results(raw):
             "results": sanitized}
 
 
-def search_once(query, *, full=False, runner=subprocess.run, sleeper=time.sleep):
+def search_once(query, *, category="all", full=False, runner=subprocess.run, sleeper=time.sleep):
     """Quick search returns the first matches; explicit full searches can take 12s.
 
     Both modes reuse one qBittorrent session per job and clean up that job only.
@@ -156,10 +164,11 @@ def search_once(query, *, full=False, runner=subprocess.run, sleeper=time.sleep)
     if type(full) is not bool:
         raise SearchError("Invalid search depth")
     pattern = checked_query(query)
+    category = checked_category(category)
     gateway, port = locate_verified_downloader(runner=runner)
     raw, session = _api(runner, gateway, port, "start",
                         fields={"pattern": pattern, "plugins": "enabled",
-                                "category": "all"})
+                                "category": category})
     try:
         started = json.loads(raw)
     except (UnicodeDecodeError, ValueError) as exc:
@@ -197,7 +206,7 @@ def search_once(query, *, full=False, runner=subprocess.run, sleeper=time.sleep)
                 pass
 
 
-def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
+def stream_search(query, emit, *, category="all", runner=subprocess.run, sleeper=time.sleep):
     """Emit successive incremental results from one existing qBittorrent job.
 
     Follow the same offset-based polling model as VueTorrent. The validated
@@ -209,10 +218,11 @@ def stream_search(query, emit, *, runner=subprocess.run, sleeper=time.sleep):
     if not callable(emit):
         raise SearchError("Search stream unavailable")
     pattern=checked_query(query)
+    category=checked_category(category)
     gateway,port=locate_verified_downloader(runner=runner)
     raw,session=_api(runner,gateway,port,"start",
                      fields={"pattern":pattern,"plugins":"enabled",
-                             "category":"all"})
+                             "category":category})
     try:
         started=json.loads(raw)
     except (UnicodeDecodeError,ValueError) as exc:

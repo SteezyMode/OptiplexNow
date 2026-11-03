@@ -1,4 +1,4 @@
-# VERSION: 1.1
+# VERSION: 1.2
 # AUTHORS: Bruiser contributors
 """Fast, bounded API Bay search plugin for qBittorrent Nova.
 
@@ -53,7 +53,7 @@ def _magnet(infohash, title):
 def _fetch(url):
     try:
         request = Request(url, headers={
-            "User-Agent": "BruiserSearch/1.1",
+            "User-Agent": "BruiserSearch/1.2",
             "Accept": "application/json",
         })
         with urlopen(request, timeout=TIMEOUT_SECONDS) as response:
@@ -73,14 +73,23 @@ def _fetch(url):
 class bruiser_apibay:
     name = "Bruiser - API Bay"
     url = "https://apibay.org"
-    supported_categories = {"all": "0"}
+    # Nova category keys map to API Bay category IDs; filtering happens
+    # before the provider's 100-result response limit.
+    supported_categories = {
+        "all": "0",
+        "movies": "201,202,207,209,210,211",
+        "tv": "205,208,212",
+        "games": "401",
+        "music": "101,104",
+        "software": "301,302,303,304,305,306,399",
+    }
 
     def search(self, what, cat="all"):
         query = _query(what)
         if query is None or cat not in self.supported_categories:
             return
 
-        endpoint = self.url + "/q.php?" + urlencode({"q": query, "cat": 0})
+        endpoint = self.url + "/q.php?" + urlencode({"q": query, "cat": self.supported_categories[cat]})
         rows = _fetch(endpoint)
         if rows is None:
             return

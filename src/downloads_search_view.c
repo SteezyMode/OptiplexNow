@@ -4,11 +4,14 @@
 #include "downloads_search_view.h"
 #include <gio/gio.h>
 #include <string.h>
+#include <signal.h>
 
 #define RESULT_LIMIT 100
 #define MAX_WIRE 180000
+typedef struct _SearchJob SearchJob;
 typedef struct {
- GtkWidget *entry,*button,*headers[5],*status,*list,*results;
+ GtkWidget *entry,*button,*cancel,*headers[5],*status,*list,*results;
+ SearchJob *active;
  guint result_count,sort_column;
  gboolean ascending;
  gchar *host,*user,*helper;
@@ -16,13 +19,13 @@ typedef struct {
  gpointer select_data;
  gboolean running,partial,received_initial;
 } SearchView;
-typedef struct {
+struct _SearchJob {
  GtkWidget *view;
  GSubprocess *proc;
  GDataInputStream *reader;
  gchar *host,*user;
  gboolean done,invalid,got_frame;
-} SearchJob;
+};
 
 static SearchView *state(GtkWidget *view){
  return view ? g_object_get_data(G_OBJECT(view),"now-search-state") : NULL;
@@ -244,6 +247,35 @@ void now_downloads_search_view_on_select(GtkWidget *view,
  SearchView *s=state(view);
  if(s){s->on_select=callback;s->select_data=user_data;}
 }
+/* Retired subprocesses must never mutate another search. Allow the helper to
+ * close SSH gracefully, then force-exit it after a bounded delay. */
+static gboolean force_retired_search(gpointer data){
+ GSubprocess *proc=G_SUBPROCESS(data);
+ if(!g_subprocess_get_if_exited(proc))g_subprocess_force_exit(proc);
+ return G_SOURCE_REMOVE;
+}
+static void retire_search(SearchView *s){
+ if(!s || !s->active)return;
+ SearchJob *job=s->active;
+ s->active=NULL;
+ s->running=FALSE;
+ g_subprocess_send_signal(job->proc,SIGTERM);
+ g_timeout_add_seconds_full(G_PRIORITY_DEFAULT,2,force_retired_search,
+                            g_object_ref(job->proc),(GDestroyNotify)g_object_unref);
+ gtk_widget_hide(s->cancel);
+ gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
+}
+static void cancel_search(GtkWidget *unused,gpointer data){
+ (void)unused;
+ SearchView *s=state(GTK_WIDGET(data));
+ if(!s || !s->active)return;
+ retire_search(s);
+ gchar *message=g_strdup_printf(
+     "Search stopped. %u result%s retained; enter another search.",
+     s->result_count,s->result_count==1?"":"s");
+ gtk_label_set_text(GTK_LABEL(s->status),message);
+ g_free(message);
+}
 static void stream_finished(GObject *source,GAsyncResult *res,gpointer data){
  (void)source;
  SearchJob *job=data;
@@ -252,22 +284,24 @@ static void stream_finished(GObject *source,GAsyncResult *res,gpointer data){
  gboolean ok=g_subprocess_wait_finish(job->proc,res,&err) &&
              g_subprocess_get_successful(job->proc) &&
              job->done && job->got_frame && !job->invalid;
- if(s){
+ if(s && s->active==job){
    if(!g_strcmp0(s->host,job->host) && !g_strcmp0(s->user,job->user)){
      if(!ok){
        if(!job->got_frame)clear_results(s);
        gtk_label_set_text(GTK_LABEL(s->status),
          "Search stopped or unavailable; previously received results retained.");
      }else if(s->partial){
-       gchar *ended=g_strdup_printf(
-         "%u result%s collected; search time limit reached. Some plugins may not have finished.",
-         s->result_count,s->result_count==1?"":"s");
+       gchar *ended=s->result_count ? g_strdup_printf(
+         "%u result%s collected; some sources timed out. Try refining the query.",
+         s->result_count,s->result_count==1?"":"s") :
+         g_strdup("No results yet; some sources timed out. Try a different query.");
        gtk_label_set_text(GTK_LABEL(s->status),ended);
        g_free(ended);
      }
    }
+   s->active=NULL;
    s->running=FALSE;
-   gtk_widget_set_sensitive(s->entry,TRUE);
+   gtk_widget_hide(s->cancel);
    gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
  }
  g_clear_error(&err);
@@ -294,7 +328,7 @@ static void stream_line(GObject *source,GAsyncResult *res,gpointer data){
    if(bytes>0 && bytes<=MAX_WIRE && !memchr(raw,0,bytes)){
      gchar *wire=g_strndup((char *)raw,bytes);
      SearchView *s=state(job->view);
-     if(s && !g_strcmp0(s->host,job->host) &&
+     if(s && s->active==job && !g_strcmp0(s->host,job->host) &&
         !g_strcmp0(s->user,job->user) &&
         now_downloads_search_view_update(job->view,wire))
        job->got_frame=TRUE;
@@ -318,12 +352,13 @@ static void start_search(GtkWidget *unused,gpointer data){
  (void)unused;
  GtkWidget *view=data;
  SearchView *s=state(view);
- if(!s || s->running || !s->host || !s->user || !s->helper)return;
+ if(!s || !s->host || !s->user || !s->helper)return;
  const char *query=gtk_entry_get_text(GTK_ENTRY(s->entry));
  if(!query || g_utf8_strlen(query,-1)<2 || strlen(query)>384){
    gtk_label_set_text(GTK_LABEL(s->status),"Enter a search of 2–96 characters.");
    return;
  }
+ if(s->active)retire_search(s);
  const gchar *argv[]={"/usr/bin/python3",s->helper,s->host,s->user,query,
                       "--stream",NULL};
  GError *err=NULL;
@@ -337,10 +372,10 @@ static void start_search(GtkWidget *unused,gpointer data){
  job->view=g_object_ref(view);job->proc=proc;
  job->host=g_strdup(s->host);job->user=g_strdup(s->user);
  job->reader=g_data_input_stream_new(g_subprocess_get_stdout_pipe(proc));
+ s->active=job;
  s->running=TRUE;
  clear_results(s);
- gtk_widget_set_sensitive(s->entry,FALSE);
- gtk_widget_set_sensitive(s->button,FALSE);
+ gtk_widget_show(s->cancel);
  gtk_label_set_text(GTK_LABEL(s->status),
      "Searching enabled qBittorrent plugins; results update automatically...");
  g_data_input_stream_read_line_async(job->reader,G_PRIORITY_DEFAULT,
@@ -354,14 +389,24 @@ GtkWidget *now_downloads_search_view_new(void){
  GtkWidget *bar=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);
  gtk_box_pack_start(GTK_BOX(view),bar,FALSE,FALSE,0);
  s->entry=gtk_entry_new();
+ gtk_widget_set_name(s->entry,"nowsearchquery");
  gtk_entry_set_placeholder_text(GTK_ENTRY(s->entry),"Search downloads");
  gtk_entry_set_max_length(GTK_ENTRY(s->entry),96);
  gtk_box_pack_start(GTK_BOX(bar),s->entry,TRUE,TRUE,0);
  s->button=gtk_button_new_with_label("SEARCH");
+ gtk_widget_set_name(s->button,"nowsearchstart");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-action");
  gtk_style_context_add_class(gtk_widget_get_style_context(s->button),"now-primary");
  gtk_widget_set_sensitive(s->button,FALSE);
  gtk_box_pack_start(GTK_BOX(bar),s->button,FALSE,FALSE,0);
+ s->cancel=gtk_button_new_with_label("STOP");
+ gtk_widget_set_name(s->cancel,"nowsearchstop");
+ gtk_style_context_add_class(gtk_widget_get_style_context(s->cancel),"now-action");
+ gtk_widget_set_tooltip_text(s->cancel,"Stop the current search and keep collected results");
+ gtk_widget_set_no_show_all(s->cancel,TRUE);
+ gtk_box_pack_start(GTK_BOX(bar),s->cancel,FALSE,FALSE,0);
+ gtk_widget_hide(s->cancel);
+ g_signal_connect(s->cancel,"clicked",G_CALLBACK(cancel_search),view);
  g_signal_connect(s->button,"clicked",G_CALLBACK(start_search),view);
  g_signal_connect(s->entry,"activate",G_CALLBACK(start_search),view);
  /* One continuously scrollable sortable table; all results remain visible. */
@@ -389,6 +434,7 @@ GtkWidget *now_downloads_search_view_new(void){
  s->sort_column=1;s->ascending=TRUE;
  gtk_box_pack_start(GTK_BOX(view),head,FALSE,FALSE,0);
  s->status=text("Connect an approved owner device to search.");
+ gtk_widget_set_name(s->status,"nowsearchstatus");
  gtk_box_pack_start(GTK_BOX(view),s->status,FALSE,FALSE,0);
  s->results=gtk_scrolled_window_new(NULL,NULL);
  gtk_widget_set_name(s->results,"nowsearchresults");
@@ -414,6 +460,7 @@ void now_downloads_search_view_configure(GtkWidget *view,const char *host,
  SearchView *s=state(view);
  if(!s)return;
  if(g_strcmp0(s->host,host) || g_strcmp0(s->user,user)){
+   if(s->active)retire_search(s);
    clear_results(s);
    gtk_label_set_text(GTK_LABEL(s->status),
      host && user ? "Search enabled qBittorrent plugins." :
@@ -422,5 +469,5 @@ void now_downloads_search_view_configure(GtkWidget *view,const char *host,
  g_free(s->host);s->host=g_strdup(host);
  g_free(s->user);s->user=g_strdup(user);
  g_free(s->helper);s->helper=g_strdup(helper);
- gtk_widget_set_sensitive(s->button,!s->running && s->host && s->user && s->helper);
+ gtk_widget_set_sensitive(s->button,s->host && s->user && s->helper);
 }

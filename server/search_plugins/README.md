@@ -1,16 +1,53 @@
-# Bruiser API Bay search candidate (not yet installed)
+# API Bay-only Bruiser searches
 
-The API Bay engine makes one bounded HTTPS JSON request and prints only validated direct magnet links through qBittorrent Nova. It uses a shared parser and URL helper, with a four-second per-request timeout, 1 MiB response cap, maximum 100 results, and 40-digit hexadecimal infohash validation. No account, API key, or extra service is required.
+**Protected baseline:** November 3, 2026 personal alpha. The existing qBittorrent
+container, media, transfers, Tailscale, Gluetun and client remain intact until
+the owner explicitly applies the change.
 
-- `bruiser_apibay.py`: provider adapter
-- `_bruiser_source.py`: shared validation (underscore-prefixed helper is not a Nova search engine)
-- `tools/probe_nova_sources.py`: SHA-256-pinned temporary Nova-runner test for specific episode queries
-- `tools/probe_apibay_results.py`: temporary Nova test of broad search, repeated titles and invalid links
+## Design
 
-**Reference-host evidence:** API Bay returned 12 matching South Park S29E04 titles with 12 usable magnets in 0.42 seconds through the real Nova runner. TorrentClaw is **excluded**: its public unauthenticated API omitted infohash and magnet identifiers for 24 matching results. LimeTorrents is not recommended as a default because its search remained Running beyond 25 seconds. TorrentsCSV remains the existing working fallback; we have not established whether removing it would harm breadth of coverage.
+- A self-contained qBittorrent Nova plugin: `server/search_plugins/bruiser_apibay.py`.
+  Single HTTPS API request, 4-second network timeout, no source pagination,
+  100 maximum results, direct verified magnet links.
+- A narrowly scoped reversible switch:
+  `tools/manage_apibay_search.py`. It is inert by default. Inside the running
+  `qbittorrent-vpn` container: no arguments shows status; `--apply` verifies
+  a pinned Git source and isolated Nova run, installs through qBittorrent's
+  supported WebUI Search API, validates the installed plugin and a real read-only
+  search, stores the enabled-state backup, then disables only the known
+  TorrentsCSV and LimeTorrents engines. `--rollback` restores those exact
+  engine enable states and disables API Bay.
+- Existing legacy search engines stay **installed**, not deleted. The backup
+  is saved with mode 0600 at
+  `/config/qBittorrent/.bruiser-search-rollback-v1.json`.
+- Unexpected plugin states, incompatible source, failed verification or an
+  existing rollback backup block activation; no assumptions.
+- The release's owner broker still calls `plugins=enabled`, so with only
+  API Bay enabled, Bruiser searches only API Bay. A separate future release
+  must ensure a newly installed host has its managed plugin provisioned
+  before using an explicit provider name.
 
-The client, host broker, qBittorrent container, VPN and working existing plugins are untouched by this source-only draft. No plugin installation/activation or default-selection policy is connected yet. A separate release-gated, backup-safe provisioning path is required before promotion.
+## Evidence
 
-Standard-library HTTPS is routed through Nova's configured socket-level SOCKS proxy, if present. Testing within the downloader network namespace does **not** establish VPN kill-switch correctness.
+- API Bay single-engine Nova search of `resident evil`: 100 rows in 0.69s,
+  100 unique infohashes, zero webpage links and zero invalid entries.
+- `south park s29e04`: 12 direct magnet results in 0.42s, whereas
+  TorrentsCSV returned zero for that term.
+- TorrentClaw omitted the infohash and magnet fields required by a
+  free/public client. It is excluded from the proposed default.
+- No assertion that all API Bay search terms will finish within one second,
+  or that a VPN kill-switch is certified by these API probes.
 
-Offline regression test: `python3 -m unittest discover -s tests -p 'test_bruiser_search_plugins.py'`.
+## Validation gates
+
+1. Exact-head GitHub unit/package/sanitizer CI passes.
+2. Owner uses the no-argument read-only status and the temporary Nova proof.
+3. Only then owner explicitly runs `--apply` inside `qbittorrent-vpn`.
+4. Run both `south park s29e04` and `resident evil` in the real Bruiser
+   Downloads interface and verify timing and results.
+5. If behavior regresses, invoke the same script with `--rollback`.
+
+The script does not download torrents, modify the torrent queue, restart the
+container, change VPN credentials, install any other service, or modify host
+SSH permissions. It should be packaged for operator access in a later release,
+but must never run unprompted as part of a `.deb` update.

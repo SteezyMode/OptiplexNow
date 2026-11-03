@@ -1,12 +1,20 @@
 # Private Alpha 1: release contract
 
-**Status: NOT ACCEPTED.** This is the immediate, supported small-tester release target. It is not an announcement that the existing code, current beta, or reference server satisfies these requirements.
+**Phase status: ACTIVE PRIVATE ALPHA (owner-operated). Exit status: NOT YET ACCEPTED.** On November 3, 2026, the owner officially declared Bruiser's personally usable, multi-device household deployment private alpha. Games, Video, protected Downloads and optional Music are in daily use on the configured reference host/clients; the owner confirmed v1.21.16 Downloads behavior and locked it as the functional baseline. **This is a phase-entry designation, not sign-off on the requirements below.** Physical clean-host provisioning, new-client enrollment, VPN fail-closed verification, safe recovery and an independent tester are still open. Do not mark the private-alpha acceptance boxes complete from personal-use success or CI alone.
 
 **Scope lock: one owner plus owner-operated devices only.** Independent household Admin/User roles, viewer/guest enrollment, their separate Steam profiles and unified Wolf/NOW guest revocation are **post-Private-Alpha 1**. No invitee is enrolled during this milestone. The immediate security gate still requires host-side denial of unapproved requests and restricted credentials; it does **not** require constructing a member-account system. A later member-facing release must pass separate server-side authorization tests.
 
 **Product:** One personally owned compatible Linux PC becomes a private games, video and download server. An approved client uses graphical onboarding to play a game from an independent Wolf session, watch the owner's Jellyfin library, or manage their own VPN-isolated downloads and files. The host remains usable as a normal computer.
 
 **Priorities:** complete the three real user journeys before broadening feature support. Deliver one maintainable host/client experience, not a thin page of launch buttons or a custom rewrite of third-party services.
+
+## Private-alpha phase lock (November 3, 2026)
+
+- **Official current release:** [v1.21.16](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.16), source commit `45e140e7bf2faa1067779ec38e6e11597dc1443c`. It is the owner-verified household baseline, not a promise of support for unconfigured consumer hosts.
+- **Feature freeze:** do not redesign Downloads search/queue/file picker, expand the Games/Media/Music feature set, or make SubHub/subtitle translation a release dependency. Security bugs, real regressions and the minimum onboarding/recovery changes needed to ship remain in scope.
+- **Exit target:** an unfamiliar person should be able to use the graphical installer on a supported disposable Linux host and fresh client, authorize the device, install/adopt selected services, stream a real game, watch a real video, manage an approved VPN-isolated download, recover from expected failures and never need to manually create a list of backend service accounts. Report real device evidence and negative authorization results.
+- **Engineering constraint:** modularize risky monolithic UI and service code in small, behavior-preserving changes when delivering these gates. [#185](https://github.com/SteezyMode/OptiplexNow/issues/185) owns code structure; no standalone rewrite and no arbitrary file-size target.
+- **Success vocabulary:** *phase active* = configured household can use it today; *feature locked* = user accepts a current flow; *Private Alpha 1 accepted* = every required physical clean-host/client and safety check in this document passes. Only the first two statements are true today.
 
 ## What "private alpha" means here
 

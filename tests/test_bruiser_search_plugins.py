@@ -9,6 +9,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1] / "server" / "search_plugins"
 HASH = "f" * 40
+# Stable capture sink: imported engine modules bind to prettyPrinter at import
+# time; each fixture resets this one list instead of a stale per-test closure.
+SHARED_PRINTED = []
 
 
 class _FixtureModules:
@@ -17,8 +20,9 @@ class _FixtureModules:
         self.pkg = types.ModuleType("engines")
         self.pkg.__path__ = [str(ROOT)]
         self.printer = types.ModuleType("novaprinter")
-        self.results = []
-        self.printer.prettyPrinter = self.results.append
+        self.results = SHARED_PRINTED
+        self.results.clear()
+        self.printer.prettyPrinter = SHARED_PRINTED.append
         self.patch = patch.dict(sys.modules, {
             "engines": self.pkg,
             "novaprinter": self.printer,

@@ -34,6 +34,7 @@ class EnrollmentWindow:
         self.pending_request = None
         self.review_source = None
         self.phone_approval_mode = False
+        self.remote_review_available = False
         self.window = Gtk.Window(title="NOW | Request Owner Access")
         self.window.set_default_size(460, 550)
         self.window.connect("destroy", self.destroy)
@@ -124,7 +125,7 @@ class EnrollmentWindow:
         self.request_button.set_sensitive(True)
         self.check_button.set_sensitive(True)
         self.review_button.set_sensitive(
-            self.pending_request is not None and not self.phone_approval_mode)
+            self.pending_request is not None and self.remote_review_available)
         callback(answer, error)
         return False
 
@@ -132,9 +133,12 @@ class EnrollmentWindow:
         self.pending_request = None
         self.review_source = None
         self.phone_approval_mode = False
+        self.remote_review_available = False
         self.review_button.set_visible(True)
         self.review_button.set_sensitive(False)
         self.qr_box.hide()
+        # Never leave a previous request code visible after a failed retry.
+        self.code.set_text("")
         self.status.set_text("Contacting owner server through Tailscale...")
         self.job(lambda: load("now_owner_client_request", "owner-enroll-client.py").request_using_available_transport(
             self.host, self.user, include_transport=True), self.request_done)
@@ -149,6 +153,7 @@ class EnrollmentWindow:
         if answer.get("status") == "already_authorized":
             self.pending_request = None
             self.phone_approval_mode = False
+            self.remote_review_available = False
             self.review_button.set_visible(False)
             self.review_button.set_sensitive(False)
             self.qr_box.hide()
@@ -162,10 +167,13 @@ class EnrollmentWindow:
         self.phone_approval_mode = (
             answer.get("transport") == "tailnet" and
             answer.get("phone_approval_available") is True)
-        # A normal QR client must NOT be offered a button to self-approve:
-        # only the independently pinned owner phone can grant access.
-        self.review_button.set_visible(not self.phone_approval_mode)
-        self.review_button.set_sensitive(not self.phone_approval_mode)
+        # A normal QR client must not self-approve. An SSH fallback occurs
+        # precisely when the Tailnet listener is absent, so never offer a
+        # remote-review button which cannot reach that listener.
+        self.remote_review_available = (
+            answer.get("transport") == "tailnet" and not self.phone_approval_mode)
+        self.review_button.set_visible(self.remote_review_available)
+        self.review_button.set_sensitive(self.remote_review_available)
         self.status.set_text(
             "PENDING OWNER APPROVAL. " +
             ("Verifying this device's Moonlight identity before phone QR."
@@ -190,6 +198,7 @@ class EnrollmentWindow:
     def proof_done(self, result, error):
         if error or result is not True:
             self.qr_box.hide()
+            self.code.set_text("")
             self.status.set_text(
                 "Moonlight identity could not be proven automatically. "
                 "No QR approval has been offered and no access was granted. "
@@ -223,7 +232,7 @@ class EnrollmentWindow:
                 "Check the installed qrencode package.")
 
     def review(self, *_):
-        if self.pending_request is None or self.phone_approval_mode:
+        if self.pending_request is None or not self.remote_review_available:
             return
         self.status.set_text(
             "Checking this node's fresh Wolf pairing; otherwise the active Wolf UI...")
@@ -283,6 +292,7 @@ class EnrollmentWindow:
             return
         self.pending_request = None
         self.review_source = None
+        self.remote_review_available = False
         self.review_button.set_sensitive(False)
         self.status.set_text(
             "REMOTE OWNER APPROVAL RECORDED. Use VERIFY ACCESS to confirm "
@@ -294,7 +304,11 @@ class EnrollmentWindow:
             self.host, self.user, "status"), self.verify_done)
 
     def verify_done(self, answer, error):
-        if error:
+        # Successful job completion does not imply restricted authorization.
+        # Check the same finite host status contract as the pre-request probe.
+        if error or not load(
+                "now_owner_verify_response", "owner-enroll-client.py"
+        ).verified_restricted_access(answer):
             self.status.set_text(
                 "Not approved yet, or host unavailable. "
                 "Request a device review or ask the owner to approve access.")

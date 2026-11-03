@@ -39,6 +39,23 @@ test -x /usr/lib/optiplex-now/host_dependencies.py
 test -r /usr/lib/optiplex-now/host_storage_review.py
 test -r /usr/lib/optiplex-now/host_games_readiness.py
 test -x /usr/lib/optiplex-now/owner-host-upgrade.py
+# Search engine artifacts are bundled for later owner-approved provisioning,
+# but must never be activated during installation of the desktop .deb.
+test -r /usr/share/optiplex-now/search/bruiser_apibay.py
+test -r /usr/share/optiplex-now/search/manage_apibay_search.py
+test -r /usr/share/doc/optiplex-now/search-providers.md
+python3 - <<'PY'
+from pathlib import Path
+import hashlib
+root=Path("/usr/share/optiplex-now/search")
+for name in ("bruiser_apibay.py","manage_apibay_search.py"):
+    source=(root/name).read_bytes()
+    compile(source,name,"exec")
+source=(root/"bruiser_apibay.py").read_bytes()
+digest=hashlib.sha1(b"blob "+str(len(source)).encode()+b"\0"+source).hexdigest()
+manager=(root/"manage_apibay_search.py").read_text()
+assert f'SOURCE_GIT_BLOB = "{digest}"' in manager, "Packaged search source/manager mismatch"
+PY
 for f in owner_games_ssh.py owner_games_request.py owner_games_enroll.py download_inventory.py download_queue.py download_search.py download_manage.py download_destinations.py media_endpoint.py; do
   test -r "/usr/lib/optiplex-now/owner-bridge/server/$f"
 done

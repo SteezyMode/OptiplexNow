@@ -51,3 +51,15 @@ The script does not download torrents, modify the torrent queue, restart the
 container, change VPN credentials, install any other service, or modify host
 SSH permissions. It should be packaged for operator access in a later release,
 but must never run unprompted as part of a `.deb` update.
+
+## Debian packaging checkpoint
+
+The `.deb` carries both the single-file API Bay engine and the operator-only
+management utility under `/usr/share/optiplex-now/search/`. Its installed
+package smoke test checks that both files compile and that the manager's pinned
+Git blob matches the packaged plugin. **Installing or updating the .deb does not
+install or enable a qBittorrent plugin**, does not touch Docker and does not
+change existing users' provider selections. This keeps the accepted personal
+alpha baseline intact while preparing a reproducible, owner-approved host
+setup integration. A managed fresh downloader installer remains a separate
+milestone: the current host installer principally covers Wolf and adoption.

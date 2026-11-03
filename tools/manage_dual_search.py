@@ -22,10 +22,10 @@ import time
 from urllib.parse import urlencode
 from urllib.request import Request, HTTPCookieProcessor, build_opener, urlopen
 
-SOURCE_COMMIT = "7b037e9e05660314905e46794116bc4e33006b95"
+SOURCE_COMMIT = "6220a503cc239c2cd397c8f7e67c7538de5c615c"
 SOURCE_BLOBS = {
-    "bruiser_apibay": "2a04167c10be437c7af8b37cc052993dd143bcea",
-    "bruiser_bitsearch": "6c91378b9586855a395d1f7234041dcd3e4256ff",
+    "bruiser_apibay": "5a6a469b8f4626fded3fa19ed388ce3d8a92f318",
+    "bruiser_bitsearch": "09fc0b9b86fd9827799e3961a896118dbab89734",
 }
 OLD_API_BAY = "871a80678abdbd302a98722811171c446e4f7e62"
 CONFIG = Path("/config/qBittorrent")

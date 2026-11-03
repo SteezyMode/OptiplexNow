@@ -1,5 +1,5 @@
-"""Hermetic tests for the API Bay Nova engine. No DNS/network required."""
-import importlib
+"""Offline tests of the self-contained, installable API Bay Nova engine."""
+import importlib.util
 import json
 from pathlib import Path
 import sys
@@ -7,134 +7,114 @@ import types
 import unittest
 from unittest.mock import patch
 
-ROOT = Path(__file__).resolve().parents[1] / "server" / "search_plugins"
+ROOT = Path(__file__).resolve().parents[1]
+FILE = ROOT / "server/search_plugins/bruiser_apibay.py"
 HASH = "f" * 40
-# Stable capture sink: imported engine modules bind to prettyPrinter at import
-# time; each fixture resets this one list instead of a stale per-test closure.
-SHARED_PRINTED = []
 
 
-class _FixtureModules:
-    """Avoid polluting the repository's other unittest imports."""
+class FakeResponse:
+    def __init__(self, data, url="https://apibay.org/q.php"):
+        self.body = json.dumps(data).encode("utf-8") if not isinstance(data, bytes) else data
+        self.url = url
+
     def __enter__(self):
-        self.pkg = types.ModuleType("engines")
-        self.pkg.__path__ = [str(ROOT)]
-        self.printer = types.ModuleType("novaprinter")
-        self.results = SHARED_PRINTED
-        self.results.clear()
-        self.printer.prettyPrinter = SHARED_PRINTED.append
-        self.patch = patch.dict(sys.modules, {
-            "engines": self.pkg,
-            "novaprinter": self.printer,
-        })
-        self.patch.__enter__()
-        self.common = importlib.import_module("engines._bruiser_source")
-        self.apibay = importlib.import_module("engines.bruiser_apibay")
         return self
 
     def __exit__(self, *args):
-        for key in ("engines._bruiser_source", "engines.bruiser_apibay"):
-            sys.modules.pop(key, None)
-        self.patch.__exit__(*args)
-
-
-class Response:
-    def __init__(self, address, body):
-        self.address = address
-        self.body = body
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_):
-        pass
+        return None
 
     def geturl(self):
-        return self.address
+        return self.url
 
-    def read(self, length):
-        return self.body[:length]
+    def read(self, count):
+        return self.body[:count]
 
 
-class PluginTests(unittest.TestCase):
+class ApiBayTests(unittest.TestCase):
     def setUp(self):
-        self.fixture = _FixtureModules()
-        self.fixture.__enter__()
-        self.addCleanup(self.fixture.__exit__, None, None, None)
-        self.common = self.fixture.common
-        self.apibay = self.fixture.apibay
-        self.results = self.fixture.results
+        self.rows = []
+        printer = types.ModuleType("novaprinter")
+        printer.prettyPrinter = self.rows.append
+        self.modules = patch.dict(sys.modules, {"novaprinter": printer})
+        self.modules.__enter__()
+        self.addCleanup(self.modules.__exit__, None, None, None)
+        spec = importlib.util.spec_from_file_location("bruiser_apibay_test", FILE)
+        self.plugin = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(self.plugin)
+        self.engine = self.plugin.bruiser_apibay()
 
-    def load(self, engine, query, response):
+    def run_query(self, query, payload, url="https://apibay.org/q.php"):
         calls = []
-        def fake_urlopen(request, timeout):
+        def fake_open(request, timeout):
             calls.append((request.full_url, timeout))
-            return Response(request.full_url, json.dumps(response).encode())
-        with patch.object(self.common, "urlopen", side_effect=fake_urlopen):
-            engine.search(query)
+            return FakeResponse(payload, url)
+        with patch.object(self.plugin, "urlopen", side_effect=fake_open):
+            self.engine.search(query)
         return calls
 
-    def test_apibay_encodes_once_and_emits_magnet_and_date(self):
-        row = {
-            "name": "South.Park.S29E04.1080p", "info_hash": HASH,
-            "size": "444222", "seeders": "7", "leechers": "3",
-            "added": "1793232000",
-        }
-        req = self.load(self.apibay.bruiser_apibay(),
-                        "south%20park%20s29e04", [row])
-        self.assertEqual(len(req), 1)
-        self.assertIn("q=south+park+s29e04", req[0][0])
-        self.assertNotIn("%2520", req[0][0])
-        self.assertEqual(len(self.results), 1)
-        self.assertTrue(self.results[0]["link"].startswith("magnet:?xt=urn:btih:"+HASH))
-        self.assertEqual(self.results[0]["size"], "444222 B")
-        self.assertEqual(self.results[0]["seeds"], "7")
-        self.assertEqual(self.results[0]["pub_date"], 1793232000)
-        self.assertLess(len(self.results[0]["link"]), 1024)
+    def test_query_is_decoded_only_once_and_one_request(self):
+        hits = self.run_query("resident%20evil", [{
+            "name": "Resident Evil", "info_hash": HASH,
+            "size": 1024, "seeders": 12, "leechers": 6, "added": 1793232000,
+        }])
+        self.assertEqual(len(hits), 1)
+        self.assertIn("q=resident+evil", hits[0][0])
+        self.assertNotIn("%2520", hits[0][0])
+        self.assertEqual(hits[0][1], 4)
+        self.assertEqual(len(self.rows), 1)
+        self.assertEqual(self.rows[0]["size"], "1024 B")
+        self.assertEqual(self.rows[0]["pub_date"], 1793232000)
+        self.assertTrue(self.rows[0]["link"].startswith("magnet:?xt=urn:btih:" + HASH))
+        self.assertLessEqual(len(self.rows[0]["link"]), 1024)
 
-    def test_apibay_ignores_bad_hash_and_sentinel(self):
-        rows = [{"name": "No results returned", "info_hash": "0"},
-                {"name": "Bad", "info_hash": "magnet:?xt=foo"},
-                {"name": "Bad\nname", "info_hash": "g" * 40}]
-        self.load(self.apibay.bruiser_apibay(), "south park", rows)
-        self.assertEqual(self.results, [])
+    def test_bad_hash_or_webpage_cannot_be_returned(self):
+        self.run_query("resident evil", [
+            {"name": "HTML result", "info_hash": "https://example.org/page"},
+            {"name": "Bad", "info_hash": "x"*40},
+            {"name": "No results returned", "info_hash": "0"},
+        ])
+        self.assertEqual(self.rows, [])
 
-    def test_common_http_bounds_and_redirects(self):
-        with patch.object(self.common, "urlopen", return_value=Response(
-                "http://apibay.org/q.php", b"{}")):
-            self.assertIsNone(self.common.read_json("https://apibay.org/q.php"))
-        with patch.object(self.common, "urlopen", return_value=Response(
-                "https://unapproved.invalid/", b"{}")):
-            self.assertIsNone(self.common.read_json("https://apibay.org/q.php"))
-        with patch.object(self.common, "urlopen", return_value=Response(
-                "https://apibay.org/q.php", b" " * (self.common.MAX_BODY_BYTES + 1))):
-            self.assertIsNone(self.common.read_json("https://apibay.org/q.php"))
+    def test_invalid_queries_do_not_touch_network(self):
+        with patch.object(self.plugin, "urlopen") as network:
+            for term in ("a", None, "x"*97, "bad\nquery", "good\rquery"):
+                self.engine.search(term)
+            network.assert_not_called()
 
-    def test_empty_invalid_and_bounded_queries_never_network(self):
-        for eng in (self.apibay.bruiser_apibay(),):
-            with patch.object(self.common, "urlopen") as network:
-                eng.search("a")
-                eng.search("test\ncommand")
-                eng.search("x" * 97)
-                eng.search(None)
-                network.assert_not_called()
-            self.assertEqual(self.results, [])
+    def test_redirect_and_oversized_payload_fail_closed(self):
+        for url in ("http://apibay.org/q.php",
+                    "https://something.invalid/q.php"):
+            self.run_query("resident evil", [{"name": "ok", "info_hash": HASH}], url=url)
+            self.assertEqual(self.rows, [])
+        self.run_query("resident evil", b" "*(1_048_577))
+        self.assertEqual(self.rows, [])
 
-    def test_malformed_provider_is_quiet_and_never_calls_network(self):
-        # Patch imported module symbol, not its original provider module.
-        with patch.object(self.apibay, "read_json", return_value="bad") as lookup:
-            self.apibay.bruiser_apibay().search("hello world")
-            lookup.assert_called_once()
-        self.assertEqual(self.results, [])
+    def test_bad_json_schema_and_missing_fields(self):
+        for payload in (b"{broken", {"results": []}, None,
+                        [{"name": "foo", "info_hash": None}],
+                        [{"name": 2, "info_hash": HASH}]):
+            with self.subTest(payload=str(payload)[:30]):
+                self.rows.clear()
+                self.run_query("resident evil", payload)
+                self.assertEqual(self.rows, [])
 
-    def test_invalid_response_does_not_fabricate_results(self):
-        for response in (None, {}, {"torrents": []},
-                         [{"name": "Nothing", "info_hash": None}]):
-            with self.subTest(response=response):
-                self.results.clear()
-                with patch.object(self.apibay, "read_json", return_value=response):
-                    self.apibay.bruiser_apibay().search("hello world")
-                self.assertEqual(self.results, [])
+    def test_one_hundred_maximum_and_unknown_metadata(self):
+        self.run_query("resident evil", [
+            {"name": f"Result {i}", "info_hash": HASH, "size": "none",
+             "seeders": None, "leechers": None, "added": None}
+            for i in range(125)
+        ])
+        self.assertEqual(len(self.rows), 100)
+        self.assertEqual(self.rows[0]["size"], "-1 B")
+        self.assertEqual(self.rows[0]["seeds"], "-1")
+
+    def test_magnet_does_not_require_extra_site_lookups(self):
+        self.run_query("south%20park%20s29e04", [
+            {"name": "South Park S29E04", "info_hash": HASH}
+        ])
+        self.assertEqual(len(self.rows), 1)
+        self.assertIn("urn:btih:", self.rows[0]["link"])
+        self.assertEqual(self.rows[0]["engine_url"], "https://apibay.org")
 
 
 if __name__ == "__main__":

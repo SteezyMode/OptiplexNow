@@ -32,6 +32,7 @@ NEGATIVE_TTL = 30 * 60
 SEARCH_TIMEOUT_SECONDS = 10
 IMAGE_TIMEOUT_SECONDS = 15
 MAX_CACHE_BYTES = 2048
+# Successful images are cached independently in native CoverArtRepository.
 MAX_CONCURRENT_LOOKUPS = 2
 
 _semaphore: asyncio.Semaphore | None = None
@@ -185,7 +186,13 @@ async def missing_album_cover(
 
     path = _cache_path(local_id, title, artist, year)
     async with _sem():
-        found, mbid = await asyncio.to_thread(_read_cache, path)
+        # A projected canonical ID is authoritative; UUIDv5 is never.
+        projected = _attr(album, "musicbrainz_release_group_id")
+        if _valid_rg(projected):
+            mbid = projected.lower()
+            found = True
+        else:
+            found, mbid = await asyncio.to_thread(_read_cache, path)
         if found and not mbid:
             return None
         if not found:
@@ -203,8 +210,11 @@ async def missing_album_cover(
                     ), timeout=SEARCH_TIMEOUT_SECONDS
                 )
                 mbid = pick_verified_release_group(candidates, title, artist, year)
-                await asyncio.to_thread(_write_cache, path, mbid)
-            except (asyncio.TimeoutError, Exception):
+                # A blank repository response can also be an upstream outage:
+                # never poison the persistent mapping cache on empty search.
+                if candidates:
+                    await asyncio.to_thread(_write_cache, path, mbid)
+            except Exception:
                 # A provider outage is not proof no cover exists: do NOT
                 # record a negative cache entry.
                 return None

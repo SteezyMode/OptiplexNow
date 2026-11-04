@@ -51,6 +51,14 @@ class CoverResolverPolicyTests(unittest.TestCase):
             [release(DEJA_MBID,"Deja Entendu","Brand New",2003)],
             "Deja Entendu","Brand New",2003), DEJA_MBID)
 
+    def test_accents_do_not_hide_same_release_from_verified_search(self):
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(DEJA_MBID,"Deja Entendu","Brand New",2003)],
+            "Déjà Entendu","Brand New",2003),DEJA_MBID)
+        self.assertIsNone(resolver.pick_verified_release_group(
+            [release(DEJA_MBID,"Deja Entendu Demos","Brand New",2003)],
+            "Déjà Entendu","Brand New",2003))
+
     def test_v1_negative_cache_does_not_block_v2_uuidv3_recovery(self):
         self.assertEqual(resolver.CACHE_VERSION,2)
         self.assertIn("v2",str(resolver.CACHE_ROOT))

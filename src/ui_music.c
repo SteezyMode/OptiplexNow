@@ -262,6 +262,8 @@ static void music_update_controls(MusicView *view){
     ?g_ptr_array_index(view->queue,view->queue_index):NULL;
  gtk_label_set_text(GTK_LABEL(view->playing_label),
      current?current->title:"Now playing");
+ gtk_widget_set_tooltip_text(view->playing_label,
+     current?current->title:"Now playing");
  if(view->playing_like && current){
   gtk_button_set_image(GTK_BUTTON(view->playing_like),
       gtk_image_new_from_icon_name(current->liked?"emblem-favorite-symbolic":
@@ -278,6 +280,7 @@ static void music_update_controls(MusicView *view){
       ?g_strdup_printf("%s · %s",current->artist,current->album)
       :g_strdup(current?current->artist:"");
   gtk_label_set_text(GTK_LABEL(view->playing_artist_label),by);
+  gtk_widget_set_tooltip_text(view->playing_artist_label,by);
   g_free(by);
  }
  gtk_button_set_image(GTK_BUTTON(view->pause_button),
@@ -749,8 +752,14 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
   if(view->hero_row){
    gtk_widget_show(view->hero_row);
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+   gtk_widget_set_tooltip_text(view->hero_title,title);
    gtk_label_set_text(GTK_LABEL(view->hero_subtitle),artist?artist:"");
+   gtk_widget_set_tooltip_text(view->hero_subtitle,artist?artist:"");
+   gtk_widget_set_visible(view->hero_play,
+     !g_strcmp0(kind,"album") || !g_strcmp0(kind,"playlist"));
+   gtk_widget_set_visible(view->hero_shuffle,!g_strcmp0(kind,"album"));
    gtk_widget_set_sensitive(view->hero_play,FALSE);
+   gtk_widget_set_sensitive(view->hero_shuffle,FALSE);
    gtk_widget_set_visible(view->hero_like,
      !g_strcmp0(kind,"album") || !g_strcmp0(kind,"artist"));
    g_object_set_data_full(G_OBJECT(view->hero_like),"music-id",
@@ -1167,13 +1176,16 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
  if(!g_strcmp0(kind,"album_meta")){
-  if(view->hero_title && title && *title)
+  if(view->hero_title && title && *title){
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+   gtk_widget_set_tooltip_text(view->hero_title,title);
+  }
   if(view->hero_subtitle){
    char *description=album && *album?
        g_strdup_printf("%s · %s",artist?artist:"",album):
        g_strdup(artist?artist:"");
    gtk_label_set_text(GTK_LABEL(view->hero_subtitle),description);
+   gtk_widget_set_tooltip_text(view->hero_subtitle,description);
    g_free(description);
   }
   if(view->hero_like){
@@ -1506,6 +1518,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                        !g_strcmp0(job->operation,"playlist")) &&
                        view->visible_tracks->len>0;
     gtk_widget_set_sensitive(view->hero_play,playable);
+    if(view->hero_shuffle)
+     gtk_widget_set_sensitive(view->hero_shuffle,
+       !g_strcmp0(job->operation,"album") && view->visible_tracks->len>0);
    }
    /* Use the existing heading for relevant library information.
     * No separate "Connected to your music library" status row. */
@@ -2411,6 +2426,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
  view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
+ /* Full-width track metadata above buttons: never squeeze the title away. */
+ GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
  gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
@@ -2418,12 +2435,16 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_name(view->player_bar,"music-player");
  view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
  gtk_widget_set_size_request(view->playing_art,44,44);
- gtk_box_pack_start(GTK_BOX(controls),view->playing_art,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_art,FALSE,FALSE,0);
  GtkWidget *now_playing=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_widget_set_hexpand(now_playing,TRUE);
+ gtk_widget_set_size_request(now_playing,0,-1);
  view->playing_label=gtk_label_new("");
  gtk_widget_set_name(view->playing_label,"music-now-title");
  gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
+ gtk_label_set_line_wrap(GTK_LABEL(view->playing_label),TRUE);
+ gtk_label_set_line_wrap_mode(GTK_LABEL(view->playing_label),PANGO_WRAP_WORD_CHAR);
+ gtk_label_set_lines(GTK_LABEL(view->playing_label),2);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
  gtk_widget_set_hexpand(view->playing_label,TRUE);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_label,FALSE,FALSE,0);
@@ -2432,14 +2453,15 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_xalign(GTK_LABEL(view->playing_artist_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_artist_label),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_artist_label,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(controls),now_playing,TRUE,TRUE,0);
+ gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0);
  view->playing_like=music_icon_button("non-starred-symbolic","Like current song");
  gtk_widget_set_name(view->playing_like,"music-playing-like");
  g_object_set_data(G_OBJECT(view->playing_like),"music-view",view);
  g_object_set_data(G_OBJECT(view->playing_like),"music-kind",(gpointer)"song");
  g_signal_connect(view->playing_like,"clicked",
                   G_CALLBACK(music_like_clicked),view->playing_like);
- gtk_box_pack_start(GTK_BOX(controls),view->playing_like,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_like,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0);
  view->shuffle_button=gtk_toggle_button_new();
  gtk_button_set_image(GTK_BUTTON(view->shuffle_button),
     gtk_image_new_from_icon_name("media-playlist-shuffle-symbolic",GTK_ICON_SIZE_BUTTON));

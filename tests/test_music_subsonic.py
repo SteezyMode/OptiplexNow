@@ -281,19 +281,37 @@ class MusicSubsonicTests(unittest.TestCase):
         from unittest import mock
         calls = []
         def fake_query(base, method, auth, params=None):
-            self.assertEqual(method, "getAlbumList2")
-            calls.append(params["type"])
-            if params["type"] == "recent":
-                return {"albumList2": {"album": []}}
-            return {"albumList2": {"album": [{"id": "a7", "name": "New addition"}]}}
+            calls.append((method, params["type"] if params else None))
+            if method == "getAlbumList2":
+                if params["type"] == "recent":
+                    return {"albumList2": {"album": []}}
+                return {"albumList2": {"album": [{"id": "a7", "name": "New addition"}]}}
+            if method == "getStarred2":
+                return {"starred2": {"album": [], "song": []}}
+            if method == "getPlaylists":
+                return {"playlists": {"playlist": []}}
+            raise AssertionError("Unexpected API call: " + method)
         output = io.StringIO()
-        with mock.patch.object(music, "query", side_effect=fake_query), \
-             mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
-             mock.patch.object(music.sys, "stdout", output):
+        from music_rest import MusicRESTError
+        with mock.patch.object(music, "query", side_effect=fake_query), \\
+             mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \\
+             mock.patch.object(music.sys, "stdout", output), \\
+             mock.patch("music_rest.get_session", side_effect=MusicRESTError("no session")):
             code = music.main([self.base, "home"])
         self.assertEqual(code, 0)
-        self.assertEqual(calls, ["recent", "newest"])
-        self.assertEqual(json.loads(output.getvalue())["albums"][0]["id"], "a7")
+        self.assertEqual(set(calls), {
+            ("getAlbumList2", "recent"), ("getAlbumList2", "newest"),
+            ("getStarred2", None), ("getPlaylists", None)
+        })
+        self.assertEqual(json.loads(output.getvalue())["added"][0]["id"], "a7")
+        from base64 import b64decode
+        rows = music._home_rows(json.loads(output.getvalue())).splitlines()
+        self.assertEqual(
+            [(b64decode(r.split("\t")[0]).decode(),
+              b64decode(r.split("\t")[2]).decode()) for r in rows
+             if b64decode(r.split("\t")[0]).decode() == "section"],
+            [("section", "Recently Added")]
+        )
 
     def test_real_recent_new_and_liked_endpoint_contracts(self):
         for kind in ("recent", "newest", "alphabeticalByName"):

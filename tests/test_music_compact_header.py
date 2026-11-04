@@ -190,7 +190,7 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertNotIn('Added to Liked Songs.',UI)
         self.assertNotIn('Removed from Liked Songs.',UI)
         self.assertNotIn('status_set(view,"Album requested.',UI)
-        self.assertIn('gtk_button_set_label(GTK_BUTTON(job->button),"Requested")',UI)
+        self.assertIn('gtk_button_set_label(GTK_BUTTON(job->button),status)',UI)
         self.assertIn('status_set(view,"Could not update Music library. Try again.")',UI)
 
     def test_flat_song_rows_use_space_for_songs_not_cards(self):

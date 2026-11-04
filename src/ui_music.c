@@ -55,6 +55,7 @@ typedef struct {
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav, *discover_back;
+ GtkWidget *home_scroll, *home_body, *home_shelf_cards;
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
@@ -67,7 +68,7 @@ typedef struct {
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode, shuffle_enabled, discover_active;
+ gboolean grid_mode, shuffle_enabled, discover_active, home_active;
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
@@ -735,10 +736,11 @@ static void music_card_art_start(MusicView *view,const char *cover_id,
  g_queue_push_tail(view->pending_art,pending);
 }
 static void music_card_queue_pump(MusicView *view){
- if(view->closing || !view->pending_art || !view->cards ||
-    !view->cards_scroll)return;
+ GtkWidget *viewport=view->home_active?view->home_scroll:view->cards_scroll;
+ GtkWidget *content=view->home_active?view->home_body:view->cards;
+ if(view->closing || !view->pending_art || !viewport || !content)return;
  GtkAdjustment *adjustment=gtk_scrolled_window_get_vadjustment(
-                                  GTK_SCROLLED_WINDOW(view->cards_scroll));
+                                  GTK_SCROLLED_WINDOW(viewport));
  double top=gtk_adjustment_get_value(adjustment);
  double height=gtk_adjustment_get_page_size(adjustment);
  GList *link=view->pending_art->head;
@@ -749,7 +751,7 @@ static void music_card_queue_pump(MusicView *view){
                  !gtk_widget_get_parent(item->image);
   int x=0,y=0;
   gboolean placed=gtk_widget_translate_coordinates(
-                        item->image,view->cards,0,0,&x,&y);
+                        item->image,content,0,0,&x,&y);
   gboolean visible=height<=0 || (placed && y+160>=top-180 &&
                                              y<=top+height+180);
   if(stale || visible){
@@ -1355,7 +1357,9 @@ static void music_catalog_card(MusicView *view,const char *kind,
   g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
   gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
  }
- gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
+ if(view->home_active && view->home_shelf_cards)
+  gtk_box_pack_start(GTK_BOX(view->home_shelf_cards),card,FALSE,FALSE,0);
+ else gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
  music_card_art_start(view,cover,art);
 }
 
@@ -1429,11 +1433,32 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   g_object_set_data(G_OBJECT(card),"music-liked",
                     GINT_TO_POINTER(liked?2:1));
   g_signal_connect(card,"clicked",G_CALLBACK(music_item_clicked),card);
-  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
+  if(view->home_active && view->home_shelf_cards)
+   gtk_box_pack_start(GTK_BOX(view->home_shelf_cards),card,FALSE,FALSE,0);
+  else gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
   music_card_art_start(view,cover,art);
   return;
  }
  if(!g_strcmp0(kind,"section")){
+  if(view->home_active && view->home_body){
+   /* Home is a vertical feed of horizontally scrollable real-content shelves. */
+   GtkWidget *heading=gtk_label_new(title);
+   gtk_widget_set_name(heading,"music-section-title");
+   gtk_label_set_xalign(GTK_LABEL(heading),0);
+   gtk_widget_set_margin_top(heading,13);
+   gtk_widget_set_margin_bottom(heading,5);
+   gtk_box_pack_start(GTK_BOX(view->home_body),heading,FALSE,FALSE,0);
+   GtkWidget *scroll=gtk_scrolled_window_new(NULL,NULL);
+   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll),
+                                  GTK_POLICY_AUTOMATIC,GTK_POLICY_NEVER);
+   gtk_widget_set_size_request(scroll,-1,240);
+   GtkWidget *lane=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,9);
+   gtk_container_set_border_width(GTK_CONTAINER(lane),5);
+   gtk_container_add(GTK_CONTAINER(scroll),lane);
+   gtk_box_pack_start(GTK_BOX(view->home_body),scroll,FALSE,FALSE,0);
+   view->home_shelf_cards=lane;
+   return;
+  }
   GtkWidget *heading=gtk_label_new(title);
   gtk_widget_set_name(heading,"music-section-title");
   gtk_label_set_xalign(GTK_LABEL(heading),0);
@@ -1573,6 +1598,12 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
 static int render_rows(MusicView *view,const char *output,gboolean append){
  if(!append){
   ++view->card_art_serial;
+  view->home_shelf_cards=NULL;
+  if(view->home_body){
+   GList *shelves=gtk_container_get_children(GTK_CONTAINER(view->home_body));
+   for(GList *p=shelves;p;p=p->next)gtk_widget_destroy(GTK_WIDGET(p->data));
+   g_list_free(shelves);
+  }
   music_pending_clear(view);
   view->card_art_count=0;
   GList *cards=gtk_container_get_children(GTK_CONTAINER(view->cards));
@@ -1874,7 +1905,10 @@ static void music_show_empty(MusicView *view,const char *operation){
  gtk_widget_set_margin_top(empty,22);
  gtk_widget_set_margin_bottom(empty,22);
  gtk_label_set_xalign(GTK_LABEL(empty),0);
- if(view->grid_mode){
+ if(view->home_active && view->home_body){
+  gtk_box_pack_start(GTK_BOX(view->home_body),empty,FALSE,FALSE,0);
+  gtk_widget_show_all(view->home_body);
+ }else if(view->grid_mode){
   gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),empty,-1);
   gtk_widget_show_all(view->cards);
  }else{
@@ -1922,6 +1956,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
       ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
+   view->home_active=!g_strcmp0(job->operation,"home");
    view->grid_mode=(!g_strcmp0(job->operation,"artist_releases") ||
                     !g_strcmp0(job->operation,"home") ||
                     !g_strcmp0(job->operation,"albums") ||
@@ -1939,10 +1974,16 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
         !g_strcmp0(job->operation,"catalog_tracks"))) &&
       view->discover_active && view->discover_back)
     gtk_widget_show(view->discover_back);
-   if(view->grid_mode){
+   if(view->home_active){
+    gtk_widget_show_all(view->home_scroll);
+    gtk_widget_hide(view->cards_scroll);
+    gtk_widget_hide(view->list_scroll);
+   }else if(view->grid_mode){
+    gtk_widget_hide(view->home_scroll);
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);
    }else{
+    gtk_widget_hide(view->home_scroll);
     gtk_widget_hide(view->cards_scroll);
     gtk_widget_show(view->list_scroll);
    }
@@ -1993,7 +2034,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     * the destination only; publish the actual total after the last page. */
    gboolean partial=(!g_strcmp0(job->operation,"songs") && view->song_has_more) ||
                     (!g_strcmp0(job->operation,"albums") && view->album_has_more);
-   char *heading=partial?g_strdup(job->heading):
+   char *heading=view->home_active || partial?g_strdup(job->heading):
        g_strdup_printf("%s · %d %s",job->heading,displayed,noun);
    gtk_label_set_text(GTK_LABEL(view->heading),heading);
    g_free(heading);
@@ -2921,6 +2962,23 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                   G_CALLBACK(music_card_scroll_changed),view);
  gtk_widget_set_no_show_all(view->cards_scroll,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->cards_scroll,TRUE,TRUE,0);
+ view->home_scroll=gtk_scrolled_window_new(NULL,NULL);
+ gtk_widget_set_name(view->home_scroll,"music-home-shelves-scroll");
+ gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(view->home_scroll),
+                                GTK_POLICY_NEVER,GTK_POLICY_AUTOMATIC);
+ gtk_widget_set_vexpand(view->home_scroll,TRUE);
+ view->home_body=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ gtk_widget_set_name(view->home_body,"music-home-shelves");
+ gtk_container_set_border_width(GTK_CONTAINER(view->home_body),8);
+ gtk_container_add(GTK_CONTAINER(view->home_scroll),view->home_body);
+ GtkAdjustment *home_art_scroll=gtk_scrolled_window_get_vadjustment(
+                              GTK_SCROLLED_WINDOW(view->home_scroll));
+ g_signal_connect(home_art_scroll,"value-changed",
+                  G_CALLBACK(music_card_scroll_changed),view);
+ g_signal_connect(home_art_scroll,"changed",
+                  G_CALLBACK(music_card_scroll_changed),view);
+ gtk_widget_set_no_show_all(view->home_scroll,TRUE);
+ gtk_box_pack_start(GTK_BOX(maincol),view->home_scroll,TRUE,TRUE,0);
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */

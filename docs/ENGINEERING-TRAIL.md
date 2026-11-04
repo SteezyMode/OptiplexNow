@@ -1,3 +1,9 @@
+## 2026-11-04 — Mac mini Music start SIGSEGV traced to tray GtkMenu lifetime
+
+Owner reproduced the v1.21.16 crash on Pop!_OS COSMIC under GDB. The GTK main-thread backtrace is `g_type_check_instance_is_a → gtk_widget_destroy → music_tray_rebuild_idle`, not an mpv/SIGPIPE/audio-stream failure. Before this fix, `tray_build_menu()` replaced the AppIndicator menu and explicitly destroyed the previous GTK widget while retaining only a borrowed pointer. AppIndicator can release its old menu ref synchronously during replacement. This explains the stale pointer and app crash.
+
+Fix candidate: sink/own one root GtkMenu ref at creation; destroy and release that ref after the new menu has been installed. Includes native real-GTK Xvfb regression test simulating SNI reference turnover plus classic tray lifecycle. The v1.21.16 public release and deployed OptiPlex/MacBook/Mini packages are unchanged; exact CI and owner physical playback acceptance are required before any main release. Unrelated title/tray navigation polish remains isolated.
+
 ## 2026-11-03 — Active private alpha and shippability lock
 
 Owner declared Bruiser (legacy package name OptiPlex NOW) officially in **active owner-validated private alpha** after daily household utility across the OptiPlex host and two Linux clients, with v1.21.16 as the frozen reference version. This is an explicit **phase-entry** decision; all original fresh-host/client, VPN fail-closed, negative authorization and non-developer acceptance boxes stay open. Roadmap priority pivots from feature additions to zero-knowledge customer setup, secure credential/device recovery, reliable integration and disposable-host testing. De-monolithing is approved as **small tested refactors tied to ship-readiness**, tracked in issue #185, not a rewrite. No servers, users, containers, keys or release tags were changed as part of this documentation decision.

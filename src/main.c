@@ -207,6 +207,7 @@ static const char *CSS =
 "#music-player button.music-transport:checked {color:#c47d65;background:#39302b;border-color:#c47d65;}"
 "#music-player button#music-primary-play.music-transport {background:#ece8e0;color:#101111;border-radius:22px;min-height:42px;min-width:42px;}"
 "#music-player button#music-primary-play.music-transport:hover {background:#fff;}"
+"#music-player button#music-playing-like.music-transport,#music-player button#music-playing-add.music-transport {min-width:28px;min-height:28px;padding:2px;}"
 "button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
 "button.now-action label {color:#ece8e0;}"
 "button.now-action:hover,button.now-action:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"

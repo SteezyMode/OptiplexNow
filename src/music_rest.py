@@ -466,7 +466,7 @@ def _discover_rows(result: dict[str, Any], *,
     # "Because you listened to" is the most direct evidence-based shelf.
     because=result.get("because_you_listen_to",[])
     if isinstance(because,list):
-        for index,pick in enumerate(because[:8]):
+        for index,pick in enumerate(because[:2]):
             if not isinstance(pick,dict):
                 continue
             section=pick.get("section")
@@ -480,13 +480,27 @@ def _discover_rows(result: dict[str, Any], *,
                 if seed and len(seed)<=64:
                     section={**section,"title":"Because You Listen to "+seed}
             add_section(section,"because_you_listen_%d"%index)
+    # Reserve a fair slice for genuine user mixes before broad discovery can
+    # consume the 180-entry budget. Up to two mixes and two radio-based
+    # recommendation pools (radio here means album picks, not streaming).
+    personal_shelves={"top_picks","artists_you_might_like",
+                      "listeners_like_you","popular_in_your_genres"}
     for key in DISCOVER_SECTIONS:
-        add_section(result.get(key),key)
+        if key in personal_shelves:
+            add_section(result.get(key),key)
     for key in ("daily_mixes","radio_sections"):
         values=result.get(key,[])
         if isinstance(values,list):
-            for index,section in enumerate(values[:8]):
+            for index,section in enumerate(values[:2]):
+                if key=="radio_sections" and isinstance(section,dict):
+                    label=section.get("title")
+                    if isinstance(label,str) and label.startswith("Radio: "):
+                        # These are suggestions, NOT full audio streams yet.
+                        section={**section,"title":"Artist Picks: "+label[7:]}
                 add_section(section,"%s_%d"%(key,index))
+    for key in DISCOVER_SECTIONS:
+        if key not in personal_shelves:
+            add_section(result.get(key),key)
     return "\n".join(lines)+("\n" if lines else "")
 
 def main(argv=None) -> int:

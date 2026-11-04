@@ -98,6 +98,7 @@ static void music_card_queue_pump(MusicView *view);
 static void music_schedule_next_page(MusicView *view);
 static void music_show_search(MusicView *view,gboolean open);
 static gboolean music_status_tick(gpointer data);
+static void music_discover_show_landing(MusicView *view);
 
 static void wipe_free(char *value){
  if(!value)return;
@@ -1240,9 +1241,70 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  if(view && id)music_action_start(view,"playlist_options",NULL,button,id);
 }
 
+static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ const char *artist=g_object_get_data(G_OBJECT(button),"music-artist-query");
+ if(!view || view->closing || view->busy || !artist || !*artist)return;
+ view->discover_active=TRUE;
+ query_start(view,"catalog",artist,"Discover artist");
+}
+static void music_catalog_card(MusicView *view,const char *kind,
+                               const char *id,const char *title,
+                               const char *artist,const char *cover){
+ /* Compact image-led cards. Catalog covers come from the separate scoped
+  * bearer; local OpenSubsonic artwork is never used for unowned albums. */
+ GtkWidget *card=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_widget_set_name(card,"music-catalog-card");
+ gtk_container_set_border_width(GTK_CONTAINER(card),7);
+ gtk_widget_set_size_request(card,168,-1);
+ GtkWidget *art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
+ gtk_widget_set_size_request(art,148,148);
+ gtk_box_pack_start(GTK_BOX(card),art,FALSE,FALSE,0);
+ GtkWidget *name=gtk_label_new(title);
+ gtk_widget_set_name(name,"music-card-title");
+ gtk_label_set_xalign(GTK_LABEL(name),0);
+ gtk_label_set_line_wrap(GTK_LABEL(name),TRUE);
+ gtk_label_set_lines(GTK_LABEL(name),2);
+ gtk_label_set_ellipsize(GTK_LABEL(name),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_tooltip_text(name,title);
+ gtk_box_pack_start(GTK_BOX(card),name,FALSE,FALSE,0);
+ gboolean is_album=!g_strcmp0(kind,"catalog_album");
+ const char *status=artist?artist:"";
+ GtkWidget *subtitle=gtk_label_new(status);
+ gtk_widget_set_name(subtitle,"music-card-subtitle");
+ gtk_label_set_xalign(GTK_LABEL(subtitle),0);
+ gtk_label_set_ellipsize(GTK_LABEL(subtitle),PANGO_ELLIPSIZE_END);
+ gtk_box_pack_start(GTK_BOX(card),subtitle,FALSE,FALSE,0);
+ if(is_album){
+  GtkWidget *request=gtk_button_new_with_label("Add to Library");
+  gtk_widget_set_name(request,"music-discover-add");
+  gtk_style_context_add_class(gtk_widget_get_style_context(request),"now-action");
+  g_object_set_data_full(G_OBJECT(request),"music-request-mbid",g_strdup(id),g_free);
+  if(g_str_has_suffix(status," · Requested")){
+   gtk_button_set_label(GTK_BUTTON(request),"Requested");
+   gtk_widget_set_sensitive(request,FALSE);
+  }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
+  gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
+  g_hash_table_replace(view->album_buttons,g_strdup(id),request);
+ }else{
+  GtkWidget *explore=gtk_button_new_with_label("Explore artist");
+  gtk_widget_set_name(explore,"music-discover-explore");
+  gtk_style_context_add_class(gtk_widget_get_style_context(explore),"now-action");
+  g_object_set_data_full(G_OBJECT(explore),"music-artist-query",g_strdup(title),g_free);
+  g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
+  gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
+ }
+ gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
+ music_card_art_start(view,cover,art);
+}
+
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
+ if(view->grid_mode && g_str_has_prefix(kind,"catalog_")){
+  music_catalog_card(view,kind,id,title,artist,cover);
+  return;
+ }
  if(!g_strcmp0(kind,"album_meta")){
   if(view->hero_title && title && *title){
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);

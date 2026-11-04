@@ -9,8 +9,8 @@ on:
     branches:
       - main
     paths:
-      - 'docs/releases/v1.21.18.md'
       - 'docs/releases/v1.21.19.md'
+      - 'docs/releases/v1.21.18.md'
 
 permissions:
   contents: write

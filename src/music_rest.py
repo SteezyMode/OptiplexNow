@@ -227,7 +227,8 @@ def cover_bytes(base_url: str, cover_id: str, *, token: str) -> bytes:
 def _rows(results: dict[str,Any]) -> str:
     """Same five-column, base64-tabbed bounded transport as library rows."""
     rows=[]
-    for kind in ("artist","album"):
+    # Discover/catalog is album acquisition, not a dead-end artist button.
+    for kind in ("album",):
         entries=results.get(kind+"s",[])
         if not isinstance(entries,list):continue
         for item in entries[:100]:
@@ -420,14 +421,17 @@ def _discover_rows(result: dict[str, Any], *,
             if not isinstance(artist,str):artist=""
             # HomeArtist has no album metadata; HomeAlbum does. Follow the
             # section's explicit type first and never infer a song request.
+            # Artist-only records have no release-group MBID and cannot be
+            # requested by DroppedNeedle. Never offer inert "Explore artist".
+            # Only verified album-shaped suggestions appear in this UI.
             is_album=("album" in kind_hint or
                       (artist and "artist" not in kind_hint))
-            kind="catalog_album" if is_album else "catalog_artist"
+            if not is_album:
+                continue
+            kind="catalog_album"
             state="Requested" if candidate.get("requested") else "Not in library"
-            artist_key=_artist_name_key(title if kind=="catalog_artist" else artist)
+            artist_key=_artist_name_key(artist)
             artist_id=candidate.get("artist_mbid") or candidate.get("artist_musicbrainz_id")
-            if kind=="catalog_artist":
-                artist_id=mbid
             known=(artist_key in liked_names if artist_key else False) or (
                 isinstance(artist_id,str) and artist_id.lower() in liked_mbids)
             # A loved artist is a TASTE SIGNAL, not the definition of
@@ -437,7 +441,7 @@ def _discover_rows(result: dict[str, Any], *,
             relevant=bool(genres & liked_genres) and not known
             accepted.append((known,relevant,(kind,mbid,title[:512],
                              (artist+" · "+state)[:256],
-                             "dn-"+("album" if is_album else "artist")+":"+mbid)))
+                             "dn-album:"+mbid)))
             seen.add(mbid)
             total+=1
             if total>=180:break

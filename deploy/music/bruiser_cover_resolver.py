@@ -1,18 +1,16 @@
-"""Conservative, persistent cover resolution for MusicBrainz-ID-less local albums.
+"""Conservative, persistent fallback for verified album cover IDs and editions.
 
 This is an OptiPlex/Bruiser host-side compatibility fallback, NOT a tag writer.
 DroppedNeedle's native scanner uses UUIDv5 for local album identities while
 Cover Art Archive expects a genuine MusicBrainz release-group MBID. Looking
 up cover art by an unrelated UUIDv5 cannot succeed remotely.
 
-The normal local-art and genuine MBID paths retain priority.
-MusicBrainz release groups may be UUIDv3 (historical) or UUIDv4; the first
-version of this resolver incorrectly rejected genuine UUIDv3 matches. The v2
-cache namespace bypasses stale negative decisions created by that error. When those miss,
-a candidate may be accepted only when both artist and album title normalize
-exactly, the release year agrees (when known), and a unique MB release-group
-identity is returned. All decisions are persisted in the existing /app/cache
-Docker volume; no audio files or library records are modified.
+The normal local-art, native AudioDB, and release-group cover paths
+retain priority. Existing v2 only helped synthetic UUIDv5 albums; when a
+genuine MusicBrainz release-group had no representative front cover, v2 did
+nothing. v3 also examines a bounded number of verified official *editions*
+in the SAME release group, whose front art may be available independently.
+No fuzzy cover assignment, new media downloads, credentials or tag edits.
 """
 
 from __future__ import annotations
@@ -28,12 +26,14 @@ import time
 import unicodedata
 import uuid
 
-CACHE_ROOT = Path("/app/cache/bruiser-cover-mappings-v2")
-CACHE_VERSION = 2
+CACHE_ROOT = Path("/app/cache/bruiser-cover-mappings-v3")
+CACHE_VERSION = 3
 POSITIVE_TTL = 30 * 86400
 NEGATIVE_TTL = 30 * 60
 SEARCH_TIMEOUT_SECONDS = 10
-IMAGE_TIMEOUT_SECONDS = 15
+IMAGE_TIMEOUT_SECONDS = 12
+EDITION_TIMEOUT_SECONDS = 13
+MAX_EDITION_ATTEMPTS = 3
 MAX_CACHE_BYTES = 2048
 # Successful images are cached independently in native CoverArtRepository.
 MAX_CONCURRENT_LOOKUPS = 2
@@ -171,70 +171,137 @@ def _write_cache(path: Path, mbid: str | None) -> None:
         return
 
 
+def official_edition_ids(details: object, group_id: str) -> list[str]:
+    """Return up to three independently flagged front-cover editions.
+
+    An edition must originate from the exact requested group metadata. We
+    never search another artist or substitute an unrelated album. Prefer
+    releases which explicitly advertise front art and are not bootlegs.
+    """
+    if not isinstance(details,dict) or not isinstance(details.get("releases"),list):
+        return []
+    metadata_id=details.get("id")
+    if metadata_id and str(metadata_id).lower()!=group_id.lower():
+        return []
+    front=[]
+    unknown=[]
+    seen=set()
+    for release in details["releases"][:100]:
+        if not isinstance(release,dict):
+            continue
+        release_id=release.get("id")
+        if not _valid_rg(release_id) or release_id.lower() in seen:
+            continue
+        seen.add(release_id.lower())
+        status=release.get("status")
+        if status not in ("Official",None,""):
+            continue
+        flag=release.get("cover-art-archive")
+        if isinstance(flag,dict):
+            if flag.get("front") is True:
+                front.append(release_id.lower())
+            # Explicitly no front art is NOT a fallback candidate.
+        else:
+            unknown.append(release_id.lower())
+    return (front+unknown)[:MAX_EDITION_ATTEMPTS]
+
+
+async def _edition_cover(
+    group_id: str, coverart: object, size: str, is_disconnected: object,
+) -> tuple[bytes, str, str] | None:
+    """Use native cached CoverArtRepository methods; never fetch arbitrary URL."""
+    from core.dependencies.repo_providers import get_musicbrainz_repository
+    from infrastructure.queue.priority_queue import RequestPriority
+
+    repository=get_musicbrainz_repository()
+    details=await repository.get_release_group_by_id(
+        group_id, includes=["releases"], priority=RequestPriority.IMAGE_FETCH
+    )
+    for edition in official_edition_ids(details,group_id):
+        result=await coverart.get_release_cover(
+            edition,size,is_disconnected=is_disconnected,
+        )
+        if result is not None:
+            return result
+    return None
+
+
 async def missing_album_cover(
     album: object, local_id: str, coverart: object, size: str,
     is_disconnected: object = None,
 ) -> tuple[bytes, str, str] | None:
-    """Resolve a single known-library, synthetic-ID album only on cover miss.
+    """Resolve only an authenticated album whose native cover fetch missed.
 
-    No background crawler, tag rewriting, downloading audio, or invented MBID.
-    MusicBrainz requests use DroppedNeedle's existing bounded repository.
+    For synthetic UUIDv5, first map conservatively to a verified MusicBrainz
+    release group. For an actual v3/v4 ID, avoid a redundant search and look
+    for art on other official editions of that same release group.
     """
-    if not synthetic_album_id(local_id):
+    synthetic=synthetic_album_id(local_id)
+    genuine=_valid_rg(local_id)
+    if not synthetic and not genuine:
         return None
 
-    title = _attr(album, "title")
-    artist = _attr(album, "artist_name")
-    year = _year(_attr(album, "year")) or _year(
-        _attr(album, "original_release_date")
-    )
-    if not isinstance(title, str) or not isinstance(artist, str):
+    title=_attr(album,"title")
+    artist=_attr(album,"artist_name")
+    year=_year(_attr(album,"year")) or _year(_attr(album,"original_release_date"))
+    if not isinstance(title,str) or not isinstance(artist,str):
         return None
     if not _normalize(title) or not _normalize(artist):
         return None
 
-    path = _cache_path(local_id, title, artist, year)
+    path=_cache_path(local_id,title,artist,year)
     async with _sem():
-        # A projected canonical ID is authoritative; UUIDv5 is never.
-        projected = _attr(album, "musicbrainz_release_group_id")
-        if _valid_rg(projected):
-            mbid = projected.lower()
-            found = True
+        # The source album itself is authoritative if it has a genuine ID.
+        if genuine:
+            mbid=local_id.lower()
         else:
-            found, mbid = await asyncio.to_thread(_read_cache, path)
-        if found and not mbid:
-            return None
-        if not found:
-            try:
-                # Resolve lazily, and never bypass the existing provider rate
-                # limits, circuit breaker or MusicBrainz caches.
-                from core.dependencies.repo_providers import get_musicbrainz_repository
-                from infrastructure.queue.priority_queue import RequestPriority
-
-                repository = get_musicbrainz_repository()
-                candidates = await asyncio.wait_for(
-                    repository.search_release_groups(
-                        artist, title, limit=15, include_all_types=True,
-                        priority=RequestPriority.IMAGE_FETCH,
-                    ), timeout=SEARCH_TIMEOUT_SECONDS
-                )
-                mbid = pick_verified_release_group(candidates, title, artist, year)
-                # A blank repository response can also be an upstream outage:
-                # never poison the persistent mapping cache on empty search.
-                if candidates:
-                    await asyncio.to_thread(_write_cache, path, mbid)
-            except Exception:
-                # A provider outage is not proof no cover exists: do NOT
-                # record a negative cache entry.
+            projected=_attr(album,"musicbrainz_release_group_id")
+            if _valid_rg(projected):
+                mbid=projected.lower()
+                found=True
+            else:
+                found,mbid=await asyncio.to_thread(_read_cache,path)
+            if found and not mbid:
                 return None
+            if not found:
+                try:
+                    from core.dependencies.repo_providers import get_musicbrainz_repository
+                    from infrastructure.queue.priority_queue import RequestPriority
+                    repository=get_musicbrainz_repository()
+                    candidates=await asyncio.wait_for(
+                        repository.search_release_groups(
+                            artist,title,limit=15,include_all_types=True,
+                            priority=RequestPriority.IMAGE_FETCH,
+                        ),timeout=SEARCH_TIMEOUT_SECONDS,
+                    )
+                    mbid=pick_verified_release_group(candidates,title,artist,year)
+                    if candidates:
+                        await asyncio.to_thread(_write_cache,path,mbid)
+                except Exception:
+                    return None
         if not mbid:
             return None
+        if synthetic:
+            # Native CoverArtRepository was already tried using the synthetic
+            # local UUID, never the genuine MBID. Try that mapped MBID first.
+            try:
+                result=await asyncio.wait_for(
+                    coverart.get_release_group_cover(
+                        mbid,size,is_disconnected=is_disconnected
+                    ),timeout=IMAGE_TIMEOUT_SECONDS,
+                )
+                if result is not None:
+                    return result
+            except Exception:
+                pass
+
+        # A release-group cover may be absent while another official edition
+        # has front artwork. This is especially common on older MusicBrainz
+        # entries, including some UUIDv3 release-group IDs.
         try:
-            result = await asyncio.wait_for(
-                coverart.get_release_group_cover(
-                    mbid, size, is_disconnected=is_disconnected
-                ), timeout=IMAGE_TIMEOUT_SECONDS
+            return await asyncio.wait_for(
+                _edition_cover(mbid,coverart,size,is_disconnected),
+                timeout=EDITION_TIMEOUT_SECONDS,
             )
-            return result
         except Exception:
             return None

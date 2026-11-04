@@ -37,14 +37,14 @@ def discovery():
 
 
 class DiscoverFavoritesTests(unittest.TestCase):
-    def test_liked_song_artist_reorders_existing_candidates_within_section(self):
+    def test_artist_likes_do_not_turn_new_releases_into_an_echo_chamber(self):
         favorites=rest._favorite_artist_signals({"song":[
             {"id":"private-1","artist":"Stereolab","title":"Favorite"}]})
         self.assertIn("stereolab",favorites[0])
         original=rows(rest._discover_rows(discovery()))
         ranked=rows(rest._discover_rows(discovery(),favorite_artists=favorites))
         self.assertEqual([x[1] for x in original[1:]],[A,B,C])
-        self.assertEqual([x[1] for x in ranked[1:]],[B,A,C])
+        self.assertEqual([x[1] for x in ranked[1:]],[A,B,C])
         self.assertEqual(ranked[0],original[0])
         self.assertEqual(set(x[1] for x in ranked[1:]),{A,B,C})
 
@@ -68,7 +68,7 @@ class DiscoverFavoritesTests(unittest.TestCase):
             {"name":"New Music","mbid":A},
             {"name":"Some Artist","mbid":ARTIST}]}}
         result=rows(rest._discover_rows(discover,favorite_artists=favorites))
-        self.assertEqual([x[1] for x in result[1:]],[ARTIST,A])
+        self.assertEqual([x[1] for x in result[1:]],[A,ARTIST])
 
     def test_unknown_fields_and_oversized_favorites_are_bounded(self):
         fake=[{"artist":"NOISE"}]*800
@@ -87,11 +87,60 @@ class DiscoverFavoritesTests(unittest.TestCase):
              contextlib.redirect_stdout(captured):
             rc=sub.main([BASE,"discover","--format=rows","--auth-format=form"])
         self.assertEqual(rc,0)
-        self.assertEqual([x[1] for x in rows(captured.getvalue())[1:]],[B,A,C])
+        self.assertEqual([x[1] for x in rows(captured.getvalue())[1:]],[A,B,C])
         auth.assert_called_once_with("form",optional=True)
         query.assert_called_once_with(BASE,"getStarred2",{"apiKey":"one-user-app-pass"})
         get_session.assert_called_once_with(BASE)
         request.assert_called_once_with(BASE,"discover",token="existing-bearer")
+
+    def test_new_genre_matched_artist_moves_ahead_of_existing_favorites(self):
+        data={"artists_you_might_like":{"type":"artists","items":[
+            {"name":"Stereolab","mbid":ARTIST,"genres":["Indie Rock"]},
+            {"name":"Random","mbid":A,"genre":"ambient"},
+            {"name":"Fresh Artist","mbid":B,"genres":[{"name":"Indie Rock"}]},
+        ]}}
+        liked={"song":[{"artist":"Stereolab","genre":"Indie Rock"}]}
+        artists=rest._favorite_artist_signals(liked)
+        genres=rest._favorite_genre_signals(liked)
+        self.assertEqual(genres,{"indie rock"})
+        ranked=rows(rest._discover_rows(data,favorite_artists=artists,
+                                        favorite_genres=genres))
+        self.assertEqual([x[1] for x in ranked[1:]],[B,A,ARTIST])
+
+    def test_unliking_removes_influence_on_next_discover(self):
+        dataset={"popular_in_your_genres":{"type":"artists","items":[
+            {"name":"Random","mbid":A,"genre":"ambient"},
+            {"name":"New Artist","mbid":B,"genre":"Indie Rock"},
+        ]}}
+        liked={"album":[{"artist":"Stereolab","genre":"Indie Rock"}]}
+        ranked=rest._discover_rows(dataset,
+               favorite_artists=rest._favorite_artist_signals(liked),
+               favorite_genres=rest._favorite_genre_signals(liked))
+        unliked=rest._discover_rows(dataset,
+               favorite_artists=rest._favorite_artist_signals({}),
+               favorite_genres=rest._favorite_genre_signals({}))
+        self.assertEqual([x[1] for x in rows(ranked)[1:]],[B,A])
+        self.assertEqual([x[1] for x in rows(unliked)[1:]],[A,B])
+
+    def test_no_genre_metadata_means_no_invented_similarity(self):
+        liked={"song":[{"artist":"Stereolab","genre":"Indie Rock"}]}
+        discovered=discovery()  # No explicit genre fields at all
+        self.assertEqual(rest._discover_rows(discovered),
+                         rest._discover_rows(discovered,
+                          favorite_artists=rest._favorite_artist_signals(liked),
+                          favorite_genres=rest._favorite_genre_signals(liked)))
+
+    def test_followed_and_rediscover_sections_preserve_upstream_order(self):
+        candidate={"type":"artists","items":[
+            {"name":"Other","mbid":A,"genre":"ambient"},
+            {"name":"Favorite","mbid":B,"genre":"Indie Rock"}]}
+        data={"new_from_followed":candidate,
+              "rediscover":candidate}
+        liked={"song":[{"artist":"Favorite","genre":"Indie Rock"}]}
+        self.assertEqual(rest._discover_rows(data),
+                         rest._discover_rows(data,
+                          favorite_artists=rest._favorite_artist_signals(liked),
+                          favorite_genres=rest._favorite_genre_signals(liked)))
 
     def test_no_app_password_is_normal_unpersonalized_discover(self):
         captured=io.StringIO()

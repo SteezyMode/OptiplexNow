@@ -481,6 +481,11 @@ def main(argv: list[str] | None = None) -> int:
                 rows = retained_discover_rows(args.base_url,token,result,
                                              favorite_artists=favorites,
                                              favorite_genres=genres)
+                if not rows.strip() and result.get("refreshing") is True:
+                    status_fields=("section","__refreshing",
+                                   "Recommendations are updating","","")
+                    rows="\t".join(base64.b64encode(field.encode()).decode()
+                                     for field in status_fields)+"\n"
             if args.format == "rows":
                 sys.stdout.write(rows)
             else:

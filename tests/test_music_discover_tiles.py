@@ -61,9 +61,9 @@ class DiscoverTileTests(unittest.TestCase):
         labels=[r[2] for r in data_rows if r[0]=="section"]
         self.assertIn("Daily Mix 1 - Hip-Hop",labels)
         self.assertIn("Artist Picks: Circa Survive",labels)
-        self.assertIn("Globally Trending",labels)
+        self.assertIn("Charts",labels)
         self.assertLess(labels.index("Daily Mix 1 - Hip-Hop"),
-                        labels.index("Globally Trending"))
+                        labels.index("Charts"))
         self.assertFalse(any(x.startswith("Radio: ") for x in labels))
         self.assertEqual(sum(x.startswith("Because You Listen") for x in labels),2)
 

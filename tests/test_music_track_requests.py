@@ -66,7 +66,7 @@ class TrackRequestTests(unittest.TestCase):
         for value in ("", "not-a-uuid|Artist|Song|Album|"+A,
                       encoded(R,"","Song","Album",A),
                       encoded(R,"Artist","Song","Album","wrong"),
-                      encoded(R,"Artist","bad\\nname","Album",A),
+                      encoded(R,"Artist","bad\nname","Album",A),
                       encoded(R,"Artist","Song")):
             with self.subTest(value=value),self.assertRaises(rest.MusicRESTError):
                 rest.request(BASE,"request_track",token=TOKEN,value=value)

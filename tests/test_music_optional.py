@@ -28,7 +28,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('else if(n==2)on_music_tab(NULL,NULL);', MAIN)
         self.assertIn('on_music_tab(GtkWidget*w,gpointer data)', MAIN)
         self.assertIn('now_nav_show_page(main_pages,"music");', MAIN)
-        self.assertIn('query_start(view,"home",NULL,"Music Home");', UI_MUSIC)
+        self.assertIn('query_start(view,"discover",NULL,"Discover");', UI_MUSIC)
         self.assertIn('view->open_url(cfg[6])', UI_MUSIC)
         self.assertIn('wipe_free(view->app_password);', UI_MUSIC)
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)
@@ -62,9 +62,11 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("music_keyring.py", package)
 
     def test_standard_music_navigation_and_advanced_are_separate(self):
-        # A compact rail with Home and Discover; Library expands its filters.
-        self.assertIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
+        # Music opens on useful Discover content. The empty Home entry is
+        # absent; the complete Library and settings remain accessible.
+        self.assertNotIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
         self.assertIn('GtkWidget *discover_button=music_button("Discover")', UI_MUSIC)
+        self.assertIn('music_nav_selected(view,discover_button);', UI_MUSIC)
         self.assertIn('gtk_label_new("Your Library")', UI_MUSIC)
         self.assertIn('G_CALLBACK(music_library_clicked)', UI_MUSIC)
         self.assertIn('GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN', UI_MUSIC)
@@ -82,6 +84,24 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("Your Library", contract)
         self.assertIn("Downloads", contract)
         self.assertIn("contextual", contract.lower())
+
+    def test_private_alpha_starts_in_discover_without_dead_home(self):
+        # A previously approved device must enter Discover after keyring
+        # lookup. Do not start a legacy library snapshot or fake a Home page.
+        self.assertIn('query_start(view,"discover",NULL,"Discover");', UI_MUSIC)
+        self.assertIn('view->discover_active=TRUE;', UI_MUSIC)
+        self.assertIn('view->heading=gtk_label_new("Discover");', UI_MUSIC)
+        self.assertIn('music_nav_selected(view,discover_button);', UI_MUSIC)
+        self.assertNotIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
+        self.assertIn('g_object_set_data(G_OBJECT(discover_button),"music-operation",(gpointer)"discover")', UI_MUSIC)
+        self.assertIn('GtkWidget *library_button=gtk_button_new();', UI_MUSIC)
+        self.assertIn('gtk_label_new("Your Library")', UI_MUSIC)
+        self.assertIn('query_start(view,"songs",NULL,"All songs");', UI_MUSIC)
+        self.assertIn('query_start(view,"catalog",value,"Discover results");', UI_MUSIC)
+        self.assertIn('!g_strcmp0(job->operation,"discover") || partial?', UI_MUSIC)
+        # Preserve click-based acquisition authorization and no automatic
+        # requests merely because a recommendation is displayed.
+        self.assertIn('g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);',UI_MUSIC)
 
     def test_real_music_feeds_and_private_cover_art_in_ui(self):
         transport = (ROOT / "src/music_subsonic.py").read_text(encoding="utf-8")
@@ -237,7 +257,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"updatePlaylist"', transport)
         self.assertIn('"createPlaylist"', transport)
         self.assertIn('SONG_PAGE_SIZE = 200', transport)
-        self.assertIn('g_object_set_data(G_OBJECT(home_button),"music-heading",(gpointer)"Music Home")', UI_MUSIC)
+        self.assertIn('g_object_set_data(G_OBJECT(discover_button),"music-heading",(gpointer)"Discover")', UI_MUSIC)
         self.assertIn('"#music-library #music-row-title', MAIN)
         self.assertIn('"#music-sidebar button#music-library-root', MAIN)
         self.assertIn('"#music-player button.music-transport', MAIN)

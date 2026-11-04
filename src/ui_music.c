@@ -2072,7 +2072,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     * the destination only; publish the actual total after the last page. */
    gboolean partial=(!g_strcmp0(job->operation,"songs") && view->song_has_more) ||
                     (!g_strcmp0(job->operation,"albums") && view->album_has_more);
-   char *heading=view->home_active || partial?g_strdup(job->heading):
+   char *heading=view->home_active ||
+       !g_strcmp0(job->operation,"discover") || partial?
+       g_strdup(job->heading):
        g_strdup_printf("%s · %d %s",job->heading,displayed,noun);
    gtk_label_set_text(GTK_LABEL(view->heading),heading);
    g_free(heading);
@@ -2393,7 +2395,9 @@ static void vault_complete(GObject *unused,GAsyncResult *result,gpointer data){
      g_free(view->bound_url);
      view->bound_url=g_strdup(job->url);
      gtk_revealer_set_reveal_child(GTK_REVEALER(view->connect_panel),FALSE);
-     query_start(view,"home",NULL,"Music Home");
+     /* Discover is the default Music destination after device approval. */
+     view->discover_active=TRUE;
+     query_start(view,"discover",NULL,"Discover");
     }else{
      wipe_free(key);wipe_free(username);
      if(exit_code==3 && !view->auto_enroll_attempted &&
@@ -2537,7 +2541,7 @@ static void music_nav(GtkWidget *button,gpointer data){
  if(operation){
   if(!g_strcmp0(operation,"discover"))
    view->discover_retry_count=0;
-  if(!g_strcmp0(operation,"home") || !g_strcmp0(operation,"discover"))
+  if(!g_strcmp0(operation,"discover"))
    music_library_expand(view,FALSE);
   music_nav_selected(view,button);
   view->hero_art_serial++;
@@ -2787,17 +2791,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *sidebar=gtk_box_new(GTK_ORIENTATION_VERTICAL,3);
  gtk_widget_set_name(sidebar,"music-sidebar");
  gtk_widget_set_size_request(sidebar,162,-1);
- /* Deliberately sparse: two primary destinations and one expandable
-  * collection. Search lives in the content toolbar, not duplicated here. */
- GtkWidget *home_button=music_button("Home");
- music_align_nav_label(home_button);
- gtk_widget_set_name(home_button,"music-nav");
- g_object_set_data(G_OBJECT(home_button),"music-operation",(gpointer)"home");
- g_object_set_data(G_OBJECT(home_button),"music-heading",(gpointer)"Music Home");
- g_signal_connect(home_button,"clicked",G_CALLBACK(music_nav),view);
- gtk_box_pack_start(GTK_BOX(sidebar),home_button,FALSE,FALSE,0);
- music_nav_selected(view,home_button);
-
+ /* Discover is the single top-level Music destination. An empty Home
+  * would be a dead end; the Library remains fully accessible below. */
  GtkWidget *discover_button=music_button("Discover");
  music_align_nav_label(discover_button);
  gtk_widget_set_name(discover_button,"music-nav");
@@ -2805,6 +2800,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_object_set_data(G_OBJECT(discover_button),"music-heading",(gpointer)"Discover");
  g_signal_connect(discover_button,"clicked",G_CALLBACK(music_nav),view);
  gtk_box_pack_start(GTK_BOX(sidebar),discover_button,FALSE,FALSE,0);
+ music_nav_selected(view,discover_button);
 
  GtkWidget *library_button=gtk_button_new();
  view->library_button=library_button;
@@ -2847,8 +2843,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_container_add(GTK_CONTAINER(view->library_revealer),filters);
  gtk_box_pack_start(GTK_BOX(sidebar),view->library_revealer,FALSE,FALSE,0);
  music_library_expand(view,FALSE);
- /* The sidebar owns its scrolling, so nine nav actions must not
-  * enlarge a 640x500 client or the still-hidden Dashboard stack. */
+ /* The sidebar owns its scrolling, so compact-window clients retain
+  * room for the Music content and the still-hidden Dashboard stack. */
  GtkWidget *sidebar_scroll=gtk_scrolled_window_new(NULL,NULL);
  gtk_widget_set_name(sidebar_scroll,"music-sidebar-scroll");
  gtk_widget_set_hexpand(sidebar_scroll,FALSE);
@@ -2892,7 +2888,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_hexpand(view->header_stack,TRUE);
  gtk_box_pack_start(GTK_BOX(header_row),view->header_stack,TRUE,TRUE,0);
  GtkWidget *browse_header=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
- view->heading=gtk_label_new("Music Home");
+ view->heading=gtk_label_new("Discover");
  gtk_widget_set_name(view->heading,"music-section-title");
  gtk_label_set_xalign(GTK_LABEL(view->heading),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->heading),PANGO_ELLIPSIZE_END);

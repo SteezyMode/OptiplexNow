@@ -1278,7 +1278,7 @@ static void music_catalog_card(MusicView *view,const char *kind,
  for(const char *suffixes[]={" · Not in library"," · Requested",NULL},**s=suffixes;
      *s;s++){
   if(g_str_has_suffix(display_artist,*s)){
-   display_artist[strlen(display_artist)-strlen(*s)]='\\0';
+   display_artist[strlen(display_artist)-strlen(*s)]='\0';
    break;
   }
  }

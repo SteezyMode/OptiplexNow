@@ -46,6 +46,7 @@
 #include "backup_async.h"
 #include "tray_prefs.h"
 #include "tray_actions.h"
+#include "tray_menu_lifetime.h"
 #include "moonlight_install.h"
 #include "instance_lock.h"
 #include <gtk/gtk.h>
@@ -3058,7 +3059,10 @@ static void music_tray_changed(void){
 }
 static void tray_build_menu(void){
  GtkWidget*old=tray_menu;
- tray_menu=gtk_menu_new();
+ /* Own a strong reference independently of AppIndicator. Replacing the
+  * indicator's menu releases its old reference synchronously; without an
+  * application ref, destroying old below may dereference freed GTK memory. */
+ tray_menu=now_tray_menu_owned_new();
  tray_menu_item("Open OptiPlex Now",NOW_TRAY_OPEN_WINDOW);
  unsigned mask=tray_button_mask();
  if(mask){
@@ -3115,7 +3119,7 @@ static void tray_build_menu(void){
  }
  gtk_widget_show_all(tray_menu);
  if(app_indicator && app_indicator_set_menu_fn)app_indicator_set_menu_fn(app_indicator,tray_menu);
- if(old)gtk_widget_destroy(old);
+ now_tray_menu_owned_destroy(old);
 }
 static void tray_initialize(void){
  tray_build_menu();

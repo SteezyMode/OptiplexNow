@@ -293,8 +293,38 @@ def _favorite_artist_signals(starred: object) -> tuple[set[str],set[str]]:
     return names,mbids
 
 
+def _genre_names(value: object) -> set[str]:
+    """Read only explicit, bounded genre labels; never guess from an artist."""
+    if isinstance(value,str):
+        candidates=[value]
+    elif isinstance(value,list):
+        candidates=[x if isinstance(x,str) else x.get("name") or x.get("value")
+                    if isinstance(x,dict) else None for x in value[:20]]
+    else:
+        return set()
+    return {label for entry in candidates
+            if (label:=_artist_name_key(entry))}
+
+
+def _favorite_genre_signals(starred: object) -> set[str]:
+    """Explicit genres from THIS user's liked songs/albums, never server-wide."""
+    if not isinstance(starred,dict):
+        return set()
+    genres:set[str]=set()
+    for kind in ("song","album"):
+        entries=starred.get(kind,[])
+        if not isinstance(entries,list):
+            continue
+        for item in entries[:400]:
+            if isinstance(item,dict):
+                genres.update(_genre_names(item.get("genre")))
+                genres.update(_genre_names(item.get("genres")))
+    return genres
+
+
 def _discover_rows(result: dict[str, Any], *,
-                   favorite_artists: tuple[set[str],set[str]] | None = None) -> str:
+                   favorite_artists: tuple[set[str],set[str]] | None = None,
+                   favorite_genres: set[str] | None = None) -> str:
     """Flatten only DroppedNeedle's known discovery sections into safe rows.
 
     Section boundaries are preserved for the native GTK screen. DroppedNeedle
@@ -306,6 +336,7 @@ def _discover_rows(result: dict[str, Any], *,
     seen=set()
     total=0
     liked_names,liked_mbids=favorite_artists or (set(),set())
+    liked_genres=favorite_genres or set()
 
     def add_section(section: object, key: str):
         nonlocal total
@@ -337,9 +368,14 @@ def _discover_rows(result: dict[str, Any], *,
             artist_id=item.get("artist_mbid") or item.get("artist_musicbrainz_id")
             if kind=="catalog_artist":
                 artist_id=mbid
-            match=(artist_key in liked_names if artist_key else False) or (
+            known=(artist_key in liked_names if artist_key else False) or (
                 isinstance(artist_id,str) and artist_id.lower() in liked_mbids)
-            accepted.append((bool(match),(kind,mbid,title[:512],
+            # A loved artist is a TASTE SIGNAL, not the definition of
+            # discovery. Favor unseen artists with explicit shared genres.
+            # Do not invent genre similarity when the API has no genre data.
+            genres=_genre_names(item.get("genre")) | _genre_names(item.get("genres"))
+            relevant=bool(genres & liked_genres) and not known
+            accepted.append((known,relevant,(kind,mbid,title[:512],
                              (artist+" · "+state)[:256],"")))
             seen.add(mbid)
             total+=1
@@ -349,11 +385,19 @@ def _discover_rows(result: dict[str, Any], *,
         heading=section.get("title")
         if not isinstance(heading,str) or not heading.strip():
             heading=key.replace("_"," ").title()
-        # Stable, section-local preference ranking. An empty preference
-        # collection produces identical row order to upstream Discover.
-        accepted.sort(key=lambda entry:not entry[0])
+        # Keep DroppedNeedle's candidate sections and preserve upstream order
+        # within equal tiers. New-artist sections never boost an already-liked
+        # artist. The rediscovery/followed sections retain their own ordering.
+        novelty_sections={"artists_you_might_like","listeners_like_you",
+                          "unexplored_genres","popular_in_your_genres",
+                          "top_picks"}
+        if key in novelty_sections and (liked_names or liked_mbids or liked_genres):
+            accepted.sort(key=lambda entry:(entry[0],not entry[1]))
+        elif liked_genres and key not in ("rediscover","new_from_followed"):
+            # A small taste hint for a new artist, not a same-artist loop.
+            accepted.sort(key=lambda entry:not entry[1])
         rows=[("section",key,heading[:96],"","")]
-        rows.extend(fields for _,fields in accepted)
+        rows.extend(fields for _,_,fields in accepted)
         for fields in rows:
             lines.append("\t".join(base64.b64encode(x.encode()).decode()
                                    for x in fields))

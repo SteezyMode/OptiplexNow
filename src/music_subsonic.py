@@ -233,8 +233,9 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
         found = [("song", x) for x in items(result.get("songs"))]
     elif operation == "liked":
         saved = result.get("starred") or {}
-        found = [(kind, item) for kind in ("album", "song", "artist")
-                 for item in items(saved.get(kind))][:1000]
+        # The Liked songs view contains tracks only; starring an album or
+        # artist never implicitly likes its songs or adds an album tile here.
+        found = [("song", item) for item in items(saved.get("song"))]
     elif operation == "artists":
         found = [("artist", artist) for index in items(result.get("indexes"))
                  for artist in items(index.get("artist"))][:1000]

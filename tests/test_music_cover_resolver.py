@@ -78,14 +78,28 @@ class CoverResolverPolicyTests(unittest.TestCase):
             [release(MB1,"Blue Sky Noise","Circa Survive",2010),
              release(MB2,"Blue Sky Noise","Circa Survive",2010)],
             [release(MB1,"Blue Sky Noise","Different Artist",2010)],
-            [release(MB1,"Blue Sky Noise","Circa Survive",2017)],
-            [release(MB1,"Blue Sky Noise","Circa Survive",None)],
             [release(SYN,"Blue Sky Noise","Circa Survive",2010)],
             [],
         ):
             with self.subTest(candidates=candidates):
                 self.assertIsNone(resolver.pick_verified_release_group(
                     candidates,"Blue Sky Noise","Circa Survive",2010))
+
+    def test_unique_exact_match_allows_reissue_year_but_never_ambiguous_cover(self):
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(MB1,"Deja Entendu","Brand New",2003)],
+            "Deja Entendu","Brand New",2015),MB1)
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(MB1,"Deja Entendu","Brand New",None)],
+            "Deja Entendu","Brand New",2015),MB1)
+        self.assertIsNone(resolver.pick_verified_release_group(
+            [release(MB1,"Deja Entendu","Brand New",2003),
+             release(MB2,"Deja Entendu","Brand New",2010)],
+            "Deja Entendu","Brand New",2015))
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(MB1,"Deja Entendu","Brand New",2003),
+             release(MB2,"Deja Entendu","Brand New",2015)],
+            "Deja Entendu","Brand New",2015),MB2)
 
     def test_persistent_mapping_is_keyed_by_local_identity_metadata(self):
         with tempfile.TemporaryDirectory() as folder:

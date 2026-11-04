@@ -1545,6 +1545,178 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  return count;
 }
 
+/* Discover landing is deliberately a small set of click-through shelves, not
+ * a vertical dump of the upstream 13+ recommendation sections. Actual items
+ * are cached only for this view and remain suggestion-only until Add is clicked. */
+enum { DISC_FOR_YOU, DISC_NEW_ARTISTS, DISC_FRESH, DISC_GENRES,
+       DISC_EXPLORE, DISC_TRENDING, DISC_GROUPS };
+static const char *const discover_names[DISC_GROUPS]={
+ "For You","New Artists","Fresh Releases","Your Genres","Explore","Trending"
+};
+static const char *const discover_descriptions[DISC_GROUPS]={
+ "Based on your listening","Artists worth discovering","New and noteworthy",
+ "Beyond your usual genres","Something different","Popular elsewhere"
+};
+static const char *const discover_styles[DISC_GROUPS]={
+ "music-discover-personal","music-discover-artists",
+ "music-discover-fresh","music-discover-genres",
+ "music-discover-explore","music-discover-trending"
+};
+
+static int music_discover_group_for(const char *key){
+ if(!key)return DISC_EXPLORE;
+ if(g_str_has_prefix(key,"because_you_listen_") ||
+    !g_strcmp0(key,"top_picks") ||
+    !g_strcmp0(key,"listeners_like_you") ||
+    !g_strcmp0(key,"new_from_followed") ||
+    !g_strcmp0(key,"rediscover"))return DISC_FOR_YOU;
+ if(!g_strcmp0(key,"artists_you_might_like"))return DISC_NEW_ARTISTS;
+ if(!g_strcmp0(key,"fresh_releases") ||
+    !g_strcmp0(key,"missing_essentials") ||
+    !g_strcmp0(key,"anniversaries"))return DISC_FRESH;
+ if(!g_strcmp0(key,"popular_in_your_genres") ||
+    !g_strcmp0(key,"unexplored_genres") ||
+    g_str_has_prefix(key,"daily_mixes_") ||
+    g_str_has_prefix(key,"radio_sections_"))return DISC_GENRES;
+ if(!g_strcmp0(key,"globally_trending") ||
+    !g_strcmp0(key,"lastfm_weekly_artist_chart") ||
+    !g_strcmp0(key,"lastfm_weekly_album_chart"))return DISC_TRENDING;
+ return DISC_EXPLORE;
+}
+
+static void music_discover_show_category(MusicView *view,int group){
+ if(!view || view->closing || view->busy || group<0 || group>=DISC_GROUPS)return;
+ view->discover_active=TRUE;
+ view->discover_category=group;
+ view->grid_mode=TRUE;
+ render_rows(view,"",FALSE);
+ for(guint i=0;i<view->discover_entries->len;i++){
+  MusicDiscoverEntry *entry=g_ptr_array_index(view->discover_entries,i);
+  if(entry->category!=group)continue;
+  music_add_item(view,entry->kind,entry->id,entry->title,
+                 entry->artist,entry->cover,"",FALSE);
+ }
+ gtk_label_set_text(GTK_LABEL(view->heading),discover_names[group]);
+ if(view->discover_back)gtk_widget_show(view->discover_back);
+ music_show_search(view,FALSE);
+ gtk_widget_show_all(view->cards);
+ gtk_widget_show(view->cards_scroll);
+ gtk_widget_hide(view->list_scroll);
+ music_card_queue_pump(view);
+}
+static void music_discover_tile_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ int group=GPOINTER_TO_INT(
+     g_object_get_data(G_OBJECT(button),"music-discover-group"))-1;
+ music_discover_show_category(view,group);
+}
+
+static void music_discover_show_landing(MusicView *view){
+ if(!view || view->closing || view->busy)return;
+ view->discover_active=TRUE;
+ view->discover_category=-1;
+ view->grid_mode=TRUE;
+ render_rows(view,"",FALSE);
+ for(int group=0;group<DISC_GROUPS;group++){
+  guint count=0;
+  const char *cover=NULL;
+  for(guint i=0;i<view->discover_entries->len;i++){
+   MusicDiscoverEntry *entry=g_ptr_array_index(view->discover_entries,i);
+   if(entry->category!=group)continue;
+   count++;
+   if(!cover && entry->cover && *entry->cover)cover=entry->cover;
+  }
+  /* Empty categories disappear rather than becoming dead decorative tiles. */
+  if(!count)continue;
+  GtkWidget *button=gtk_button_new();
+  gtk_widget_set_name(button,"music-discover-tile");
+  GtkStyleContext *style=gtk_widget_get_style_context(button);
+  gtk_style_context_add_class(style,"now-action");
+  gtk_style_context_add_class(style,discover_styles[group]);
+  gtk_widget_set_size_request(button,168,220);
+  GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+  gtk_container_set_border_width(GTK_CONTAINER(content),7);
+  GtkWidget *image=gtk_image_new_from_icon_name("audio-x-generic",
+                                                GTK_ICON_SIZE_DIALOG);
+  gtk_widget_set_size_request(image,148,148);
+  gtk_box_pack_start(GTK_BOX(content),image,FALSE,FALSE,0);
+  GtkWidget *label=gtk_label_new(discover_names[group]);
+  gtk_widget_set_name(label,"music-discover-tile-title");
+  gtk_label_set_xalign(GTK_LABEL(label),0);
+  gtk_box_pack_start(GTK_BOX(content),label,FALSE,FALSE,0);
+  char *description=g_strdup_printf("%u picks · %s",count,
+                                   discover_descriptions[group]);
+  GtkWidget *detail=gtk_label_new(description);
+  g_free(description);
+  gtk_widget_set_name(detail,"music-discover-tile-subtitle");
+  gtk_label_set_xalign(GTK_LABEL(detail),0);
+  gtk_label_set_ellipsize(GTK_LABEL(detail),PANGO_ELLIPSIZE_END);
+  gtk_box_pack_start(GTK_BOX(content),detail,FALSE,FALSE,0);
+  gtk_container_add(GTK_CONTAINER(button),content);
+  g_object_set_data(G_OBJECT(button),"music-discover-group",
+                    GINT_TO_POINTER(group+1));
+  g_signal_connect(button,"clicked",
+                   G_CALLBACK(music_discover_tile_clicked),view);
+  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),button,-1);
+  if(cover)music_card_art_start(view,cover,image);
+ }
+ gtk_widget_show_all(view->cards);
+ gtk_widget_show(view->cards_scroll);
+ gtk_widget_hide(view->list_scroll);
+ if(view->discover_back)gtk_widget_hide(view->discover_back);
+ gtk_label_set_text(GTK_LABEL(view->heading),"Discover");
+ gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
+                               "Search music beyond your library");
+ gtk_entry_set_text(GTK_ENTRY(view->search),"");
+ music_show_search(view,TRUE);
+ music_card_queue_pump(view);
+}
+static void music_discover_back_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view || view->busy || view->closing)return;
+ music_discover_show_landing(view);
+}
+static int music_discover_collect(MusicView *view,const char *output){
+ g_ptr_array_set_size(view->discover_entries,0);
+ char **lines=g_strsplit(output?output:"","\n",-1);
+ int category=-1;
+ int count=0;
+ for(int i=0;lines[i] && i<300 && count<180;i++){
+  char **parts=g_strsplit(lines[i],"\t",6);
+  if(g_strv_length(parts)==5){
+   char *kind=decode_field(parts[0]);
+   char *id=decode_field(parts[1]);
+   char *title=decode_field(parts[2]);
+   char *artist=decode_field(parts[3]);
+   char *cover=decode_field(parts[4]);
+   if(kind && id && title && artist && cover){
+    if(!g_strcmp0(kind,"section")){
+     category=music_discover_group_for(id);
+    }else if(category>=0 &&
+         (!g_strcmp0(kind,"catalog_album") ||
+          !g_strcmp0(kind,"catalog_artist")) &&
+         strlen(id)==36 && *title){
+     MusicDiscoverEntry *entry=g_new0(MusicDiscoverEntry,1);
+     entry->kind=g_strdup(kind);
+     entry->id=g_strdup(id);
+     entry->title=g_strdup(title);
+     entry->artist=g_strdup(artist);
+     entry->cover=g_strdup(cover);
+     entry->category=category;
+     g_ptr_array_add(view->discover_entries,entry);
+     count++;
+    }
+   }
+   g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
+  }
+  g_strfreev(parts);
+ }
+ g_strfreev(lines);
+ music_discover_show_landing(view);
+ return count;
+}
+
 static void music_show_empty(MusicView *view,const char *operation){
  const char *message="No items found. Try another search or browse your library.";
  if(!g_strcmp0(operation,"home"))

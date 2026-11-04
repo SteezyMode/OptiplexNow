@@ -532,7 +532,8 @@ def main(argv: list[str] | None = None) -> int:
                          for key,(method,params) in tasks.items()}
                 if token is not None:
                     pending["discover"]=pool.submit(
-                        rest_request,args.base_url,"discover",token=token)
+                        rest_request,args.base_url,"discover",token=token,
+                        timeout_seconds=5)
                 for key,job in pending.items():
                     try:
                         response=job.result()

@@ -1272,6 +1272,7 @@ static void music_catalog_card(MusicView *view,const char *kind,
  GtkWidget *name=gtk_label_new(title);
  gtk_widget_set_name(name,"music-card-title");
  gtk_label_set_xalign(GTK_LABEL(name),0);
+ gtk_label_set_max_width_chars(GTK_LABEL(name),22);
  gtk_label_set_line_wrap(GTK_LABEL(name),TRUE);
  gtk_label_set_lines(GTK_LABEL(name),2);
  gtk_label_set_ellipsize(GTK_LABEL(name),PANGO_ELLIPSIZE_END);
@@ -1282,6 +1283,7 @@ static void music_catalog_card(MusicView *view,const char *kind,
  GtkWidget *subtitle=gtk_label_new(status);
  gtk_widget_set_name(subtitle,"music-card-subtitle");
  gtk_label_set_xalign(GTK_LABEL(subtitle),0);
+ gtk_label_set_max_width_chars(GTK_LABEL(subtitle),22);
  gtk_label_set_ellipsize(GTK_LABEL(subtitle),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(card),subtitle,FALSE,FALSE,0);
  if(is_album){
@@ -1685,6 +1687,11 @@ static void music_discover_show_landing(MusicView *view){
   GtkWidget *label=gtk_label_new(music_discover_title(view,group));
   gtk_widget_set_name(label,"music-discover-tile-title");
   gtk_label_set_xalign(GTK_LABEL(label),0);
+  gtk_label_set_max_width_chars(GTK_LABEL(label),22);
+  gtk_label_set_line_wrap(GTK_LABEL(label),TRUE);
+  gtk_label_set_lines(GTK_LABEL(label),2);
+  gtk_label_set_ellipsize(GTK_LABEL(label),PANGO_ELLIPSIZE_END);
+  gtk_widget_set_tooltip_text(label,music_discover_title(view,group));
   gtk_box_pack_start(GTK_BOX(content),label,FALSE,FALSE,0);
   char *description=g_strdup_printf("%u picks · %s",count,
                                    music_discover_description(view,group));
@@ -1692,6 +1699,7 @@ static void music_discover_show_landing(MusicView *view){
   g_free(description);
   gtk_widget_set_name(detail,"music-discover-tile-subtitle");
   gtk_label_set_xalign(GTK_LABEL(detail),0);
+  gtk_label_set_max_width_chars(GTK_LABEL(detail),22);
   gtk_label_set_ellipsize(GTK_LABEL(detail),PANGO_ELLIPSIZE_END);
   gtk_box_pack_start(GTK_BOX(content),detail,FALSE,FALSE,0);
   gtk_container_add(GTK_CONTAINER(button),content);
@@ -1851,6 +1859,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    int count=!g_strcmp0(job->operation,"discover")
      ?music_discover_collect(view,output)
      :render_rows(view,output,job->append_albums || job->append_songs);
+   if(!g_strcmp0(job->operation,"catalog") && view->discover_active &&
+      view->discover_back)gtk_widget_show(view->discover_back);
    if(view->grid_mode){
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);

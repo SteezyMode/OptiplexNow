@@ -265,7 +265,35 @@ class MusicSubsonicTests(unittest.TestCase):
             with self.subTest(offset=argument):
                 out = io.StringIO()
                 cmd = [self.base, "albums"] + ([argument] if argument else [])
-                with (
+                with mock.patch.object(music, "query", side_effect=fake_query), \
+                     mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+                     mock.patch.object(music.sys, "stdout", out):
+                    self.assertEqual(music.main(cmd), 0)
+                self.assertEqual(calls[-1]["offset"], expected)
+                self.assertEqual(calls[-1]["size"], "200")
+        for bad in ("-200", "1", "201", "1000001", "NaN", "2e2"):
+            with self.subTest(invalid=bad):
+                with mock.patch.object(music, "_auth_from_stdin", return_value=self.auth), \
+                     mock.patch.object(music.sys, "stderr", io.StringIO()):
+                    self.assertEqual(music.main([self.base, "albums", bad]), 2)
+
+    def test_home_with_no_history_falls_back_to_real_library_additions(self):
+        from unittest import mock
+        calls = []
+        def fake_query(base, method, auth, params=None):
+            calls.append((method, params["type"] if params else None))
+            if method == "getAlbumList2":
+                if params["type"] == "recent":
+                    return {"albumList2": {"album": []}}
+                return {"albumList2": {"album": [{"id": "a7", "name": "New addition"}]}}
+            if method == "getStarred2":
+                return {"starred2": {"album": [], "song": []}}
+            if method == "getPlaylists":
+                return {"playlists": {"playlist": []}}
+            raise AssertionError("Unexpected API call: " + method)
+        output = io.StringIO()
+        from music_rest import MusicRESTError
+        with (
             mock.patch.object(music, "query", side_effect=fake_query),
             mock.patch.object(music, "_auth_from_stdin", return_value=self.auth),
             mock.patch.object(music.sys, "stdout", output),

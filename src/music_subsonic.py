@@ -455,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 from music_rest import (
                     get_session, request as rest_request, retained_discover_rows,
+                    trigger_empty_discover_refresh,
                     _favorite_artist_signals, _favorite_genre_signals, MusicRESTError,
                 )
                 try:
@@ -481,6 +482,9 @@ def main(argv: list[str] | None = None) -> int:
                 rows = retained_discover_rows(args.base_url,token,result,
                                              favorite_artists=favorites,
                                              favorite_genres=genres)
+                if not rows.strip() and trigger_empty_discover_refresh(
+                        args.base_url,token,result):
+                    result["refreshing"]=True
                 if not rows.strip() and result.get("refreshing") is True:
                     status_fields=("section","__refreshing",
                                    "Recommendations are updating","","")
@@ -512,7 +516,7 @@ def main(argv: list[str] | None = None) -> int:
             from concurrent.futures import ThreadPoolExecutor
             from music_rest import (
                 get_session, request as rest_request, retained_discover_rows,
-                MusicRESTError,
+                trigger_empty_discover_refresh, MusicRESTError,
             )
             token = None
             try:
@@ -552,6 +556,9 @@ def main(argv: list[str] | None = None) -> int:
                     else:
                         result[key]=response
                         if token is not None:
+                            # Fire a single authorized refresh when the server
+                            # lost its snapshot; Home still renders local shelves.
+                            trigger_empty_discover_refresh(args.base_url,token,response)
                             result["discover_rows"]=retained_discover_rows(
                                 args.base_url,token,response)
         elif args.operation in ("albums", "recent", "new"):

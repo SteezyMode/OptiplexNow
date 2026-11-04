@@ -120,6 +120,41 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(playlists["playlists"]["playlist"][0]["id"], "p1")
         self.assertEqual(self.server.requests[-1][0], "/subsonic/rest/getPlaylists")
 
+    def test_favorite_sends_the_correct_id_type(self):
+        cases = (
+            ("like", "star", "id", "song-1"),
+            ("unlike", "unstar", "id", "song-1"),
+            ("like_album", "star", "albumId", "album-2"),
+            ("unlike_album", "unstar", "albumId", "album-2"),
+            ("like_artist", "star", "artistId", "artist-3"),
+            ("unlike_artist", "unstar", "artistId", "artist-3"),
+        )
+        for operation, method, key, identifier in cases:
+            with self.subTest(operation=operation):
+                music.set_favorite(self.base, self.auth, operation, identifier)
+                path, fields = self.server.requests[-1]
+                self.assertEqual(path, "/subsonic/rest/" + method)
+                self.assertEqual(fields[key], [identifier])
+                self.assertEqual(set(fields).intersection({"id", "albumId", "artistId"}), {key})
+                self.assertNotIn("secret-should-never-be-in-url", path)
+        with self.assertRaises(music.MusicTransportError):
+            music.set_favorite(self.base, self.auth, "request_download", "album-2")
+        with self.assertRaises(music.MusicTransportError):
+            music.set_favorite(self.base, self.auth, "like_album", "")
+
+    def test_all_three_favorite_kinds_display_as_liked(self):
+        from base64 import b64decode
+        payload = {"starred": {
+            "album": [{"id": "a1", "name": "Favorite album"}],
+            "artist": [{"id": "r1", "name": "Favorite artist"}],
+            "song": [{"id": "s1", "title": "Favorite song"}],
+        }}
+        rows = music._rows("liked", payload)
+        entries = [list(map(b64decode, row.split("\t"))) for row in rows.splitlines()]
+        self.assertEqual({entry[0].decode(): entry[-1].decode()
+                          for entry in entries},
+                         {"album": "1", "artist": "1", "song": "1"})
+
     def test_redirect_never_forwards_auth(self):
         with self.assertRaises(music.MusicTransportError) as caught:
             music.query(self.base, "redirect", self.auth)

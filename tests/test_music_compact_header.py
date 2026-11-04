@@ -134,6 +134,26 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('button#music-song-action.music-transport',CSS)
         self.assertNotIn('min-height:62px',CSS)
 
+    def test_liked_songs_keep_the_same_heart_icon_in_both_states(self):
+        self.assertIn('static GtkWidget *music_heart_image(gboolean liked)',UI)
+        self.assertIn('gtk_widget_set_opacity(image,liked?1.0:0.40)',UI)
+        self.assertIn('music_heart_button(FALSE,"Like current song")',UI)
+        self.assertIn('music_heart_button(FALSE,"Like this album")',UI)
+        self.assertIn('GtkWidget *like=music_heart_button(liked,',UI)
+        self.assertNotIn('"non-starred-symbolic"',UI)
+        self.assertIn('G_CALLBACK(music_playlist_clicked)',UI)
+
+    def test_player_is_two_rows_with_seek_beside_transport(self):
+        self.assertIn('view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,2)',UI)
+        self.assertIn('gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),4)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(controls),timeline,TRUE,TRUE,0)',UI)
+        self.assertIn('gtk_widget_set_hexpand(timeline,TRUE)',UI)
+        self.assertNotIn('gtk_box_pack_start(GTK_BOX(view->player_bar),timeline',UI)
+        self.assertIn('padding:4px 8px',CSS)
+        self.assertIn('view->seek_caption=gtk_label_new("0:00 / 0:00")',UI)
+
 
 if __name__=="__main__":
     unittest.main()

@@ -103,7 +103,7 @@ def pick_verified_release_group(
     wanted_artist = _normalize(artist)
     if not wanted_title or not wanted_artist or not isinstance(candidates, list):
         return None
-    matches: set[str] = set()
+    matching: dict[str, int | None] = {}
     for item in candidates[:25]:
         album_name = _normalize(_attr(item, "title"))
         artist_name = _normalize(_attr(item, "artist"))
@@ -112,18 +112,22 @@ def pick_verified_release_group(
             continue
         if not _valid_rg(mbid):
             continue
-        candidate_year = _year(_attr(item, "year"))
-        # When the local album has a known year, require it to corroborate the
-        # provider's release year. One year tolerance accommodates metadata
-        # regional/early-release differences; unknown years are not evidence.
-        if year is not None and (
-            candidate_year is None or abs(candidate_year - year) > 1
-        ):
-            continue
-        matches.add(mbid.lower())
-        if len(matches) > 1:
+        matching[mbid.lower()] = _year(_attr(item, "year"))
+
+    # Prefer the original release year if multiple groups have exactly the
+    # same artist/title. A library might tag a reissue with its reissue year:
+    # when the exact artist+album identity has only ONE matching release group,
+    # that unique group remains safe even if its original year differs.
+    if year is not None:
+        matching_year={
+            key for key,value in matching.items()
+            if value is not None and abs(value-year)<=1
+        }
+        if len(matching_year)==1:
+            return next(iter(matching_year))
+        if len(matching_year)>1:
             return None
-    return next(iter(matches)) if len(matches) == 1 else None
+    return next(iter(matching)) if len(matching)==1 else None
 
 
 def _cache_path(local_id: str, title: str, artist: str, year: int | None) -> Path:

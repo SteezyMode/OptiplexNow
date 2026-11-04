@@ -185,7 +185,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('(!value || !*value)', UI_MUSIC)
         self.assertIn('g_strdup(""):g_strdup_printf(', UI_MUSIC)
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
-        self.assertIn('if args.operation in ("catalog", "discover", "artist_releases"):', transport)
+        self.assertIn('if args.operation in ("catalog", "discover", "artist_releases", "song_search", "album_tracks"):', transport)
         self.assertIn('rest_request(args.base_url, "discover"', transport)
 
     def test_real_discover_sections_and_request_buttons(self):

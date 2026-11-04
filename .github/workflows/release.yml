@@ -1,6 +1,6 @@
 name: Publish OptiPlex NOW
 
-# One-time, owner-authorized v1.21.17 Current Alpha publication.
+# One-time, owner-authorized v1.21.18 Current Alpha publication.
 # Only the deliberately marked, CI-verified release merge may publish.
 # Unmarked main pushes and PRs are inert; normal explicit tags still work.
 on:
@@ -10,7 +10,7 @@ on:
     branches:
       - main
     paths:
-      - 'docs/releases/v1.21.17.md'
+      - 'docs/releases/v1.21.18.md'
 
 permissions:
   contents: write
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.21.17]')) }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.21.18]')) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -39,7 +39,7 @@ jobs:
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
           else
-            # This path runs ONLY on the deliberately marked v1.21.17 merge.
+            # This path runs ONLY on the deliberately marked v1.21.18 merge.
             version="1.21.17"
           fi
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]

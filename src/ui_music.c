@@ -2287,7 +2287,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  const char *filter_labels[]={"Playlists","Artists","Albums","Liked songs",
                               "Recently played","New additions"};
  const char *filter_headings[]={"Your playlists","Artists","All albums",
-                                "Liked music","Recently played albums","New additions"};
+                                "Liked songs","Recently played albums","New additions"};
  for(guint i=0;i<G_N_ELEMENTS(filter_ops);i++){
   GtkWidget *filter=music_button(filter_labels[i]);
   music_align_nav_label(filter);

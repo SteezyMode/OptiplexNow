@@ -131,7 +131,7 @@ class DiscoverLastGoodTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as root:
             marker=Path(root)/"discover.json"
             sent=Mock(return_value={"status":"ok"})
-            with patch.object(rest,"_discover_cache_path",return_value=marker), \\
+            with patch.object(rest,"_discover_cache_path",return_value=marker), \
                  patch.object(rest,"request",sent):
                 self.assertTrue(rest.trigger_empty_discover_refresh(
                     BASE,TOKEN,{"refreshing":False}))
@@ -145,7 +145,7 @@ class DiscoverLastGoodTests(unittest.TestCase):
         from unittest.mock import Mock
         with tempfile.TemporaryDirectory() as root:
             sent=Mock(return_value={"status":"ok"})
-            with patch.object(rest,"_discover_cache_path",return_value=Path(root)/"discover.json"), \\
+            with patch.object(rest,"_discover_cache_path",return_value=Path(root)/"discover.json"), \
                  patch.object(rest,"request",sent):
                 self.assertFalse(rest.trigger_empty_discover_refresh(
                     BASE,TOKEN,{"refreshing":True}))

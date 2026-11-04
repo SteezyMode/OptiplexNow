@@ -22,6 +22,8 @@ spec.loader.exec_module(resolver)
 SYN=str(uuid.uuid5(uuid.NAMESPACE_URL,"Bruiser example: Blue Sky Noise"))
 MB1="11111111-1111-4111-8111-111111111111"
 MB2="22222222-2222-4222-8222-222222222222"
+# Verified historical MusicBrainz release-group ID for Brand New — Deja Entendu
+DEJA_MBID="6917ec0c-3d53-3835-bd9d-d079d70c1ce0"
 
 def release(mbid,title,artist,year):
     return {"musicbrainz_id":mbid,"title":title,"artist":artist,"year":year}
@@ -40,6 +42,30 @@ class CoverResolverPolicyTests(unittest.TestCase):
         ]
         self.assertEqual(resolver.pick_verified_release_group(
             candidates,"Blue Sky Noise","Circa Survive",2010),MB1)
+
+    def test_historical_uuidv3_musicbrainz_release_group_is_accepted(self):
+        self.assertEqual(uuid.UUID(DEJA_MBID).version,3)
+        self.assertTrue(resolver._valid_rg(DEJA_MBID))
+        self.assertFalse(resolver.synthetic_album_id(DEJA_MBID))
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(DEJA_MBID,"Deja Entendu","Brand New",2003)],
+            "Deja Entendu","Brand New",2003), DEJA_MBID)
+
+    def test_accents_do_not_hide_same_release_from_verified_search(self):
+        self.assertEqual(resolver.pick_verified_release_group(
+            [release(DEJA_MBID,"Deja Entendu","Brand New",2003)],
+            "Déjà Entendu","Brand New",2003),DEJA_MBID)
+        self.assertIsNone(resolver.pick_verified_release_group(
+            [release(DEJA_MBID,"Deja Entendu Demos","Brand New",2003)],
+            "Déjà Entendu","Brand New",2003))
+
+    def test_v1_negative_cache_does_not_block_v2_uuidv3_recovery(self):
+        self.assertEqual(resolver.CACHE_VERSION,2)
+        self.assertIn("v2",str(resolver.CACHE_ROOT))
+        with tempfile.TemporaryDirectory() as folder:
+            old=Path(folder)/"old.json"
+            old.write_text('{"version":1,"expires":9999999999,"mbid":null}')
+            self.assertEqual(resolver._read_cache(old),(False,None))
 
     def test_kid_cudi_correct_album_not_similar_album(self):
         self.assertEqual(resolver.pick_verified_release_group([

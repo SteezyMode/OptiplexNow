@@ -30,6 +30,22 @@ class ArtworkInstallerTests(unittest.TestCase):
         self.assertIn("if album is None:",updated)
         self.assertEqual(updated.count("if result is None:"),1)
 
+    def test_installed_v1_router_is_upgradable_without_second_patch(self):
+        once=installer.patch_router(self.ROUTER)
+        twice=installer.patch_router(once)
+        self.assertEqual(once,twice)
+        self.assertEqual(twice.count(
+            "from services.compat.bruiser_cover_resolver import missing_album_cover"),1)
+
+    def test_installer_accepts_only_its_own_known_v1_for_upgrade(self):
+        source=SOURCE.read_text()
+        self.assertIn('fix_label != "bruiser-artwork-v1"',source)
+        self.assertIn('old_image.endswith("-v1")',source)
+        self.assertIn('old_image.endswith("-v2")',source)
+        self.assertIn('VERSION = "bruiser-artwork-v2"',source)
+        self.assertIn('bruiser/droppedneedle-artbase:',source)
+        self.assertIn('if mounts(after) != original_mounts:',source)
+
     def test_unknown_router_never_patched(self):
         for source in ("",self.ROUTER+self.ROUTER,
                        self.ROUTER.replace("user=c.user","user=None")):

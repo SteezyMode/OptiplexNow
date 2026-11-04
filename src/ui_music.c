@@ -1253,9 +1253,15 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
 static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
  MusicView *view=data;
  const char *artist=g_object_get_data(G_OBJECT(button),"music-artist-query");
- if(!view || view->closing || view->busy || !artist || !*artist)return;
+ const char *mbid=g_object_get_data(G_OBJECT(button),"music-artist-mbid");
+ if(!view || view->closing || view->busy || !artist || !*artist ||
+    !mbid || strlen(mbid)!=36)return;
+ /* Artist cards now open real MusicBrainz release-group discography,
+  * not a second broad string search that often returns no albums. */
  view->discover_active=TRUE;
- query_start(view,"catalog",artist,"Discover artist");
+ char *heading=g_strdup_printf("%s · Discography",artist);
+ query_start(view,"artist_releases",mbid,heading);
+ g_free(heading);
 }
 static void music_catalog_card(MusicView *view,const char *kind,
                                const char *id,const char *title,
@@ -1294,6 +1300,9 @@ static void music_catalog_card(MusicView *view,const char *kind,
   if(g_str_has_suffix(status," · Requested")){
    gtk_button_set_label(GTK_BUTTON(request),"Requested");
    gtk_widget_set_sensitive(request,FALSE);
+  }else if(g_str_has_suffix(status," · In library")){
+   gtk_button_set_label(GTK_BUTTON(request),"In Library");
+   gtk_widget_set_sensitive(request,FALSE);
   }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
   gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
@@ -1302,6 +1311,7 @@ static void music_catalog_card(MusicView *view,const char *kind,
   gtk_widget_set_name(explore,"music-discover-explore");
   gtk_style_context_add_class(gtk_widget_get_style_context(explore),"now-action");
   g_object_set_data_full(G_OBJECT(explore),"music-artist-query",g_strdup(title),g_free);
+  g_object_set_data_full(G_OBJECT(explore),"music-artist-mbid",g_strdup(id),g_free);
   g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
   gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
  }
@@ -1858,7 +1868,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
       ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
-   view->grid_mode=(!g_strcmp0(job->operation,"home") ||
+   view->grid_mode=(!g_strcmp0(job->operation,"artist_releases") ||
+                    !g_strcmp0(job->operation,"home") ||
                     !g_strcmp0(job->operation,"albums") ||
                     !g_strcmp0(job->operation,"recent") ||
                     !g_strcmp0(job->operation,"new") ||
@@ -1869,8 +1880,10 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    int count=!g_strcmp0(job->operation,"discover")
      ?music_discover_collect(view,output)
      :render_rows(view,output,job->append_albums || job->append_songs);
-   if(!g_strcmp0(job->operation,"catalog") && view->discover_active &&
-      view->discover_back)gtk_widget_show(view->discover_back);
+   if((!g_strcmp0(job->operation,"catalog") ||
+       !g_strcmp0(job->operation,"artist_releases")) &&
+      view->discover_active && view->discover_back)
+    gtk_widget_show(view->discover_back);
    if(view->grid_mode){
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);
@@ -1956,7 +1969,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
- if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog")){
+ if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog") &&
+    g_strcmp0(operation,"artist_releases")){
   view->discover_active=FALSE;
   view->discover_category=-1;
   if(view->discover_back)gtk_widget_hide(view->discover_back);
@@ -1968,7 +1982,8 @@ static void query_start(MusicView *view,const char *operation,
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
-                        !g_strcmp0(operation,"discover");
+                        !g_strcmp0(operation,"discover") ||
+                        !g_strcmp0(operation,"artist_releases");
  /* Discover still works with just the DroppedNeedle companion session.
   * When playback is connected to the same host, optionally provide this
   * client's app password on stdin for read-only per-user starred artists. */

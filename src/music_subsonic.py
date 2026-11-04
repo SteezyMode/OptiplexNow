@@ -304,6 +304,102 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def _home_rows(result: dict[str, Any]) -> str:
+    """Spotify-style, source-honest Home shelves, never a dump of all albums.
+
+    Owned music remains playable; external suggestions are read-only until the
+    user explicitly requests an album/track. Empty shelves are omitted.
+    """
+    def section(name: str, entries: list[str]) -> list[str]:
+        if not entries:
+            return []
+        header=("section",name.lower().replace(" ","-"),name,"","")
+        encoded="\t".join(base64.b64encode(part.encode()).decode()
+                            for part in header)
+        return [encoded,*entries]
+
+    def encoded_rows(op: str, items: list[dict]) -> list[str]:
+        return [line for line in _rows(op,{"albums":items} if op!="playlists"
+                                      else {"playlists":items}).splitlines() if line]
+
+    def unique_albums(items: object, seen: set[str], n: int) -> list[dict]:
+        chosen=[]
+        if not isinstance(items,list):
+            return chosen
+        for item in items:
+            if not isinstance(item,dict) or not isinstance(item.get("id"),str):
+                continue
+            identifier=item["id"]
+            if not identifier or identifier in seen:
+                continue
+            seen.add(identifier)
+            chosen.append(item)
+            if len(chosen)>=n:
+                break
+        return chosen
+
+    recent=result.get("recent",[])
+    added=result.get("added",[])
+    starred=result.get("starred",{})
+    playlists=result.get("playlists",[])
+    if not isinstance(starred,dict):
+        starred={}
+    seen_local:set[str]=set()
+    shortcuts=unique_albums(recent,seen_local,6)
+    if len(shortcuts)<6:
+        shortcuts+=unique_albums(starred.get("album",[]),seen_local,6-len(shortcuts))
+
+    # DroppedNeedle already supplies personalized / fresh suggestions. We do
+    # not invent recommendations, request music, or mine global charts here.
+    from music_rest import _discover_rows
+    external=result.get("discover_rows")
+    if not isinstance(external,str):
+        external=_discover_rows(result.get("discover",{}))
+    shelves={"made":[],"fresh":[],"artists":[]}
+    seen_external:set[str]=set()
+    category=""
+    for line in external.splitlines():
+        fields=line.split("\t")
+        if len(fields)!=5:
+            continue
+        try:
+            decoded=[base64.b64decode(f,validate=True).decode() for f in fields]
+        except (ValueError,UnicodeError):
+            continue
+        kind,identifier,title,artist,cover=decoded
+        if kind=="section":
+            if identifier=="fresh_releases":
+                category="fresh"
+            elif identifier=="artists_you_might_like":
+                category="artists"
+            elif identifier.startswith(("because_you_listen_","daily_mixes_",
+                                        "radio_sections_")) or identifier in (
+                    "top_picks","listeners_like_you","missing_essentials",
+                    "popular_in_your_genres","unexplored_genres",
+                    "new_from_followed"):
+                category="made"
+            else:
+                category=""
+            continue
+        if category and kind in ("catalog_album","catalog_artist") and (
+                identifier not in seen_external) and (
+                not (category=="artists" and kind!="catalog_artist")):
+            seen_external.add(identifier)
+            shelves[category].append(line)
+
+    recent_additions=unique_albums(added,seen_local,8)
+    lines=[]
+    lines+=section("Jump Back In",encoded_rows("recent",shortcuts))
+    lines+=section("Made for You",shelves["made"][:12])
+    lines+=section("Fresh Releases",shelves["fresh"][:12])
+    lines+=section("Artists to Discover",shelves["artists"][:10])
+    lines+=section("Your Playlists",[
+        line for line in _rows("playlists",{"playlists":playlists[:8]
+            if isinstance(playlists,list) else []}).splitlines() if line])
+    lines+=section("Recently Added",encoded_rows("new",recent_additions))
+    return "\n".join(lines)+("\n" if lines else "")
+
+
 def set_favorite(base: str, auth: dict[str, str], operation: str, identifier: str) -> None:
     """Use the ID3-specific favorite key for albums/artists, never a song ID.
 
@@ -358,12 +454,12 @@ def main(argv: list[str] | None = None) -> int:
                     raise MusicTransportError(str(exc)) from None
             else:
                 from music_rest import (
-                    get_session, request as rest_request, _discover_rows,
+                    get_session, request as rest_request, retained_discover_rows,
                     _favorite_artist_signals, _favorite_genre_signals, MusicRESTError,
                 )
                 try:
-                    result = rest_request(args.base_url, "discover",
-                                          token=get_session(args.base_url))
+                    token = get_session(args.base_url)
+                    result = rest_request(args.base_url, "discover", token=token)
                 except MusicRESTError as exc:
                     raise MusicTransportError(str(exc)) from None
                 # Discover is usable with only a DroppedNeedle companion
@@ -382,8 +478,14 @@ def main(argv: list[str] | None = None) -> int:
                             genres = _favorite_genre_signals(starred.get("starred2"))
                         except MusicTransportError:
                             pass
-                rows = _discover_rows(result, favorite_artists=favorites,
-                                      favorite_genres=genres)
+                rows = retained_discover_rows(args.base_url,token,result,
+                                             favorite_artists=favorites,
+                                             favorite_genres=genres)
+                if not rows.strip() and result.get("refreshing") is True:
+                    status_fields=("section","__refreshing",
+                                   "Recommendations are updating","","")
+                    rows="\t".join(base64.b64encode(field.encode()).decode()
+                                     for field in status_fields)+"\n"
             if args.format == "rows":
                 sys.stdout.write(rows)
             else:
@@ -404,9 +506,56 @@ def main(argv: list[str] | None = None) -> int:
         if args.operation == "ping":
             data = query(args.base_url, "ping", auth)
             result = {"ok": True, "version": data.get("version", "")}
-        elif args.operation in ("home", "albums", "recent", "new"):
+        elif args.operation == "home":
+            # Independent bounded reads: missing recommendations never prevent
+            # listening to the user's existing music.
+            from concurrent.futures import ThreadPoolExecutor
+            from music_rest import (
+                get_session, request as rest_request, retained_discover_rows,
+                MusicRESTError,
+            )
+            token = None
+            try:
+                token = get_session(args.base_url)
+            except MusicRESTError:
+                pass
+            tasks = {
+                "recent": ("getAlbumList2", {"type":"recent","size":"12"}),
+                "added": ("getAlbumList2", {"type":"newest","size":"12"}),
+                "starred": ("getStarred2", None),
+                "playlists": ("getPlaylists", None),
+            }
+            result = {"recent":[], "added":[], "starred":{},
+                      "playlists":[], "discover":{}}
+            with ThreadPoolExecutor(max_workers=5) as pool:
+                pending={key:pool.submit(query,args.base_url,method,auth,params)
+                         for key,(method,params) in tasks.items()}
+                if token is not None:
+                    pending["discover"]=pool.submit(
+                        rest_request,args.base_url,"discover",token=token,
+                        timeout_seconds=5)
+                for key,job in pending.items():
+                    try:
+                        response=job.result()
+                    except (MusicTransportError,MusicRESTError):
+                        if key=="recent":
+                            # The first shelf is optional, but authentication
+                            # must be valid before saving any credentials.
+                            continue
+                        continue
+                    if key in ("recent","added"):
+                        result[key]=response.get("albumList2",{}).get("album",[])
+                    elif key=="starred":
+                        result[key]=response.get("starred2",{})
+                    elif key=="playlists":
+                        result[key]=response.get("playlists",{}).get("playlist",[])
+                    else:
+                        result[key]=response
+                        if token is not None:
+                            result["discover_rows"]=retained_discover_rows(
+                                args.base_url,token,response)
+        elif args.operation in ("albums", "recent", "new"):
             sort = {
-                "home": "recent",
                 "albums": "alphabeticalByName",
                 "recent": "recent",
                 "new": "newest",
@@ -423,12 +572,6 @@ def main(argv: list[str] | None = None) -> int:
                           "size": str(ALBUM_PAGE_SIZE if args.operation == "albums" else 100),
                           "offset": str(offset)})
             albums = data.get("albumList2", {}).get("album", [])
-            # A freshly installed player has no history yet. Populate Home
-            # with real library additions, not a fabricated recommendation.
-            if args.operation == "home" and not albums:
-                data = query(args.base_url, "getAlbumList2", auth,
-                             {"type": "newest", "size": "100", "offset": "0"})
-                albums = data.get("albumList2", {}).get("album", [])
             result = {"albums": albums}
         elif args.operation in ("songs", "random_songs"):
             if args.operation == "random_songs":
@@ -496,7 +639,8 @@ def main(argv: list[str] | None = None) -> int:
             data = query(args.base_url, "getPlaylist", auth, {"id": _bounded_text(args.value, "playlist ID")})
             result = {"playlist": data.get("playlist", {})}
         if args.format == "rows":
-            sys.stdout.write(_rows(args.operation, result))
+            sys.stdout.write(_home_rows(result) if args.operation=="home"
+                             else _rows(args.operation, result))
         else:
             json.dump(result, sys.stdout, ensure_ascii=False, separators=(",", ":"))
             sys.stdout.write("\n")

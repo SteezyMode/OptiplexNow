@@ -26,7 +26,7 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0)',UI)
         self.assertNotIn('gtk_box_pack_start(GTK_BOX(maincol),view->shuffle_all',UI)
         self.assertIn('g_strdup_printf("%s · %d %s",job->heading,',UI)
-        self.assertIn('char *heading=partial?g_strdup(job->heading):',UI)
+        self.assertIn('char *heading=view->home_active || partial?g_strdup(job->heading):',UI)
         self.assertIn('view->song_has_more',UI)
         self.assertIn('gtk_widget_set_no_show_all(view->shuffle_all,TRUE)',UI)
 

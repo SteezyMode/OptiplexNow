@@ -1968,6 +1968,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
       : "Music library unavailable. Check server access and Music connection.");
   }else{
    view->grid_mode=(!g_strcmp0(job->operation,"artist_releases") ||
+                    !g_strcmp0(job->operation,"album_tracks") ||
+                    !g_strcmp0(job->operation,"song_search") ||
                     !g_strcmp0(job->operation,"home") ||
                     !g_strcmp0(job->operation,"albums") ||
                     !g_strcmp0(job->operation,"recent") ||
@@ -1976,11 +1978,14 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                     !g_strcmp0(job->operation,"playlists") ||
                     !g_strcmp0(job->operation,"catalog") ||
                     !g_strcmp0(job->operation,"discover"));
+   view->album_tracks_active=!g_strcmp0(job->operation,"album_tracks");
    int count=!g_strcmp0(job->operation,"discover")
      ?music_discover_collect(view,output)
      :render_rows(view,output,job->append_albums || job->append_songs);
    if((!g_strcmp0(job->operation,"catalog") ||
-       !g_strcmp0(job->operation,"artist_releases")) &&
+       !g_strcmp0(job->operation,"artist_releases") ||
+       !g_strcmp0(job->operation,"album_tracks") ||
+       !g_strcmp0(job->operation,"song_search")) &&
       view->discover_active && view->discover_back)
     gtk_widget_show(view->discover_back);
    if(view->grid_mode){
@@ -2069,20 +2074,24 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
  if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog") &&
-    g_strcmp0(operation,"artist_releases")){
+    g_strcmp0(operation,"artist_releases") &&
+    g_strcmp0(operation,"album_tracks") && g_strcmp0(operation,"song_search")){
   view->discover_active=FALSE;
   view->discover_category=-1;
   if(view->discover_back)gtk_widget_hide(view->discover_back);
  }
  /* Browse/detail navigation restores the inline library header.
   * Searching itself keeps the input open for quick query refinement. */
- if(g_strcmp0(operation,"search") && g_strcmp0(operation,"catalog"))
+ if(g_strcmp0(operation,"search") && g_strcmp0(operation,"catalog") &&
+    g_strcmp0(operation,"song_search"))
   music_show_search(view,FALSE);
  const gboolean append_albums=!g_strcmp0(operation,"albums") && value && *value;
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
                         !g_strcmp0(operation,"discover") ||
-                        !g_strcmp0(operation,"artist_releases");
+                        !g_strcmp0(operation,"artist_releases") ||
+                        !g_strcmp0(operation,"album_tracks") ||
+                        !g_strcmp0(operation,"song_search");
  /* Discover still works with just the DroppedNeedle companion session.
   * When playback is connected to the same host, optionally provide this
   * client's app password on stdin for read-only per-user starred artists. */
@@ -2105,7 +2114,8 @@ static void query_start(MusicView *view,const char *operation,
  }
  /* Only text search needs a query. Discover is a standalone page:
   * DroppedNeedle GET /discover has no query parameter. */
- if((!g_strcmp0(operation,"search") || !g_strcmp0(operation,"catalog")) &&
+ if((!g_strcmp0(operation,"search") || !g_strcmp0(operation,"catalog") ||
+     !g_strcmp0(operation,"song_search") || !g_strcmp0(operation,"album_tracks")) &&
     (!value || !*value)){
   status_set(view,"Enter an artist, album, or song to search.");
   return;
@@ -2489,6 +2499,8 @@ static void music_nav(GtkWidget *button,gpointer data){
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
   view->discover_active=!g_strcmp0(operation,"discover");
+  if(view->song_search_button)
+   gtk_widget_set_visible(view->song_search_button,view->discover_active);
   query_start(view,operation,NULL,heading);
   if(!g_strcmp0(operation,"discover")){
    gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
@@ -2610,6 +2622,21 @@ static void music_search(GtkWidget *unused,gpointer data){
                connected?"Search results":"Music catalog");
   }
  }
+}
+
+static void music_search_songs(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view || view->busy || view->closing)return;
+ const char *query=gtk_entry_get_text(GTK_ENTRY(view->search));
+ if(!query || !*query){
+  status_set(view,"Enter a song title in Discover search.");
+  music_show_search(view,TRUE);
+  return;
+ }
+ view->discover_active=TRUE;
+ if(view->hero_row)gtk_widget_hide(view->hero_row);
+ query_start(view,"song_search",query,"Songs outside your library");
 }
 
 static void music_retry_access(GtkWidget *unused,gpointer data){
@@ -2868,6 +2895,14 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  g_signal_connect(view->search_toggle,"clicked",
                   G_CALLBACK(music_toggle_search),view);
  gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0);
+ view->song_search_button=gtk_button_new_with_label("Find Songs");
+ gtk_widget_set_name(view->song_search_button,"music-search-songs");
+ gtk_widget_set_tooltip_text(view->song_search_button,
+                              "Search individual recordings by song title");
+ gtk_widget_set_no_show_all(view->song_search_button,TRUE);
+ g_signal_connect(view->song_search_button,"clicked",G_CALLBACK(music_search_songs),view);
+ gtk_box_pack_end(GTK_BOX(header_row),view->song_search_button,FALSE,FALSE,0);
+ gtk_widget_hide(view->song_search_button);
  /* Album/artist/playlist art is fetched on demand, not through an
   * unbounded request fan-out for every visible library item. */
  /* Compact album header: full-width metadata and icon-only actions.

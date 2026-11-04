@@ -1272,7 +1272,18 @@ static void music_catalog_card(MusicView *view,const char *kind,
  gtk_widget_set_tooltip_text(name,title);
  gtk_box_pack_start(GTK_BOX(card),name,FALSE,FALSE,0);
  const char *status=artist?artist:"";
- GtkWidget *subtitle=gtk_label_new(status);
+ /* "Not in library" is self-evident in Discover; Requests are indicated
+  * by the action button. Show just the actual album artist as metadata. */
+ char *display_artist=g_strdup(status);
+ for(const char *suffixes[]={" · Not in library"," · Requested",NULL},**s=suffixes;
+     *s;s++){
+  if(g_str_has_suffix(display_artist,*s)){
+   display_artist[strlen(display_artist)-strlen(*s)]='\\0';
+   break;
+  }
+ }
+ GtkWidget *subtitle=gtk_label_new(display_artist);
+ g_free(display_artist);
  gtk_widget_set_name(subtitle,"music-card-subtitle");
  gtk_label_set_xalign(GTK_LABEL(subtitle),0);
  gtk_label_set_max_width_chars(GTK_LABEL(subtitle),22);

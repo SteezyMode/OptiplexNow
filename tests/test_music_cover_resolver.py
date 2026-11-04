@@ -60,8 +60,8 @@ class CoverResolverPolicyTests(unittest.TestCase):
             "Déjà Entendu","Brand New",2003))
 
     def test_v1_negative_cache_does_not_block_v2_uuidv3_recovery(self):
-        self.assertEqual(resolver.CACHE_VERSION,2)
-        self.assertIn("v2",str(resolver.CACHE_ROOT))
+        self.assertEqual(resolver.CACHE_VERSION,3)
+        self.assertIn("v3",str(resolver.CACHE_ROOT))
         with tempfile.TemporaryDirectory() as folder:
             old=Path(folder)/"old.json"
             old.write_text('{"version":1,"expires":9999999999,"mbid":null}')
@@ -110,12 +110,98 @@ class CoverResolverPolicyTests(unittest.TestCase):
             self.assertIn('"mbid": null',content)
             self.assertLess(resolver.NEGATIVE_TTL,resolver.POSITIVE_TTL)
 
-    def test_existing_verified_mbid_does_not_contact_provider(self):
-        async def go():
-            return await resolver.missing_album_cover(
-                {"title":"Blue Sky Noise","artist_name":"Circa Survive",
-                 "year":2010},MB1,object(),"250")
-        self.assertIsNone(asyncio.run(go()))
+    def _fake_edition_modules(self,repo):
+        providers=types.ModuleType("core.dependencies.repo_providers")
+        providers.get_musicbrainz_repository=lambda: repo
+        priority=types.ModuleType("infrastructure.queue.priority_queue")
+        priority.RequestPriority=types.SimpleNamespace(IMAGE_FETCH=1)
+        return {
+            "core":types.ModuleType("core"),
+            "core.dependencies":types.ModuleType("core.dependencies"),
+            "core.dependencies.repo_providers":providers,
+            "infrastructure":types.ModuleType("infrastructure"),
+            "infrastructure.queue":types.ModuleType("infrastructure.queue"),
+            "infrastructure.queue.priority_queue":priority,
+        }
+
+    def test_official_front_editions_precede_unmarked_editions(self):
+        group=DEJA_MBID
+        first="aaaa1111-aaaa-4111-8111-111111111111"
+        second="bbbb2222-bbbb-4222-8222-222222222222"
+        third="cccc3333-cccc-4333-8333-333333333333"
+        details={"id":group,"releases":[
+            {"id":third,"status":"Bootleg","cover-art-archive":{"front":True}},
+            {"id":first,"status":"Official"},
+            {"id":second,"status":"Official","cover-art-archive":{"front":True}},
+            {"id":"eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee","status":"Official",
+             "cover-art-archive":{"front":False}},
+        ]}
+        self.assertEqual(resolver.official_edition_ids(details,group),
+                         [second,first])
+        self.assertEqual(resolver.official_edition_ids(
+            {**details,"id":MB1},group),[])
+
+    def test_genuine_uuidv3_album_tries_same_group_editions_after_native_miss(self):
+        calls=[]
+        edition="aaaa1111-aaaa-4111-8111-111111111111"
+        class Repo:
+            async def get_release_group_by_id(self,group,**kwargs):
+                calls.append(("details",group))
+                return {"id":group,"releases":[
+                    {"id":edition,"status":"Official",
+                     "cover-art-archive":{"front":True}}]}
+            async def search_release_groups(self,*args,**kwargs):
+                raise AssertionError("Do not search for an already known MBID")
+        class Covers:
+            async def get_release_group_cover(self,*args,**kwargs):
+                raise AssertionError("Native front was already attempted")
+            async def get_release_cover(self,release,size,**kwargs):
+                calls.append(("edition",release,size))
+                return (b"edition-front","image/jpeg","cover-art-archive")
+        with patch.dict(sys.modules,self._fake_edition_modules(Repo())):
+            answer=asyncio.run(resolver.missing_album_cover(
+                {"title":"Deja Entendu","artist_name":"Brand New","year":2003},
+                DEJA_MBID,Covers(),"250"))
+        self.assertEqual(answer,(b"edition-front","image/jpeg","cover-art-archive"))
+        self.assertEqual(calls,[("details",DEJA_MBID),("edition",edition,"250")])
+
+    def test_synthetic_release_group_miss_uses_verified_alternate_editions(self):
+        calls=[]
+        edition="aaaa1111-aaaa-4111-8111-111111111111"
+        class Repo:
+            async def search_release_groups(self,*args,**kwargs):
+                return [release(DEJA_MBID,"Deja Entendu","Brand New",2003)]
+            async def get_release_group_by_id(self,group,**kwargs):
+                calls.append(("details",group))
+                return {"id":group,"releases":[
+                    {"id":edition,"status":"Official",
+                     "cover-art-archive":{"front":True}}]}
+        class Covers:
+            async def get_release_group_cover(self,group,size,**kwargs):
+                calls.append(("group",group))
+                return None
+            async def get_release_cover(self,release,size,**kwargs):
+                calls.append(("edition",release))
+                return (b"found","image/jpeg","caa-edition")
+        album={"title":"Déjà Entendu","artist_name":"Brand New","year":2003}
+        with tempfile.TemporaryDirectory() as root,patch.object(
+            resolver,"CACHE_ROOT",Path(root)),patch.dict(
+            sys.modules,self._fake_edition_modules(Repo())):
+            answer=asyncio.run(resolver.missing_album_cover(
+                album,SYN,Covers(),"250"))
+        self.assertEqual(answer,(b"found","image/jpeg","caa-edition"))
+        self.assertEqual(calls,[
+            ("group",DEJA_MBID),("details",DEJA_MBID),("edition",edition)
+        ])
+
+    def test_unknown_album_uuid_never_fetches_cover_from_unrelated_group(self):
+        class Covers:
+            async def get_release_cover(self,*args,**kwargs):
+                raise AssertionError("Should not contact unverified group")
+        answer=asyncio.run(resolver.missing_album_cover(
+            {"title":"Deja Entendu","artist_name":"Brand New"},
+            "not-a-uuid",Covers(),"250"))
+        self.assertIsNone(answer)
 
     def test_album_match_is_persisted_and_reused_offline(self):
         calls=[]

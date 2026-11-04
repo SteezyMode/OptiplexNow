@@ -143,6 +143,15 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertNotIn('"non-starred-symbolic"',UI)
         self.assertIn('G_CALLBACK(music_playlist_clicked)',UI)
 
+    def test_album_and_artist_hearts_use_typed_operations(self):
+        self.assertIn('liked?"unlike_album":"like_album"',UI)
+        self.assertIn('liked?"unlike_artist":"like_artist"',UI)
+        self.assertIn('liked?"unlike":"like"',UI)
+        self.assertIn('g_str_has_prefix(job->operation,"like")',UI)
+        self.assertIn('g_strcmp0(job->kind,"album") && g_strcmp0(job->kind,"artist")',UI)
+        self.assertIn('liked?"Unlike album":"Like album"',UI)
+        self.assertIn('liked?"Unlike artist":"Like artist"',UI)
+
     def test_player_is_two_rows_with_seek_beside_transport(self):
         self.assertIn('view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,2)',UI)
         self.assertIn('gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),4)',UI)

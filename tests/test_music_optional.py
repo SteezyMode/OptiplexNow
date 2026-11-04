@@ -181,7 +181,7 @@ class OptionalMusicContract(unittest.TestCase):
 
     def test_discover_is_a_page_not_a_text_query(self):
         self.assertIn('!g_strcmp0(operation,"discover")', UI_MUSIC)
-        self.assertIn('!g_strcmp0(operation,"catalog")) &&', UI_MUSIC)
+        self.assertIn('!g_strcmp0(operation,"album_tracks");', UI_MUSIC)
         self.assertIn('(!value || !*value)', UI_MUSIC)
         self.assertIn('g_strdup(""):g_strdup_printf(', UI_MUSIC)
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")
@@ -194,7 +194,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('gtk_button_new_with_label("Add to Library")', UI_MUSIC)
         self.assertIn('G_CALLBACK(music_request_album)', UI_MUSIC)
         self.assertIn('g_subprocess_communicate_utf8_async(proc,"",job->cancel', UI_MUSIC)
-        self.assertIn('gtk_button_set_label(GTK_BUTTON(job->button),"Requested")', UI_MUSIC)
+        self.assertIn('gtk_button_set_label(GTK_BUTTON(job->button),status)', UI_MUSIC)
         self.assertNotIn('status_set(view,"Album requested.', UI_MUSIC)
         self.assertIn('!g_strcmp0(operation,"discover")', UI_MUSIC)
         self.assertIn('G_CALLBACK(music_seek_changed)', UI_MUSIC)

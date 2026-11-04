@@ -67,6 +67,30 @@ class DiscoverTileTests(unittest.TestCase):
         self.assertFalse(any(x.startswith("Radio: ") for x in labels))
         self.assertEqual(sum(x.startswith("Because You Listen") for x in labels),2)
 
+    def test_2011_album_is_missing_essential_not_fresh_release(self):
+        # The 2011 Dance Gavin Dance album was surfaced under Fresh Releases
+        # because the old GTK classifier silently mixed three source shelves.
+        old={"name":"Downtown Battle Mountain II","artist_name":"Dance Gavin Dance",
+             "mbid":A,"in_library":False}
+        recent={"name":"Actual new release","artist_name":"New Artist",
+                "mbid":B,"in_library":False}
+        sections={"missing_essentials":{
+                     "title":"Missing Essentials","type":"albums","items":[old]},
+                  "fresh_releases":{
+                     "title":"Fresh Releases For You","type":"albums","items":[recent]}}
+        parsed=decode(rest._discover_rows(sections))
+        ids={row[1]:row[2] for row in parsed if row[0]=="catalog_album"}
+        self.assertEqual(ids[A],"Downtown Battle Mountain II")
+        self.assertEqual(ids[B],"Actual new release")
+        c=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
+        start=c.index("static int music_discover_group_for(")
+        end=c.index("\\n}",start)
+        routing=c[start:end]
+        self.assertIn('if(!g_strcmp0(key,"fresh_releases"))return DISC_FRESH;',routing)
+        self.assertIn('if(!g_strcmp0(key,"missing_essentials"))return DISC_FOR_YOU;',routing)
+        self.assertIn('if(!g_strcmp0(key,"anniversaries"))return DISC_EXPLORE;',routing)
+        self.assertEqual(routing.count("return DISC_FRESH;"),1)
+
     def test_empty_mix_is_not_populated_with_fake_content(self):
         data={"daily_mixes":[{"title":"Hip-Hop Mix","type":"albums","items":[]}]}
         self.assertEqual(rest._discover_rows(data),"")

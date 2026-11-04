@@ -29,7 +29,7 @@ CONTAINER = "droppedneedle"
 ROUTER = "/app/api/compat/subsonic/router.py"
 RESOLVER = "/app/services/compat/bruiser_cover_resolver.py"
 COMPOSE = Path.home() / "music-vpn/compose.json"
-VERSION = "bruiser-artwork-v1"
+VERSION = "bruiser-artwork-v2"
 
 EXACT_ORIGINAL = """        if await c.services.view.get_album(internal, user=c.user) is None:
             raise SubsonicError(70, "Album not found")
@@ -102,6 +102,11 @@ def write_atomic(data: dict, mode: int) -> None:
             os.unlink(path)
 
 def patch_router(source: str) -> str:
+    # Upgrade an already-patched v1 server without duplicating the inserted
+    # code path. This is the only accepted installed-patch signature.
+    if source.count(EXACT_REPLACEMENT) == 1 and source.count(EXACT_ORIGINAL) == 0:
+        ast.parse(source, filename=ROUTER)
+        return source
     if source.count(EXACT_ORIGINAL) != 1:
         raise InstallError("Unexpected Subsonic source version; no patch applied")
     result = source.replace(EXACT_ORIGINAL, EXACT_REPLACEMENT)
@@ -135,15 +140,17 @@ def install() -> None:
         raise InstallError("DroppedNeedle must be running before patching")
     if (info["Config"].get("Labels") or {}).get("com.docker.compose.service") != CONTAINER:
         raise InstallError("Unexpected DroppedNeedle Compose service")
-    if old_image.startswith("bruiser/droppedneedle-artwork:"):
-        if info["Config"]["Image"] == old_image:
-            print(f"ALREADY INSTALLED: {old_image}")
-            return
-        raise InstallError("Artwork Compose image does not match active container")
-    if not old_image.startswith("bruiser/droppedneedle-discover:"):
-        raise InstallError("Expected approved Discover patched base; refusing to replace unknown image")
     if info["Config"]["Image"] != old_image:
         raise InstallError("Running image differs from Compose configuration")
+    fix_label = (info["Config"].get("Labels") or {}).get("io.bruiser.fix")
+    if old_image.startswith("bruiser/droppedneedle-artwork:"):
+        if old_image.endswith("-v2") and fix_label == VERSION:
+            print(f"ALREADY INSTALLED: {old_image}")
+            return
+        if not old_image.endswith("-v1") or fix_label != "bruiser-artwork-v1":
+            raise InstallError("Unknown artwork patch; refusing unsafe upgrade")
+    elif not old_image.startswith("bruiser/droppedneedle-discover:"):
+        raise InstallError("Expected approved Discover patched base; refusing to replace unknown image")
     original_mounts = mounts(info)
     expected = {"/data","/app/config","/app/cache","/app/plugins","/app/imports"}
     if not expected.issubset({x[2] for x in original_mounts}):
@@ -161,7 +168,7 @@ def install() -> None:
     patched_router = patch_router(original_router)
     image_id = source_image.split(":",1)[1][:12]
     base = f"bruiser/droppedneedle-artbase:{image_id}"
-    image = f"bruiser/droppedneedle-artwork:{image_id}-v1"
+    image = f"bruiser/droppedneedle-artwork:{image_id}-v2"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path.home() / "bruiser-repairs" / ("artwork-persistent-" + stamp)
     directory.mkdir(parents=True,mode=0o700,exist_ok=False)
@@ -227,11 +234,11 @@ def install() -> None:
                 print(f"ROLLBACK FAILED: {exc}; restore from {directory}",
                       file=sys.stderr)
         raise
-    print("SUCCESS: persistent artwork resolver installed.")
+    print("SUCCESS: persistent artwork resolver v2 installed.")
     print(f"Image: {image}")
     print(f"Compose: {COMPOSE}")
     print(f"Backup: {directory}")
-    print("Next: verify Blue Sky Noise / Man on the Moon from a client; a health check alone does not verify their images.")
+    print("Next: refresh Deja Entendu and other missing album covers in Bruiser; health alone cannot verify artwork.")
 
 if __name__ == "__main__":
     try:

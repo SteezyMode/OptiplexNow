@@ -22,7 +22,7 @@ import sys
 import unicodedata
 from typing import Any
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlencode, urlsplit, urlunsplit
+from urllib.parse import urlencode, urlsplit, urlunsplit, unquote
 from urllib.request import Request, build_opener, ProxyHandler, HTTPHandler, HTTPSHandler
 
 from music_subsonic import (
@@ -40,6 +40,8 @@ ALLOWED={
     "search":("/search","GET"),
     "discover":("/discover","GET"),
     "artist_releases":("/artists/{id}/releases","GET"),
+    "catalog_tracks":("/albums/{id}/tracks","GET"),
+    "request_track":("/tracks/{id}/request","POST"),
     "request":("/requests/new","POST"),
     "activity":("/downloads/activity-summary","GET"),
     "downloads":("/downloads","GET"),
@@ -129,6 +131,17 @@ def request(base_url: str, action: str, *,
             raise MusicRESTError("Cannot identify this artist's discography.")
         path=path.replace("{id}",value.lower())
         query={"limit":"200","offset":"0"}
+    if action=="catalog_tracks":
+        group, artist, album = _track_context(value, 3)
+        path=path.replace("{id}",group)
+    if action=="request_track":
+        recording, artist, title, album, group = _track_context(value, 5)
+        if not MBID.fullmatch(group):
+            raise MusicRESTError("Cannot identify this track album.")
+        path=path.replace("{id}",recording)
+        body=json.dumps({"artist_name":artist,"track_title":title,
+                         "album_title":album,"release_group_mbid":group},
+                        separators=(",",":")).encode("utf-8")
     if action=="search":
         query={"q":_bounded_text(value,"search",MAX_QUERY),
                "limit_artists":"10","limit_albums":"25"}
@@ -162,8 +175,8 @@ def request(base_url: str, action: str, *,
     except HTTPError as exc:
         if exc.code in (401,403):
             raise MusicRESTError("Music device access has expired or was revoked.") from None
-        if exc.code==409 and action=="request":
-            raise MusicRESTError("This album has already been requested.") from None
+        if exc.code==409 and action in ("request","request_track"):
+            raise MusicRESTError("This music has already been requested.") from None
         raise MusicRESTError("Music service could not complete this action.") from None
     except (URLError,OSError,socket.timeout):
         raise MusicRESTError("Music server is unreachable.") from None
@@ -175,6 +188,9 @@ def request(base_url: str, action: str, *,
         raise MusicRESTError("Music server returned unreadable results.") from None
     if not isinstance(value,dict):
         raise MusicRESTError("Music service returned invalid results.")
+    if action=="catalog_tracks":
+        value={"tracks":value.get("tracks",[]), "artist":artist,
+               "album":album, "release_group_mbid":group}
     return value
 
 
@@ -552,6 +568,64 @@ def _discover_rows(result: dict[str, Any], *,
             add_section(result.get(key),key)
     return "\n".join(lines)+("\n" if lines else "")
 
+def _track_context(value: str | None, count: int) -> tuple[str, ...]:
+    """Bounded percent-escaped identifiers and metadata, never credentials."""
+    if not isinstance(value, str) or len(value) > 2200:
+        raise MusicRESTError("Invalid track selection.")
+    parts=value.split("|")
+    if len(parts)!=count:
+        raise MusicRESTError("Invalid track selection.")
+    decoded=[]
+    for i, part in enumerate(parts):
+        # Only URI-escaped printable text; reject malformed encoding and newlines.
+        if re.search(r"%(?![0-9a-fA-F]{2})",part):
+            raise MusicRESTError("Invalid track selection.")
+        try:
+            item=unquote(part,encoding="utf-8",errors="strict")
+        except UnicodeError as exc:
+            raise MusicRESTError("Invalid track selection.") from exc
+        if i==0:
+            if not MBID.fullmatch(item):
+                raise MusicRESTError("Invalid MusicBrainz track or album ID.")
+            item=item.lower()
+        elif count==5 and i==4:
+            if not MBID.fullmatch(item):
+                raise MusicRESTError("Invalid album ID.")
+            item=item.lower()
+        else:
+            try:
+                item=_bounded_text(item,"track metadata",512)
+            except MusicTransportError as exc:
+                raise MusicRESTError("Invalid track metadata.") from exc
+        decoded.append(item)
+    return tuple(decoded)
+
+
+def _catalog_track_rows(result: dict[str,Any]) -> str:
+    """Separate acquisition-only rows; never pretend remote songs are playable."""
+    out=[]
+    tracks=result.get("tracks",[])
+    if not isinstance(tracks,list):
+        return ""
+    artist=result.get("artist","")
+    album=result.get("album","")
+    group=result.get("release_group_mbid","")
+    for track in tracks[:200]:
+        if not isinstance(track,dict):
+            continue
+        recording=track.get("recording_id")
+        title=track.get("title")
+        if not isinstance(recording,str) or not MBID.fullmatch(recording):
+            continue
+        if not isinstance(title,str) or not title.strip():
+            continue
+        fields=("catalog_track",recording.lower(),title[:512],
+                artist[:512],"dn-album:"+group,album[:512],"0")
+        out.append("\t".join(base64.b64encode(x.encode("utf-8")).decode("ascii")
+                             for x in fields))
+    return "\n".join(out)+("\n" if out else "")
+
+
 def main(argv=None) -> int:
     parser=argparse.ArgumentParser(description="Bruiser Music authorized REST operations")
     parser.add_argument("base_url")
@@ -585,6 +659,8 @@ def main(argv=None) -> int:
                 sys.stdout.write(_rows(result))
             elif args.operation=="artist_releases":
                 sys.stdout.write(_artist_releases_rows(result))
+            elif args.operation=="catalog_tracks":
+                sys.stdout.write(_catalog_track_rows(result))
             elif args.operation=="discover":
                 sys.stdout.write(_discover_rows(result))
             elif args.operation=="downloads":

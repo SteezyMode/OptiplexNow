@@ -93,21 +93,22 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('gtk_widget_set_tooltip_text(playing,caption)',CSS)
         self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)",CSS)
 
-    def test_full_width_two_line_now_playing_title(self):
-        a=UI.index("GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7)")
-        b=UI.index("gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0)",a)
-        c=UI.index("gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0)",b)
+    def test_compact_now_playing_with_one_line_title(self):
+        a=UI.index("GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4)")
+        b=UI.index("gtk_box_pack_start(GTK_BOX(player_line),track_info,TRUE,TRUE,0)",a)
+        c=UI.index("gtk_box_pack_end(GTK_BOX(player_line),controls,FALSE,FALSE,0)",b)
         self.assertLess(b,c)
+        self.assertIn("gtk_widget_set_size_request(view->playing_art,34,34)",UI)
         self.assertIn("gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0)",UI)
         self.assertIn("gtk_widget_set_size_request(now_playing,0,-1)",UI)
-        self.assertIn("gtk_label_set_line_wrap(GTK_LABEL(view->playing_label),TRUE)",UI)
-        self.assertIn("gtk_label_set_lines(GTK_LABEL(view->playing_label),2)",UI)
+        self.assertIn("gtk_label_set_line_wrap(GTK_LABEL(view->playing_label),FALSE)",UI)
+        self.assertIn("gtk_label_set_lines(GTK_LABEL(view->playing_label),1)",UI)
         self.assertIn("gtk_widget_set_tooltip_text(view->playing_label,",UI)
         self.assertNotIn("gtk_box_pack_start(GTK_BOX(controls),now_playing",UI)
 
     def test_album_actions_are_small_icons_with_defined_queue_semantics(self):
-        self.assertIn("gtk_widget_set_size_request(view->hero_art,68,68)",UI)
-        self.assertIn("job->playing?44:68",UI)
+        self.assertIn("gtk_widget_set_size_request(view->hero_art,52,52)",UI)
+        self.assertIn("job->playing?34:52",UI)
         self.assertIn("gtk_label_set_lines(GTK_LABEL(view->hero_title),2)",UI)
         self.assertIn("gtk_widget_set_size_request(header_text,0,-1)",UI)
         self.assertIn('music_icon_button("media-playback-start-symbolic",',UI)
@@ -117,19 +118,21 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_play,FALSE,FALSE,0)",UI)
         self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_shuffle,FALSE,FALSE,0)",UI)
         self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_like,FALSE,FALSE,0)",UI)
-        self.assertIn("gtk_widget_set_size_request(view->hero_shuffle,32,32)",UI)
-        self.assertIn("gtk_widget_set_size_request(view->hero_play,32,32)",UI)
+        self.assertIn("gtk_widget_set_size_request(view->hero_shuffle,28,28)",UI)
+        self.assertIn("gtk_widget_set_size_request(view->hero_play,28,28)",UI)
         self.assertIn("gtk_widget_set_tooltip_text(view->hero_title,title)",UI)
         self.assertIn("gtk_widget_set_sensitive(view->hero_shuffle,",UI)
         self.assertIn("g_random_int_range(0,(int)view->visible_tracks->len)",UI)
         self.assertIn("music_play_visible(view,first);",UI)
         self.assertIn("music_play_visible(view,0);",UI)
+        self.assertIn("gtk_box_pack_end(GTK_BOX(view->hero_row),album_actions,FALSE,FALSE,0)",UI)
+        self.assertNotIn("gtk_box_pack_start(GTK_BOX(header_text),album_actions",UI)
         self.assertNotIn("gtk_box_pack_end(GTK_BOX(view->hero_row),view->hero_play",UI)
         self.assertNotIn('music_button("Play album")',UI)
 
     def test_compact_album_and_song_chrome(self):
-        self.assertIn('gtk_widget_set_size_request(view->hero_art,68,68)',UI)
-        self.assertIn('min-height:30px',CSS)
+        self.assertIn('gtk_widget_set_size_request(view->hero_art,52,52)',UI)
+        self.assertIn('min-height:25px',CSS)
         self.assertIn('button#music-song-row #music-row-title {font-size:13px',CSS)
         self.assertIn('button#music-song-action.music-transport',CSS)
         self.assertNotIn('min-height:62px',CSS)
@@ -163,16 +166,38 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('button#music-playing-add.music-transport',CSS)
         self.assertIn('button#music-playing-like.music-transport',CSS)
 
-    def test_player_is_two_rows_with_seek_beside_transport(self):
-        self.assertIn('view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,2)',UI)
-        self.assertIn('gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),4)',UI)
-        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0)',UI)
-        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0)',UI)
-        self.assertIn('gtk_box_pack_start(GTK_BOX(controls),timeline,TRUE,TRUE,0)',UI)
+    def test_single_horizontal_player_line_with_thin_seek_below(self):
+        self.assertIn('view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,0)',UI)
+        self.assertIn('gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),2)',UI)
+        self.assertIn('GtkWidget *player_line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(player_line),track_info,TRUE,TRUE,0)',UI)
+        self.assertIn('gtk_box_pack_end(GTK_BOX(player_line),controls,FALSE,FALSE,0)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),player_line,FALSE,FALSE,0)',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(view->player_bar),timeline,FALSE,FALSE,0)',UI)
         self.assertIn('gtk_widget_set_hexpand(timeline,TRUE)',UI)
-        self.assertNotIn('gtk_box_pack_start(GTK_BOX(view->player_bar),timeline',UI)
-        self.assertIn('padding:4px 8px',CSS)
+        self.assertNotIn('gtk_box_pack_start(GTK_BOX(view->player_bar),controls',UI)
+        self.assertIn('gtk_widget_set_size_request(view->pause_button,32,32)',UI)
+        self.assertIn('gtk_widget_set_size_request(view->previous_button,28,28)',UI)
+        self.assertIn('gtk_widget_set_size_request(view->next_button,28,28)',UI)
+        self.assertIn('gtk_widget_set_size_request(view->playing_art,34,34)',UI)
+        self.assertIn('gtk_widget_set_size_request(view->volume_slider,52,-1)',UI)
+        self.assertIn('border-top:1px solid #414743;border-radius:0;padding:2px 3px;',CSS)
+        self.assertIn('min-height:32px;min-width:32px;',CSS)
         self.assertIn('view->seek_caption=gtk_label_new("0:00 / 0:00")',UI)
+
+    def test_song_action_feedback_never_occupies_track_viewport(self):
+        self.assertNotIn('status_set(view,"Song added to playlist.")',UI)
+        self.assertNotIn('Added to Liked Songs.',UI)
+        self.assertNotIn('Removed from Liked Songs.',UI)
+        self.assertNotIn('status_set(view,"Album requested.',UI)
+        self.assertIn('gtk_button_set_label(GTK_BUTTON(job->button),"Requested")',UI)
+        self.assertIn('status_set(view,"Could not update Music library. Try again.")',UI)
+
+    def test_flat_song_rows_use_space_for_songs_not_cards(self):
+        self.assertIn('gtk_widget_set_size_request(like,24,24)',UI)
+        self.assertIn('gtk_widget_set_size_request(add,24,24)',UI)
+        self.assertIn('border-radius:0;padding:1px 4px;min-height:25px',CSS)
+        self.assertIn('background:transparent;border-bottom:1px solid #363d39',CSS)
 
 
 if __name__=="__main__":

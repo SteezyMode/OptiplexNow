@@ -1352,7 +1352,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   GtkWidget *like=music_heart_button(liked,
       liked?"Unlike song":"Like song");
   gtk_widget_set_name(like,"music-song-action");
-  gtk_widget_set_size_request(like,28,28);
+  gtk_widget_set_size_request(like,24,24);
   g_object_set_data(G_OBJECT(like),"music-view",view);
   g_object_set_data_full(G_OBJECT(like),"music-id",g_strdup(id),g_free);
   g_object_set_data(G_OBJECT(like),"music-liked",GINT_TO_POINTER(liked?2:1));
@@ -1360,7 +1360,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_box_pack_start(GTK_BOX(line),like,FALSE,FALSE,0);
   GtkWidget *add=music_icon_button("list-add-symbolic","Add to playlist");
   gtk_widget_set_name(add,"music-song-action");
-  gtk_widget_set_size_request(add,28,28);
+  gtk_widget_set_size_request(add,24,24);
   g_object_set_data(G_OBJECT(add),"music-view",view);
   g_object_set_data_full(G_OBJECT(add),"music-id",g_strdup(id),g_free);
   g_signal_connect(add,"clicked",G_CALLBACK(music_playlist_clicked),add);
@@ -2346,7 +2346,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->shuffle_all=music_icon_button("media-playlist-shuffle-symbolic",
                                       "Shuffle all songs");
  gtk_widget_set_name(view->shuffle_all,"music-shuffle-all");
- gtk_widget_set_size_request(view->shuffle_all,32,32);
+ gtk_widget_set_size_request(view->shuffle_all,28,28);
  g_signal_connect(view->shuffle_all,"clicked",
                   G_CALLBACK(music_shuffle_all),view);
  gtk_widget_set_no_show_all(view->shuffle_all,TRUE);
@@ -2363,7 +2363,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_stack_set_visible_child_name(GTK_STACK(view->header_stack),"browse");
  view->search_toggle=music_icon_button("system-search-symbolic","Search music");
  gtk_widget_set_name(view->search_toggle,"music-search-toggle");
- gtk_widget_set_size_request(view->search_toggle,32,32);
+ gtk_widget_set_size_request(view->search_toggle,28,28);
  g_signal_connect(view->search_toggle,"clicked",
                   G_CALLBACK(music_toggle_search),view);
  gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0);

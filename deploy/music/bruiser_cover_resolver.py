@@ -62,7 +62,11 @@ def synthetic_album_id(value: object) -> bool:
 def _normalize(value: object) -> str:
     if not isinstance(value, str):
         return ""
-    text = unicodedata.normalize("NFKC", value).casefold()
+    # Search providers may omit accents or use compatibility forms. Compare
+    # letters rather than Unicode presentation while requiring exact remaining
+    # words, artist and release year for a cover assignment.
+    text = unicodedata.normalize("NFKD", value).casefold()
+    text = "".join(c for c in text if not unicodedata.combining(c))
     return " ".join("".join(c if c.isalnum() else " " for c in text).split())
 
 

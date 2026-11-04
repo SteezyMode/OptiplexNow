@@ -664,7 +664,8 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
  wipe_free(key);g_free(name);
  GBytes *sent=g_bytes_new(job->input,strlen(job->input));
- job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
+ /* CAA 15s + opted-in name-provider lookup 14s, all asynchronous. */
+  job->deadline=g_timeout_add_seconds(38,music_art_timeout,job);
  g_subprocess_communicate_async(proc,sent,job->cancel,
                                 music_art_complete,job);
  g_bytes_unref(sent);
@@ -719,7 +720,8 @@ static void music_card_art_launch(MusicView *view,const char *cover_id,
   wipe_free(key);g_free(name);
  }
  GBytes *sent=g_bytes_new(job->input,strlen(job->input));
- job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
+ /* CAA 15s + opted-in name-provider lookup 14s, all asynchronous. */
+  job->deadline=g_timeout_add_seconds(38,music_art_timeout,job);
  view->art_inflight++;
  g_subprocess_communicate_async(proc,sent,job->cancel,music_art_complete,job);
  g_bytes_unref(sent);

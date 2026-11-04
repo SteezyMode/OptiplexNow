@@ -580,7 +580,10 @@ def _track_context(value: str | None, count: int) -> tuple[str, ...]:
         # Only URI-escaped printable text; reject malformed encoding and newlines.
         if re.search(r"%(?![0-9a-fA-F]{2})",part):
             raise MusicRESTError("Invalid track selection.")
-        item=unquote(part,encoding="utf-8",errors="strict")
+        try:
+            item=unquote(part,encoding="utf-8",errors="strict")
+        except UnicodeError as exc:
+            raise MusicRESTError("Invalid track selection.") from exc
         if i==0:
             if not MBID.fullmatch(item):
                 raise MusicRESTError("Invalid MusicBrainz track or album ID.")

@@ -1,8 +1,7 @@
 name: Publish OptiPlex NOW
 
-# One-time, owner-authorized v1.21.18 Current Alpha publication.
-# Only the deliberately marked, CI-verified release merge may publish.
-# Unmarked main pushes and PRs are inert; normal explicit tags still work.
+# Marked, CI-verified Current Alpha publications (v1.21.18 and v1.21.19).
+# Unmarked main pushes and PRs are inert; explicit version tags still work.
 on:
   push:
     tags:
@@ -10,6 +9,7 @@ on:
     branches:
       - main
     paths:
+      - 'docs/releases/v1.21.19.md'
       - 'docs/releases/v1.21.18.md'
 
 permissions:
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[publish-v1.21.18]')) }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, '[publish-v1.21.18]') || contains(github.event.head_commit.message, '[publish-v1.21.19]'))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -34,13 +34,19 @@ jobs:
           sudo apt-get install -y build-essential binutils curl python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11 desktop-file-utils openssh-client
       - name: Verify release tag and build from source
         shell: bash
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
-          else
-            # This path runs ONLY on the deliberately marked v1.21.18 merge.
+          elif [[ "$COMMIT_MESSAGE" == *"[publish-v1.21.19]"* ]]; then
+            version="1.21.19"
+          elif [[ "$COMMIT_MESSAGE" == *"[publish-v1.21.18]"* ]]; then
             version="1.21.18"
+          else
+            echo "Unapproved main-branch release marker" >&2
+            exit 1
           fi
           [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\1/p' package.py)" = "$version"

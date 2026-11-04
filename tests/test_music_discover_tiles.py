@@ -31,31 +31,31 @@ def decode(rows):
 class DiscoverTileTests(unittest.TestCase):
     def test_personal_seed_titles_change_with_real_likes(self):
         data={"because_you_listen_to":[
-            {"seed_artist":"Circa Survive","section":{"title":"Generic","type":"artists",
-                "items":[{"name":"Artist A","mbid":A,"in_library":False}]}},
-            {"seed_artist":"Low","section":{"title":"Generic","type":"artists",
-                "items":[{"name":"Artist B","mbid":B,"in_library":False}]}},
+            {"seed_artist":"Circa Survive","section":{"title":"Generic","type":"albums",
+                "items":[{"name":"Album A","mbid":A,"artist_name":"Artist A","in_library":False}]}},
+            {"seed_artist":"Low","section":{"title":"Generic","type":"albums",
+                "items":[{"name":"Album B","mbid":B,"artist_name":"Artist B","in_library":False}]}},
         ]}
         rows=decode(rest._discover_rows(data))
         sections=[x for x in rows if x[0]=="section"]
         self.assertEqual([x[2] for x in sections],
             ["Because You Listen to Circa Survive","Because You Listen to Low"])
-        self.assertEqual([x[1] for x in rows if x[0]=="catalog_artist"],[A,B])
+        self.assertEqual([x[1] for x in rows if x[0]=="catalog_album"],[A,B])
 
     def test_personalized_genre_mix_and_radio_picks_are_not_starved(self):
         data={
             "because_you_listen_to":[
                 {"seed_artist":"Artist "+str(i),
-                 "section":{"type":"artists","items":[
-                     {"name":"Artist "+str(i),
+                 "section":{"type":"albums","items":[
+                     {"name":"Album "+str(i),"artist_name":"Artist "+str(i),
                       "mbid":"00000000-0000-4000-8000-"+f"{i+1:012d}"}]}}
                 for i in range(8)],
             "daily_mixes":[{"title":"Daily Mix 1 - Hip-Hop","type":"albums",
                 "items":[{"name":"New beat","mbid":C,"artist_name":"Producer"}]}],
             "radio_sections":[{"title":"Radio: Circa Survive","type":"albums",
                 "items":[{"name":"New album","mbid":A,"artist_name":"Similar band"}]}],
-            "globally_trending":{"title":"Charts","type":"artists",
-                "items":[{"name":"Famous","mbid":B}]},
+            "globally_trending":{"title":"Charts","type":"albums",
+                "items":[{"name":"Famous album","mbid":B,"artist_name":"Famous"}]},
         }
         data_rows=decode(rest._discover_rows(data))
         labels=[r[2] for r in data_rows if r[0]=="section"]
@@ -103,12 +103,12 @@ class DiscoverTileTests(unittest.TestCase):
              "artists":[{"title":"Outside artist","musicbrainz_id":C,
                           "in_library":False}]}
         rows=decode(rest._rows(raw))
-        self.assertEqual([x[0] for x in rows],["catalog_artist","catalog_album"])
-        self.assertEqual([x[4] for x in rows],["dn-artist:"+C,"dn-album:"+A])
+        self.assertEqual([x[0] for x in rows],["catalog_album"])
+        self.assertEqual([x[4] for x in rows],["dn-album:"+A])
         from_subsonic=decode(sub._rows("catalog",{"catalog":raw}))
-        self.assertEqual([x[4] for x in from_subsonic],
-                         ["dn-artist:"+C,"dn-album:"+A])
+        self.assertEqual([x[4] for x in from_subsonic],["dn-album:"+A])
         self.assertNotIn(B,[x[1] for x in rows])
+        self.assertNotIn(C,[x[1] for x in rows])
 
     def test_catalog_cover_never_accepts_arbitrary_url_or_uuid(self):
         for bad in ("http://evil.test", "album:not-an-mbid",

@@ -166,6 +166,45 @@ class DiscoverFavoritesTests(unittest.TestCase):
         self.assertEqual([x[1] for x in rows(captured.getvalue())[1:]],[A,B,C])
         self.assertNotIn("secret",captured.getvalue())
 
+    def test_personalized_section_precedes_global_trending(self):
+        data={
+            "globally_trending":{"title":"Charts","type":"albums","items":[
+                {"name":"Chart hit","mbid":A,"artist_name":"Popular"}]},
+            "artists_you_might_like":{"title":"Because you listen","type":"artists",
+                "items":[{"name":"Novel artist","mbid":B}]},
+            "because_you_listen_to":[{"seed_artist":"Loved",
+                "section":{"title":"Inspired by Loved","type":"albums","items":[
+                    {"name":"New album","mbid":C,"artist_name":"New band"}]}}],
+        }
+        result=rows(rest._discover_rows(data))
+        self.assertEqual([x[1] for x in result if x[0]=="section"],
+                         ["because_you_listen_0","artists_you_might_like",
+                          "globally_trending"])
+        self.assertEqual([x[1] for x in result if x[0].startswith("catalog_")],
+                         [C,B,A])
+
+    def test_nested_top_picks_are_visible_without_automatic_requests(self):
+        data={"top_picks":{"title":"Top Picks for You","items":[
+            {"match_pct":97,"album":{"name":"Your new favorite","mbid":A,
+                           "artist_name":"Unknown band","in_library":False}},
+            {"match_pct":96,"album":{"name":"Owned album","mbid":B,
+                           "artist_name":"Known band","in_library":True}},
+            {"match_pct":95,"album":{"name":"Invalid ID","mbid":"not-an-id",
+                           "artist_name":"Artist","in_library":False}},
+        ]}}
+        result=rows(rest._discover_rows(data))
+        self.assertEqual([x[0] for x in result],["section","catalog_album"])
+        self.assertEqual(result[1][1],A)
+        self.assertNotIn(B,[row[1] for row in result])
+
+    def test_discover_search_is_catalog_only_even_when_library_connected(self):
+        ui=(Path(__file__).resolve().parents[1]/"src"/"ui_music.c").read_text()
+        self.assertIn('!g_strcmp0(active_operation,"discover")',ui)
+        self.assertIn('query_start(view,"catalog",value,"Discover results");',ui)
+        self.assertIn('query_start(view,connected?"search":"catalog",value,',ui)
+        self.assertIn('music_show_search(view,TRUE);',ui)
+        self.assertIn('"Search music not in your library"',ui)
+
     def test_catalog_and_discover_are_only_read_operations(self):
         ui=(Path(__file__).resolve().parents[1]/"src"/"ui_music.c").read_text()
         self.assertIn('const gboolean personalized_discover=!g_strcmp0(operation,"discover")',ui)

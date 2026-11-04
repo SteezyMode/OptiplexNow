@@ -171,7 +171,7 @@ static const char *CSS =
 "#music-library-filters button#music-filter.now-action.music-active {background:#39302b;color:#fff;font-weight:700;}"
 "#music-main {background:#1d201f;border-radius:3px;padding:2px;}"
 "#music-header-row {padding:0 2px;min-height:28px;}"
-"#music-home button#music-shuffle-all.music-transport,#music-home button#music-search-toggle.music-transport {background:transparent;border:1px solid transparent;border-radius:17px;padding:3px;min-height:32px;min-width:32px;color:#ece8e0;}"
+"#music-home button#music-shuffle-all.music-transport,#music-home button#music-search-toggle.music-transport {background:transparent;border:1px solid transparent;border-radius:4px;padding:1px;min-height:28px;min-width:28px;color:#ece8e0;}"
 "#music-home button#music-shuffle-all.music-transport:hover,#music-home button#music-search-toggle.music-transport:hover {background:#303831;border-color:#c47d65;}"
 "#music-section-title {font-size:14px;font-weight:700;color:#ece8e0;}"
 "#music-home button#music-settings-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:11px;color:#bbb7ae;}"

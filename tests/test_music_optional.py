@@ -171,7 +171,7 @@ class OptionalMusicContract(unittest.TestCase):
     def test_catalog_search_can_work_before_music_password_setup(self):
         self.assertIn('const gboolean catalog=!g_strcmp0(operation,"catalog") ||',UI_MUSIC)
         self.assertIn('const char *server_url=catalog?cfg[6]:view->bound_url;',UI_MUSIC)
-        self.assertIn('job->input=catalog?g_strdup(""):g_strdup_printf(',UI_MUSIC)
+        self.assertIn('job->input=(catalog && !personalized_discover)?g_strdup(""):g_strdup_printf(',UI_MUSIC)
         self.assertIn('query_start(view,connected?"search":"catalog",value,',UI_MUSIC)
         self.assertIn('status_clear(view);',UI_MUSIC)
         self.assertIn('gtk_widget_set_sensitive(button,FALSE);',UI_MUSIC)

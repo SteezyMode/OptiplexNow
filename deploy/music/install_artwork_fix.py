@@ -29,7 +29,7 @@ CONTAINER = "droppedneedle"
 ROUTER = "/app/api/compat/subsonic/router.py"
 RESOLVER = "/app/services/compat/bruiser_cover_resolver.py"
 COMPOSE = Path.home() / "music-vpn/compose.json"
-VERSION = "bruiser-artwork-v2"
+VERSION = "bruiser-artwork-v3"
 
 EXACT_ORIGINAL = """        if await c.services.view.get_album(internal, user=c.user) is None:
             raise SubsonicError(70, "Album not found")
@@ -144,10 +144,13 @@ def install() -> None:
         raise InstallError("Running image differs from Compose configuration")
     fix_label = (info["Config"].get("Labels") or {}).get("io.bruiser.fix")
     if old_image.startswith("bruiser/droppedneedle-artwork:"):
-        if old_image.endswith("-v2") and fix_label == VERSION:
+        if old_image.endswith("-v3") and fix_label == VERSION:
             print(f"ALREADY INSTALLED: {old_image}")
             return
-        if not old_image.endswith("-v1") or fix_label != "bruiser-artwork-v1":
+        if not (
+            (old_image.endswith("-v1") and fix_label == "bruiser-artwork-v1") or
+            (old_image.endswith("-v2") and fix_label == "bruiser-artwork-v2")
+        ):
             raise InstallError("Unknown artwork patch; refusing unsafe upgrade")
     elif not old_image.startswith("bruiser/droppedneedle-discover:"):
         raise InstallError("Expected approved Discover patched base; refusing to replace unknown image")
@@ -168,7 +171,7 @@ def install() -> None:
     patched_router = patch_router(original_router)
     image_id = source_image.split(":",1)[1][:12]
     base = f"bruiser/droppedneedle-artbase:{image_id}"
-    image = f"bruiser/droppedneedle-artwork:{image_id}-v2"
+    image = f"bruiser/droppedneedle-artwork:{image_id}-v3"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path.home() / "bruiser-repairs" / ("artwork-persistent-" + stamp)
     directory.mkdir(parents=True,mode=0o700,exist_ok=False)
@@ -234,11 +237,11 @@ def install() -> None:
                 print(f"ROLLBACK FAILED: {exc}; restore from {directory}",
                       file=sys.stderr)
         raise
-    print("SUCCESS: persistent artwork resolver v2 installed.")
+    print("SUCCESS: persistent artwork resolver v3 installed.")
     print(f"Image: {image}")
     print(f"Compose: {COMPOSE}")
     print(f"Backup: {directory}")
-    print("Next: refresh Deja Entendu and other missing album covers in Bruiser; health alone cannot verify artwork.")
+    print("Next: check Deja Entendu and other missing covers in Bruiser; health alone cannot verify artwork.")
 
 if __name__ == "__main__":
     try:

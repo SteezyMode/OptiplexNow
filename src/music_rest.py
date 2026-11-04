@@ -40,6 +40,8 @@ ALLOWED={
     "search":("/search","GET"),
     "discover":("/discover","GET"),
     "artist_releases":("/artists/{id}/releases","GET"),
+    "album_tracks":("/albums/{id}","GET"),
+    "track_request":("/tracks/{id}/request","POST"),
     "request":("/requests/new","POST"),
     "activity":("/downloads/activity-summary","GET"),
     "downloads":("/downloads","GET"),
@@ -117,18 +119,20 @@ def clear_session(base_url: str, provider=None) -> None:
 
 
 def request(base_url: str, action: str, *,
-            token: str, value: str | None = None) -> dict[str, Any]:
+            token: str, value: str | None = None,
+            track: dict[str,Any] | None = None) -> dict[str, Any]:
     base=canonical_url(base_url)
     if action not in ALLOWED:
         raise MusicRESTError("Unsupported Music request.")
     path,verb=ALLOWED[action]
     query={}
     body=None
-    if action=="artist_releases":
+    if action in ("artist_releases","album_tracks","track_request"):
         if not isinstance(value,str) or not MBID.fullmatch(value):
-            raise MusicRESTError("Cannot identify this artist's discography.")
+            raise MusicRESTError("Cannot identify this music selection.")
         path=path.replace("{id}",value.lower())
-        query={"limit":"200","offset":"0"}
+        if action=="artist_releases":
+            query={"limit":"200","offset":"0"}
     if action=="search":
         query={"q":_bounded_text(value,"search",MAX_QUERY),
                "limit_artists":"10","limit_albums":"25"}
@@ -136,6 +140,21 @@ def request(base_url: str, action: str, *,
         if not isinstance(value,str) or not MBID.fullmatch(value):
             raise MusicRESTError("Cannot identify this album for download.")
         body=json.dumps({"musicbrainz_id":value},separators=(",",":")).encode()
+    if action=="track_request":
+        if not isinstance(track,dict):
+            raise MusicRESTError("Missing track information.")
+        title=_bounded_text(track.get("title"),"song title",200)
+        artist=_bounded_text(track.get("artist"),"song artist",200)
+        album=track.get("album")
+        rg=track.get("rg")
+        payload={"artist_name":artist,"track_title":title}
+        if album:
+            payload["album_title"]=_bounded_text(album,"album title",200)
+        if rg:
+            if not isinstance(rg,str) or not MBID.fullmatch(rg):
+                raise MusicRESTError("Invalid track album identity.")
+            payload["release_group_mbid"]=rg.lower()
+        body=json.dumps(payload,separators=(",",":"),ensure_ascii=False).encode("utf-8")
     if action=="downloads":
         # A bounded owner-scoped queue snapshot, never a new download manager.
         query={"page_size":"100"}
@@ -162,7 +181,7 @@ def request(base_url: str, action: str, *,
     except HTTPError as exc:
         if exc.code in (401,403):
             raise MusicRESTError("Music device access has expired or was revoked.") from None
-        if exc.code==409 and action=="request":
+        if exc.code==409 and action in ("request","track_request"):
             raise MusicRESTError("This album has already been requested.") from None
         raise MusicRESTError("Music service could not complete this action.") from None
     except (URLError,OSError,socket.timeout):
@@ -228,6 +247,112 @@ def cover_bytes(base_url: str, cover_id: str, *, token: str) -> bytes:
         except (URLError,OSError,socket.timeout):
             raise MusicRESTError("Catalog artwork is temporarily unavailable.") from None
     raise MusicRESTError("Catalog artwork is still loading.")
+
+
+def _encode_row(*items: str) -> str:
+    return "\t".join(base64.b64encode(item.encode("utf-8")).decode("ascii")
+                     for item in items)
+
+
+def _album_tracks_rows(result: dict[str,Any], album_id: str) -> str:
+    """Show only actual MusicBrainz recordings with a requestable MBID."""
+    if not isinstance(result,dict) or not MBID.fullmatch(album_id):
+        raise MusicRESTError("Album track response was invalid.")
+    title=result.get("title") or ""
+    artist=result.get("artist_name") or ""
+    if not isinstance(title,str) or not isinstance(artist,str):
+        raise MusicRESTError("Album metadata is missing.")
+    status=("In library" if result.get("in_library") is True else
+            "Requested" if result.get("requested") is True else "Not in library")
+    rows=[_encode_row("catalog_album",album_id,title[:512],
+                      artist[:200]+" · "+status,"dn-album:"+album_id)]
+    tracks=result.get("tracks",[])
+    if not isinstance(tracks,list):
+        return "\n".join(rows)+"\n"
+    for item in tracks[:200]:
+        if not isinstance(item,dict):
+            continue
+        recording=item.get("recording_id")
+        name=item.get("title")
+        if (not isinstance(recording,str) or not MBID.fullmatch(recording) or
+            not isinstance(name,str) or not name.strip()):
+            continue
+        rows.append(_encode_row(
+            "catalog_track",recording,name[:200],artist[:200],
+            "dn-album:"+album_id,title[:200],"0"))
+    return "\n".join(rows)+"\n"
+
+
+def _song_search_rows(text: str) -> str:
+    """Official public MusicBrainz search, read-only and user initiated.
+
+    DroppedNeedle 2.15.0 searches *albums/artists* but not recordings in its
+    public search endpoint. This narrow MusicBrainz lookup is the bridge to
+    existing DroppedNeedle /tracks/{recording_mbid}/request; no secrets ever
+    accompany this public lookup. Limit one request and 15 results per search.
+    """
+    query=_bounded_text(text,"song search",MAX_QUERY)
+    cleaned=" ".join(re.findall(r"[\w-]+",query,flags=re.UNICODE))
+    if len(cleaned)<2:
+        raise MusicRESTError("Enter a song title to search.")
+    url="https://musicbrainz.org/ws/2/recording/?" + urlencode({
+        "query":cleaned[:160],"fmt":"json","limit":"15"})
+    req=Request(url,headers={
+        "User-Agent":"BruiserMusic/1.21.18 (https://github.com/SteezyMode/OptiplexNow)",
+        "Accept":"application/json",
+    },method="GET")
+    opener=build_opener(ProxyHandler({}),DenyRedirects(),
+                        HTTPSHandler(context=ssl.create_default_context()))
+    try:
+        with opener.open(req,timeout=9) as response:
+            raw=response.read(512*1024+1)
+    except (MusicTransportError,HTTPError,URLError,OSError,socket.timeout):
+        raise MusicRESTError("Song search is temporarily unavailable.") from None
+    if len(raw)>512*1024:
+        raise MusicRESTError("Song search returned too much data.")
+    try:
+        result=json.loads(raw)
+    except (ValueError,UnicodeError):
+        raise MusicRESTError("Song search returned invalid results.") from None
+    if not isinstance(result,dict) or not isinstance(result.get("recordings"),list):
+        raise MusicRESTError("Song search returned no usable results.")
+    out=[]; seen=set()
+    for item in result["recordings"][:25]:
+        if not isinstance(item,dict):
+            continue
+        rid=item.get("id")
+        name=item.get("title")
+        if (not isinstance(rid,str) or not MBID.fullmatch(rid) or
+            not isinstance(name,str) or not name.strip() or rid in seen):
+            continue
+        credit=item.get("artist-credit")
+        if not isinstance(credit,list):
+            continue
+        artist="".join(
+            (part.get("name") or (part.get("artist") or {}).get("name") or "")+
+            (part.get("joinphrase") or "")
+            for part in credit if isinstance(part,dict)
+        ).strip()
+        if not artist:
+            continue
+        release_group=""
+        album=""
+        for release in (item.get("releases") or [])[:12]:
+            if not isinstance(release,dict):
+                continue
+            group=release.get("release-group") or {}
+            if isinstance(group,dict) and isinstance(group.get("id"),str) and MBID.fullmatch(group["id"]):
+                release_group=group["id"]
+                album=group.get("title") if isinstance(group.get("title"),str) else ""
+                break
+        out.append(_encode_row(
+            "catalog_track",rid,name[:200],artist[:200],
+            "dn-album:"+release_group if release_group else "",
+            album[:200],"0"))
+        seen.add(rid)
+        if len(out)>=15:
+            break
+    return "\n".join(out)+("\n" if out else "")
 
 
 def _artist_releases_rows(result: dict[str,Any]) -> str:
@@ -555,11 +680,20 @@ def _discover_rows(result: dict[str, Any], *,
 def main(argv=None) -> int:
     parser=argparse.ArgumentParser(description="Bruiser Music authorized REST operations")
     parser.add_argument("base_url")
-    parser.add_argument("operation",choices=(*ALLOWED.keys(),"cover","link","unlink"))
+    parser.add_argument("operation",choices=(*ALLOWED.keys(),"song_search","cover","link","unlink"))
     parser.add_argument("value",nargs="?")
     parser.add_argument("--format",choices=("json","rows"),default="json")
+    parser.add_argument("--track-artist")
+    parser.add_argument("--track-title")
+    parser.add_argument("--track-album")
+    parser.add_argument("--track-rg")
     args=parser.parse_args(argv)
     try:
+        if args.operation=="song_search":
+            if args.format!="rows":
+                raise MusicRESTError("Song search needs row output.")
+            sys.stdout.write(_song_search_rows(args.value))
+            return 0
         if args.operation=="link":
             # Only a separately authorized host/device provisioning flow may
             # hand a DN companion bearer here. Never put it in a URL/argv.
@@ -579,12 +713,18 @@ def main(argv=None) -> int:
         if args.operation=="cover":
             sys.stdout.buffer.write(cover_bytes(args.base_url,args.value,token=token))
             return 0
-        result=request(args.base_url,args.operation,token=token,value=args.value)
+        track=({"artist":args.track_artist,"title":args.track_title,
+                "album":args.track_album,"rg":args.track_rg}
+               if args.operation=="track_request" else None)
+        result=request(args.base_url,args.operation,token=token,
+                       value=args.value,track=track)
         if args.format=="rows":
             if args.operation=="search":
                 sys.stdout.write(_rows(result))
             elif args.operation=="artist_releases":
                 sys.stdout.write(_artist_releases_rows(result))
+            elif args.operation=="album_tracks":
+                sys.stdout.write(_album_tracks_rows(result,args.value))
             elif args.operation=="discover":
                 sys.stdout.write(_discover_rows(result))
             elif args.operation=="downloads":

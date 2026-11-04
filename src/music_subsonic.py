@@ -329,7 +329,7 @@ def set_favorite(base: str, auth: dict[str, str], operation: str, identifier: st
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "artist_releases", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_options", "playlist_add", "playlist_create"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "artist_releases", "song_search", "album_tracks", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_options", "playlist_add", "playlist_create"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -339,21 +339,30 @@ def main(argv: list[str] | None = None) -> int:
         # per-user library playback API. Do not request, store or forward a
         # playback key for a basic search. The configured private host is
         # validated by catalog_search before the outbound request.
-        if args.operation in ("catalog", "discover", "artist_releases"):
+        if args.operation in ("catalog", "discover", "artist_releases", "song_search", "album_tracks"):
             if args.operation == "catalog":
                 result = {"catalog": catalog_search(
                     args.base_url, _bounded_text(args.value, "search query", 200))}
                 rows = _rows("catalog", result)
-            elif args.operation == "artist_releases":
+            elif args.operation in ("artist_releases", "album_tracks", "song_search"):
                 from music_rest import (
-                    get_session, request as rest_request, _artist_releases_rows,
-                    MusicRESTError,
+                    get_session, request as rest_request,
+                    _artist_releases_rows, _album_tracks_rows,
+                    _song_search_rows, MusicRESTError,
                 )
                 try:
-                    result = rest_request(args.base_url, "artist_releases",
-                                          token=get_session(args.base_url),
-                                          value=args.value)
-                    rows = _artist_releases_rows(result)
+                    if args.operation=="song_search":
+                        # Public MusicBrainz is read only; never send any
+                        # DroppedNeedle or OpenSubsonic credentials to it.
+                        result={"query":args.value}
+                        rows=_song_search_rows(args.value)
+                    else:
+                        result=rest_request(
+                            args.base_url, args.operation,
+                            token=get_session(args.base_url), value=args.value)
+                        rows=(_artist_releases_rows(result) if
+                              args.operation=="artist_releases" else
+                              _album_tracks_rows(result,args.value))
                 except MusicRESTError as exc:
                     raise MusicTransportError(str(exc)) from None
             else:

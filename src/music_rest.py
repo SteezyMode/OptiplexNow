@@ -14,6 +14,12 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
+import os
+from pathlib import Path
+import stat
+import tempfile
+import time
 import json
 import re
 import socket
@@ -364,6 +370,78 @@ def _download_rows(result: dict[str,Any]) -> str:
         if previous is None or priority[status]>previous[0]:
             seen[mbid]=(priority[status],label)
     return "".join(mbid+"\t"+value[1]+"\n" for mbid,value in seen.items())
+
+
+# Retain a bounded, owner-device-local last-good Discover feed. DroppedNeedle
+# may legitimately return refreshing=true with no sections after a container
+# recreation; do not replace a healthy earlier feed with that empty response.
+# Cache entries are scoped to the exact approved device bearer and host.
+DISCOVER_CACHE_TTL = 7 * 86400
+DISCOVER_CACHE_LIMIT = 512 * 1024
+
+def _discover_cache_path(base_url: str, token: str) -> Path:
+    origin=canonical_url(base_url)
+    digest=hashlib.sha256((origin+"\\0"+token).encode("utf-8")).hexdigest()
+    return Path.home()/".cache"/"optiplex-now"/"music-discover-v1"/(digest+".json")
+
+def _last_discover_rows(base_url: str, token: str) -> str:
+    path=_discover_cache_path(base_url,token)
+    try:
+        if path.is_symlink():
+            return ""
+        info=path.stat()
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid()
+                or info.st_size > DISCOVER_CACHE_LIMIT
+                or info.st_mode & 0o077):
+            return ""
+        data=json.loads(path.read_text(encoding="utf-8"))
+        written=data.get("saved_at")
+        rows=data.get("rows")
+        if (data.get("version")!=1 or not isinstance(rows,str)
+                or not isinstance(written,(int,float))
+                or not 0 <= time.time()-written <= DISCOVER_CACHE_TTL
+                or len(rows.encode("utf-8"))>DISCOVER_CACHE_LIMIT
+                or not rows.strip()):
+            return ""
+        return rows
+    except (OSError,ValueError,TypeError,UnicodeError):
+        return ""
+
+def _store_discover_rows(base_url: str, token: str, rows: str) -> None:
+    if not rows or len(rows.encode("utf-8"))>DISCOVER_CACHE_LIMIT//2:
+        return
+    path=_discover_cache_path(base_url,token)
+    try:
+        path.parent.mkdir(mode=0o700,parents=True,exist_ok=True)
+        if path.parent.is_symlink():
+            return
+        fd,tmp=tempfile.mkstemp(prefix=".discover-",dir=path.parent)
+        try:
+            with os.fdopen(fd,"w",encoding="utf-8") as stream:
+                os.fchmod(stream.fileno(),0o600)
+                json.dump({"version":1,"saved_at":time.time(),"rows":rows},stream)
+                stream.flush()
+                os.fsync(stream.fileno())
+            os.replace(tmp,path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
+    except (OSError,ValueError):
+        return
+
+def retained_discover_rows(base_url: str, token: str, response: dict[str, Any],
+                           *,favorite_artists=None,favorite_genres=None) -> str:
+    """Use real current recommendations or last known valid ones after warmup.
+
+    Requires a successful, authorized REST response: auth errors never fall
+    back to cached data. Does not make a download/request or mark items liked.
+    """
+    rows=_discover_rows(response,favorite_artists=favorite_artists,
+                        favorite_genres=favorite_genres)
+    if rows.strip():
+        _store_discover_rows(base_url,token,rows)
+        return rows
+    return _last_discover_rows(base_url,token)
 
 
 # Personal discovery first. General-popularity charts should never crowd out

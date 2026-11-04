@@ -195,6 +195,8 @@ def execute(compose: Path) -> None:
         + "', encoding='utf-8').read())\"\n",
         encoding="utf-8",
     )
+    # Keep backups (which may contain Compose secrets) out of Docker build context.
+    (directory / ".dockerignore").write_text("*\\n!Dockerfile\\n!homepage_service.py\\n", encoding="utf-8")
     print("Building persistent, versioned DroppedNeedle image...", flush=True)
     call("docker", "build", "--pull=false", "-t", derived_tag, str(directory))
     (directory / "patch-manifest.json").write_text(json.dumps({

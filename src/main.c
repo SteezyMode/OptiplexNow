@@ -176,8 +176,11 @@ static const char *CSS =
 "#music-section-title {font-size:14px;font-weight:700;color:#ece8e0;}"
 "#music-home button#music-settings-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:11px;color:#bbb7ae;}"
 "#music-home button#music-settings-nav.now-action:hover {background:#39302b;color:#fff;}"
-"#music-hero {background:#222724;border-radius:9px;padding:7px;}"
-"#music-hero label {font-size:16px;font-weight:700;color:#ece8e0;}"
+"#music-hero {background:#222724;border-radius:9px;padding:5px;}"
+"#music-hero label#music-album-title {font-size:14px;font-weight:750;color:#ece8e0;}"
+"#music-hero label#music-album-artist {font-size:11px;font-weight:500;color:#bdb7b0;}"
+"#music-hero button.music-transport {background:transparent;border:1px solid transparent;border-radius:16px;padding:2px;min-height:32px;min-width:32px;color:#ece8e0;}"
+"#music-hero button.music-transport:hover {background:#303831;border-color:#c47d65;}"
 "#music-library {background:transparent;border:0;}"
 "#music-card-grid {background:transparent;border:0;}"
 "#music-card-grid flowboxchild {background:transparent;border:0;padding:3px;}"
@@ -3043,6 +3046,13 @@ static void tray_music_next(GtkWidget *unused,gpointer data){
  (void)unused;(void)data;
  now_music_next();
 }
+/* Current song title is navigation, not another playback control. */
+static void tray_music_open_current(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ if(!now_music_is_playing_session())return;
+ on_music_tab(NULL,NULL);
+ tray_show_window();
+}
 /* Collapse quick BUFFERING/PLAYING/PAUSED updates into one idle rebuild.
  * Rebuilding and destroying the old GTK/AppIndicator menu repeatedly during
  * playback event delivery is avoidable and can race menu activation. */
@@ -3102,7 +3112,8 @@ static void tray_build_menu(void){
       g_strconcat(g_utf8_substring(caption,0,45),"…",NULL):
       g_strdup(caption);
   GtkWidget *playing=gtk_menu_item_new_with_label(short_title);
-  gtk_widget_set_sensitive(playing,FALSE);
+  gtk_widget_set_tooltip_text(playing,caption);
+  g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL);
   gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
   g_free(short_title);
   GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous");

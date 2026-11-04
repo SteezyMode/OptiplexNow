@@ -1733,6 +1733,7 @@ static int music_discover_collect(MusicView *view,const char *output){
  char **lines=g_strsplit(output?output:"","\n",-1);
  int category=-1;
  int count=0;
+ guint personal_shelves=0, mix_shelves=0;
  for(int i=0;lines[i] && i<300 && count<180;i++){
   char **parts=g_strsplit(lines[i],"\t",6);
   if(g_strv_length(parts)==5){
@@ -1747,17 +1748,23 @@ static int music_discover_collect(MusicView *view,const char *output){
      /* These tiles are generated from actual personalized recommendation
       * sections. A new artist or mix title can replace yesterday's; no
       * generic static 'Hip-Hop Mix' cards or empty placeholders. */
-     gboolean dynamic=g_str_has_prefix(id,"because_you_listen_") ||
-                      g_str_has_prefix(id,"daily_mixes_") ||
-                      g_str_has_prefix(id,"radio_sections_");
+     gboolean personal=g_str_has_prefix(id,"because_you_listen_");
+     gboolean mix=g_str_has_prefix(id,"daily_mixes_") ||
+                  g_str_has_prefix(id,"radio_sections_");
+     /* Reserve room for variety: a rich listening history should not
+      * displace every genre/mixtape tile with four nearly identical artists. */
+     gboolean dynamic=(personal && personal_shelves<2) ||
+                      (mix && mix_shelves<2);
      if(dynamic && *title &&
         view->discover_shelves->len<DISC_MAX_DYNAMIC){
       MusicDiscoverShelf *shelf=g_new0(MusicDiscoverShelf,1);
       shelf->title=g_strdup(title);
-      shelf->description=g_strdup(g_str_has_prefix(id,"because_you_listen_")?
+      shelf->description=g_strdup(personal?
              "Inspired by your listening":"A tailored selection");
       category=DISC_DYNAMIC_START+(int)view->discover_shelves->len;
       g_ptr_array_add(view->discover_shelves,shelf);
+      if(personal)personal_shelves++;
+      else mix_shelves++;
      }
     }else if(category>=0 &&
          (!g_strcmp0(kind,"catalog_album") ||

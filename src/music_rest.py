@@ -45,6 +45,7 @@ ALLOWED={
     "verify":("/auth/sessions","GET"),
     "search":("/search","GET"),
     "discover":("/discover","GET"),
+    "refresh_discover":("/discover/refresh","POST"),
     "artist_releases":("/artists/{id}/releases","GET"),
     "catalog_tracks":("/albums/{id}/tracks","GET"),
     "request_track":("/tracks/{id}/request","POST"),
@@ -431,6 +432,37 @@ def _store_discover_rows(base_url: str, token: str, rows: str) -> None:
                 os.unlink(tmp)
     except (OSError,ValueError):
         return
+
+DISCOVER_REFRESH_COOLDOWN = 20 * 60
+
+def refresh_discover_if_empty(base_url: str, token: str) -> bool:
+    """Trigger ONE bounded, user-navigation-initiated recomputation on empty.
+
+    Read-only with respect to media. DroppedNeedle's refresh action rebuilds
+    recommendation caches; it does NOT request or download albums. The local
+    cooldown avoids hammering expensive providers during repeated UI polls.
+    """
+    path=_discover_cache_path(base_url,token).with_suffix(".refresh")
+    try:
+        if path.is_symlink():
+            return False
+        if path.is_file() and time.time()-path.stat().st_mtime < DISCOVER_REFRESH_COOLDOWN:
+            return False
+        request(base_url,"refresh_discover",token=token,timeout_seconds=6)
+        path.parent.mkdir(parents=True,mode=0o700,exist_ok=True)
+        fd,temp=tempfile.mkstemp(prefix=".refresh-",dir=path.parent)
+        try:
+            with os.fdopen(fd,"w",encoding="ascii") as handle:
+                os.fchmod(handle.fileno(),0o600)
+                handle.write("refresh requested\n")
+            os.replace(temp,path)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
+        return True
+    except (MusicRESTError,OSError,ValueError):
+        return False
+
 
 def retained_discover_rows(base_url: str, token: str, response: dict[str, Any],
                            *,favorite_artists=None,favorite_genres=None) -> str:

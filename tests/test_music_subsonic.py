@@ -142,7 +142,7 @@ class MusicSubsonicTests(unittest.TestCase):
         with self.assertRaises(music.MusicTransportError):
             music.set_favorite(self.base, self.auth, "like_album", "")
 
-    def test_all_three_favorite_kinds_display_as_liked(self):
+    def test_liked_songs_excludes_favorited_albums_and_artists(self):
         from base64 import b64decode
         payload = {"starred": {
             "album": [{"id": "a1", "name": "Favorite album"}],
@@ -151,9 +151,12 @@ class MusicSubsonicTests(unittest.TestCase):
         }}
         rows = music._rows("liked", payload)
         entries = [list(map(b64decode, row.split("\t"))) for row in rows.splitlines()]
-        self.assertEqual({entry[0].decode(): entry[-1].decode()
-                          for entry in entries},
-                         {"album": "1", "artist": "1", "song": "1"})
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0][0], b"song")
+        self.assertEqual(entries[0][1], b"s1")
+        self.assertEqual(entries[0][-1], b"1")
+        self.assertEqual(music._rows("liked", {"starred": {
+            "album": [{"id": "a1"}], "artist": [{"id": "r1"}]}}), "")
 
     def test_redirect_never_forwards_auth(self):
         with self.assertRaises(music.MusicTransportError) as caught:

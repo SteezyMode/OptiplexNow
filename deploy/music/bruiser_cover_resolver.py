@@ -233,5 +233,10 @@ async def missing_album_cover(
         # Native library / embedded art was attempted before this function.
         # Missing real-MBID covers and unresolved local albums can use an
         # opted-in, artist-scoped AudioDB lookup, with an on-disk image cache.
-        from services.compat.bruiser_cover_fallback import album_name_cover
+        try:
+            from services.compat.bruiser_cover_fallback import album_name_cover
+        except ImportError:
+            # Artwork is optional: never break playback when a partial
+            # host install omitted the accompanying fallback module.
+            return None
         return await album_name_cover(album, local_id, coverart)

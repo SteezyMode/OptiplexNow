@@ -107,7 +107,7 @@ async def recover_album_cover(
         return None
     cover = services.coverart
     disk = cover.disk_cache
-    cache_file = disk.get_file_path("rg_" + album_id, size)
+    cache_file = disk.get_file_path("bruiser_rg_" + album_id, size)
     lock = _LOCKS.setdefault(album_id + ":" + size, asyncio.Lock())
 
     async with lock:

@@ -71,7 +71,7 @@ typedef struct {
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
- char *username, *app_password, *bound_url, *vault_attempted_url;
+ char *username, *app_password, *bound_url, *vault_attempted_url, *discover_artist;
  gboolean busy, closing, vault_busy, remember_pending;
  gboolean song_has_more, album_has_more;
  guint page_idle;
@@ -157,6 +157,7 @@ static void music_view_free(gpointer data){
  g_free(view->username);
  g_free(view->bound_url);
  g_free(view->vault_attempted_url);
+ g_free(view->discover_artist);
  g_free(view->playing_caption);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
@@ -898,7 +899,9 @@ static void music_request_album(GtkWidget *button,gpointer data){
  MusicView *view=data;
  if(view->closing || !*cfg[6])return;
  const char *mbid=g_object_get_data(G_OBJECT(button),"music-request-mbid");
- if(!mbid || strlen(mbid)!=36)return;
+ const char *track=g_object_get_data(G_OBJECT(button),"music-track-value");
+ const char *value=track?track:mbid;
+ if(!value || (!track && strlen(value)!=36))return;
  /* No credential ever enters argv, environment or a GUI entry field. */
  char *source=helper_path();
  char *dir=g_path_get_dirname(source);
@@ -909,7 +912,7 @@ static void music_request_album(GtkWidget *button,gpointer data){
   status_set(view,"Music request integration is not installed.");
   g_free(helper);return;
  }
- const gchar *argv[]={"/usr/bin/python3",helper,cfg[6],"request",mbid,NULL};
+ const gchar *argv[]={"/usr/bin/python3",helper,cfg[6],track?"request_track":"request",value,NULL};
  GError *error=NULL;
  GSubprocess *proc=g_subprocess_newv(argv,
       G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
@@ -1250,6 +1253,29 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  if(view && id)music_action_start(view,"playlist_options",NULL,button,id);
 }
 
+static char *track_selection(const char *id,const char *artist,const char *title,
+                             const char *album,const char *group){
+ char *a=g_uri_escape_string(artist,NULL,FALSE);
+ char *t=g_uri_escape_string(title,NULL,FALSE);
+ char *b=g_uri_escape_string(album,NULL,FALSE);
+ char *v=g_strdup_printf("%s|%s|%s|%s|%s",id,a,t,b,group);
+ g_free(a);g_free(t);g_free(b);return v;
+}
+static void catalog_tracks_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ const char *id=g_object_get_data(G_OBJECT(button),"music-album-mbid");
+ const char *artist=g_object_get_data(G_OBJECT(button),"music-album-artist");
+ const char *title=g_object_get_data(G_OBJECT(button),"music-album-title");
+ if(!id || strlen(id)!=36 || !artist || !*artist || !title || !*title ||
+    view->closing || view->busy)return;
+ char *a=g_uri_escape_string(artist,NULL,FALSE);
+ char *t=g_uri_escape_string(title,NULL,FALSE);
+ char *v=g_strdup_printf("%s|%s|%s",id,a,t);
+ char *heading=g_strdup_printf("%s · Tracks",title);
+ view->discover_active=TRUE;
+ query_start(view,"catalog_tracks",v,heading);
+ g_free(a);g_free(t);g_free(v);g_free(heading);
+}
 static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
  MusicView *view=data;
  const char *artist=g_object_get_data(G_OBJECT(button),"music-artist-query");
@@ -1258,6 +1284,8 @@ static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
     !mbid || strlen(mbid)!=36)return;
  /* Artist cards now open real MusicBrainz release-group discography,
   * not a second broad string search that often returns no albums. */
+ g_free(view->discover_artist);
+ view->discover_artist=g_strdup(artist);
  view->discover_active=TRUE;
  char *heading=g_strdup_printf("%s · Discography",artist);
  query_start(view,"artist_releases",mbid,heading);
@@ -1305,6 +1333,18 @@ static void music_catalog_card(MusicView *view,const char *kind,
    gtk_widget_set_sensitive(request,FALSE);
   }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
   gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
+  GtkWidget *tracks=gtk_button_new_with_label("Tracks");
+  const char *sep=g_strstr_len(status,-1," · ");
+  gboolean discog=g_str_has_prefix(status,"Album ·") ||
+      g_str_has_prefix(status,"EP ·") || g_str_has_prefix(status,"Single ·");
+  char *who=discog?g_strdup(view->discover_artist):
+      (sep?g_strndup(status,sep-status):g_strdup(status));
+  g_object_set_data_full(G_OBJECT(tracks),"music-album-mbid",g_strdup(id),g_free);
+  g_object_set_data_full(G_OBJECT(tracks),"music-album-artist",who,g_free);
+  g_object_set_data_full(G_OBJECT(tracks),"music-album-title",g_strdup(title),g_free);
+  gtk_widget_set_sensitive(tracks,who && *who);
+  g_signal_connect(tracks,"clicked",G_CALLBACK(catalog_tracks_clicked),view);
+  gtk_box_pack_end(GTK_BOX(card),tracks,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
  }else{
   GtkWidget *explore=gtk_button_new_with_label("Explore artist");
@@ -1322,7 +1362,8 @@ static void music_catalog_card(MusicView *view,const char *kind,
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
- if(view->grid_mode && g_str_has_prefix(kind,"catalog_")){
+ if(view->grid_mode && (!g_strcmp0(kind,"catalog_album") ||
+                        !g_strcmp0(kind,"catalog_artist"))){
   music_catalog_card(view,kind,id,title,artist,cover);
   return;
  }
@@ -1405,7 +1446,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  GtkWidget *button=gtk_button_new();
  gtk_widget_set_name(button,!g_strcmp0(kind,"song")?"music-song-row":"music-row");
  gtk_style_context_add_class(gtk_widget_get_style_context(button),"now-action");
- gboolean is_song=!g_strcmp0(kind,"song");
+ gboolean is_song=!g_strcmp0(kind,"song") || !g_strcmp0(kind,"catalog_track");
  GtkWidget *content=gtk_box_new(is_song?GTK_ORIENTATION_HORIZONTAL:
                                   GTK_ORIENTATION_VERTICAL,is_song?6:3);
  gtk_container_set_border_width(GTK_CONTAINER(content),is_song?0:5);
@@ -1418,7 +1459,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  if(is_song)gtk_label_set_single_line_mode(GTK_LABEL(primary),TRUE);
  gtk_box_pack_start(GTK_BOX(content),primary,FALSE,FALSE,0);
  char *detail;
- if(!g_strcmp0(kind,"song")){
+ if(is_song){
   detail=(album && *album && artist && *artist)?
       g_strdup_printf("%s · %s",artist,album):
       g_strdup(artist && *artist?artist:album && *album?album:"Unknown artist");
@@ -1461,6 +1502,18 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   }
   gtk_box_pack_end(GTK_BOX(line),request,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
+  gtk_container_add(GTK_CONTAINER(row),line);
+ }else if(!g_strcmp0(kind,"catalog_track")){
+  GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+  gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
+  GtkWidget *request=gtk_button_new_with_label("Add Song");
+  const char *group=g_str_has_prefix(cover?cover:"","dn-album:")?cover+9:"";
+  if(strlen(group)==36){
+   g_object_set_data_full(G_OBJECT(request),"music-track-value",
+       track_selection(id,artist,title,album,group),g_free);
+   g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
+  }else gtk_widget_set_sensitive(request,FALSE);
+  gtk_box_pack_end(GTK_BOX(line),request,FALSE,FALSE,0);
   gtk_container_add(GTK_CONTAINER(row),line);
  }else if(!g_strcmp0(kind,"song")){
   GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
@@ -1550,6 +1603,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
        !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
+       !strcmp(kind,"catalog_track") ||
        !strcmp(kind,"album_meta") || !strcmp(kind,"section"))){
     music_add_item(view,kind,id,title,artist,cover,album,!strcmp(liked,"1"));
     if(strcmp(kind,"album_meta"))++count;
@@ -1881,7 +1935,8 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
      ?music_discover_collect(view,output)
      :render_rows(view,output,job->append_albums || job->append_songs);
    if((!g_strcmp0(job->operation,"catalog") ||
-       !g_strcmp0(job->operation,"artist_releases")) &&
+       (!g_strcmp0(job->operation,"artist_releases") ||
+        !g_strcmp0(job->operation,"catalog_tracks"))) &&
       view->discover_active && view->discover_back)
     gtk_widget_show(view->discover_back);
    if(view->grid_mode){
@@ -1970,7 +2025,8 @@ static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
  if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog") &&
-    g_strcmp0(operation,"artist_releases")){
+    g_strcmp0(operation,"artist_releases") &&
+    g_strcmp0(operation,"catalog_tracks")){
   view->discover_active=FALSE;
   view->discover_category=-1;
   if(view->discover_back)gtk_widget_hide(view->discover_back);
@@ -1983,7 +2039,8 @@ static void query_start(MusicView *view,const char *operation,
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
                         !g_strcmp0(operation,"discover") ||
-                        !g_strcmp0(operation,"artist_releases");
+                        !g_strcmp0(operation,"artist_releases") ||
+                        !g_strcmp0(operation,"catalog_tracks");
  /* Discover still works with just the DroppedNeedle companion session.
   * When playback is connected to the same host, optionally provide this
   * client's app password on stdin for read-only per-user starred artists. */
@@ -2012,6 +2069,12 @@ static void query_start(MusicView *view,const char *operation,
   return;
  }
  char *helper=helper_path();
+ if(!g_strcmp0(operation,"catalog_tracks")){
+  char *dir=g_path_get_dirname(helper);
+  g_free(helper);
+  helper=g_build_filename(dir,"music_rest.py",NULL);
+  g_free(dir);
+ }
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
   status_set(view,"Installed Music client helper is missing.");
   g_free(helper);

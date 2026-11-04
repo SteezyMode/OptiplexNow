@@ -152,6 +152,17 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn('liked?"Unlike album":"Like album"',UI)
         self.assertIn('liked?"Unlike artist":"Like artist"',UI)
 
+    def test_now_playing_can_add_current_song_to_existing_or_new_playlist(self):
+        self.assertIn("*playing_add, *pause_button",UI)
+        self.assertIn('music_icon_button("list-add-symbolic","Add current song to playlist")',UI)
+        self.assertIn('gtk_widget_set_name(view->playing_add,"music-playing-add")',UI)
+        self.assertIn('G_CALLBACK(music_playlist_clicked),view->playing_add',UI)
+        self.assertIn('gtk_box_pack_start(GTK_BOX(track_info),view->playing_add,FALSE,FALSE,0)',UI)
+        self.assertIn('g_strdup(current?current->id:"")',UI)
+        self.assertIn('gtk_widget_set_sensitive(view->playing_add,current!=NULL)',UI)
+        self.assertIn('button#music-playing-add.music-transport',CSS)
+        self.assertIn('button#music-playing-like.music-transport',CSS)
+
     def test_player_is_two_rows_with_seek_beside_transport(self):
         self.assertIn('view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,2)',UI)
         self.assertIn('gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),4)',UI)

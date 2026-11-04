@@ -32,14 +32,25 @@ static MusicTrack *track_copy(const MusicTrack *source){
  return t;
 }
 typedef struct {
+ char *kind, *id, *title, *artist, *cover;
+ int category;
+} MusicDiscoverEntry;
+static void music_discover_entry_free(gpointer data){
+ MusicDiscoverEntry *entry=data;
+ if(!entry)return;
+ g_free(entry->kind);g_free(entry->id);g_free(entry->title);
+ g_free(entry->artist);g_free(entry->cover);g_free(entry);
+}
+
+typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
- GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
+ GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav, *discover_back;
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
- GPtrArray *visible_tracks, *queue;
+ GPtrArray *visible_tracks, *queue, *discover_entries;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
  int queue_index, album_offset, song_offset, volume;
@@ -48,7 +59,7 @@ typedef struct {
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode, shuffle_enabled;
+ gboolean grid_mode, shuffle_enabled, discover_active;
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
@@ -56,6 +67,7 @@ typedef struct {
  gboolean busy, closing, vault_busy, remember_pending;
  gboolean song_has_more, album_has_more;
  guint page_idle;
+ int discover_category;
  gboolean auto_enroll_busy, auto_enroll_attempted;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
@@ -139,6 +151,7 @@ static void music_view_free(gpointer data){
  g_free(view->playing_caption);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
+ if(view->discover_entries)g_ptr_array_unref(view->discover_entries);
  if(view->shuffle_order)g_array_unref(view->shuffle_order);
  if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
  if(view->pending_art)g_queue_free_full(view->pending_art,music_pending_free);
@@ -530,7 +543,7 @@ typedef struct {
  GCancellable *cancel;
  guint deadline;
  guint64 serial;
- gboolean playing;
+ gboolean playing, catalog;
  GtkWidget *card_target; /* reference; old cards are ignored after navigation */
  char *server_url;
  char *input; /* wipe after the worker completes */
@@ -561,7 +574,7 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
  GError *error=NULL;
  gboolean ok=g_subprocess_communicate_finish(job->process,result,&output,NULL,&error);
  if(view && !view->closing &&
-    g_strcmp0(job->server_url,view->bound_url)==0 &&
+    (job->catalog || g_strcmp0(job->server_url,view->bound_url)==0) &&
     g_strcmp0(job->server_url,cfg[6])==0 &&
     job->serial==(job->card_target?view->card_art_serial:
         (job->playing?view->playing_art_serial:view->hero_art_serial)) &&
@@ -648,29 +661,49 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  * No artwork requests are made for cards the user never reaches. */
 static void music_card_art_launch(MusicView *view,const char *cover_id,
                                   GtkWidget *image){
- if(view->closing || !view->app_password || !view->bound_url ||
-    g_strcmp0(cfg[6],view->bound_url)!=0)return;
+ if(view->closing || !cover_id || !*cover_id || !*cfg[6])return;
+ const gboolean catalog=g_str_has_prefix(cover_id,"dn-album:") ||
+                        g_str_has_prefix(cover_id,"dn-artist:");
+ if(!catalog && (!view->app_password || !view->bound_url ||
+    g_strcmp0(cfg[6],view->bound_url)!=0))return;
  char *helper=helper_path();
+ if(catalog){
+  /* Unowned catalog art requires the scoped DN bearer, never a playback key.
+   * The Python helper validates the MBID and fixed, same-host API route. */
+  char *dir=g_path_get_dirname(helper);
+  g_free(helper);
+  helper=g_build_filename(dir,"music_rest.py",NULL);
+  g_free(dir);
+ }
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){g_free(helper);return;}
- const char *argv[]={"/usr/bin/python3",helper,view->bound_url,
-                     "art",cover_id,"--auth-format=form",NULL};
+ char *cover_arg=catalog?g_strdup(cover_id+3):g_strdup(cover_id);
+ const gchar *argv_catalog[]={"/usr/bin/python3",helper,cfg[6],
+                              "cover",cover_arg,NULL};
+ const gchar *argv_local[]={"/usr/bin/python3",helper,view->bound_url,
+                            "art",cover_arg,"--auth-format=form",NULL};
  GError *error=NULL;
- GSubprocess *proc=g_subprocess_newv(argv,
+ GSubprocess *proc=g_subprocess_newv(catalog?argv_catalog:argv_local,
      G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(cover_arg);
  g_free(helper);
  if(!proc){g_clear_error(&error);return;}
  MusicArtJob *job=g_new0(MusicArtJob,1);
  job->process=proc;
  job->root=g_object_ref(view->root);
  job->card_target=g_object_ref(image);
+ job->catalog=catalog;
  job->cancel=g_cancellable_new();
  job->serial=view->card_art_serial;
- job->server_url=g_strdup(view->bound_url);
- char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
- char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
- job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
- wipe_free(key);g_free(name);
+ job->server_url=g_strdup(cfg[6]);
+ if(catalog){
+  job->input=g_strdup("");
+ }else{
+  char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
+  char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+  job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
+  wipe_free(key);g_free(name);
+ }
  GBytes *sent=g_bytes_new(job->input,strlen(job->input));
  job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
  view->art_inflight++;
@@ -692,7 +725,7 @@ static void music_card_art_start(MusicView *view,const char *cover_id,
 }
 static void music_card_queue_pump(MusicView *view){
  if(view->closing || !view->pending_art || !view->cards ||
-    !view->cards_scroll || !view->app_password)return;
+    !view->cards_scroll)return;
  GtkAdjustment *adjustment=gtk_scrolled_window_get_vadjustment(
                                   GTK_SCROLLED_WINDOW(view->cards_scroll));
  double top=gtk_adjustment_get_value(adjustment);
@@ -2187,6 +2220,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->tray_changed=tray_changed;
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
+ view->discover_entries=g_ptr_array_new_with_free_func(music_discover_entry_free);
+ view->discover_category=-1;
  view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
  view->pending_art=g_queue_new();
  view->queue_index=-1;

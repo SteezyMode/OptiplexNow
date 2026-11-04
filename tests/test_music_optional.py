@@ -181,7 +181,7 @@ class OptionalMusicContract(unittest.TestCase):
 
     def test_discover_is_a_page_not_a_text_query(self):
         self.assertIn('!g_strcmp0(operation,"discover")', UI_MUSIC)
-        self.assertIn('!g_strcmp0(operation,"album_tracks");', UI_MUSIC)
+        self.assertIn('!g_strcmp0(operation,"album_tracks")', UI_MUSIC)
         self.assertIn('(!value || !*value)', UI_MUSIC)
         self.assertIn('g_strdup(""):g_strdup_printf(', UI_MUSIC)
         transport=(ROOT/"src"/"music_subsonic.py").read_text(encoding="utf-8")

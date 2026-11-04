@@ -175,14 +175,15 @@ async def missing_album_cover(
     album: object, local_id: str, coverart: object, size: str,
     is_disconnected: object = None,
 ) -> tuple[bytes, str, str] | None:
-    """Resolve a single known-library, synthetic-ID album only on cover miss.
+    """After native art misses, use verified MB identity then opted-in AudioDB.
 
-    No background crawler, tag rewriting, downloading audio, or invented MBID.
-    MusicBrainz requests use DroppedNeedle's existing bounded repository.
+    Works for real v3/v4 release-group IDs AND local synthetic UUIDv5 IDs.
+    Does not modify album metadata, music files or service preferences.
     """
-    if not synthetic_album_id(local_id):
+    if not isinstance(local_id, str) or not (
+        synthetic_album_id(local_id) or _valid_rg(local_id)
+    ):
         return None
-
     title = _attr(album, "title")
     artist = _attr(album, "artist_name")
     year = _year(_attr(album, "year")) or _year(
@@ -193,48 +194,44 @@ async def missing_album_cover(
     if not _normalize(title) or not _normalize(artist):
         return None
 
-    path = _cache_path(local_id, title, artist, year)
     async with _sem():
-        # A projected canonical ID is authoritative; UUIDv5 is never.
-        projected = _attr(album, "musicbrainz_release_group_id")
-        if _valid_rg(projected):
-            mbid = projected.lower()
-            found = True
-        else:
-            found, mbid = await asyncio.to_thread(_read_cache, path)
-        if found and not mbid:
-            return None
-        if not found:
-            try:
-                # Resolve lazily, and never bypass the existing provider rate
-                # limits, circuit breaker or MusicBrainz caches.
-                from core.dependencies.repo_providers import get_musicbrainz_repository
-                from infrastructure.queue.priority_queue import RequestPriority
+        if synthetic_album_id(local_id):
+            path = _cache_path(local_id, title, artist, year)
+            projected = _attr(album, "musicbrainz_release_group_id")
+            if _valid_rg(projected):
+                mbid = projected.lower()
+                found = True
+            else:
+                found, mbid = await asyncio.to_thread(_read_cache, path)
+            if not found:
+                try:
+                    from core.dependencies.repo_providers import get_musicbrainz_repository
+                    from infrastructure.queue.priority_queue import RequestPriority
+                    candidates = await asyncio.wait_for(
+                        get_musicbrainz_repository().search_release_groups(
+                            artist, title, limit=15, include_all_types=True,
+                            priority=RequestPriority.IMAGE_FETCH,
+                        ), timeout=SEARCH_TIMEOUT_SECONDS
+                    )
+                    mbid = pick_verified_release_group(candidates, title, artist, year)
+                    if candidates:
+                        await asyncio.to_thread(_write_cache, path, mbid)
+                except Exception:
+                    mbid = None
+            if mbid:
+                try:
+                    result = await asyncio.wait_for(
+                        coverart.get_release_group_cover(
+                            mbid, size, is_disconnected=is_disconnected
+                        ), timeout=IMAGE_TIMEOUT_SECONDS
+                    )
+                    if result is not None:
+                        return result
+                except Exception:
+                    pass
 
-                repository = get_musicbrainz_repository()
-                candidates = await asyncio.wait_for(
-                    repository.search_release_groups(
-                        artist, title, limit=15, include_all_types=True,
-                        priority=RequestPriority.IMAGE_FETCH,
-                    ), timeout=SEARCH_TIMEOUT_SECONDS
-                )
-                mbid = pick_verified_release_group(candidates, title, artist, year)
-                # A blank repository response can also be an upstream outage:
-                # never poison the persistent mapping cache on empty search.
-                if candidates:
-                    await asyncio.to_thread(_write_cache, path, mbid)
-            except Exception:
-                # A provider outage is not proof no cover exists: do NOT
-                # record a negative cache entry.
-                return None
-        if not mbid:
-            return None
-        try:
-            result = await asyncio.wait_for(
-                coverart.get_release_group_cover(
-                    mbid, size, is_disconnected=is_disconnected
-                ), timeout=IMAGE_TIMEOUT_SECONDS
-            )
-            return result
-        except Exception:
-            return None
+        # Native library / embedded art was attempted before this function.
+        # Missing real-MBID covers and unresolved local albums can use an
+        # opted-in, artist-scoped AudioDB lookup, with an on-disk image cache.
+        from services.compat.bruiser_cover_fallback import album_name_cover
+        return await album_name_cover(album, local_id, coverart)

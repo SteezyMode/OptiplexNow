@@ -42,6 +42,31 @@ class DiscoverTileTests(unittest.TestCase):
             ["Because You Listen to Circa Survive","Because You Listen to Low"])
         self.assertEqual([x[1] for x in rows if x[0]=="catalog_artist"],[A,B])
 
+    def test_personalized_genre_mix_and_radio_picks_are_not_starved(self):
+        data={
+            "because_you_listen_to":[
+                {"seed_artist":"Artist "+str(i),
+                 "section":{"type":"artists","items":[
+                     {"name":"Artist "+str(i),
+                      "mbid":"00000000-0000-4000-8000-"+f"{i+1:012d}"}]}}
+                for i in range(8)],
+            "daily_mixes":[{"title":"Daily Mix 1 - Hip-Hop","type":"albums",
+                "items":[{"name":"New beat","mbid":C,"artist_name":"Producer"}]}],
+            "radio_sections":[{"title":"Radio: Circa Survive","type":"albums",
+                "items":[{"name":"New album","mbid":A,"artist_name":"Similar band"}]}],
+            "globally_trending":{"title":"Charts","type":"artists",
+                "items":[{"name":"Famous","mbid":B}]},
+        }
+        data_rows=decode(rest._discover_rows(data))
+        labels=[r[2] for r in data_rows if r[0]=="section"]
+        self.assertIn("Daily Mix 1 - Hip-Hop",labels)
+        self.assertIn("Artist Picks: Circa Survive",labels)
+        self.assertIn("Globally Trending",labels)
+        self.assertLess(labels.index("Daily Mix 1 - Hip-Hop"),
+                        labels.index("Globally Trending"))
+        self.assertFalse(any(x.startswith("Radio: ") for x in labels))
+        self.assertEqual(sum(x.startswith("Because You Listen") for x in labels),2)
+
     def test_empty_mix_is_not_populated_with_fake_content(self):
         data={"daily_mixes":[{"title":"Hip-Hop Mix","type":"albums","items":[]}]}
         self.assertEqual(rest._discover_rows(data),"")

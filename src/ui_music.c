@@ -1612,7 +1612,7 @@ static void music_discover_tile_clicked(GtkWidget *button,gpointer data){
 }
 
 static void music_discover_show_landing(MusicView *view){
- if(!view || view->closing || view->busy)return;
+ if(!view || view->closing)return;
  view->discover_active=TRUE;
  view->discover_category=-1;
  view->grid_mode=TRUE;
@@ -1787,8 +1787,12 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                     !g_strcmp0(job->operation,"recent") ||
                     !g_strcmp0(job->operation,"new") ||
                     !g_strcmp0(job->operation,"artists") ||
-                    !g_strcmp0(job->operation,"playlists"));
-   int count=render_rows(view,output,job->append_albums || job->append_songs);
+                    !g_strcmp0(job->operation,"playlists") ||
+                    !g_strcmp0(job->operation,"catalog") ||
+                    !g_strcmp0(job->operation,"discover"));
+   int count=!g_strcmp0(job->operation,"discover")
+     ?music_discover_collect(view,output)
+     :render_rows(view,output,job->append_albums || job->append_songs);
    if(view->grid_mode){
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);
@@ -1874,6 +1878,11 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
+ if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog")){
+  view->discover_active=FALSE;
+  view->discover_category=-1;
+  if(view->discover_back)gtk_widget_hide(view->discover_back);
+ }
  /* Browse/detail navigation restores the inline library header.
   * Searching itself keeps the input open for quick query refinement. */
  if(g_strcmp0(operation,"search") && g_strcmp0(operation,"catalog"))
@@ -2287,6 +2296,7 @@ static void music_nav(GtkWidget *button,gpointer data){
   music_nav_selected(view,button);
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
+  view->discover_active=!g_strcmp0(operation,"discover");
   query_start(view,operation,NULL,heading);
   if(!g_strcmp0(operation,"discover")){
    gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
@@ -2622,6 +2632,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *header_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
  gtk_widget_set_name(header_row,"music-header-row");
  gtk_box_pack_start(GTK_BOX(maincol),header_row,FALSE,FALSE,0);
+ view->discover_back=music_icon_button("go-previous-symbolic","Back to Discover");
+ gtk_widget_set_name(view->discover_back,"music-discover-back");
+ gtk_widget_set_size_request(view->discover_back,28,28);
+ gtk_widget_set_no_show_all(view->discover_back,TRUE);
+ g_signal_connect(view->discover_back,"clicked",
+                  G_CALLBACK(music_discover_back_clicked),view);
+ gtk_box_pack_start(GTK_BOX(header_row),view->discover_back,FALSE,FALSE,0);
  view->header_stack=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(view->header_stack),
                                 GTK_STACK_TRANSITION_TYPE_NONE);
@@ -2862,6 +2879,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->status_timer=g_timeout_add_seconds(15,music_status_tick,view);
  gtk_widget_show_all(view->root);
  gtk_widget_hide(view->hero_row);
+ gtk_widget_hide(view->discover_back);
  gtk_widget_hide(view->cards_scroll);
  gtk_widget_hide(view->player_bar);
  gtk_widget_hide(view->shuffle_all);

@@ -28,7 +28,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('else if(n==2)on_music_tab(NULL,NULL);', MAIN)
         self.assertIn('on_music_tab(GtkWidget*w,gpointer data)', MAIN)
         self.assertIn('now_nav_show_page(main_pages,"music");', MAIN)
-        self.assertIn('query_start(view,"home",NULL,"Music Home");', UI_MUSIC)
+        self.assertIn('query_start(view,"discover",NULL,"Discover");', UI_MUSIC)
         self.assertIn('view->open_url(cfg[6])', UI_MUSIC)
         self.assertIn('wipe_free(view->app_password);', UI_MUSIC)
         self.assertIn('g_strcmp0(view->bound_url,cfg[6])', UI_MUSIC)
@@ -62,9 +62,11 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("music_keyring.py", package)
 
     def test_standard_music_navigation_and_advanced_are_separate(self):
-        # A compact rail with Home and Discover; Library expands its filters.
-        self.assertIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
+        # Music opens on useful Discover content. The empty Home entry is
+        # absent; the complete Library and settings remain accessible.
+        self.assertNotIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
         self.assertIn('GtkWidget *discover_button=music_button("Discover")', UI_MUSIC)
+        self.assertIn('music_nav_selected(view,discover_button);', UI_MUSIC)
         self.assertIn('gtk_label_new("Your Library")', UI_MUSIC)
         self.assertIn('G_CALLBACK(music_library_clicked)', UI_MUSIC)
         self.assertIn('GTK_REVEALER_TRANSITION_TYPE_SLIDE_DOWN', UI_MUSIC)
@@ -237,7 +239,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"updatePlaylist"', transport)
         self.assertIn('"createPlaylist"', transport)
         self.assertIn('SONG_PAGE_SIZE = 200', transport)
-        self.assertIn('g_object_set_data(G_OBJECT(home_button),"music-heading",(gpointer)"Music Home")', UI_MUSIC)
+        self.assertIn('g_object_set_data(G_OBJECT(discover_button),"music-heading",(gpointer)"Discover")', UI_MUSIC)
         self.assertIn('"#music-library #music-row-title', MAIN)
         self.assertIn('"#music-sidebar button#music-library-root', MAIN)
         self.assertIn('"#music-player button.music-transport', MAIN)

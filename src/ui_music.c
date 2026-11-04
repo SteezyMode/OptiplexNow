@@ -1250,13 +1250,6 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  if(view && id)music_action_start(view,"playlist_options",NULL,button,id);
 }
 
-static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
- MusicView *view=data;
- const char *artist=g_object_get_data(G_OBJECT(button),"music-artist-query");
- if(!view || view->closing || view->busy || !artist || !*artist)return;
- view->discover_active=TRUE;
- query_start(view,"catalog",artist,"Discover artist");
-}
 static void music_catalog_card(MusicView *view,const char *kind,
                                const char *id,const char *title,
                                const char *artist,const char *cover){
@@ -1278,15 +1271,25 @@ static void music_catalog_card(MusicView *view,const char *kind,
  gtk_label_set_ellipsize(GTK_LABEL(name),PANGO_ELLIPSIZE_END);
  gtk_widget_set_tooltip_text(name,title);
  gtk_box_pack_start(GTK_BOX(card),name,FALSE,FALSE,0);
- gboolean is_album=!g_strcmp0(kind,"catalog_album");
  const char *status=artist?artist:"";
- GtkWidget *subtitle=gtk_label_new(status);
+ /* "Not in library" is self-evident in Discover; Requests are indicated
+  * by the action button. Show just the actual album artist as metadata. */
+ char *display_artist=g_strdup(status);
+ for(const char *suffixes[]={" · Not in library"," · Requested",NULL},**s=suffixes;
+     *s;s++){
+  if(g_str_has_suffix(display_artist,*s)){
+   display_artist[strlen(display_artist)-strlen(*s)]='\0';
+   break;
+  }
+ }
+ GtkWidget *subtitle=gtk_label_new(display_artist);
+ g_free(display_artist);
  gtk_widget_set_name(subtitle,"music-card-subtitle");
  gtk_label_set_xalign(GTK_LABEL(subtitle),0);
  gtk_label_set_max_width_chars(GTK_LABEL(subtitle),22);
  gtk_label_set_ellipsize(GTK_LABEL(subtitle),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(card),subtitle,FALSE,FALSE,0);
- if(is_album){
+ {
   GtkWidget *request=gtk_button_new_with_label("Add to Library");
   gtk_widget_set_name(request,"music-discover-add");
   gtk_style_context_add_class(gtk_widget_get_style_context(request),"now-action");
@@ -1297,13 +1300,6 @@ static void music_catalog_card(MusicView *view,const char *kind,
   }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
   gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
- }else{
-  GtkWidget *explore=gtk_button_new_with_label("Explore artist");
-  gtk_widget_set_name(explore,"music-discover-explore");
-  gtk_style_context_add_class(gtk_widget_get_style_context(explore),"now-action");
-  g_object_set_data_full(G_OBJECT(explore),"music-artist-query",g_strdup(title),g_free);
-  g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
-  gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
  }
  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
  music_card_art_start(view,cover,art);
@@ -1312,7 +1308,8 @@ static void music_catalog_card(MusicView *view,const char *kind,
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
- if(view->grid_mode && g_str_has_prefix(kind,"catalog_")){
+ if(!g_strcmp0(kind,"catalog_artist"))return;
+ if(view->grid_mode && !g_strcmp0(kind,"catalog_album")){
   music_catalog_card(view,kind,id,title,artist,cover);
   return;
  }
@@ -1413,12 +1410,14 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
       g_strdup_printf("%s · %s",artist,album):
       g_strdup(artist && *artist?artist:album && *album?album:"Unknown artist");
  }else{
-  detail=g_strdup_printf("%s · %s",
-      !g_strcmp0(kind,"artist")?"Artist":
-      !g_strcmp0(kind,"catalog_artist")?"Discover artist":
-      !g_strcmp0(kind,"catalog_album")?"Discover album":
-      !g_strcmp0(kind,"playlist")?"Playlist":"Album",
-      artist && *artist?artist:"");
+  /* Catalog-only requestable albums don't need a "Discover album" label.
+   * Use the actual artist name as metadata, not a redundant type banner. */
+  detail=!g_strcmp0(kind,"catalog_album")
+      ?g_strdup(artist && *artist?artist:"")
+      :g_strdup_printf("%s · %s",
+        !g_strcmp0(kind,"artist")?"Artist":
+        !g_strcmp0(kind,"playlist")?"Playlist":"Album",
+        artist && *artist?artist:"");
  }
  GtkWidget *secondary=gtk_label_new(detail);
  gtk_label_set_xalign(GTK_LABEL(secondary),0);
@@ -1770,8 +1769,7 @@ static int music_discover_collect(MusicView *view,const char *output){
       else mix_shelves++;
      }
     }else if(category>=0 &&
-         (!g_strcmp0(kind,"catalog_album") ||
-          !g_strcmp0(kind,"catalog_artist")) &&
+         !g_strcmp0(kind,"catalog_album") &&
          strlen(id)==36 && *title){
      MusicDiscoverEntry *entry=g_new0(MusicDiscoverEntry,1);
      entry->kind=g_strdup(kind);

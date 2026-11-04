@@ -227,7 +227,7 @@ def cover_bytes(base_url: str, cover_id: str, *, token: str) -> bytes:
 def _rows(results: dict[str,Any]) -> str:
     """Same five-column, base64-tabbed bounded transport as library rows."""
     rows=[]
-    for kind in ("artist","album"):
+    for kind in ("album",):
         entries=results.get(kind+"s",[])
         if not isinstance(entries,list):continue
         for item in entries[:100]:

@@ -103,11 +103,11 @@ class DiscoverTileTests(unittest.TestCase):
              "artists":[{"title":"Outside artist","musicbrainz_id":C,
                           "in_library":False}]}
         rows=decode(rest._rows(raw))
-        self.assertEqual([x[0] for x in rows],["catalog_artist","catalog_album"])
-        self.assertEqual([x[4] for x in rows],["dn-artist:"+C,"dn-album:"+A])
+        self.assertEqual([x[0] for x in rows],["catalog_album"])
+        self.assertEqual([x[4] for x in rows],["dn-album:"+A])
         from_subsonic=decode(sub._rows("catalog",{"catalog":raw}))
         self.assertEqual([x[4] for x in from_subsonic],
-                         ["dn-artist:"+C,"dn-album:"+A])
+                         ["dn-album:"+A])
         self.assertNotIn(B,[x[1] for x in rows])
 
     def test_catalog_cover_never_accepts_arbitrary_url_or_uuid(self):
@@ -159,8 +159,7 @@ class DiscoverTileTests(unittest.TestCase):
                      'G_CALLBACK(music_discover_back_clicked)',
                      'music_discover_show_category(view,group)',
                      'music_discover_show_landing(view)',
-                     '"music-discover-add"',
-                     '"music-discover-explore"'):
+                     '"music-discover-add"'):
             with self.subTest(text=text):
                 self.assertIn(text,ui if text!='"Because You Listen to "' else
                               (ROOT/"src/music_rest.py").read_text())
@@ -168,6 +167,10 @@ class DiscoverTileTests(unittest.TestCase):
         self.assertIn('!count)continue;',ui)
         self.assertIn('"cover",cover_arg,NULL',ui)
         self.assertIn('g_strdup("")',ui)
+        self.assertNotIn("music_catalog_artist_clicked",ui)
+        self.assertNotIn('gtk_button_new_with_label("Explore artist")',ui)
+        self.assertIn('!g_strcmp0(kind,"catalog_album") &&',ui)
+        self.assertIn('if(!g_strcmp0(kind,"catalog_artist"))return;',ui)
 
 if __name__=="__main__":
     unittest.main()

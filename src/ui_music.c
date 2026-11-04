@@ -68,7 +68,9 @@ typedef struct {
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode, shuffle_enabled, discover_active, home_active;
+ gboolean grid_mode, shuffle_enabled, discover_active, home_active, discover_building;
+ guint discover_retry_count;
+ guint64 navigation_serial;
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
@@ -1826,6 +1828,7 @@ static void music_discover_back_clicked(GtkWidget *unused,gpointer data){
  music_discover_show_landing(view);
 }
 static int music_discover_collect(MusicView *view,const char *output){
+ view->discover_building=FALSE;
  g_ptr_array_set_size(view->discover_entries,0);
  g_ptr_array_set_size(view->discover_shelves,0);
  char **lines=g_strsplit(output?output:"","\n",-1);
@@ -1842,7 +1845,10 @@ static int music_discover_collect(MusicView *view,const char *output){
    char *cover=decode_field(parts[4]);
    if(kind && id && title && artist && cover){
     if(!g_strcmp0(kind,"section")){
-     category=music_discover_group_for(id);
+     if(!g_strcmp0(id,"__refreshing")){
+      view->discover_building=TRUE;
+      category=-1;
+     }else category=music_discover_group_for(id);
      /* These tiles are generated from actual personalized recommendation
       * sections. A new artist or mix title can replace yesterday's; no
       * generic static 'Hip-Hop Mix' cards or empty placeholders. */
@@ -1897,7 +1903,9 @@ static void music_show_empty(MusicView *view,const char *operation){
  else if(!g_strcmp0(operation,"liked"))
   message="Nothing in Liked yet. Favorites from your music library will appear here.";
  else if(!g_strcmp0(operation,"discover"))
-  message="No music suggestions are available right now.";
+  message=view->discover_building
+    ?"Recommendations are updating. This view will retry automatically."
+    :"No music suggestions are available right now. Try Discover again later.";
  else if(!g_strcmp0(operation,"playlists"))
   message="No playlists yet. Existing server playlists will appear here.";
  GtkWidget *empty=gtk_label_new(message);
@@ -1934,6 +1942,33 @@ static void query_free(MusicQuery *job){
  g_free(job->operation);
  g_free(job->heading);
  g_free(job);
+}
+
+typedef struct {
+ GtkWidget *root;
+ guint64 serial;
+} MusicDiscoverRetry;
+
+static void music_discover_retry_free(gpointer data){
+ MusicDiscoverRetry *retry=data;
+ g_object_unref(retry->root);
+ g_free(retry);
+}
+static gboolean music_discover_retry(gpointer data){
+ MusicDiscoverRetry *retry=data;
+ MusicView *view=g_object_get_data(G_OBJECT(retry->root),"music-view");
+ if(view && !view->closing && !view->busy &&
+    view->navigation_serial==retry->serial &&
+    view->discover_active)
+  query_start(view,"discover",NULL,"Discover");
+ return G_SOURCE_REMOVE;
+}
+static void music_discover_retry_schedule(MusicView *view){
+ MusicDiscoverRetry *retry=g_new0(MusicDiscoverRetry,1);
+ retry->root=g_object_ref(view->root);
+ retry->serial=view->navigation_serial;
+ g_timeout_add_seconds_full(G_PRIORITY_DEFAULT,12,music_discover_retry,
+                            retry,music_discover_retry_free);
 }
 
 static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
@@ -2053,6 +2088,14 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
     music_vault_begin(view,"store",form);
     wipe_free(form);
    }
+   if(!g_strcmp0(job->operation,"discover")){
+    if(count==0 && view->discover_building && view->discover_retry_count<8){
+     view->discover_retry_count++;
+     music_discover_retry_schedule(view);
+    }else if(count>0){
+     view->discover_retry_count=0;
+    }
+   }
   }
   view->busy=FALSE;
   music_schedule_next_page(view);
@@ -2065,6 +2108,7 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
+ ++view->navigation_serial;
  if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog") &&
     g_strcmp0(operation,"artist_releases") &&
     g_strcmp0(operation,"catalog_tracks")){
@@ -2488,6 +2532,8 @@ static void music_nav(GtkWidget *button,gpointer data){
  const char *operation=g_object_get_data(G_OBJECT(button),"music-operation");
  const char *heading=g_object_get_data(G_OBJECT(button),"music-heading");
  if(operation){
+  if(!g_strcmp0(operation,"discover"))
+   view->discover_retry_count=0;
   if(!g_strcmp0(operation,"home") || !g_strcmp0(operation,"discover"))
    music_library_expand(view,FALSE);
   music_nav_selected(view,button);

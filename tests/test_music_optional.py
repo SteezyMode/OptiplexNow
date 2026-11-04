@@ -85,6 +85,24 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("Downloads", contract)
         self.assertIn("contextual", contract.lower())
 
+    def test_private_alpha_starts_in_discover_without_dead_home(self):
+        # A previously approved device must enter Discover after keyring
+        # lookup. Do not start a legacy library snapshot or fake a Home page.
+        self.assertIn('query_start(view,"discover",NULL,"Discover");', UI_MUSIC)
+        self.assertIn('view->discover_active=TRUE;', UI_MUSIC)
+        self.assertIn('view->heading=gtk_label_new("Discover");', UI_MUSIC)
+        self.assertIn('music_nav_selected(view,discover_button);', UI_MUSIC)
+        self.assertNotIn('GtkWidget *home_button=music_button("Home")', UI_MUSIC)
+        self.assertIn('g_object_set_data(G_OBJECT(discover_button),"music-operation",(gpointer)"discover")', UI_MUSIC)
+        self.assertIn('GtkWidget *library_button=gtk_button_new();', UI_MUSIC)
+        self.assertIn('gtk_label_new("Your Library")', UI_MUSIC)
+        self.assertIn('query_start(view,"songs",NULL,"All songs");', UI_MUSIC)
+        self.assertIn('query_start(view,"catalog",value,"Discover results");', UI_MUSIC)
+        self.assertIn('!g_strcmp0(job->operation,"discover") || partial?', UI_MUSIC)
+        # Preserve click-based acquisition authorization and no automatic
+        # requests merely because a recommendation is displayed.
+        self.assertIn('music_request_clicked',UI_MUSIC)
+
     def test_real_music_feeds_and_private_cover_art_in_ui(self):
         transport = (ROOT / "src/music_subsonic.py").read_text(encoding="utf-8")
         for kind in ('"home"', '"albums"', '"recent"', '"new"', '"liked"',

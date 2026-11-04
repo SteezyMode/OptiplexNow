@@ -193,12 +193,12 @@ class RestAccessTests(unittest.TestCase):
         rows=[[base64.b64decode(x).decode() for x in line.split("\t")]
               for line in rest._discover_rows(sections).splitlines()]
         self.assertEqual([r[0] for r in rows],
-             ["section","catalog_album","section","catalog_artist"])
-        self.assertEqual(rows[0][2],"Fresh releases")
-        self.assertEqual(rows[1][1],album_id)
-        self.assertEqual(rows[2][2],"For you")
-        self.assertEqual(rows[3][1],artist_id)
-        self.assertIn("Not in library",rows[1][3])
+             ["section","catalog_artist","section","catalog_album"])
+        self.assertEqual(rows[0][2],"For you")
+        self.assertEqual(rows[1][1],artist_id)
+        self.assertEqual(rows[2][2],"Fresh releases")
+        self.assertEqual(rows[3][1],album_id)
+        self.assertIn("Not in library",rows[3][3])
 
     def test_missing_bearer_is_not_an_open_rest_request(self):
         with self.assertRaises(rest.MusicRESTError):

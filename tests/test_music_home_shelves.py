@@ -126,6 +126,32 @@ class DiscoverLastGoodTests(unittest.TestCase):
         self.assertNotEqual(rest._discover_cache_path(BASE,TOKEN),
                             rest._discover_cache_path("http://127.0.0.1:9000",TOKEN))
 
+    def test_empty_discover_requests_only_one_refresh_per_cooldown(self):
+        with tempfile.TemporaryDirectory() as root:
+            cache_path=Path(root)/"discover.json"
+            calls=[]
+            def fake_refresh(base,action,*,token,timeout_seconds):
+                calls.append((base,action,token,timeout_seconds))
+                return {"status":"ok"}
+            with patch.object(rest,"_discover_cache_path",
+                              return_value=cache_path),patch.object(
+                                  rest,"request",side_effect=fake_refresh):
+                self.assertTrue(rest.refresh_discover_if_empty(BASE,TOKEN))
+                self.assertFalse(rest.refresh_discover_if_empty(BASE,TOKEN))
+                refresh_path=cache_path.with_suffix(".refresh")
+                self.assertEqual(stat.S_IMODE(refresh_path.stat().st_mode),0o600)
+            self.assertEqual(calls,[(BASE,"refresh_discover",TOKEN,6)])
+
+    def test_failed_discover_refresh_never_marks_success(self):
+        with tempfile.TemporaryDirectory() as root:
+            cache_path=Path(root)/"discover.json"
+            with patch.object(rest,"_discover_cache_path",
+                              return_value=cache_path),patch.object(
+                                  rest,"request",
+                                  side_effect=rest.MusicRESTError("provider offline")):
+                self.assertFalse(rest.refresh_discover_if_empty(BASE,TOKEN))
+                self.assertFalse(cache_path.with_suffix(".refresh").exists())
+
     def test_client_discover_cache_is_suggestions_only(self):
         source=(ROOT/"src/music_subsonic.py").read_text()
         self.assertIn("retained_discover_rows",source)

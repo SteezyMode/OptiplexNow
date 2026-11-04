@@ -248,12 +248,14 @@ def _download_rows(result: dict[str,Any]) -> str:
     return "".join(mbid+"\t"+value[1]+"\n" for mbid,value in seen.items())
 
 
+# Personal discovery first. General-popularity charts should never crowd out
+# recommendations from the owner's listens and favorites.
 DISCOVER_SECTIONS = (
-    "fresh_releases", "missing_essentials", "new_from_followed",
-    "artists_you_might_like", "popular_in_your_genres",
-    "globally_trending", "rediscover", "listeners_like_you",
-    "top_picks", "lastfm_weekly_artist_chart", "lastfm_weekly_album_chart",
-    "anniversaries", "unexplored_genres"
+    "top_picks", "artists_you_might_like", "listeners_like_you",
+    "popular_in_your_genres", "new_from_followed",
+    "fresh_releases", "unexplored_genres", "missing_essentials",
+    "rediscover", "anniversaries", "lastfm_weekly_album_chart",
+    "lastfm_weekly_artist_chart", "globally_trending"
 )
 
 
@@ -348,24 +350,29 @@ def _discover_rows(result: dict[str, Any], *,
         kind_hint=str(section.get("type","")).lower()
         accepted=[]
         for item in items[:50]:
-            if not isinstance(item,dict) or item.get("in_library") is True:
+            if not isinstance(item,dict):
                 continue
-            mbid=item.get("mbid")
-            title=item.get("name")
+            # TopPicksSection wraps a HomeAlbum in {"album": ..., "match_pct": ...}.
+            # Previously these best personal recommendations were silently dropped.
+            candidate=item.get("album") if key=="top_picks" else item
+            if not isinstance(candidate,dict) or candidate.get("in_library") is True:
+                continue
+            mbid=candidate.get("mbid")
+            title=candidate.get("name")
             if (not isinstance(mbid,str) or not MBID.fullmatch(mbid) or
                 not isinstance(title,str) or not title.strip() or
                 mbid in seen):
                 continue
-            artist=item.get("artist_name") or ""
+            artist=candidate.get("artist_name") or ""
             if not isinstance(artist,str):artist=""
             # HomeArtist has no album metadata; HomeAlbum does. Follow the
             # section's explicit type first and never infer a song request.
             is_album=("album" in kind_hint or
                       (artist and "artist" not in kind_hint))
             kind="catalog_album" if is_album else "catalog_artist"
-            state="Requested" if item.get("requested") else "Not in library"
+            state="Requested" if candidate.get("requested") else "Not in library"
             artist_key=_artist_name_key(title if kind=="catalog_artist" else artist)
-            artist_id=item.get("artist_mbid") or item.get("artist_musicbrainz_id")
+            artist_id=candidate.get("artist_mbid") or candidate.get("artist_musicbrainz_id")
             if kind=="catalog_artist":
                 artist_id=mbid
             known=(artist_key in liked_names if artist_key else False) or (
@@ -373,7 +380,7 @@ def _discover_rows(result: dict[str, Any], *,
             # A loved artist is a TASTE SIGNAL, not the definition of
             # discovery. Favor unseen artists with explicit shared genres.
             # Do not invent genre similarity when the API has no genre data.
-            genres=_genre_names(item.get("genre")) | _genre_names(item.get("genres"))
+            genres=_genre_names(candidate.get("genre")) | _genre_names(candidate.get("genres"))
             relevant=bool(genres & liked_genres) and not known
             accepted.append((known,relevant,(kind,mbid,title[:512],
                              (artist+" · "+state)[:256],"")))
@@ -402,6 +409,12 @@ def _discover_rows(result: dict[str, Any], *,
             lines.append("\t".join(base64.b64encode(x.encode()).decode()
                                    for x in fields))
 
+    # "Because you listened to" is the most direct evidence-based shelf.
+    because=result.get("because_you_listen_to",[])
+    if isinstance(because,list):
+        for index,pick in enumerate(because[:8]):
+            if isinstance(pick,dict):
+                add_section(pick.get("section"),"because_you_listen_%d"%index)
     for key in DISCOVER_SECTIONS:
         add_section(result.get(key),key)
     for key in ("daily_mixes","radio_sections"):
@@ -409,11 +422,6 @@ def _discover_rows(result: dict[str, Any], *,
         if isinstance(values,list):
             for index,section in enumerate(values[:8]):
                 add_section(section,"%s_%d"%(key,index))
-    because=result.get("because_you_listen_to",[])
-    if isinstance(because,list):
-        for index,pick in enumerate(because[:8]):
-            if isinstance(pick,dict):
-                add_section(pick.get("section"),"because_you_listen_%d"%index)
     return "\n".join(lines)+("\n" if lines else "")
 
 def main(argv=None) -> int:

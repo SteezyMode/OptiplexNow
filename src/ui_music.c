@@ -33,7 +33,7 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
- GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
+ GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
  GtkWidget *library_revealer, *library_arrow, *library_button;
@@ -80,6 +80,7 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
 static void music_refresh_status(MusicView *view);
 static void music_next_clicked(GtkWidget *unused,gpointer data);
 static void music_play_visible(MusicView *view,int index);
+static void music_playlist_clicked(GtkWidget *unused,gpointer data);
 static void music_notify_tray(MusicView *view);
 static void music_card_queue_pump(MusicView *view);
 static void music_schedule_next_page(MusicView *view);
@@ -287,6 +288,11 @@ static void music_update_controls(MusicView *view){
                          g_strdup(current->id),g_free);
   g_object_set_data(G_OBJECT(view->playing_like),"music-liked",
                          GINT_TO_POINTER(current->liked?2:1));
+ }
+ if(view->playing_add){
+  gtk_widget_set_sensitive(view->playing_add,current!=NULL);
+  g_object_set_data_full(G_OBJECT(view->playing_add),"music-id",
+                         g_strdup(current?current->id:""),g_free);
  }
  if(view->playing_artist_label){
   char *by=current && current->album && *current->album
@@ -2484,11 +2490,19 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0);
  view->playing_like=music_heart_button(FALSE,"Like current song");
  gtk_widget_set_name(view->playing_like,"music-playing-like");
+ gtk_widget_set_size_request(view->playing_like,28,28);
  g_object_set_data(G_OBJECT(view->playing_like),"music-view",view);
  g_object_set_data(G_OBJECT(view->playing_like),"music-kind",(gpointer)"song");
  g_signal_connect(view->playing_like,"clicked",
                   G_CALLBACK(music_like_clicked),view->playing_like);
  gtk_box_pack_start(GTK_BOX(track_info),view->playing_like,FALSE,FALSE,0);
+ view->playing_add=music_icon_button("list-add-symbolic","Add current song to playlist");
+ gtk_widget_set_name(view->playing_add,"music-playing-add");
+ gtk_widget_set_size_request(view->playing_add,28,28);
+ g_object_set_data(G_OBJECT(view->playing_add),"music-view",view);
+ g_signal_connect(view->playing_add,"clicked",
+                  G_CALLBACK(music_playlist_clicked),view->playing_add);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_add,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0);
  view->shuffle_button=gtk_toggle_button_new();
  gtk_button_set_image(GTK_BUTTON(view->shuffle_button),

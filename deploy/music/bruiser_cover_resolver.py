@@ -206,7 +206,7 @@ async def missing_album_cover(
                 candidates = await asyncio.wait_for(
                     repository.search_release_groups(
                         artist, title, limit=15, include_all_types=True,
-                        priority=RequestPriority.BACKGROUND_SYNC,
+                        priority=RequestPriority.IMAGE_FETCH,
                     ), timeout=SEARCH_TIMEOUT_SECONDS
                 )
                 mbid = pick_verified_release_group(candidates, title, artist, year)

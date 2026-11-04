@@ -101,7 +101,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('!g_strcmp0(job->operation,"discover") || partial?', UI_MUSIC)
         # Preserve click-based acquisition authorization and no automatic
         # requests merely because a recommendation is displayed.
-        self.assertIn('music_request_clicked',UI_MUSIC)
+        self.assertIn('g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);',UI_MUSIC)
 
     def test_real_music_feeds_and_private_cover_art_in_ui(self):
         transport = (ROOT / "src/music_subsonic.py").read_text(encoding="utf-8")

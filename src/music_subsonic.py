@@ -291,7 +291,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
                 genre if isinstance(genre, str) else "") if part)
         if not isinstance(album, str):
             album = ""
-        starred = ("1" if (operation == "liked" and kind == "song") or
+        starred = ("1" if operation == "liked" or
                    bool(item.get("starred")) else "0")
         fields = (kind, identifier[:512], title[:2048], artist[:1024],
                   cover_id[:512], album[:1024], starred)
@@ -300,10 +300,32 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
     return "\n".join(lines) + ("\n" if lines else "")
 
 
+def set_favorite(base: str, auth: dict[str, str], operation: str, identifier: str) -> None:
+    """Use the ID3-specific favorite key for albums/artists, never a song ID.
+
+    The upstream star/unstar endpoint accepts id, albumId or artistId.
+    Using id for ID3 album/artist identifiers may not update the intended
+    collection even when the transport returns success.
+    """
+    keys = {
+        "like": ("star", "id"),
+        "unlike": ("unstar", "id"),
+        "like_album": ("star", "albumId"),
+        "unlike_album": ("unstar", "albumId"),
+        "like_artist": ("star", "artistId"),
+        "unlike_artist": ("unstar", "artistId"),
+    }
+    if operation not in keys:
+        raise MusicTransportError("Unsupported favorite operation.")
+    endpoint, key = keys[operation]
+    selected = _bounded_text(identifier, "favorite ID", 512)
+    query(base, endpoint, auth, {key: selected})
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "like", "unlike", "playlist_options", "playlist_add", "playlist_create"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_options", "playlist_add", "playlist_create"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -338,7 +360,7 @@ def main(argv: list[str] | None = None) -> int:
         auth = _auth_from_stdin(args.auth_format)
         # Authenticate and validate before making any outbound request.
         endpoint_for(args.base_url, "ping")
-        if args.operation in ("album", "artist", "playlist", "stream", "art", "search", "like", "unlike", "playlist_add", "playlist_create") and not args.value:
+        if args.operation in ("album", "artist", "playlist", "stream", "art", "search", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_add", "playlist_create") and not args.value:
             raise MusicTransportError("This music operation needs a selection.")
         if args.operation == "stream":
             stream(args.base_url, auth, args.value)
@@ -391,10 +413,9 @@ def main(argv: list[str] | None = None) -> int:
                     "query": "", "artistCount": "0", "albumCount": "0",
                     "songCount": str(SONG_PAGE_SIZE), "songOffset": str(offset)})
                 result = {"songs": data.get("searchResult3", {}).get("song", [])}
-        elif args.operation in ("like", "unlike"):
-            track_id = _bounded_text(args.value, "song ID", 512)
-            query(args.base_url, "star" if args.operation == "like" else "unstar",
-                  auth, {"id": track_id})
+        elif args.operation in ("like", "unlike", "like_album", "unlike_album",
+                                "like_artist", "unlike_artist"):
+            set_favorite(args.base_url, auth, args.operation, args.value)
             result = {"ok": True}
         elif args.operation in ("playlist_add", "playlist_create"):
             playlist_id_or_name, sep, track_id = args.value.rpartition("|")

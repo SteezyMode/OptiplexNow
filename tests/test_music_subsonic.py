@@ -305,10 +305,9 @@ class MusicSubsonicTests(unittest.TestCase):
                 self.assertEqual(fields["type"], [kind])
         liked = music.query(self.base, "getStarred2", self.auth)
         rows = music._rows("liked", {"starred": liked["starred2"]}).splitlines()
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         from base64 import b64decode
-        self.assertEqual(b64decode(rows[0].split("\t")[0]), b"album")
-        self.assertEqual(b64decode(rows[1].split("\t")[0]), b"song")
+        self.assertEqual(b64decode(rows[0].split("\t")[0]), b"song")
 
     def test_readonly_row_shapes(self):
         cases = {

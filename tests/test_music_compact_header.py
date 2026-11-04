@@ -80,8 +80,55 @@ class CompactMusicHeaderTests(unittest.TestCase):
                     '#1a221c','#253329','#35473a','#202c24'):
             self.assertNotIn(old,section)
 
+    def test_tray_current_song_activates_music_and_restores_window(self):
+        a=CSS.index("static void tray_music_open_current(")
+        b=CSS.index("static guint music_tray_rebuild_pending",a)
+        callback=CSS[a:b]
+        self.assertIn("if(!now_music_is_playing_session())return;",callback)
+        self.assertIn("on_music_tab(NULL,NULL);",callback)
+        self.assertIn("tray_show_window();",callback)
+        self.assertNotIn("now_music_next()",callback)
+        self.assertNotIn("now_music_toggle_pause()",callback)
+        self.assertIn('g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL)',CSS)
+        self.assertIn('gtk_widget_set_tooltip_text(playing,caption)',CSS)
+        self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)",CSS)
+
+    def test_full_width_two_line_now_playing_title(self):
+        a=UI.index("GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7)")
+        b=UI.index("gtk_box_pack_start(GTK_BOX(view->player_bar),track_info,FALSE,FALSE,0)",a)
+        c=UI.index("gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0)",b)
+        self.assertLess(b,c)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0)",UI)
+        self.assertIn("gtk_widget_set_size_request(now_playing,0,-1)",UI)
+        self.assertIn("gtk_label_set_line_wrap(GTK_LABEL(view->playing_label),TRUE)",UI)
+        self.assertIn("gtk_label_set_lines(GTK_LABEL(view->playing_label),2)",UI)
+        self.assertIn("gtk_widget_set_tooltip_text(view->playing_label,",UI)
+        self.assertNotIn("gtk_box_pack_start(GTK_BOX(controls),now_playing",UI)
+
+    def test_album_actions_are_small_icons_with_defined_queue_semantics(self):
+        self.assertIn("gtk_widget_set_size_request(view->hero_art,68,68)",UI)
+        self.assertIn("job->playing?44:68",UI)
+        self.assertIn("gtk_label_set_lines(GTK_LABEL(view->hero_title),2)",UI)
+        self.assertIn("gtk_widget_set_size_request(header_text,0,-1)",UI)
+        self.assertIn('music_icon_button("media-playback-start-symbolic",',UI)
+        self.assertIn('"Play album from the beginning"',UI)
+        self.assertIn('music_icon_button("media-playlist-shuffle-symbolic",',UI)
+        self.assertIn('"Shuffle this album"',UI)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_play,FALSE,FALSE,0)",UI)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_shuffle,FALSE,FALSE,0)",UI)
+        self.assertIn("gtk_box_pack_start(GTK_BOX(album_actions),view->hero_like,FALSE,FALSE,0)",UI)
+        self.assertIn("gtk_widget_set_size_request(view->hero_shuffle,32,32)",UI)
+        self.assertIn("gtk_widget_set_size_request(view->hero_play,32,32)",UI)
+        self.assertIn("gtk_widget_set_tooltip_text(view->hero_title,title)",UI)
+        self.assertIn("gtk_widget_set_sensitive(view->hero_shuffle,",UI)
+        self.assertIn("g_random_int_range(0,(int)view->visible_tracks->len)",UI)
+        self.assertIn("music_play_visible(view,first);",UI)
+        self.assertIn("music_play_visible(view,0);",UI)
+        self.assertNotIn("gtk_box_pack_end(GTK_BOX(view->hero_row),view->hero_play",UI)
+        self.assertNotIn('music_button("Play album")',UI)
+
     def test_compact_album_and_song_chrome(self):
-        self.assertIn('gtk_widget_set_size_request(view->hero_art,96,96)',UI)
+        self.assertIn('gtk_widget_set_size_request(view->hero_art,68,68)',UI)
         self.assertIn('min-height:30px',CSS)
         self.assertIn('button#music-song-row #music-row-title {font-size:13px',CSS)
         self.assertIn('button#music-song-action.music-transport',CSS)

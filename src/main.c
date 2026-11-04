@@ -199,7 +199,7 @@ static const char *CSS =
 "#music-library button#music-song-row #music-row-detail {font-size:11px;}"
 "#music-library button#music-song-action.music-transport {background:transparent;border:1px solid transparent;border-radius:6px;padding:1px;min-width:28px;min-height:28px;}"
 "#music-library button#music-song-action.music-transport:hover {background:#303831;border-color:#c47d65;}"
-"#music-player {background:#1d201f;border:1px solid #414743;border-radius:11px;padding:7px 11px;}"
+"#music-player {background:#1d201f;border:1px solid #414743;border-radius:9px;padding:4px 8px;}"
 "#music-player #music-now-title {font-size:13px;font-weight:800;color:#fff;}"
 "#music-player #music-now-artist {font-size:11px;color:#bdb7b0;}"
 "#music-player button.music-transport {background:transparent;color:#ece8e0;border:1px solid transparent;border-radius:20px;min-height:38px;min-width:38px;padding:5px;}"

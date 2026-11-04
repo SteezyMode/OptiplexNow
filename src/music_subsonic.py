@@ -314,7 +314,7 @@ def _home_rows(result: dict[str, Any]) -> str:
         if not entries:
             return []
         header=("section",name.lower().replace(" ","-"),name,"","")
-        encoded="\\t".join(base64.b64encode(part.encode()).decode()
+        encoded="\t".join(base64.b64encode(part.encode()).decode()
                             for part in header)
         return [encoded,*entries]
 
@@ -357,7 +357,7 @@ def _home_rows(result: dict[str, Any]) -> str:
     seen_external:set[str]=set()
     category=""
     for line in external.splitlines():
-        fields=line.split("\\t")
+        fields=line.split("\t")
         if len(fields)!=5:
             continue
         try:
@@ -395,7 +395,7 @@ def _home_rows(result: dict[str, Any]) -> str:
         line for line in _rows("playlists",{"playlists":playlists[:8]
             if isinstance(playlists,list) else []}).splitlines() if line])
     lines+=section("Recently Added",encoded_rows("new",recent_additions))
-    return "\\n".join(lines)+("\\n" if lines else "")
+    return "\n".join(lines)+("\n" if lines else "")
 
 
 def set_favorite(base: str, auth: dict[str, str], operation: str, identifier: str) -> None:

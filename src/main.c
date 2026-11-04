@@ -169,15 +169,18 @@ static const char *CSS =
 "#music-library-filters button#music-filter.now-action {background:transparent;border:0;border-radius:5px;padding:4px 6px 4px 15px;min-height:27px;color:#bbb7ae;font-size:11px;font-weight:500;}"
 "#music-library-filters button#music-filter.now-action:hover {background:#303331;color:#fff;}"
 "#music-library-filters button#music-filter.now-action.music-active {background:#39302b;color:#fff;font-weight:700;}"
-"#music-main {background:#1d201f;border-radius:8px;padding:4px;}"
-"#music-header-row {padding:0 2px;min-height:32px;}"
-"#music-home button#music-shuffle-all.music-transport,#music-home button#music-search-toggle.music-transport {background:transparent;border:1px solid transparent;border-radius:17px;padding:3px;min-height:32px;min-width:32px;color:#ece8e0;}"
+"#music-main {background:#1d201f;border-radius:3px;padding:2px;}"
+"#music-header-row {padding:0 2px;min-height:28px;}"
+"#music-home button#music-shuffle-all.music-transport,#music-home button#music-search-toggle.music-transport {background:transparent;border:1px solid transparent;border-radius:4px;padding:1px;min-height:28px;min-width:28px;color:#ece8e0;}"
 "#music-home button#music-shuffle-all.music-transport:hover,#music-home button#music-search-toggle.music-transport:hover {background:#303831;border-color:#c47d65;}"
 "#music-section-title {font-size:14px;font-weight:700;color:#ece8e0;}"
 "#music-home button#music-settings-nav.now-action {background:transparent;border:0;border-radius:6px;padding:5px 7px;min-height:30px;font-size:11px;color:#bbb7ae;}"
 "#music-home button#music-settings-nav.now-action:hover {background:#39302b;color:#fff;}"
-"#music-hero {background:#222724;border-radius:9px;padding:7px;}"
-"#music-hero label {font-size:16px;font-weight:700;color:#ece8e0;}"
+"#music-hero {background:transparent;border-bottom:1px solid #363d39;border-radius:0;padding:2px;}"
+"#music-hero label#music-album-title {font-size:14px;font-weight:750;color:#ece8e0;}"
+"#music-hero label#music-album-artist {font-size:11px;font-weight:500;color:#bdb7b0;}"
+"#music-hero button.music-transport {background:transparent;border:1px solid transparent;border-radius:4px;padding:1px;min-height:28px;min-width:28px;color:#ece8e0;}"
+"#music-hero button.music-transport:hover {background:#303831;border-color:#c47d65;}"
 "#music-library {background:transparent;border:0;}"
 "#music-card-grid {background:transparent;border:0;}"
 "#music-card-grid flowboxchild {background:transparent;border:0;padding:3px;}"
@@ -187,23 +190,24 @@ static const char *CSS =
 "#music-card-grid #music-card-subtitle {font-size:11px;color:#bdb7b0;}"
 "#music-library row {background:transparent;border:0;padding:0;}"
 "#music-library button#music-row.now-action {background:#222724;border:1px solid transparent;border-radius:7px;padding:5px 10px;min-height:44px;}"
-"#music-library button#music-song-row.now-action {background:#222724;border:1px solid transparent;border-radius:5px;padding:1px 6px;min-height:30px;}"
-"#music-library button#music-song-row.now-action:hover,#music-library button#music-song-row.now-action:focus {background:#303831;border-color:#c47d65;}"
+"#music-library button#music-song-row.now-action {background:transparent;border:0;border-bottom:1px solid #313634;border-radius:0;padding:1px 4px;min-height:25px;}"
+"#music-library button#music-song-row.now-action:hover,#music-library button#music-song-row.now-action:focus {background:#2b302e;border-bottom-color:#c47d65;}"
 "#music-library button#music-row.now-action:hover,#music-library button#music-row.now-action:focus {background:#303831;border-color:#c47d65;}"
 "#music-library #music-row-title {font-size:15px;font-weight:700;color:#ece8e0;}"
 "#music-library #music-row-detail {font-size:12px;color:#bdb7b0;}"
 "#music-library button#music-song-row #music-row-title {font-size:13px;font-weight:600;}"
 "#music-library button#music-song-row #music-row-detail {font-size:11px;}"
-"#music-library button#music-song-action.music-transport {background:transparent;border:1px solid transparent;border-radius:6px;padding:1px;min-width:28px;min-height:28px;}"
+"#music-library button#music-song-action.music-transport {background:transparent;border:1px solid transparent;border-radius:3px;padding:0;min-width:24px;min-height:24px;}"
 "#music-library button#music-song-action.music-transport:hover {background:#303831;border-color:#c47d65;}"
-"#music-player {background:#1d201f;border:1px solid #414743;border-radius:11px;padding:7px 11px;}"
+"#music-player {background:#1d201f;border-top:1px solid #414743;border-radius:0;padding:2px 3px;}"
 "#music-player #music-now-title {font-size:13px;font-weight:800;color:#fff;}"
 "#music-player #music-now-artist {font-size:11px;color:#bdb7b0;}"
-"#music-player button.music-transport {background:transparent;color:#ece8e0;border:1px solid transparent;border-radius:20px;min-height:38px;min-width:38px;padding:5px;}"
+"#music-player button.music-transport {background:transparent;color:#ece8e0;border:1px solid transparent;border-radius:4px;min-height:28px;min-width:28px;padding:1px;}"
 "#music-player button.music-transport:hover {background:#303831;border-color:#c47d65;}"
 "#music-player button.music-transport:checked {color:#c47d65;background:#39302b;border-color:#c47d65;}"
-"#music-player button#music-primary-play.music-transport {background:#ece8e0;color:#101111;border-radius:22px;min-height:42px;min-width:42px;}"
+"#music-player button#music-primary-play.music-transport {background:#ece8e0;color:#101111;border-radius:16px;min-height:32px;min-width:32px;}"
 "#music-player button#music-primary-play.music-transport:hover {background:#fff;}"
+"#music-player button#music-playing-like.music-transport,#music-player button#music-playing-add.music-transport {min-width:26px;min-height:26px;padding:0;}"
 "button.now-action {background:#222724;color:#ece8e0;border:1px solid #4b544d;border-radius:3px;padding:5px 11px;min-height:25px;font-size:11px;font-weight:700;}"
 "button.now-action label {color:#ece8e0;}"
 "button.now-action:hover,button.now-action:focus {background:#303831;color:#ece8e0;border-color:#c47d65;}"
@@ -3043,6 +3047,13 @@ static void tray_music_next(GtkWidget *unused,gpointer data){
  (void)unused;(void)data;
  now_music_next();
 }
+/* Current song title is navigation, not another playback control. */
+static void tray_music_open_current(GtkWidget *unused,gpointer data){
+ (void)unused;(void)data;
+ if(!now_music_is_playing_session())return;
+ on_music_tab(NULL,NULL);
+ tray_show_window();
+}
 /* Collapse quick BUFFERING/PLAYING/PAUSED updates into one idle rebuild.
  * Rebuilding and destroying the old GTK/AppIndicator menu repeatedly during
  * playback event delivery is avoidable and can race menu activation. */
@@ -3102,7 +3113,8 @@ static void tray_build_menu(void){
       g_strconcat(g_utf8_substring(caption,0,45),"…",NULL):
       g_strdup(caption);
   GtkWidget *playing=gtk_menu_item_new_with_label(short_title);
-  gtk_widget_set_sensitive(playing,FALSE);
+  gtk_widget_set_tooltip_text(playing,caption);
+  g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL);
   gtk_menu_shell_append(GTK_MENU_SHELL(tray_menu),playing);
   g_free(short_title);
   GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous");

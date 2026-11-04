@@ -120,6 +120,44 @@ class MusicSubsonicTests(unittest.TestCase):
         self.assertEqual(playlists["playlists"]["playlist"][0]["id"], "p1")
         self.assertEqual(self.server.requests[-1][0], "/subsonic/rest/getPlaylists")
 
+    def test_favorite_sends_the_correct_id_type(self):
+        cases = (
+            ("like", "star", "id", "song-1"),
+            ("unlike", "unstar", "id", "song-1"),
+            ("like_album", "star", "albumId", "album-2"),
+            ("unlike_album", "unstar", "albumId", "album-2"),
+            ("like_artist", "star", "artistId", "artist-3"),
+            ("unlike_artist", "unstar", "artistId", "artist-3"),
+        )
+        for operation, method, key, identifier in cases:
+            with self.subTest(operation=operation):
+                music.set_favorite(self.base, self.auth, operation, identifier)
+                path, fields = self.server.requests[-1]
+                self.assertEqual(path, "/subsonic/rest/" + method)
+                self.assertEqual(fields[key], [identifier])
+                self.assertEqual(set(fields).intersection({"id", "albumId", "artistId"}), {key})
+                self.assertNotIn("secret-should-never-be-in-url", path)
+        with self.assertRaises(music.MusicTransportError):
+            music.set_favorite(self.base, self.auth, "request_download", "album-2")
+        with self.assertRaises(music.MusicTransportError):
+            music.set_favorite(self.base, self.auth, "like_album", "")
+
+    def test_liked_songs_excludes_favorited_albums_and_artists(self):
+        from base64 import b64decode
+        payload = {"starred": {
+            "album": [{"id": "a1", "name": "Favorite album"}],
+            "artist": [{"id": "r1", "name": "Favorite artist"}],
+            "song": [{"id": "s1", "title": "Favorite song"}],
+        }}
+        rows = music._rows("liked", payload)
+        entries = [list(map(b64decode, row.split("\t"))) for row in rows.splitlines()]
+        self.assertEqual(len(entries), 1)
+        self.assertEqual(entries[0][0], b"song")
+        self.assertEqual(entries[0][1], b"s1")
+        self.assertEqual(entries[0][-1], b"1")
+        self.assertEqual(music._rows("liked", {"starred": {
+            "album": [{"id": "a1"}], "artist": [{"id": "r1"}]}}), "")
+
     def test_redirect_never_forwards_auth(self):
         with self.assertRaises(music.MusicTransportError) as caught:
             music.query(self.base, "redirect", self.auth)
@@ -267,10 +305,9 @@ class MusicSubsonicTests(unittest.TestCase):
                 self.assertEqual(fields["type"], [kind])
         liked = music.query(self.base, "getStarred2", self.auth)
         rows = music._rows("liked", {"starred": liked["starred2"]}).splitlines()
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(len(rows), 1)
         from base64 import b64decode
-        self.assertEqual(b64decode(rows[0].split("\t")[0]), b"album")
-        self.assertEqual(b64decode(rows[1].split("\t")[0]), b"song")
+        self.assertEqual(b64decode(rows[0].split("\t")[0]), b"song")
 
     def test_readonly_row_shapes(self):
         cases = {

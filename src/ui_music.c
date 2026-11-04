@@ -33,8 +33,8 @@ static MusicTrack *track_copy(const MusicTrack *source){
 }
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
- GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
- GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_like, *playing_art, *shuffle_all;
+ GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
+ GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
  GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
@@ -80,6 +80,7 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
 static void music_refresh_status(MusicView *view);
 static void music_next_clicked(GtkWidget *unused,gpointer data);
 static void music_play_visible(MusicView *view,int index);
+static void music_playlist_clicked(GtkWidget *unused,gpointer data);
 static void music_notify_tray(MusicView *view);
 static void music_card_queue_pump(MusicView *view);
 static void music_schedule_next_page(MusicView *view);
@@ -237,6 +238,20 @@ static GtkWidget *music_icon_button(const char *icon,const char *tooltip){
  gtk_widget_set_size_request(button,38,38);
  return button;
 }
+/* Keep the heart shape constant across every favorite state. GTK's built-in
+ * non-starred icon is a star; a dimmed heart is a reliable cross-theme
+ * inactive state without requiring an optional system icon pack. */
+static GtkWidget *music_heart_image(gboolean liked){
+ GtkWidget *image=gtk_image_new_from_icon_name("emblem-favorite-symbolic",
+                                             GTK_ICON_SIZE_BUTTON);
+ gtk_widget_set_opacity(image,liked?1.0:0.40);
+ return image;
+}
+static GtkWidget *music_heart_button(gboolean liked,const char *tooltip){
+ GtkWidget *button=music_icon_button("emblem-favorite-symbolic",tooltip);
+ gtk_button_set_image(GTK_BUTTON(button),music_heart_image(liked));
+ return button;
+}
 static void music_shuffle_clicked(GtkToggleButton *button,gpointer data){
  MusicView *view=data;
  view->shuffle_enabled=gtk_toggle_button_get_active(button);
@@ -262,10 +277,11 @@ static void music_update_controls(MusicView *view){
     ?g_ptr_array_index(view->queue,view->queue_index):NULL;
  gtk_label_set_text(GTK_LABEL(view->playing_label),
      current?current->title:"Now playing");
+ gtk_widget_set_tooltip_text(view->playing_label,
+     current?current->title:"Now playing");
  if(view->playing_like && current){
   gtk_button_set_image(GTK_BUTTON(view->playing_like),
-      gtk_image_new_from_icon_name(current->liked?"emblem-favorite-symbolic":
-      "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(current->liked));
   gtk_widget_set_tooltip_text(view->playing_like,
       current->liked?"Unlike song":"Like song");
   g_object_set_data_full(G_OBJECT(view->playing_like),"music-id",
@@ -273,11 +289,17 @@ static void music_update_controls(MusicView *view){
   g_object_set_data(G_OBJECT(view->playing_like),"music-liked",
                          GINT_TO_POINTER(current->liked?2:1));
  }
+ if(view->playing_add){
+  gtk_widget_set_sensitive(view->playing_add,current!=NULL);
+  g_object_set_data_full(G_OBJECT(view->playing_add),"music-id",
+                         g_strdup(current?current->id:""),g_free);
+ }
  if(view->playing_artist_label){
   char *by=current && current->album && *current->album
       ?g_strdup_printf("%s · %s",current->artist,current->album)
       :g_strdup(current?current->artist:"");
   gtk_label_set_text(GTK_LABEL(view->playing_artist_label),by);
+  gtk_widget_set_tooltip_text(view->playing_artist_label,by);
   g_free(by);
  }
  gtk_button_set_image(GTK_BUTTON(view->pause_button),
@@ -548,7 +570,7 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
   const guchar *bytes=g_bytes_get_data(output,&len);
   if(len>0 && len<=3*1024*1024){
    GdkPixbufLoader *loader=gdk_pixbuf_loader_new();
-   const int pixels=job->card_target?148:(job->playing?44:120);
+   const int pixels=job->card_target?148:(job->playing?34:52);
    gdk_pixbuf_loader_set_size(loader,pixels,pixels);
    gboolean valid=gdk_pixbuf_loader_write(loader,bytes,len,NULL);
    if(valid)valid=gdk_pixbuf_loader_close(loader,NULL);
@@ -712,7 +734,24 @@ static void music_play_visible(MusicView *view,int index){
 }
 static void music_play_album(GtkWidget *unused,gpointer data){
  (void)unused;
- music_play_visible(data,0);
+ MusicView *view=data;
+ if(!view || view->closing || view->busy || !view->visible_tracks ||
+    view->visible_tracks->len==0)return;
+ /* Play album always starts at track one; Pause belongs to the bottom player. */
+ if(view->shuffle_button)
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(view->shuffle_button),FALSE);
+ music_play_visible(view,0);
+}
+static void music_shuffle_album(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view || view->closing || view->busy || !view->visible_tracks ||
+    view->visible_tracks->len==0)return;
+ /* Shuffle this album only, including its first selected song. */
+ if(view->shuffle_button)
+  gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(view->shuffle_button),TRUE);
+ int first=g_random_int_range(0,(int)view->visible_tracks->len);
+ music_play_visible(view,first);
 }
 
 static void music_item_clicked(GtkWidget *unused,gpointer data){
@@ -732,8 +771,14 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
   if(view->hero_row){
    gtk_widget_show(view->hero_row);
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+   gtk_widget_set_tooltip_text(view->hero_title,title);
    gtk_label_set_text(GTK_LABEL(view->hero_subtitle),artist?artist:"");
+   gtk_widget_set_tooltip_text(view->hero_subtitle,artist?artist:"");
+   gtk_widget_set_visible(view->hero_play,
+     !g_strcmp0(kind,"album") || !g_strcmp0(kind,"playlist"));
+   gtk_widget_set_visible(view->hero_shuffle,!g_strcmp0(kind,"album"));
    gtk_widget_set_sensitive(view->hero_play,FALSE);
+   gtk_widget_set_sensitive(view->hero_shuffle,FALSE);
    gtk_widget_set_visible(view->hero_like,
      !g_strcmp0(kind,"album") || !g_strcmp0(kind,"artist"));
    g_object_set_data_full(G_OBJECT(view->hero_like),"music-id",
@@ -742,8 +787,7 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
                           GINT_TO_POINTER(liked?2:1));
    g_object_set_data_full(G_OBJECT(view->hero_like),"music-kind",g_strdup(kind),g_free);
    gtk_button_set_image(GTK_BUTTON(view->hero_like),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-      "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(liked));
    gtk_widget_set_tooltip_text(view->hero_like,liked?
           "Unlike this album or artist":"Like this album or artist");
   }
@@ -795,7 +839,8 @@ static void music_request_complete(GObject *unused,GAsyncResult *result,gpointer
   if(done && g_subprocess_get_successful(job->process)){
    gtk_button_set_label(GTK_BUTTON(job->button),"Requested");
    gtk_widget_set_sensitive(job->button,FALSE);
-   status_set(view,"Album requested. DroppedNeedle handles downloading and import.");
+   /* The Requested button confirms success without taking track-list space. */
+   status_clear(view);
    music_refresh_status(view);
   }else{
    gtk_widget_set_sensitive(job->button,TRUE);
@@ -1048,39 +1093,47 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
   }else if(!strcmp(job->operation,"playlist_options")){
    music_playlist_dialog(view,job->song_id,output,job->button);
   }else if(!strcmp(job->operation,"like") ||
-           !strcmp(job->operation,"unlike")){
-   gboolean liked=!strcmp(job->operation,"like");
+           !strcmp(job->operation,"unlike") ||
+           !strcmp(job->operation,"like_album") ||
+           !strcmp(job->operation,"unlike_album") ||
+           !strcmp(job->operation,"like_artist") ||
+           !strcmp(job->operation,"unlike_artist")){
+   gboolean liked=g_str_has_prefix(job->operation,"like");
    if(job->button && gtk_widget_get_parent(job->button) &&
       !g_strcmp0(g_object_get_data(G_OBJECT(job->button),"music-id"),
                  job->song_id)){
     gtk_button_set_image(GTK_BUTTON(job->button),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-                                   "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
-    gtk_widget_set_tooltip_text(job->button,liked?"Unlike song":"Like song");
+      music_heart_image(liked));
+    gtk_widget_set_tooltip_text(job->button,
+        !g_strcmp0(job->kind,"album")?(liked?"Unlike album":"Like album"):
+        !g_strcmp0(job->kind,"artist")?(liked?"Unlike artist":"Like artist"):
+        (liked?"Unlike song":"Like song"));
     g_object_set_data(G_OBJECT(job->button),"music-liked",
                       GINT_TO_POINTER(liked?2:1));
    }
-   for(guint i=0;i<view->visible_tracks->len;i++){
-    MusicTrack *t=g_ptr_array_index(view->visible_tracks,i);
-    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
-   }
-   for(guint i=0;i<view->queue->len;i++){
-    MusicTrack *t=g_ptr_array_index(view->queue,i);
-    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+   /* Favoriting an album/artist does not favorite all its songs. */
+   if(g_strcmp0(job->kind,"album") && g_strcmp0(job->kind,"artist")){
+    for(guint i=0;i<view->visible_tracks->len;i++){
+     MusicTrack *t=g_ptr_array_index(view->visible_tracks,i);
+     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+    }
+    for(guint i=0;i<view->queue->len;i++){
+     MusicTrack *t=g_ptr_array_index(view->queue,i);
+     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+    }
    }
    const char *kind=job->kind;
-   if(view->playing_like && view->queue_index>=0 &&
+   if(g_strcmp0(kind,"album") && g_strcmp0(kind,"artist") &&
+      view->playing_like && view->queue_index>=0 &&
       view->queue_index<(int)view->queue->len &&
       !g_strcmp0(((MusicTrack*)g_ptr_array_index(
        view->queue,view->queue_index))->id,job->song_id))
       music_update_controls(view);
-   status_set(view,!g_strcmp0(kind,"album")?
-       (liked?"Album liked.":"Album unliked."):
-       !g_strcmp0(kind,"artist")?
-       (liked?"Artist liked.":"Artist unliked."):
-       (liked?"Added to Liked Songs.":"Removed from Liked Songs."));
+   /* The heart's visual state confirms the change. Never leave a success
+    * notification above the album track list. */
+   status_clear(view);
   }else{
-   status_set(view,"Song added to playlist.");
+   status_clear(view); /* Playlist selection is the acknowledgment. */
   }
  }
  g_clear_error(&error);
@@ -1136,7 +1189,15 @@ static void music_like_clicked(GtkWidget *unused,gpointer data){
  MusicView *view=g_object_get_data(G_OBJECT(button),"music-view");
  const char *id=g_object_get_data(G_OBJECT(button),"music-id");
  gboolean liked=GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button),"music-liked"))==2;
- if(view && id)music_action_start(view,liked?"unlike":"like",id,button,id);
+ if(view && id){
+  const char *kind=g_object_get_data(G_OBJECT(button),"music-kind");
+  const char *operation=!g_strcmp0(kind,"album")?
+      (liked?"unlike_album":"like_album"):
+      !g_strcmp0(kind,"artist")?
+      (liked?"unlike_artist":"like_artist"):
+      (liked?"unlike":"like");
+  music_action_start(view,operation,id,button,id);
+ }
 }
 static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  (void)unused;
@@ -1150,13 +1211,16 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
  if(!g_strcmp0(kind,"album_meta")){
-  if(view->hero_title && title && *title)
+  if(view->hero_title && title && *title){
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
+   gtk_widget_set_tooltip_text(view->hero_title,title);
+  }
   if(view->hero_subtitle){
    char *description=album && *album?
        g_strdup_printf("%s · %s",artist?artist:"",album):
        g_strdup(artist?artist:"");
    gtk_label_set_text(GTK_LABEL(view->hero_subtitle),description);
+   gtk_widget_set_tooltip_text(view->hero_subtitle,description);
    g_free(description);
   }
   if(view->hero_like){
@@ -1165,8 +1229,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
    g_object_set_data(G_OBJECT(view->hero_like),"music-liked",
                      GINT_TO_POINTER(liked?2:1));
    gtk_button_set_image(GTK_BUTTON(view->hero_like),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-          "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(liked));
   }
   return;
  }
@@ -1286,11 +1349,10 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  }else if(!g_strcmp0(kind,"song")){
   GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
   gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
-  GtkWidget *like=music_icon_button(liked?
-      "emblem-favorite-symbolic":"non-starred-symbolic",
+  GtkWidget *like=music_heart_button(liked,
       liked?"Unlike song":"Like song");
   gtk_widget_set_name(like,"music-song-action");
-  gtk_widget_set_size_request(like,28,28);
+  gtk_widget_set_size_request(like,24,24);
   g_object_set_data(G_OBJECT(like),"music-view",view);
   g_object_set_data_full(G_OBJECT(like),"music-id",g_strdup(id),g_free);
   g_object_set_data(G_OBJECT(like),"music-liked",GINT_TO_POINTER(liked?2:1));
@@ -1298,7 +1360,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
   gtk_box_pack_start(GTK_BOX(line),like,FALSE,FALSE,0);
   GtkWidget *add=music_icon_button("list-add-symbolic","Add to playlist");
   gtk_widget_set_name(add,"music-song-action");
-  gtk_widget_set_size_request(add,28,28);
+  gtk_widget_set_size_request(add,24,24);
   g_object_set_data(G_OBJECT(add),"music-view",view);
   g_object_set_data_full(G_OBJECT(add),"music-id",g_strdup(id),g_free);
   g_signal_connect(add,"clicked",G_CALLBACK(music_playlist_clicked),add);
@@ -1489,6 +1551,9 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                        !g_strcmp0(job->operation,"playlist")) &&
                        view->visible_tracks->len>0;
     gtk_widget_set_sensitive(view->hero_play,playable);
+    if(view->hero_shuffle)
+     gtk_widget_set_sensitive(view->hero_shuffle,
+       !g_strcmp0(job->operation,"album") && view->visible_tracks->len>0);
    }
    /* Use the existing heading for relevant library information.
     * No separate "Connected to your music library" status row. */
@@ -1550,6 +1615,12 @@ static void query_start(MusicView *view,const char *operation,
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
                         !g_strcmp0(operation,"discover");
+ /* Discover still works with just the DroppedNeedle companion session.
+  * When playback is connected to the same host, optionally provide this
+  * client's app password on stdin for read-only per-user starred artists. */
+ const gboolean personalized_discover=!g_strcmp0(operation,"discover") &&
+    view->app_password && *view->app_password && view->bound_url &&
+    !g_strcmp0(view->bound_url,cfg[6]);
  if(!*cfg[6]){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
@@ -1596,7 +1667,7 @@ static void query_start(MusicView *view,const char *operation,
  }
  char *encoded_user=NULL;
  char *encoded_key=NULL;
- if(!catalog){
+ if(!catalog || personalized_discover){
   encoded_user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
   encoded_key=g_uri_escape_string(view->app_password,NULL,FALSE);
  }
@@ -1615,7 +1686,7 @@ static void query_start(MusicView *view,const char *operation,
   if(view->page_idle)g_source_remove(view->page_idle);
   view->page_idle=0;
  }
- job->input=catalog?g_strdup(""):g_strdup_printf(
+ job->input=(catalog && !personalized_discover)?g_strdup(""):g_strdup_printf(
      "api_key=%s&username=%s",encoded_key,encoded_user);
  wipe_free(encoded_key);
  g_free(encoded_user);
@@ -2106,13 +2177,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->volume=75;
  view->playback=now_music_playback_new(music_player_event,view);
  active_music_view=view;
- view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ view->root=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  gtk_widget_set_name(view->root,"music-home");
  /* Music must fill the GtkStack allocation at any window width. The
   * sidebar stays next to the main browser while extra width goes to tracks. */
  gtk_widget_set_halign(view->root,GTK_ALIGN_FILL);
  gtk_widget_set_hexpand(view->root,TRUE);
- gtk_container_set_border_width(GTK_CONTAINER(view->root),5);
+ gtk_container_set_border_width(GTK_CONTAINER(view->root),3);
  g_object_set_data_full(G_OBJECT(view->root),"music-view",view,music_view_free);
  g_signal_connect(view->root,"destroy",G_CALLBACK(music_view_destroy),view);
 
@@ -2221,7 +2292,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  const char *filter_labels[]={"Playlists","Artists","Albums","Liked songs",
                               "Recently played","New additions"};
  const char *filter_headings[]={"Your playlists","Artists","All albums",
-                                "Liked music","Recently played albums","New additions"};
+                                "Liked songs","Recently played albums","New additions"};
  for(guint i=0;i<G_N_ELEMENTS(filter_ops);i++){
   GtkWidget *filter=music_button(filter_labels[i]);
   music_align_nav_label(filter);
@@ -2281,7 +2352,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->shuffle_all=music_icon_button("media-playlist-shuffle-symbolic",
                                       "Shuffle all songs");
  gtk_widget_set_name(view->shuffle_all,"music-shuffle-all");
- gtk_widget_set_size_request(view->shuffle_all,32,32);
+ gtk_widget_set_size_request(view->shuffle_all,28,28);
  g_signal_connect(view->shuffle_all,"clicked",
                   G_CALLBACK(music_shuffle_all),view);
  gtk_widget_set_no_show_all(view->shuffle_all,TRUE);
@@ -2298,23 +2369,28 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_stack_set_visible_child_name(GTK_STACK(view->header_stack),"browse");
  view->search_toggle=music_icon_button("system-search-symbolic","Search music");
  gtk_widget_set_name(view->search_toggle,"music-search-toggle");
- gtk_widget_set_size_request(view->search_toggle,32,32);
+ gtk_widget_set_size_request(view->search_toggle,28,28);
  g_signal_connect(view->search_toggle,"clicked",
                   G_CALLBACK(music_toggle_search),view);
  gtk_box_pack_end(GTK_BOX(header_row),view->search_toggle,FALSE,FALSE,0);
  /* Album/artist/playlist art is fetched on demand, not through an
   * unbounded request fan-out for every visible library item. */
- view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,12);
+ /* Compact album header: full-width metadata and icon-only actions.
+  * Controls live under the album title, not beside the track names. */
+ view->hero_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
  gtk_widget_set_name(view->hero_row,"music-hero");
  view->hero_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
- gtk_widget_set_size_request(view->hero_art,96,96);
+ gtk_widget_set_size_request(view->hero_art,52,52);
  gtk_box_pack_start(GTK_BOX(view->hero_row),view->hero_art,FALSE,FALSE,0);
- GtkWidget *header_text=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ GtkWidget *header_text=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  gtk_widget_set_hexpand(header_text,TRUE);
+ gtk_widget_set_size_request(header_text,0,-1);
  view->hero_title=gtk_label_new("");
  gtk_widget_set_name(view->hero_title,"music-album-title");
  gtk_label_set_xalign(GTK_LABEL(view->hero_title),0);
  gtk_label_set_line_wrap(GTK_LABEL(view->hero_title),TRUE);
+ gtk_label_set_line_wrap_mode(GTK_LABEL(view->hero_title),PANGO_WRAP_WORD_CHAR);
+ gtk_label_set_lines(GTK_LABEL(view->hero_title),2);
  gtk_label_set_ellipsize(GTK_LABEL(view->hero_title),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(header_text),view->hero_title,FALSE,FALSE,0);
  view->hero_subtitle=gtk_label_new("");
@@ -2322,18 +2398,31 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_xalign(GTK_LABEL(view->hero_subtitle),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->hero_subtitle),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(header_text),view->hero_subtitle,FALSE,FALSE,0);
+ /* The album play/shuffle/like actions sit next to title/artist, not below. */
+ GtkWidget *album_actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,1);
+ gtk_widget_set_valign(album_actions,GTK_ALIGN_CENTER);
  gtk_box_pack_start(GTK_BOX(view->hero_row),header_text,TRUE,TRUE,0);
- view->hero_like=music_icon_button("non-starred-symbolic","Like this album");
- gtk_widget_set_name(view->hero_like,"music-album-like");
- g_object_set_data(G_OBJECT(view->hero_like),"music-view",view);
- g_signal_connect(view->hero_like,"clicked",G_CALLBACK(music_like_clicked),
-                  view->hero_like);
- gtk_box_pack_end(GTK_BOX(view->hero_row),view->hero_like,FALSE,FALSE,0);
- view->hero_play=music_icon_button("media-playback-start-symbolic","Play album");
+ gtk_box_pack_end(GTK_BOX(view->hero_row),album_actions,FALSE,FALSE,0);
+ view->hero_play=music_icon_button("media-playback-start-symbolic",
+                                  "Play album from the beginning");
  gtk_widget_set_name(view->hero_play,"music-album-play");
+ gtk_widget_set_size_request(view->hero_play,28,28);
  gtk_widget_set_sensitive(view->hero_play,FALSE);
  g_signal_connect(view->hero_play,"clicked",G_CALLBACK(music_play_album),view);
- gtk_box_pack_end(GTK_BOX(view->hero_row),view->hero_play,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(album_actions),view->hero_play,FALSE,FALSE,0);
+ view->hero_shuffle=music_icon_button("media-playlist-shuffle-symbolic",
+                                     "Shuffle this album");
+ gtk_widget_set_name(view->hero_shuffle,"music-album-shuffle");
+ gtk_widget_set_size_request(view->hero_shuffle,28,28);
+ gtk_widget_set_sensitive(view->hero_shuffle,FALSE);
+ g_signal_connect(view->hero_shuffle,"clicked",G_CALLBACK(music_shuffle_album),view);
+ gtk_box_pack_start(GTK_BOX(album_actions),view->hero_shuffle,FALSE,FALSE,0);
+ view->hero_like=music_heart_button(FALSE,"Like this album");
+ gtk_widget_set_name(view->hero_like,"music-album-like");
+ gtk_widget_set_size_request(view->hero_like,28,28);
+ g_object_set_data(G_OBJECT(view->hero_like),"music-view",view);
+ g_signal_connect(view->hero_like,"clicked",G_CALLBACK(music_like_clicked),view->hero_like);
+ gtk_box_pack_start(GTK_BOX(album_actions),view->hero_like,FALSE,FALSE,0);
  gtk_widget_show_all(view->hero_row);
  gtk_widget_set_no_show_all(view->hero_row,TRUE);
  gtk_box_pack_start(GTK_BOX(maincol),view->hero_row,FALSE,FALSE,0);
@@ -2376,20 +2465,27 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
- view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
- GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
+ view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ /* Player layout: metadata and controls in ONE row; seek directly below. */
+ GtkWidget *player_line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+ GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
+ GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,1);
+ gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),2);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
                              "music-player-bar");
  gtk_widget_set_name(view->player_bar,"music-player");
  view->playing_art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_SMALL_TOOLBAR);
- gtk_widget_set_size_request(view->playing_art,44,44);
- gtk_box_pack_start(GTK_BOX(controls),view->playing_art,FALSE,FALSE,0);
- GtkWidget *now_playing=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
+ gtk_widget_set_size_request(view->playing_art,34,34);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_art,FALSE,FALSE,0);
+ GtkWidget *now_playing=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
  gtk_widget_set_hexpand(now_playing,TRUE);
+ gtk_widget_set_size_request(now_playing,0,-1);
  view->playing_label=gtk_label_new("");
  gtk_widget_set_name(view->playing_label,"music-now-title");
  gtk_label_set_xalign(GTK_LABEL(view->playing_label),0);
+ gtk_label_set_line_wrap(GTK_LABEL(view->playing_label),FALSE);
+ gtk_label_set_line_wrap_mode(GTK_LABEL(view->playing_label),PANGO_WRAP_WORD_CHAR);
+ gtk_label_set_lines(GTK_LABEL(view->playing_label),1);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_label),PANGO_ELLIPSIZE_END);
  gtk_widget_set_hexpand(view->playing_label,TRUE);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_label,FALSE,FALSE,0);
@@ -2398,33 +2494,46 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_xalign(GTK_LABEL(view->playing_artist_label),0);
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_artist_label),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_artist_label,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(controls),now_playing,TRUE,TRUE,0);
- view->playing_like=music_icon_button("non-starred-symbolic","Like current song");
+ gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0);
+ view->playing_like=music_heart_button(FALSE,"Like current song");
  gtk_widget_set_name(view->playing_like,"music-playing-like");
+ gtk_widget_set_size_request(view->playing_like,26,26);
  g_object_set_data(G_OBJECT(view->playing_like),"music-view",view);
  g_object_set_data(G_OBJECT(view->playing_like),"music-kind",(gpointer)"song");
  g_signal_connect(view->playing_like,"clicked",
                   G_CALLBACK(music_like_clicked),view->playing_like);
- gtk_box_pack_start(GTK_BOX(controls),view->playing_like,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_like,FALSE,FALSE,0);
+ view->playing_add=music_icon_button("list-add-symbolic","Add current song to playlist");
+ gtk_widget_set_name(view->playing_add,"music-playing-add");
+ gtk_widget_set_size_request(view->playing_add,26,26);
+ g_object_set_data(G_OBJECT(view->playing_add),"music-view",view);
+ g_signal_connect(view->playing_add,"clicked",
+                  G_CALLBACK(music_playlist_clicked),view->playing_add);
+ gtk_box_pack_start(GTK_BOX(track_info),view->playing_add,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(player_line),track_info,TRUE,TRUE,0);
  view->shuffle_button=gtk_toggle_button_new();
  gtk_button_set_image(GTK_BUTTON(view->shuffle_button),
     gtk_image_new_from_icon_name("media-playlist-shuffle-symbolic",GTK_ICON_SIZE_BUTTON));
  gtk_style_context_add_class(gtk_widget_get_style_context(view->shuffle_button),"music-transport");
  gtk_widget_set_tooltip_text(view->shuffle_button,"Shuffle off");
- gtk_widget_set_size_request(view->shuffle_button,38,38);
+ gtk_widget_set_size_request(view->shuffle_button,26,26);
  g_signal_connect(view->shuffle_button,"toggled",G_CALLBACK(music_shuffle_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),view->shuffle_button,FALSE,FALSE,0);
  view->previous_button=music_icon_button("media-skip-backward-symbolic","Previous");
+ gtk_widget_set_size_request(view->previous_button,28,28);
  g_signal_connect(view->previous_button,"clicked",G_CALLBACK(music_prev_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),view->previous_button,FALSE,FALSE,0);
  view->pause_button=music_icon_button("media-playback-pause-symbolic","Pause");
+ gtk_widget_set_size_request(view->pause_button,32,32);
  gtk_widget_set_name(view->pause_button,"music-primary-play");
  g_signal_connect(view->pause_button,"clicked",G_CALLBACK(music_pause_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),view->pause_button,FALSE,FALSE,0);
  view->next_button=music_icon_button("media-skip-forward-symbolic","Next");
+ gtk_widget_set_size_request(view->next_button,28,28);
  g_signal_connect(view->next_button,"clicked",G_CALLBACK(music_next_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),view->next_button,FALSE,FALSE,0);
  GtkWidget *stop_button=music_icon_button("media-playback-stop-symbolic","Stop");
+ gtk_widget_set_size_request(stop_button,26,26);
  g_signal_connect(stop_button,"clicked",G_CALLBACK(music_stop_clicked),view);
  gtk_box_pack_start(GTK_BOX(controls),stop_button,FALSE,FALSE,0);
  /* Local volume only; never changes another user's playback. */
@@ -2432,13 +2541,16 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->volume_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,100,1);
  gtk_scale_set_draw_value(GTK_SCALE(view->volume_slider),FALSE);
  gtk_range_set_value(GTK_RANGE(view->volume_slider),view->volume);
- gtk_widget_set_size_request(view->volume_slider,65,-1);
+ gtk_widget_set_size_request(view->volume_slider,52,-1);
  gtk_widget_set_tooltip_text(view->volume_slider,"This device's music volume");
  g_signal_connect(view->volume_slider,"value-changed",
                   G_CALLBACK(music_volume_changed),view);
  gtk_box_pack_start(GTK_BOX(controls),view->volume_slider,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0);
- GtkWidget *timeline=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ gtk_box_pack_end(GTK_BOX(player_line),controls,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(view->player_bar),player_line,FALSE,FALSE,0);
+ /* Independent thin progress row keeps seek usable on small screens. */
+ GtkWidget *timeline=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+ gtk_widget_set_hexpand(timeline,TRUE);
  view->seek_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,1,1);
  gtk_scale_set_draw_value(GTK_SCALE(view->seek_slider),FALSE);
  gtk_widget_set_hexpand(view->seek_slider,TRUE);
@@ -2453,7 +2565,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                   G_CALLBACK(music_seek_release),view);
  gtk_box_pack_start(GTK_BOX(timeline),view->seek_slider,TRUE,TRUE,0);
  view->seek_caption=gtk_label_new("0:00 / 0:00");
- gtk_widget_set_size_request(view->seek_caption,100,-1);
+ gtk_widget_set_size_request(view->seek_caption,76,-1);
  gtk_box_pack_start(GTK_BOX(timeline),view->seek_caption,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->player_bar),timeline,FALSE,FALSE,0);
  /* Show children once, then suppress the entire bar from root show_all()

@@ -19,6 +19,7 @@ import re
 import socket
 import ssl
 import sys
+import unicodedata
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlsplit, urlunsplit
@@ -256,15 +257,86 @@ DISCOVER_SECTIONS = (
 )
 
 
-def _discover_rows(result: dict[str, Any]) -> str:
+def _artist_name_key(name: object) -> str:
+    """Only exact Unicode-normalized artist names qualify as a fallback ID."""
+    if not isinstance(name,str) or not name.strip() or len(name)>256:
+        return ""
+    key=" ".join(unicodedata.normalize("NFKC",name).casefold().split())
+    return "" if key in ("unknown artist","various artists","unknown") else key
+
+
+def _favorite_artist_signals(starred: object) -> tuple[set[str],set[str]]:
+    """Read-only, per-user signals. No playback tracking or external writes."""
+    if not isinstance(starred,dict):
+        return set(),set()
+    names:set[str]=set()
+    mbids:set[str]=set()
+    for category in ("song","album","artist"):
+        entries=starred.get(category,[])
+        if not isinstance(entries,list):
+            continue
+        for item in entries[:400]:
+            if not isinstance(item,dict):
+                continue
+            candidate=item.get("name") if category=="artist" else item.get("artist")
+            name=_artist_name_key(candidate)
+            if name:
+                names.add(name)
+            # The artistMBID is not the release/album MBID. Never compare
+            # a liked track or album ID to a recommended album ID.
+            identifiers=("musicBrainzId","musicbrainzId","mbid") if category=="artist" else (
+                "artistMusicBrainzId","artistMbid","artistMBID")
+            for key in identifiers:
+                artist_mbid=item.get(key)
+                if isinstance(artist_mbid,str) and MBID.fullmatch(artist_mbid):
+                    mbids.add(artist_mbid.lower())
+    return names,mbids
+
+
+def _genre_names(value: object) -> set[str]:
+    """Read only explicit, bounded genre labels; never guess from an artist."""
+    if isinstance(value,str):
+        candidates=[value]
+    elif isinstance(value,list):
+        candidates=[x if isinstance(x,str) else x.get("name") or x.get("value")
+                    if isinstance(x,dict) else None for x in value[:20]]
+    else:
+        return set()
+    return {label for entry in candidates
+            if (label:=_artist_name_key(entry))}
+
+
+def _favorite_genre_signals(starred: object) -> set[str]:
+    """Explicit genres from THIS user's liked songs/albums, never server-wide."""
+    if not isinstance(starred,dict):
+        return set()
+    genres:set[str]=set()
+    for kind in ("song","album"):
+        entries=starred.get(kind,[])
+        if not isinstance(entries,list):
+            continue
+        for item in entries[:400]:
+            if isinstance(item,dict):
+                genres.update(_genre_names(item.get("genre")))
+                genres.update(_genre_names(item.get("genres")))
+    return genres
+
+
+def _discover_rows(result: dict[str, Any], *,
+                   favorite_artists: tuple[set[str],set[str]] | None = None,
+                   favorite_genres: set[str] | None = None) -> str:
     """Flatten only DroppedNeedle's known discovery sections into safe rows.
 
     Section boundaries are preserved for the native GTK screen. DroppedNeedle
-    remains responsible for recommendation logic and album identity.
+    remains responsible for recommendation logic and album identity. When
+    available, this user's likes can only reorder existing eligible entries
+    inside each section; they never create a request or follow an artist.
     """
     lines=[]
     seen=set()
     total=0
+    liked_names,liked_mbids=favorite_artists or (set(),set())
+    liked_genres=favorite_genres or set()
 
     def add_section(section: object, key: str):
         nonlocal total
@@ -292,8 +364,19 @@ def _discover_rows(result: dict[str, Any]) -> str:
                       (artist and "artist" not in kind_hint))
             kind="catalog_album" if is_album else "catalog_artist"
             state="Requested" if item.get("requested") else "Not in library"
-            accepted.append((kind,mbid,title[:512],
-                             (artist+" · "+state)[:256],""))
+            artist_key=_artist_name_key(title if kind=="catalog_artist" else artist)
+            artist_id=item.get("artist_mbid") or item.get("artist_musicbrainz_id")
+            if kind=="catalog_artist":
+                artist_id=mbid
+            known=(artist_key in liked_names if artist_key else False) or (
+                isinstance(artist_id,str) and artist_id.lower() in liked_mbids)
+            # A loved artist is a TASTE SIGNAL, not the definition of
+            # discovery. Favor unseen artists with explicit shared genres.
+            # Do not invent genre similarity when the API has no genre data.
+            genres=_genre_names(item.get("genre")) | _genre_names(item.get("genres"))
+            relevant=bool(genres & liked_genres) and not known
+            accepted.append((known,relevant,(kind,mbid,title[:512],
+                             (artist+" · "+state)[:256],"")))
             seen.add(mbid)
             total+=1
             if total>=180:break
@@ -302,8 +385,20 @@ def _discover_rows(result: dict[str, Any]) -> str:
         heading=section.get("title")
         if not isinstance(heading,str) or not heading.strip():
             heading=key.replace("_"," ").title()
-        items=[("section",key,heading[:96],"",""),*accepted]
-        for fields in items:
+        # Keep DroppedNeedle's candidate sections and preserve upstream order
+        # within equal tiers. New-artist sections never boost an already-liked
+        # artist. The rediscovery/followed sections retain their own ordering.
+        novelty_sections={"artists_you_might_like","listeners_like_you",
+                          "unexplored_genres","popular_in_your_genres",
+                          "top_picks"}
+        if key in novelty_sections and (liked_names or liked_mbids or liked_genres):
+            accepted.sort(key=lambda entry:(entry[0],not entry[1]))
+        elif liked_genres and key not in ("rediscover","new_from_followed"):
+            # A small taste hint for a new artist, not a same-artist loop.
+            accepted.sort(key=lambda entry:not entry[1])
+        rows=[("section",key,heading[:96],"","")]
+        rows.extend(fields for _,_,fields in accepted)
+        for fields in rows:
             lines.append("\t".join(base64.b64encode(x.encode()).decode()
                                    for x in fields))
 

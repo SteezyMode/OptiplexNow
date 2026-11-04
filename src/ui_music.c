@@ -1615,6 +1615,12 @@ static void query_start(MusicView *view,const char *operation,
  const gboolean append_songs=!g_strcmp0(operation,"songs") && value && *value;
  const gboolean catalog=!g_strcmp0(operation,"catalog") ||
                         !g_strcmp0(operation,"discover");
+ /* Discover still works with just the DroppedNeedle companion session.
+  * When playback is connected to the same host, optionally provide this
+  * client's app password on stdin for read-only per-user starred artists. */
+ const gboolean personalized_discover=!g_strcmp0(operation,"discover") &&
+    view->app_password && *view->app_password && view->bound_url &&
+    !g_strcmp0(view->bound_url,cfg[6]);
  if(!*cfg[6]){
   status_set(view,"Add your Music server URL under NOW Settings.");
   return;
@@ -1661,7 +1667,7 @@ static void query_start(MusicView *view,const char *operation,
  }
  char *encoded_user=NULL;
  char *encoded_key=NULL;
- if(!catalog){
+ if(!catalog || personalized_discover){
   encoded_user=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
   encoded_key=g_uri_escape_string(view->app_password,NULL,FALSE);
  }
@@ -1680,7 +1686,7 @@ static void query_start(MusicView *view,const char *operation,
   if(view->page_idle)g_source_remove(view->page_idle);
   view->page_idle=0;
  }
- job->input=catalog?g_strdup(""):g_strdup_printf(
+ job->input=(catalog && !personalized_discover)?g_strdup(""):g_strdup_printf(
      "api_key=%s&username=%s",encoded_key,encoded_user);
  wipe_free(encoded_key);
  g_free(encoded_user);

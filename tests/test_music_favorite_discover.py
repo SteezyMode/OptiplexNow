@@ -67,8 +67,8 @@ class DiscoverFavoritesTests(unittest.TestCase):
         discover={"artists_you_might_like":{"type":"artists","items":[
             {"name":"New Music","mbid":A},
             {"name":"Some Artist","mbid":ARTIST}]}}
-        result=rows(rest._discover_rows(discover,favorite_artists=favorites))
-        self.assertEqual([x[1] for x in result[1:]],[A,ARTIST])
+        # Artist suggestions have no release-group ID; no fake "Add" action.
+        self.assertEqual(rows(rest._discover_rows(discover,favorite_artists=favorites)),[])
 
     def test_unknown_fields_and_oversized_favorites_are_bounded(self):
         fake=[{"artist":"NOISE"}]*800
@@ -94,10 +94,10 @@ class DiscoverFavoritesTests(unittest.TestCase):
         request.assert_called_once_with(BASE,"discover",token="existing-bearer")
 
     def test_new_genre_matched_artist_moves_ahead_of_existing_favorites(self):
-        data={"artists_you_might_like":{"type":"artists","items":[
-            {"name":"Stereolab","mbid":ARTIST,"genres":["Indie Rock"]},
-            {"name":"Random","mbid":A,"genre":"ambient"},
-            {"name":"Fresh Artist","mbid":B,"genres":[{"name":"Indie Rock"}]},
+        data={"top_picks":{"type":"albums","items":[
+            {"album":{"name":"Old album","mbid":ARTIST,"artist_name":"Stereolab","genres":["Indie Rock"]}},
+            {"album":{"name":"Ambient album","mbid":A,"artist_name":"Random","genre":"ambient"}},
+            {"album":{"name":"New album","mbid":B,"artist_name":"Fresh Artist","genres":[{"name":"Indie Rock"}]}},
         ]}}
         liked={"song":[{"artist":"Stereolab","genre":"Indie Rock"}]}
         artists=rest._favorite_artist_signals(liked)
@@ -108,9 +108,9 @@ class DiscoverFavoritesTests(unittest.TestCase):
         self.assertEqual([x[1] for x in ranked[1:]],[B,A,ARTIST])
 
     def test_unliking_removes_influence_on_next_discover(self):
-        dataset={"popular_in_your_genres":{"type":"artists","items":[
-            {"name":"Random","mbid":A,"genre":"ambient"},
-            {"name":"New Artist","mbid":B,"genre":"Indie Rock"},
+        dataset={"popular_in_your_genres":{"type":"albums","items":[
+            {"name":"Ambient","mbid":A,"artist_name":"Random","genre":"ambient"},
+            {"name":"Rock","mbid":B,"artist_name":"New Artist","genre":"Indie Rock"},
         ]}}
         liked={"album":[{"artist":"Stereolab","genre":"Indie Rock"}]}
         ranked=rest._discover_rows(dataset,
@@ -131,9 +131,9 @@ class DiscoverFavoritesTests(unittest.TestCase):
                           favorite_genres=rest._favorite_genre_signals(liked)))
 
     def test_followed_and_rediscover_sections_preserve_upstream_order(self):
-        candidate={"type":"artists","items":[
-            {"name":"Other","mbid":A,"genre":"ambient"},
-            {"name":"Favorite","mbid":B,"genre":"Indie Rock"}]}
+        candidate={"type":"albums","items":[
+            {"name":"Other album","artist_name":"Other","mbid":A,"genre":"ambient"},
+            {"name":"Favorite album","artist_name":"Favorite","mbid":B,"genre":"Indie Rock"}]}
         data={"new_from_followed":candidate,
               "rediscover":candidate}
         liked={"song":[{"artist":"Favorite","genre":"Indie Rock"}]}
@@ -178,10 +178,9 @@ class DiscoverFavoritesTests(unittest.TestCase):
         }
         result=rows(rest._discover_rows(data))
         self.assertEqual([x[1] for x in result if x[0]=="section"],
-                         ["because_you_listen_0","artists_you_might_like",
-                          "globally_trending"])
+                         ["because_you_listen_0","globally_trending"])
         self.assertEqual([x[1] for x in result if x[0].startswith("catalog_")],
-                         [C,B,A])
+                         [C,A])
 
     def test_nested_top_picks_are_visible_without_automatic_requests(self):
         data={"top_picks":{"title":"Top Picks for You","items":[

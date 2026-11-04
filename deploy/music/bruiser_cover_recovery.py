@@ -8,6 +8,7 @@ the server's existing MusicBrainz and cover-art repositories.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import re
 import unicodedata
@@ -107,7 +108,15 @@ async def recover_album_cover(
         return None
     cover = services.coverart
     disk = cover.disk_cache
-    cache_file = disk.get_file_path("bruiser_rg_" + album_id, size)
+    # A changed album artist/title/year must not reuse a previously verified
+    # cover just because its library-local UUID stayed unchanged.
+    identity = "\\0".join((
+        album_id, folded(getattr(album, "title", None)),
+        folded(getattr(album, "artist_name", None)),
+        str(getattr(album, "year", None) or ""),
+    ))
+    revision = hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
+    cache_file = disk.get_file_path("bruiser_rg_" + album_id + "_" + revision, size)
     lock = _LOCKS.setdefault(album_id + ":" + size, asyncio.Lock())
 
     async with lock:

@@ -45,6 +45,7 @@ ALLOWED={
     "verify":("/auth/sessions","GET"),
     "search":("/search","GET"),
     "discover":("/discover","GET"),
+    "discover_refresh":("/discover/refresh","POST"),
     "artist_releases":("/artists/{id}/releases","GET"),
     "catalog_tracks":("/albums/{id}/tracks","GET"),
     "request_track":("/tracks/{id}/request","POST"),
@@ -431,6 +432,36 @@ def _store_discover_rows(base_url: str, token: str, rows: str) -> None:
                 os.unlink(tmp)
     except (OSError,ValueError):
         return
+
+def trigger_empty_discover_refresh(
+    base_url: str, token: str, response: dict[str, Any]
+) -> bool:
+    """Start at most one authorized refresh per 10 minutes when truly empty.
+
+    User has navigated to Music Home/Discover. No music acquisition, download,
+    follow, or playback side effect. Preserve server-side throttle limits.
+    """
+    if response.get("refreshing") is True or _discover_rows(response).strip():
+        return False
+    if _last_discover_rows(base_url,token):
+        return False
+    stamp=_discover_cache_path(base_url,token).with_suffix(".refresh")
+    try:
+        if stamp.exists() and time.time()-stamp.stat().st_mtime < 600:
+            return False
+        stamp.parent.mkdir(parents=True,mode=0o700,exist_ok=True)
+        fd,temp=tempfile.mkstemp(prefix=".discover-refresh-",dir=stamp.parent)
+        os.fchmod(fd,0o600)
+        os.close(fd)
+        os.replace(temp,stamp)
+    except OSError:
+        return False
+    try:
+        request(base_url,"discover_refresh",token=token,timeout_seconds=8)
+        return True
+    except MusicRESTError:
+        return False
+
 
 def retained_discover_rows(base_url: str, token: str, response: dict[str, Any],
                            *,favorite_artists=None,favorite_genres=None) -> str:

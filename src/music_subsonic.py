@@ -352,7 +352,9 @@ def _home_rows(result: dict[str, Any]) -> str:
     # DroppedNeedle already supplies personalized / fresh suggestions. We do
     # not invent recommendations, request music, or mine global charts here.
     from music_rest import _discover_rows
-    external=_discover_rows(result.get("discover",{}))
+    external=result.get("discover_rows")
+    if not isinstance(external,str):
+        external=_discover_rows(result.get("discover",{}))
     shelves={"made":[],"fresh":[],"artists":[]}
     seen_external:set[str]=set()
     category=""
@@ -452,12 +454,12 @@ def main(argv: list[str] | None = None) -> int:
                     raise MusicTransportError(str(exc)) from None
             else:
                 from music_rest import (
-                    get_session, request as rest_request, _discover_rows,
+                    get_session, request as rest_request, retained_discover_rows,
                     _favorite_artist_signals, _favorite_genre_signals, MusicRESTError,
                 )
                 try:
-                    result = rest_request(args.base_url, "discover",
-                                          token=get_session(args.base_url))
+                    token = get_session(args.base_url)
+                    result = rest_request(args.base_url, "discover", token=token)
                 except MusicRESTError as exc:
                     raise MusicTransportError(str(exc)) from None
                 # Discover is usable with only a DroppedNeedle companion
@@ -476,8 +478,9 @@ def main(argv: list[str] | None = None) -> int:
                             genres = _favorite_genre_signals(starred.get("starred2"))
                         except MusicTransportError:
                             pass
-                rows = _discover_rows(result, favorite_artists=favorites,
-                                      favorite_genres=genres)
+                rows = retained_discover_rows(args.base_url,token,result,
+                                             favorite_artists=favorites,
+                                             favorite_genres=genres)
             if args.format == "rows":
                 sys.stdout.write(rows)
             else:
@@ -502,7 +505,10 @@ def main(argv: list[str] | None = None) -> int:
             # Independent bounded reads: missing recommendations never prevent
             # listening to the user's existing music.
             from concurrent.futures import ThreadPoolExecutor
-            from music_rest import get_session, request as rest_request, MusicRESTError
+            from music_rest import (
+                get_session, request as rest_request, retained_discover_rows,
+                MusicRESTError,
+            )
             token = None
             try:
                 token = get_session(args.base_url)
@@ -539,6 +545,9 @@ def main(argv: list[str] | None = None) -> int:
                         result[key]=response.get("playlists",{}).get("playlist",[])
                     else:
                         result[key]=response
+                        if token is not None:
+                            result["discover_rows"]=retained_discover_rows(
+                                args.base_url,token,response)
         elif args.operation in ("albums", "recent", "new"):
             sort = {
                 "albums": "alphabeticalByName",

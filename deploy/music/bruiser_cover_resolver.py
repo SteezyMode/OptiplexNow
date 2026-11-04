@@ -5,7 +5,10 @@ DroppedNeedle's native scanner uses UUIDv5 for local album identities while
 Cover Art Archive expects a genuine MusicBrainz release-group MBID. Looking
 up cover art by an unrelated UUIDv5 cannot succeed remotely.
 
-The normal local-art and genuine MBID paths retain priority. When those miss,
+The normal local-art and genuine MBID paths retain priority.
+MusicBrainz release groups may be UUIDv3 (historical) or UUIDv4; the first
+version of this resolver incorrectly rejected genuine UUIDv3 matches. The v2
+cache namespace bypasses stale negative decisions created by that error. When those miss,
 a candidate may be accepted only when both artist and album title normalize
 exactly, the release year agrees (when known), and a unique MB release-group
 identity is returned. All decisions are persisted in the existing /app/cache
@@ -25,8 +28,8 @@ import time
 import unicodedata
 import uuid
 
-CACHE_ROOT = Path("/app/cache/bruiser-cover-mappings-v1")
-CACHE_VERSION = 1
+CACHE_ROOT = Path("/app/cache/bruiser-cover-mappings-v2")
+CACHE_VERSION = 2
 POSITIVE_TTL = 30 * 86400
 NEGATIVE_TTL = 30 * 60
 SEARCH_TIMEOUT_SECONDS = 10
@@ -83,7 +86,9 @@ def _valid_rg(value: object) -> bool:
         candidate = uuid.UUID(value)
     except (ValueError, AttributeError):
         return False
-    return str(candidate) == value.lower() and candidate.version == 4
+    # Legacy MusicBrainz release-group identifiers include UUIDv3.
+    # Reject UUIDv5: that version is reserved here for synthetic local IDs.
+    return str(candidate) == value.lower() and candidate.version in (3, 4)
 
 
 def pick_verified_release_group(

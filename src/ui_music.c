@@ -54,7 +54,7 @@ typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
- GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav, *discover_back;
+ GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav, *discover_back, *song_search_button;
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
@@ -67,7 +67,7 @@ typedef struct {
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode, shuffle_enabled, discover_active;
+ gboolean grid_mode, shuffle_enabled, discover_active, album_tracks_active;
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
@@ -853,6 +853,7 @@ typedef struct {
  GSubprocess *process;
  GCancellable *cancel;
  guint deadline;
+ gboolean track;
 } MusicAlbumRequest;
 
 static gboolean music_request_timeout(gpointer data){
@@ -880,9 +881,14 @@ static void music_request_complete(GObject *unused,GAsyncResult *result,gpointer
      job->process,result,&output,NULL,&error);
  if(view && !view->closing){
   if(done && g_subprocess_get_successful(job->process)){
-   gtk_button_set_label(GTK_BUTTON(job->button),"Requested");
+   const char *status="Requested";
+   if(job->track && output){
+    if(strstr(output,"already_in_library"))status="In Library";
+    else if(strstr(output,"awaiting_approval"))status="Awaiting Approval";
+   }
+   gtk_button_set_label(GTK_BUTTON(job->button),status);
    gtk_widget_set_sensitive(job->button,FALSE);
-   /* The Requested button confirms success without taking track-list space. */
+   /* The button confirms the actual request state without extra banners. */
    status_clear(view);
    music_refresh_status(view);
   }else{
@@ -925,6 +931,62 @@ static void music_request_album(GtkWidget *button,gpointer data){
  job->button=g_object_ref(button);
  job->process=proc;
  job->cancel=g_cancellable_new();
+ gtk_widget_set_sensitive(button,FALSE);
+ status_clear(view);
+ job->deadline=g_timeout_add_seconds(25,music_request_timeout,job);
+ g_subprocess_communicate_utf8_async(proc,"",job->cancel,
+                                     music_request_complete,job);
+}
+
+/* Single recording requests use DroppedNeedle's existing authorized
+ * POST /tracks/{recording_mbid}/request. Recording and human-readable metadata
+ * are public identifiers; the bearer remains inside the OS Secret Service. */
+static void music_request_track(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ if(!view || view->closing || !*cfg[6])return;
+ const char *id=g_object_get_data(G_OBJECT(button),"music-request-track");
+ const char *title=g_object_get_data(G_OBJECT(button),"music-request-track-title");
+ const char *artist=g_object_get_data(G_OBJECT(button),"music-request-track-artist");
+ const char *album=g_object_get_data(G_OBJECT(button),"music-request-track-album");
+ const char *rg=g_object_get_data(G_OBJECT(button),"music-request-track-rg");
+ if(!id || strlen(id)!=36 || !title || !*title || !artist || !*artist)return;
+ char *source=helper_path();
+ char *dir=g_path_get_dirname(source);
+ g_free(source);
+ char *helper=g_build_filename(dir,"music_rest.py",NULL);
+ g_free(dir);
+ if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
+  status_set(view,"Music request integration is not installed.");
+  g_free(helper);return;
+ }
+ const gchar *argv[20];
+ guint n=0;
+ argv[n++]="/usr/bin/python3";
+ argv[n++]=helper;
+ argv[n++]=cfg[6];
+ argv[n++]="track_request";
+ argv[n++]=id;
+ argv[n++]="--track-title"; argv[n++]=title;
+ argv[n++]="--track-artist";argv[n++]=artist;
+ if(album && *album){argv[n++]="--track-album";argv[n++]=album;}
+ if(rg && strlen(rg)==36){argv[n++]="--track-rg";argv[n++]=rg;}
+ argv[n]=NULL;
+ GError *error=NULL;
+ GSubprocess *proc=g_subprocess_newv(argv,
+    G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
+    G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(helper);
+ if(!proc){
+  g_clear_error(&error);
+  status_set(view,"Cannot start the individual song request.");
+  return;
+ }
+ MusicAlbumRequest *job=g_new0(MusicAlbumRequest,1);
+ job->root=g_object_ref(view->root);
+ job->button=g_object_ref(button);
+ job->process=proc;
+ job->cancel=g_cancellable_new();
+ job->track=TRUE;
  gtk_widget_set_sensitive(button,FALSE);
  status_clear(view);
  job->deadline=g_timeout_add_seconds(25,music_request_timeout,job);

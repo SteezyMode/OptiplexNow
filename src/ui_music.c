@@ -41,6 +41,14 @@ static void music_discover_entry_free(gpointer data){
  g_free(entry->kind);g_free(entry->id);g_free(entry->title);
  g_free(entry->artist);g_free(entry->cover);g_free(entry);
 }
+typedef struct {
+ char *title, *description;
+} MusicDiscoverShelf;
+static void music_discover_shelf_free(gpointer data){
+ MusicDiscoverShelf *shelf=data;
+ if(!shelf)return;
+ g_free(shelf->title);g_free(shelf->description);g_free(shelf);
+}
 
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
@@ -50,7 +58,7 @@ typedef struct {
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
- GPtrArray *visible_tracks, *queue, *discover_entries;
+ GPtrArray *visible_tracks, *queue, *discover_entries, *discover_shelves;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
  int queue_index, album_offset, song_offset, volume;
@@ -153,6 +161,7 @@ static void music_view_free(gpointer data){
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
  if(view->discover_entries)g_ptr_array_unref(view->discover_entries);
+ if(view->discover_shelves)g_ptr_array_unref(view->discover_shelves);
  if(view->shuffle_order)g_array_unref(view->shuffle_order);
  if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
  if(view->pending_art)g_queue_free_full(view->pending_art,music_pending_free);
@@ -1549,7 +1558,8 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  * a vertical dump of the upstream 13+ recommendation sections. Actual items
  * are cached only for this view and remain suggestion-only until Add is clicked. */
 enum { DISC_FOR_YOU, DISC_NEW_ARTISTS, DISC_FRESH, DISC_GENRES,
-       DISC_EXPLORE, DISC_TRENDING, DISC_GROUPS };
+       DISC_EXPLORE, DISC_TRENDING, DISC_GROUPS, DISC_DYNAMIC_START=DISC_GROUPS,
+       DISC_MAX_DYNAMIC=4 };
 static const char *const discover_names[DISC_GROUPS]={
  "For You","New Artists","Fresh Releases","Your Genres","Explore","Trending"
 };
@@ -1584,8 +1594,32 @@ static int music_discover_group_for(const char *key){
  return DISC_EXPLORE;
 }
 
+static const char *music_discover_title(MusicView *view,int group){
+ if(group>=DISC_DYNAMIC_START){
+  guint idx=(guint)(group-DISC_DYNAMIC_START);
+  if(idx<view->discover_shelves->len){
+   MusicDiscoverShelf *shelf=g_ptr_array_index(view->discover_shelves,idx);
+   return shelf->title;
+  }
+  return "Discover";
+ }
+ return group>=0 && group<DISC_GROUPS?discover_names[group]:"Discover";
+}
+static const char *music_discover_description(MusicView *view,int group){
+ if(group>=DISC_DYNAMIC_START){
+  guint idx=(guint)(group-DISC_DYNAMIC_START);
+  if(idx<view->discover_shelves->len){
+   MusicDiscoverShelf *shelf=g_ptr_array_index(view->discover_shelves,idx);
+   return shelf->description;
+  }
+  return "Personal picks";
+ }
+ return group>=0 && group<DISC_GROUPS?discover_descriptions[group]:"Explore";
+}
+
 static void music_discover_show_category(MusicView *view,int group){
- if(!view || view->closing || view->busy || group<0 || group>=DISC_GROUPS)return;
+ if(!view || view->closing || view->busy || group<0 ||
+    group>=DISC_GROUPS+(int)view->discover_shelves->len)return;
  view->discover_active=TRUE;
  view->discover_category=group;
  view->grid_mode=TRUE;
@@ -1596,7 +1630,7 @@ static void music_discover_show_category(MusicView *view,int group){
   music_add_item(view,entry->kind,entry->id,entry->title,
                  entry->artist,entry->cover,"",FALSE);
  }
- gtk_label_set_text(GTK_LABEL(view->heading),discover_names[group]);
+ gtk_label_set_text(GTK_LABEL(view->heading),music_discover_title(view,group));
  if(view->discover_back)gtk_widget_show(view->discover_back);
  music_show_search(view,FALSE);
  gtk_widget_show_all(view->cards);
@@ -1617,7 +1651,14 @@ static void music_discover_show_landing(MusicView *view){
  view->discover_category=-1;
  view->grid_mode=TRUE;
  render_rows(view,"",FALSE);
- for(int group=0;group<DISC_GROUPS;group++){
+ const guint dynamic_count=view->discover_shelves->len;
+ for(int position=0;position<DISC_GROUPS+(int)dynamic_count;position++){
+  /* Stable For You entry point; truly personalized mixes change underneath
+   * it as the user's recent listening and likes change. Trending stays last. */
+  int group=position==0?DISC_FOR_YOU:
+    (position<=(int)dynamic_count
+      ? DISC_DYNAMIC_START+position-1
+      : position-(int)dynamic_count);
   guint count=0;
   const char *cover=NULL;
   for(guint i=0;i<view->discover_entries->len;i++){
@@ -1632,7 +1673,8 @@ static void music_discover_show_landing(MusicView *view){
   gtk_widget_set_name(button,"music-discover-tile");
   GtkStyleContext *style=gtk_widget_get_style_context(button);
   gtk_style_context_add_class(style,"now-action");
-  gtk_style_context_add_class(style,discover_styles[group]);
+  gtk_style_context_add_class(style,group>=DISC_DYNAMIC_START?
+                                "music-discover-dynamic":discover_styles[group]);
   gtk_widget_set_size_request(button,168,220);
   GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
   gtk_container_set_border_width(GTK_CONTAINER(content),7);
@@ -1640,12 +1682,12 @@ static void music_discover_show_landing(MusicView *view){
                                                 GTK_ICON_SIZE_DIALOG);
   gtk_widget_set_size_request(image,148,148);
   gtk_box_pack_start(GTK_BOX(content),image,FALSE,FALSE,0);
-  GtkWidget *label=gtk_label_new(discover_names[group]);
+  GtkWidget *label=gtk_label_new(music_discover_title(view,group));
   gtk_widget_set_name(label,"music-discover-tile-title");
   gtk_label_set_xalign(GTK_LABEL(label),0);
   gtk_box_pack_start(GTK_BOX(content),label,FALSE,FALSE,0);
   char *description=g_strdup_printf("%u picks · %s",count,
-                                   discover_descriptions[group]);
+                                   music_discover_description(view,group));
   GtkWidget *detail=gtk_label_new(description);
   g_free(description);
   gtk_widget_set_name(detail,"music-discover-tile-subtitle");
@@ -1679,6 +1721,7 @@ static void music_discover_back_clicked(GtkWidget *unused,gpointer data){
 }
 static int music_discover_collect(MusicView *view,const char *output){
  g_ptr_array_set_size(view->discover_entries,0);
+ g_ptr_array_set_size(view->discover_shelves,0);
  char **lines=g_strsplit(output?output:"","\n",-1);
  int category=-1;
  int count=0;
@@ -1693,6 +1736,21 @@ static int music_discover_collect(MusicView *view,const char *output){
    if(kind && id && title && artist && cover){
     if(!g_strcmp0(kind,"section")){
      category=music_discover_group_for(id);
+     /* These tiles are generated from actual personalized recommendation
+      * sections. A new artist or mix title can replace yesterday's; no
+      * generic static 'Hip-Hop Mix' cards or empty placeholders. */
+     gboolean dynamic=g_str_has_prefix(id,"because_you_listen_") ||
+                      g_str_has_prefix(id,"daily_mixes_") ||
+                      g_str_has_prefix(id,"radio_sections_");
+     if(dynamic && *title &&
+        view->discover_shelves->len<DISC_MAX_DYNAMIC){
+      MusicDiscoverShelf *shelf=g_new0(MusicDiscoverShelf,1);
+      shelf->title=g_strdup(title);
+      shelf->description=g_strdup(g_str_has_prefix(id,"because_you_listen_")?
+             "Inspired by your listening":"A tailored selection");
+      category=DISC_DYNAMIC_START+(int)view->discover_shelves->len;
+      g_ptr_array_add(view->discover_shelves,shelf);
+     }
     }else if(category>=0 &&
          (!g_strcmp0(kind,"catalog_album") ||
           !g_strcmp0(kind,"catalog_artist")) &&
@@ -2465,6 +2523,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
  view->discover_entries=g_ptr_array_new_with_free_func(music_discover_entry_free);
+ view->discover_shelves=g_ptr_array_new_with_free_func(music_discover_shelf_free);
  view->discover_category=-1;
  view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
  view->pending_art=g_queue_new();

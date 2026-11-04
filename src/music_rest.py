@@ -467,8 +467,19 @@ def _discover_rows(result: dict[str, Any], *,
     because=result.get("because_you_listen_to",[])
     if isinstance(because,list):
         for index,pick in enumerate(because[:8]):
-            if isinstance(pick,dict):
-                add_section(pick.get("section"),"because_you_listen_%d"%index)
+            if not isinstance(pick,dict):
+                continue
+            section=pick.get("section")
+            if not isinstance(section,dict):
+                continue
+            seed=pick.get("seed_artist")
+            # A genuinely personal tile, derived from DroppedNeedle's linked
+            # ListenBrainz history, not a hard-coded genre or guessed artist.
+            if isinstance(seed,str):
+                seed=" ".join(seed.strip().split())
+                if seed and len(seed)<=64:
+                    section={**section,"title":"Because You Listen to "+seed}
+            add_section(section,"because_you_listen_%d"%index)
     for key in DISCOVER_SECTIONS:
         add_section(result.get(key),key)
     for key in ("daily_mixes","radio_sections"):

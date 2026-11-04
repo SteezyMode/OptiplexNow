@@ -80,10 +80,10 @@ class DiscoverFavoritesTests(unittest.TestCase):
         dataset=discovery()
         starred={"starred2":{"song":[{"id":"private-1","artist":"Stereolab"}]}}
         captured=io.StringIO()
-        with patch.object(sub,"_auth_from_stdin",return_value={"apiKey":"one-user-app-pass"}) as auth, \\
-             patch.object(rest,"get_session",return_value="existing-bearer") as get_session, \\
-             patch.object(rest,"request",return_value=dataset) as request, \\
-             patch.object(sub,"query",return_value=starred) as query, \\
+        with patch.object(sub,"_auth_from_stdin",return_value={"apiKey":"one-user-app-pass"}) as auth, \
+             patch.object(rest,"get_session",return_value="existing-bearer") as get_session, \
+             patch.object(rest,"request",return_value=dataset) as request, \
+             patch.object(sub,"query",return_value=starred) as query, \
              contextlib.redirect_stdout(captured):
             rc=sub.main([BASE,"discover","--format=rows","--auth-format=form"])
         self.assertEqual(rc,0)
@@ -95,10 +95,10 @@ class DiscoverFavoritesTests(unittest.TestCase):
 
     def test_no_app_password_is_normal_unpersonalized_discover(self):
         captured=io.StringIO()
-        with patch.object(sub,"_auth_from_stdin",return_value=None), \\
-             patch.object(rest,"get_session",return_value="existing-bearer"), \\
-             patch.object(rest,"request",return_value=discovery()), \\
-             patch.object(sub,"query") as query, \\
+        with patch.object(sub,"_auth_from_stdin",return_value=None), \
+             patch.object(rest,"get_session",return_value="existing-bearer"), \
+             patch.object(rest,"request",return_value=discovery()), \
+             patch.object(sub,"query") as query, \
              contextlib.redirect_stdout(captured):
             rc=sub.main([BASE,"discover","--format=rows","--auth-format=form"])
         self.assertEqual(rc,0)
@@ -107,10 +107,10 @@ class DiscoverFavoritesTests(unittest.TestCase):
 
     def test_starred_lookups_fail_open_without_leaking_auth(self):
         captured=io.StringIO()
-        with patch.object(sub,"_auth_from_stdin",return_value={"apiKey":"secret"}), \\
-             patch.object(rest,"get_session",return_value="existing-bearer"), \\
-             patch.object(rest,"request",return_value=discovery()), \\
-             patch.object(sub,"query",side_effect=sub.MusicTransportError("offline")), \\
+        with patch.object(sub,"_auth_from_stdin",return_value={"apiKey":"secret"}), \
+             patch.object(rest,"get_session",return_value="existing-bearer"), \
+             patch.object(rest,"request",return_value=discovery()), \
+             patch.object(sub,"query",side_effect=sub.MusicTransportError("offline")), \
              contextlib.redirect_stdout(captured):
             rc=sub.main([BASE,"discover","--format=rows","--auth-format=form"])
         self.assertEqual(rc,0)

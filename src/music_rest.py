@@ -39,6 +39,7 @@ ALLOWED={
     "verify":("/auth/sessions","GET"),
     "search":("/search","GET"),
     "discover":("/discover","GET"),
+    "artist_releases":("/artists/{id}/releases","GET"),
     "request":("/requests/new","POST"),
     "activity":("/downloads/activity-summary","GET"),
     "downloads":("/downloads","GET"),
@@ -123,6 +124,11 @@ def request(base_url: str, action: str, *,
     path,verb=ALLOWED[action]
     query={}
     body=None
+    if action=="artist_releases":
+        if not isinstance(value,str) or not MBID.fullmatch(value):
+            raise MusicRESTError("Cannot identify this artist's discography.")
+        path=path.replace("{id}",value.lower())
+        query={"limit":"200","offset":"0"}
     if action=="search":
         query={"q":_bounded_text(value,"search",MAX_QUERY),
                "limit_artists":"10","limit_albums":"25"}
@@ -224,6 +230,49 @@ def cover_bytes(base_url: str, cover_id: str, *, token: str) -> bytes:
     raise MusicRESTError("Catalog artwork is still loading.")
 
 
+def _artist_releases_rows(result: dict[str,Any]) -> str:
+    """Render bounded MusicBrainz release groups as requestable album cards.
+
+    A real artist MBID is required upstream. Albums, EPs and singles remain
+    distinct in the subtitle. Discography cards are actual artist releases,
+    never a best-effort title-only search for the artist's name.
+    """
+    if not isinstance(result,dict):
+        raise MusicRESTError("Artist discography returned invalid data.")
+    out=[]
+    seen=set()
+    for key,label in (("albums","Album"),("eps","EP"),("singles","Single")):
+        items=result.get(key)
+        if not isinstance(items,list):
+            continue
+        for item in items[:200]:
+            if len(out)>=200:
+                break
+            if not isinstance(item,dict):
+                continue
+            mbid=item.get("id")
+            title=item.get("title")
+            if (not isinstance(mbid,str) or not MBID.fullmatch(mbid) or
+                not isinstance(title,str) or not title.strip() or mbid in seen):
+                continue
+            seen.add(mbid)
+            year=item.get("year")
+            if not isinstance(year,int) or not 1900<=year<=2100:
+                date=item.get("first_release_date")
+                year=(int(date[:4]) if isinstance(date,str) and
+                      len(date)>=4 and date[:4].isdigit() else None)
+            requested=item.get("requested") is True
+            owned=item.get("in_library") is True
+            status="In library" if owned else ("Requested" if requested else "Not in library")
+            subtitle=" · ".join(x for x in (
+                label, str(year) if year else "", status) if x)
+            fields=("catalog_album",mbid,title[:512],subtitle[:256],
+                    "dn-album:"+mbid)
+            out.append("\t".join(base64.b64encode(x.encode("utf-8")).decode("ascii")
+                                 for x in fields))
+    return "\n".join(out)+("\n" if out else "")
+
+
 def _rows(results: dict[str,Any]) -> str:
     """Same five-column, base64-tabbed bounded transport as library rows."""
     rows=[]
@@ -231,7 +280,7 @@ def _rows(results: dict[str,Any]) -> str:
         entries=results.get(kind+"s",[])
         if not isinstance(entries,list):continue
         for item in entries[:100]:
-            if not isinstance(item,dict) or item.get("in_library") is True:
+            if not isinstance(item,dict) or (kind=="album" and item.get("in_library") is True):
                 continue
             title=item.get("title")
             mbid=item.get("musicbrainz_id")
@@ -534,6 +583,8 @@ def main(argv=None) -> int:
         if args.format=="rows":
             if args.operation=="search":
                 sys.stdout.write(_rows(result))
+            elif args.operation=="artist_releases":
+                sys.stdout.write(_artist_releases_rows(result))
             elif args.operation=="discover":
                 sys.stdout.write(_discover_rows(result))
             elif args.operation=="downloads":

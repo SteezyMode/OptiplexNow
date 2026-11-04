@@ -210,7 +210,7 @@ class DiscoverFavoritesTests(unittest.TestCase):
         self.assertIn('const gboolean personalized_discover=!g_strcmp0(operation,"discover")',ui)
         self.assertIn('job->input=(catalog && !personalized_discover)?g_strdup("")',ui)
         subsource=(Path(__file__).resolve().parents[1]/"src"/"music_subsonic.py").read_text()
-        section=subsource[subsource.index('if args.operation in ("catalog", "discover"):'):
+        section=subsource[subsource.index('if args.operation in ("catalog", "discover", "artist_releases"):'):
                           subsource.index('auth = _auth_from_stdin(args.auth_format)')]
         self.assertIn('getStarred2',section)
         self.assertNotIn('playlist_add',section)

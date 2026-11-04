@@ -269,7 +269,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
             "coverArt": "dn-" + kind + ":" + str(item.get("musicbrainz_id") or ""),
         }) for kind in ("artist", "album")
             for item in items(catalog.get(kind + "s"))
-            if item.get("in_library") is not True][:1000]
+            if kind=="artist" or item.get("in_library") is not True][:1000]
     else:
         found = []
     lines = []
@@ -329,7 +329,7 @@ def set_favorite(base: str, auth: dict[str, str], operation: str, identifier: st
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Bruiser optional OpenSubsonic transport")
     parser.add_argument("base_url", help="Configured music-server URL; no credentials")
-    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_options", "playlist_add", "playlist_create"))
+    parser.add_argument("operation", choices=("ping", "home", "albums", "recent", "new", "liked", "artists", "songs", "random_songs", "search", "album", "artist", "playlists", "playlist", "stream", "art", "catalog", "discover", "artist_releases", "like", "unlike", "like_album", "unlike_album", "like_artist", "unlike_artist", "playlist_options", "playlist_add", "playlist_create"))
     parser.add_argument("value", nargs="?")
     parser.add_argument("--format", choices=("json", "rows"), default="json")
     parser.add_argument("--auth-format", choices=("json", "form"), default="json")
@@ -339,11 +339,23 @@ def main(argv: list[str] | None = None) -> int:
         # per-user library playback API. Do not request, store or forward a
         # playback key for a basic search. The configured private host is
         # validated by catalog_search before the outbound request.
-        if args.operation in ("catalog", "discover"):
+        if args.operation in ("catalog", "discover", "artist_releases"):
             if args.operation == "catalog":
                 result = {"catalog": catalog_search(
                     args.base_url, _bounded_text(args.value, "search query", 200))}
                 rows = _rows("catalog", result)
+            elif args.operation == "artist_releases":
+                from music_rest import (
+                    get_session, request as rest_request, _artist_releases_rows,
+                    MusicRESTError,
+                )
+                try:
+                    result = rest_request(args.base_url, "artist_releases",
+                                          token=get_session(args.base_url),
+                                          value=args.value)
+                    rows = _artist_releases_rows(result)
+                except MusicRESTError as exc:
+                    raise MusicTransportError(str(exc)) from None
             else:
                 from music_rest import (
                     get_session, request as rest_request, _discover_rows,

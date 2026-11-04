@@ -82,11 +82,13 @@ def _bounded_text(value: object, name: str, maximum: int = MAX_TEXT) -> str:
     return value
 
 
-def _auth_from_stdin(fmt: str = "json") -> dict[str, str]:
+def _auth_from_stdin(fmt: str = "json", *, optional: bool = False) -> dict[str, str] | None:
     # Credentials intentionally stay session-only; there is no write to disk.
     raw = sys.stdin.buffer.read(MAX_STDIN + 1)
     if len(raw) > MAX_STDIN:
         raise MusicTransportError("Music credentials were too large.")
+    if optional and not raw:
+        return None
     try:
         if fmt == "form":
             values = parse_qs(raw.decode("utf-8"), strict_parsing=True,
@@ -344,14 +346,28 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 from music_rest import (
                     get_session, request as rest_request, _discover_rows,
-                    MusicRESTError,
+                    _favorite_artist_signals, MusicRESTError,
                 )
                 try:
                     result = rest_request(args.base_url, "discover",
                                           token=get_session(args.base_url))
                 except MusicRESTError as exc:
                     raise MusicTransportError(str(exc)) from None
-                rows = _discover_rows(result)
+                # Discover is usable with only a DroppedNeedle companion
+                # session. If a per-user OpenSubsonic app password is also
+                # available, read starred tracks/albums/artists and rank only
+                # the already-fetched suggestions. Failure is non-fatal.
+                # No scrobble, follow, request, or download call occurs here.
+                favorites = None
+                if args.format == "rows":
+                    optional_auth = _auth_from_stdin(args.auth_format, optional=True)
+                    if optional_auth is not None:
+                        try:
+                            starred = query(args.base_url, "getStarred2", optional_auth)
+                            favorites = _favorite_artist_signals(starred.get("starred2"))
+                        except MusicTransportError:
+                            pass
+                rows = _discover_rows(result, favorite_artists=favorites)
             if args.format == "rows":
                 sys.stdout.write(rows)
             else:

@@ -1583,9 +1583,12 @@ static int music_discover_group_for(const char *key){
     !g_strcmp0(key,"new_from_followed") ||
     !g_strcmp0(key,"rediscover"))return DISC_FOR_YOU;
  if(!g_strcmp0(key,"artists_you_might_like"))return DISC_NEW_ARTISTS;
- if(!g_strcmp0(key,"fresh_releases") ||
-    !g_strcmp0(key,"missing_essentials") ||
-    !g_strcmp0(key,"anniversaries"))return DISC_FRESH;
+ /* Only ListenBrainz's time-bounded fresh-releases feed is fresh.
+  * Missing Essentials is a personalized back-catalog recommendation, and
+  * anniversaries are older catalog history. They are never new releases. */
+ if(!g_strcmp0(key,"fresh_releases"))return DISC_FRESH;
+ if(!g_strcmp0(key,"missing_essentials"))return DISC_FOR_YOU;
+ if(!g_strcmp0(key,"anniversaries"))return DISC_EXPLORE;
  if(!g_strcmp0(key,"popular_in_your_genres") ||
     !g_strcmp0(key,"unexplored_genres") ||
     g_str_has_prefix(key,"daily_mixes_") ||

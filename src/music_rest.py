@@ -33,6 +33,7 @@ SCHEMA_NAME="com.bruiser.music.droppedneedle-rest"
 MAX_SESSION=4096
 MAX_REPLY=2*1024*1024
 MAX_QUERY=200
+MAX_COVER=3*1024*1024
 MBID=re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\Z")
 ALLOWED={
     "verify":("/auth/sessions","GET"),
@@ -171,6 +172,58 @@ def request(base_url: str, action: str, *,
     return value
 
 
+def cover_bytes(base_url: str, cover_id: str, *, token: str) -> bytes:
+    """Fetch one catalog image through an authenticated, fixed-path DN endpoint.
+
+    Never fetch arbitrary upstream URLs, return SVG placeholders, or put the
+    device's bearer credential in a URL, command line, or public image cache.
+    """
+    if not isinstance(cover_id,str):
+        raise MusicRESTError("Invalid catalog cover.")
+    kind,sep,mbid=cover_id.partition(":")
+    if sep!=":" or kind not in ("album","artist") or not MBID.fullmatch(mbid):
+        raise MusicRESTError("Invalid catalog cover.")
+    base=canonical_url(base_url)
+    parts=urlsplit(base)
+    path="/covers/release-group/" if kind=="album" else "/covers/artist/"
+    url=urlunsplit((parts.scheme,parts.netloc,
+        parts.path.rstrip("/")+"/api/v1"+path+mbid, "size=250", ""))
+    opener=build_opener(ProxyHandler({}),DenyRedirects(),
+                        HTTPHandler(),HTTPSHandler(context=ssl.create_default_context()))
+    for attempt in range(2):
+        req=Request(url,headers={
+            "Authorization":"Bearer "+_valid_token(token),
+            "Accept":"image/jpeg, image/png, image/webp",
+        },method="GET")
+        try:
+            with opener.open(req,timeout=12) as response:
+                if response.status==202:
+                    if attempt==0:
+                        import time
+                        time.sleep(2)
+                        continue
+                    raise MusicRESTError("Catalog artwork is still loading.")
+                kind=response.headers.get("Content-Type","").split(";",1)[0].strip().lower()
+                if kind not in ("image/jpeg","image/png","image/webp"):
+                    raise MusicRESTError("Catalog artwork is not available.")
+                size=response.headers.get("Content-Length")
+                if size and size.isdecimal() and int(size)>MAX_COVER:
+                    raise MusicRESTError("Catalog artwork is too large.")
+                data=response.read(MAX_COVER+1)
+                if not data or len(data)>MAX_COVER:
+                    raise MusicRESTError("Catalog artwork is not usable.")
+                return data
+        except MusicTransportError:
+            raise MusicRESTError("Catalog image redirected; access denied.") from None
+        except HTTPError as exc:
+            if exc.code in (401,403):
+                raise MusicRESTError("Music device access has expired or was revoked.") from None
+            raise MusicRESTError("Catalog artwork is temporarily unavailable.") from None
+        except (URLError,OSError,socket.timeout):
+            raise MusicRESTError("Catalog artwork is temporarily unavailable.") from None
+    raise MusicRESTError("Catalog artwork is still loading.")
+
+
 def _rows(results: dict[str,Any]) -> str:
     """Same five-column, base64-tabbed bounded transport as library rows."""
     rows=[]
@@ -189,7 +242,7 @@ def _rows(results: dict[str,Any]) -> str:
             if not isinstance(artist,str):artist=""
             state="Requested" if item.get("requested") else "Not in library"
             fields=("catalog_"+kind,mbid,title[:512],
-                    (artist+" · "+state)[:256],"")
+                    (artist+" · "+state)[:256],"dn-"+kind+":"+mbid)
             rows.append("\t".join(base64.b64encode(x.encode()).decode()
                                   for x in fields))
     return "\n".join(rows)+("\n" if rows else "")
@@ -383,7 +436,8 @@ def _discover_rows(result: dict[str, Any], *,
             genres=_genre_names(candidate.get("genre")) | _genre_names(candidate.get("genres"))
             relevant=bool(genres & liked_genres) and not known
             accepted.append((known,relevant,(kind,mbid,title[:512],
-                             (artist+" · "+state)[:256],"")))
+                             (artist+" · "+state)[:256],
+                             "dn-"+("album" if is_album else "artist")+":"+mbid)))
             seen.add(mbid)
             total+=1
             if total>=180:break
@@ -427,7 +481,7 @@ def _discover_rows(result: dict[str, Any], *,
 def main(argv=None) -> int:
     parser=argparse.ArgumentParser(description="Bruiser Music authorized REST operations")
     parser.add_argument("base_url")
-    parser.add_argument("operation",choices=(*ALLOWED.keys(),"link","unlink"))
+    parser.add_argument("operation",choices=(*ALLOWED.keys(),"cover","link","unlink"))
     parser.add_argument("value",nargs="?")
     parser.add_argument("--format",choices=("json","rows"),default="json")
     args=parser.parse_args(argv)
@@ -448,6 +502,9 @@ def main(argv=None) -> int:
             print('unlinked')
             return 0
         token=get_session(args.base_url)
+        if args.operation=="cover":
+            sys.stdout.buffer.write(cover_bytes(args.base_url,args.value,token=token))
+            return 0
         result=request(args.base_url,args.operation,token=token,value=args.value)
         if args.format=="rows":
             if args.operation=="search":

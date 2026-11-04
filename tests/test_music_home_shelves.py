@@ -126,6 +126,35 @@ class DiscoverLastGoodTests(unittest.TestCase):
         self.assertNotEqual(rest._discover_cache_path(BASE,TOKEN),
                             rest._discover_cache_path("http://127.0.0.1:9000",TOKEN))
 
+    def test_missing_discover_refresh_is_authorized_and_throttled(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as root:
+            marker=Path(root)/"discover.json"
+            sent=Mock(return_value={"status":"ok"})
+            with patch.object(rest,"_discover_cache_path",return_value=marker), \\
+                 patch.object(rest,"request",sent):
+                self.assertTrue(rest.trigger_empty_discover_refresh(
+                    BASE,TOKEN,{"refreshing":False}))
+                self.assertFalse(rest.trigger_empty_discover_refresh(
+                    BASE,TOKEN,{"refreshing":False}))
+                sent.assert_called_once_with(BASE,"discover_refresh",
+                                             token=TOKEN,timeout_seconds=8)
+                self.assertEqual(marker.with_suffix(".refresh").stat().st_mode & 0o777,0o600)
+
+    def test_nonempty_and_in_progress_discover_never_trigger_refresh(self):
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as root:
+            sent=Mock(return_value={"status":"ok"})
+            with patch.object(rest,"_discover_cache_path",return_value=Path(root)/"discover.json"), \\
+                 patch.object(rest,"request",sent):
+                self.assertFalse(rest.trigger_empty_discover_refresh(
+                    BASE,TOKEN,{"refreshing":True}))
+                self.assertFalse(rest.trigger_empty_discover_refresh(
+                    BASE,TOKEN,{"top_picks":{"type":"albums","items":[
+                        {"album":{"mbid":A,"name":"Album","artist_name":"Artist"}}
+                    ]}}))
+                sent.assert_not_called()
+
     def test_client_discover_cache_is_suggestions_only(self):
         source=(ROOT/"src/music_subsonic.py").read_text()
         self.assertIn("retained_discover_rows",source)

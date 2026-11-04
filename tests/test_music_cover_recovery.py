@@ -148,8 +148,17 @@ class CoverResolverTests(unittest.IsolatedAsyncioTestCase):
 
 class InstallerTests(unittest.TestCase):
     def test_route_patch_preserves_track_artist_and_auth(self):
-        source='from api.compat.subsonic.auth import resolve_subsonic_user\n' + (
-            installer.EXPECTED
+        source=(
+            'from api.compat.subsonic.auth import resolve_subsonic_user\n'
+            '\nasync def handler(c):\n'
+            '    kind = "album"\n'
+            '    internal = "uuid"\n'
+            '    size = "220"\n'
+            '    disc = None\n'
+            '    result = None\n'
+            + installer.EXPECTED +
+            '\n        pass\n'
+            '    return result\n'
         )
         patched=installer.patch_router(source)
         self.assertIn("is_local_album_id(internal)",patched)

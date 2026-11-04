@@ -86,7 +86,7 @@ class HomeShelfTests(unittest.TestCase):
         self.assertIn("view->home_shelf_cards=lane;",source)
         self.assertIn("GTK_POLICY_AUTOMATIC,GTK_POLICY_NEVER",source)
         self.assertIn("GtkWidget *viewport=view->home_active?view->home_scroll",source)
-        self.assertIn('char *heading=view->home_active || partial?',source)
+        self.assertIn('!g_strcmp0(job->operation,"discover") || partial?',source)
         self.assertIn("view->discover_retry_count<8",source)
         self.assertIn("view->navigation_serial==retry->serial",source)
 

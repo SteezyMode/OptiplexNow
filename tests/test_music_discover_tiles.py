@@ -84,7 +84,7 @@ class DiscoverTileTests(unittest.TestCase):
         self.assertEqual(ids[B],"Actual new release")
         c=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
         start=c.index("static int music_discover_group_for(")
-        end=c.index("\\n}",start)
+        end=c.index("static const char *music_discover_title(",start)
         routing=c[start:end]
         self.assertIn('if(!g_strcmp0(key,"fresh_releases"))return DISC_FRESH;',routing)
         self.assertIn('if(!g_strcmp0(key,"missing_essentials"))return DISC_FOR_YOU;',routing)

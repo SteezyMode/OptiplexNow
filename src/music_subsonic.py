@@ -455,6 +455,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 from music_rest import (
                     get_session, request as rest_request, retained_discover_rows,
+                    refresh_discover_if_empty,
                     _favorite_artist_signals, _favorite_genre_signals, MusicRESTError,
                 )
                 try:
@@ -481,6 +482,12 @@ def main(argv: list[str] | None = None) -> int:
                 rows = retained_discover_rows(args.base_url,token,result,
                                              favorite_artists=favorites,
                                              favorite_genres=genres)
+                if not rows.strip() and result.get("refreshing") is not True:
+                    # This is a user-initiated Discover visit. A 20-minute
+                    # cooldown protects DroppedNeedle from repeated costly
+                    # refreshes when it has no persisted recommendations.
+                    if refresh_discover_if_empty(args.base_url,token):
+                        result["refreshing"]=True
                 if not rows.strip() and result.get("refreshing") is True:
                     status_fields=("section","__refreshing",
                                    "Recommendations are updating","","")

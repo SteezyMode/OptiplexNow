@@ -39,10 +39,12 @@ class ArtworkInstallerTests(unittest.TestCase):
 
     def test_installer_accepts_only_its_own_known_v1_for_upgrade(self):
         source=SOURCE.read_text()
-        self.assertIn('fix_label != "bruiser-artwork-v1"',source)
+        self.assertIn('fix_label == "bruiser-artwork-v1"',source)
+        self.assertIn('fix_label == "bruiser-artwork-v2"',source)
         self.assertIn('old_image.endswith("-v1")',source)
         self.assertIn('old_image.endswith("-v2")',source)
-        self.assertIn('VERSION = "bruiser-artwork-v2"',source)
+        self.assertIn('old_image.endswith("-v3")',source)
+        self.assertIn('VERSION = "bruiser-artwork-v3"',source)
         self.assertIn('bruiser/droppedneedle-artbase:',source)
         self.assertIn('if mounts(after) != original_mounts:',source)
 

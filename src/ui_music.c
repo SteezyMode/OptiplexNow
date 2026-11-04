@@ -237,6 +237,20 @@ static GtkWidget *music_icon_button(const char *icon,const char *tooltip){
  gtk_widget_set_size_request(button,38,38);
  return button;
 }
+/* Keep the heart shape constant across every favorite state. GTK's built-in
+ * non-starred icon is a star; a dimmed heart is a reliable cross-theme
+ * inactive state without requiring an optional system icon pack. */
+static GtkWidget *music_heart_image(gboolean liked){
+ GtkWidget *image=gtk_image_new_from_icon_name("emblem-favorite-symbolic",
+                                             GTK_ICON_SIZE_BUTTON);
+ gtk_widget_set_opacity(image,liked?1.0:0.40);
+ return image;
+}
+static GtkWidget *music_heart_button(gboolean liked,const char *tooltip){
+ GtkWidget *button=music_icon_button("emblem-favorite-symbolic",tooltip);
+ gtk_button_set_image(GTK_BUTTON(button),music_heart_image(liked));
+ return button;
+}
 static void music_shuffle_clicked(GtkToggleButton *button,gpointer data){
  MusicView *view=data;
  view->shuffle_enabled=gtk_toggle_button_get_active(button);
@@ -266,8 +280,7 @@ static void music_update_controls(MusicView *view){
      current?current->title:"Now playing");
  if(view->playing_like && current){
   gtk_button_set_image(GTK_BUTTON(view->playing_like),
-      gtk_image_new_from_icon_name(current->liked?"emblem-favorite-symbolic":
-      "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(current->liked));
   gtk_widget_set_tooltip_text(view->playing_like,
       current->liked?"Unlike song":"Like song");
   g_object_set_data_full(G_OBJECT(view->playing_like),"music-id",
@@ -768,8 +781,7 @@ static void music_item_clicked(GtkWidget *unused,gpointer data){
                           GINT_TO_POINTER(liked?2:1));
    g_object_set_data_full(G_OBJECT(view->hero_like),"music-kind",g_strdup(kind),g_free);
    gtk_button_set_image(GTK_BUTTON(view->hero_like),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-      "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(liked));
    gtk_widget_set_tooltip_text(view->hero_like,liked?
           "Unlike this album or artist":"Like this album or artist");
   }
@@ -1080,8 +1092,7 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
       !g_strcmp0(g_object_get_data(G_OBJECT(job->button),"music-id"),
                  job->song_id)){
     gtk_button_set_image(GTK_BUTTON(job->button),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-                                   "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(liked));
     gtk_widget_set_tooltip_text(job->button,liked?"Unlike song":"Like song");
     g_object_set_data(G_OBJECT(job->button),"music-liked",
                       GINT_TO_POINTER(liked?2:1));
@@ -1194,8 +1205,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
    g_object_set_data(G_OBJECT(view->hero_like),"music-liked",
                      GINT_TO_POINTER(liked?2:1));
    gtk_button_set_image(GTK_BUTTON(view->hero_like),
-      gtk_image_new_from_icon_name(liked?"emblem-favorite-symbolic":
-          "non-starred-symbolic",GTK_ICON_SIZE_BUTTON));
+      music_heart_image(liked));
   }
   return;
  }
@@ -1315,8 +1325,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
  }else if(!g_strcmp0(kind,"song")){
   GtkWidget *line=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
   gtk_box_pack_start(GTK_BOX(line),button,TRUE,TRUE,0);
-  GtkWidget *like=music_icon_button(liked?
-      "emblem-favorite-symbolic":"non-starred-symbolic",
+  GtkWidget *like=music_heart_button(liked,
       liked?"Unlike song":"Like song");
   gtk_widget_set_name(like,"music-song-action");
   gtk_widget_set_size_request(like,28,28);
@@ -2377,7 +2386,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_widget_set_sensitive(view->hero_shuffle,FALSE);
  g_signal_connect(view->hero_shuffle,"clicked",G_CALLBACK(music_shuffle_album),view);
  gtk_box_pack_start(GTK_BOX(album_actions),view->hero_shuffle,FALSE,FALSE,0);
- view->hero_like=music_icon_button("non-starred-symbolic","Like this album");
+ view->hero_like=music_heart_button(FALSE,"Like this album");
  gtk_widget_set_name(view->hero_like,"music-album-like");
  gtk_widget_set_size_request(view->hero_like,32,32);
  g_object_set_data(G_OBJECT(view->hero_like),"music-view",view);
@@ -2425,11 +2434,11 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
 
  /* Persistent bottom player only while NOW has an active local stream.
   * It does not play/control phone audio, or fake a progress bar/seek support. */
- view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,4);
+ view->player_bar=gtk_box_new(GTK_ORIENTATION_VERTICAL,2);
  /* Full-width track metadata above buttons: never squeeze the title away. */
  GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
- gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),7);
+ GtkWidget *controls=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+ gtk_container_set_border_width(GTK_CONTAINER(view->player_bar),4);
  gtk_style_context_add_class(gtk_widget_get_style_context(view->player_bar),
                              "music-player-bar");
  gtk_widget_set_name(view->player_bar,"music-player");
@@ -2454,7 +2463,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  gtk_label_set_ellipsize(GTK_LABEL(view->playing_artist_label),PANGO_ELLIPSIZE_END);
  gtk_box_pack_start(GTK_BOX(now_playing),view->playing_artist_label,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(track_info),now_playing,TRUE,TRUE,0);
- view->playing_like=music_icon_button("non-starred-symbolic","Like current song");
+ view->playing_like=music_heart_button(FALSE,"Like current song");
  gtk_widget_set_name(view->playing_like,"music-playing-like");
  g_object_set_data(G_OBJECT(view->playing_like),"music-view",view);
  g_object_set_data(G_OBJECT(view->playing_like),"music-kind",(gpointer)"song");
@@ -2494,7 +2503,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                   G_CALLBACK(music_volume_changed),view);
  gtk_box_pack_start(GTK_BOX(controls),view->volume_slider,FALSE,FALSE,0);
  gtk_box_pack_start(GTK_BOX(view->player_bar),controls,FALSE,FALSE,0);
- GtkWidget *timeline=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,7);
+ /* Keep seek and transport on one row: metadata stays readable above them. */
+ GtkWidget *timeline=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
+ gtk_widget_set_hexpand(timeline,TRUE);
  view->seek_slider=gtk_scale_new_with_range(GTK_ORIENTATION_HORIZONTAL,0,1,1);
  gtk_scale_set_draw_value(GTK_SCALE(view->seek_slider),FALSE);
  gtk_widget_set_hexpand(view->seek_slider,TRUE);
@@ -2509,9 +2520,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
                   G_CALLBACK(music_seek_release),view);
  gtk_box_pack_start(GTK_BOX(timeline),view->seek_slider,TRUE,TRUE,0);
  view->seek_caption=gtk_label_new("0:00 / 0:00");
- gtk_widget_set_size_request(view->seek_caption,100,-1);
+ gtk_widget_set_size_request(view->seek_caption,84,-1);
  gtk_box_pack_start(GTK_BOX(timeline),view->seek_caption,FALSE,FALSE,0);
- gtk_box_pack_start(GTK_BOX(view->player_bar),timeline,FALSE,FALSE,0);
+ gtk_box_pack_start(GTK_BOX(controls),timeline,TRUE,TRUE,0);
  /* Show children once, then suppress the entire bar from root show_all()
   * until a real playback session becomes active. */
  gtk_widget_show_all(view->player_bar);

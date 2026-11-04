@@ -125,8 +125,11 @@ def clear_session(base_url: str, provider=None) -> None:
 
 
 def request(base_url: str, action: str, *,
-            token: str, value: str | None = None) -> dict[str, Any]:
+            token: str, value: str | None = None,
+            timeout_seconds: int = 18) -> dict[str, Any]:
     base=canonical_url(base_url)
+    if not isinstance(timeout_seconds,int) or not 1 <= timeout_seconds <= 18:
+        raise MusicRESTError("Invalid Music request timeout.")
     if action not in ALLOWED:
         raise MusicRESTError("Unsupported Music request.")
     path,verb=ALLOWED[action]
@@ -174,7 +177,7 @@ def request(base_url: str, action: str, *,
     opener=build_opener(ProxyHandler({}),DenyRedirects(),
                         HTTPHandler(),HTTPSHandler(context=ssl.create_default_context()))
     try:
-        with opener.open(req,timeout=18) as response:
+        with opener.open(req,timeout=timeout_seconds) as response:
             data=response.read(MAX_REPLY+1)
     except MusicTransportError:
         raise MusicRESTError("Music server redirected the request.") from None

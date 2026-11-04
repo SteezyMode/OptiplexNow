@@ -152,7 +152,8 @@ async def recover_album_cover(
             mb_repository = get_musicbrainz_repository()
         if priority is None:
             from infrastructure.queue.priority_queue import RequestPriority
-            priority = RequestPriority.BACKGROUND_SYNC
+            # This is an explicit user's album-art request, not background sync.
+            priority = RequestPriority.IMAGE_FETCH
 
         try:
             async with _SEMAPHORE:

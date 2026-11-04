@@ -593,7 +593,10 @@ def _track_context(value: str | None, count: int) -> tuple[str, ...]:
                 raise MusicRESTError("Invalid album ID.")
             item=item.lower()
         else:
-            item=_bounded_text(item,"track metadata",512)
+            try:
+                item=_bounded_text(item,"track metadata",512)
+            except MusicTransportError as exc:
+                raise MusicRESTError("Invalid track metadata.") from exc
         decoded.append(item)
     return tuple(decoded)
 

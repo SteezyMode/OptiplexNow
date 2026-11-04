@@ -2021,6 +2021,14 @@ static void music_nav(GtkWidget *button,gpointer data){
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
   query_start(view,operation,NULL,heading);
+  if(!g_strcmp0(operation,"discover")){
+   gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
+                                  "Search music not in your library");
+   music_show_search(view,TRUE);
+  }else{
+   gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
+                                  "Song, artist or album");
+  }
  }
 }
 
@@ -2122,8 +2130,16 @@ static void music_search(GtkWidget *unused,gpointer data){
   if(view->hero_row)gtk_widget_hide(view->hero_row);
   gboolean connected=view->app_password && view->bound_url &&
                        !g_strcmp0(view->bound_url,cfg[6]);
-  query_start(view,connected?"search":"catalog",value,
-              connected?"Search results":"Music catalog");
+  /* Discover is an acquisition-first catalog, NOT a search3 library view.
+   * The previously owned-first results came from this wrong routing. */
+  const char *active_operation=view->active_nav?
+      g_object_get_data(G_OBJECT(view->active_nav),"music-operation"):NULL;
+  if(!g_strcmp0(active_operation,"discover")){
+   query_start(view,"catalog",value,"Discover results");
+  }else{
+   query_start(view,connected?"search":"catalog",value,
+               connected?"Search results":"Music catalog");
+  }
  }
 }
 

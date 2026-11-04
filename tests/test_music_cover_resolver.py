@@ -104,7 +104,7 @@ class CoverResolverPolicyTests(unittest.TestCase):
         repo_mod=types.ModuleType("core.dependencies.repo_providers")
         repo_mod.get_musicbrainz_repository=lambda: Repo()
         priority=types.ModuleType("infrastructure.queue.priority_queue")
-        priority.RequestPriority=types.SimpleNamespace(BACKGROUND_SYNC=4)
+        priority.RequestPriority=types.SimpleNamespace(BACKGROUND_SYNC=4, IMAGE_FETCH=1)
         replacements={
             "core":types.ModuleType("core"),
             "core.dependencies":types.ModuleType("core.dependencies"),
@@ -132,7 +132,7 @@ class CoverResolverPolicyTests(unittest.TestCase):
         repo_mod=types.ModuleType("core.dependencies.repo_providers")
         repo_mod.get_musicbrainz_repository=lambda: Repo()
         priority=types.ModuleType("infrastructure.queue.priority_queue")
-        priority.RequestPriority=types.SimpleNamespace(BACKGROUND_SYNC=4)
+        priority.RequestPriority=types.SimpleNamespace(BACKGROUND_SYNC=4, IMAGE_FETCH=1)
         replacements={
             "core":types.ModuleType("core"),
             "core.dependencies":types.ModuleType("core.dependencies"),

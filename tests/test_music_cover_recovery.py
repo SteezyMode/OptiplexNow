@@ -105,7 +105,8 @@ class CoverResolverTests(unittest.IsolatedAsyncioTestCase):
         result=await art.recover_album_cover(
             svc,original,SYN,"220",mb_repository=repo,priority="background")
         self.assertEqual(result[:2],(PNG,"image/png"))
-        self.assertEqual(disk.writes[0][0],"bruiser_rg_"+SYN+"_220")
+        self.assertTrue(disk.writes[0][0].startswith("bruiser_rg_"+SYN+"_"))
+        self.assertTrue(disk.writes[0][0].endswith("_220"))
         self.assertTrue(disk.writes[0][1])
         self.assertEqual(disk.writes[0][2]["matched_mbid"],REAL)
         second=await art.recover_album_cover(
@@ -113,6 +114,20 @@ class CoverResolverTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(second[0],PNG)
         self.assertEqual(repo.search_release_groups.await_count,1)
         svc.coverart.get_release_group_cover.assert_awaited_once()
+
+    async def test_album_year_change_invalidates_cached_remote_art(self):
+        original=album("Blue Sky Noise","Circa Survive",2010)
+        svc,repo,disk=setup(
+            [match(REAL,"Blue Sky Noise","Circa Survive",2010)])
+        self.assertIsNotNone(await art.recover_album_cover(
+            svc,original,SYN,"220",mb_repository=repo,priority="background"))
+        later=album("Blue Sky Noise","Circa Survive",2011)
+        # Once corrected in local metadata, a 2010 cover must NOT continue
+        # to be served under the same synthetic local album UUID.
+        self.assertIsNone(await art.recover_album_cover(
+            svc,later,SYN,"220",mb_repository=repo,priority="background"))
+        self.assertEqual(repo.search_release_groups.await_count,2)
+        self.assertEqual(len(disk.writes),1)
 
     async def test_local_folder_or_embedded_art_beats_remote(self):
         svc,repo,disk=setup(
@@ -133,7 +148,7 @@ class CoverResolverTests(unittest.IsolatedAsyncioTestCase):
             mb_repository=repo,priority="background")
         self.assertIsNone(result)
         self.assertEqual(disk.data,{})
-        self.assertEqual(disk.misses["bruiser_rg_"+SYN+"_220"],6*3600)
+        self.assertEqual(next(iter(disk.misses.values())),6*3600)
         svc.coverart.get_release_group_cover.assert_not_called()
 
     async def test_provider_outage_fails_closed_and_retries(self):
@@ -143,7 +158,7 @@ class CoverResolverTests(unittest.IsolatedAsyncioTestCase):
             svc,album("Blue Sky Noise","Circa Survive",2010),SYN,"220",
             mb_repository=repo,priority="background")
         self.assertIsNone(result)
-        self.assertEqual(disk.misses["bruiser_rg_"+SYN+"_220"],5*60)
+        self.assertEqual(next(iter(disk.misses.values())),5*60)
         svc.coverart.get_release_group_cover.assert_not_called()
 
 class InstallerTests(unittest.TestCase):

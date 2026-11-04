@@ -1325,9 +1325,20 @@ static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
  query_start(view,"artist_releases",mbid,heading);
  g_free(heading);
 }
+static void music_album_tracks_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ const char *id=g_object_get_data(G_OBJECT(button),"music-album-tracks-id");
+ const char *title=g_object_get_data(G_OBJECT(button),"music-album-tracks-title");
+ if(!view || view->closing || view->busy || !id || strlen(id)!=36)return;
+ view->discover_active=TRUE;
+ char *heading=g_strdup_printf("%s · Songs",title?title:"Album");
+ query_start(view,"album_tracks",id,heading);
+ g_free(heading);
+}
 static void music_catalog_card(MusicView *view,const char *kind,
                                const char *id,const char *title,
-                               const char *artist,const char *cover){
+                               const char *artist,const char *cover,
+                               const char *album){
  /* Compact image-led cards. Catalog covers come from the separate scoped
   * bearer; local OpenSubsonic artwork is never used for unowned albums. */
  GtkWidget *card=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
@@ -1347,7 +1358,11 @@ static void music_catalog_card(MusicView *view,const char *kind,
  gtk_widget_set_tooltip_text(name,title);
  gtk_box_pack_start(GTK_BOX(card),name,FALSE,FALSE,0);
  gboolean is_album=!g_strcmp0(kind,"catalog_album");
- const char *status=artist?artist:"";
+ gboolean is_track=!g_strcmp0(kind,"catalog_track");
+ char *description=(is_track && album && *album)?
+    g_strdup_printf("%s · %s",artist?artist:"",album):
+    g_strdup(artist?artist:"");
+ const char *status=description;
  GtkWidget *subtitle=gtk_label_new(status);
  gtk_widget_set_name(subtitle,"music-card-subtitle");
  gtk_label_set_xalign(GTK_LABEL(subtitle),0);
@@ -1366,8 +1381,29 @@ static void music_catalog_card(MusicView *view,const char *kind,
    gtk_button_set_label(GTK_BUTTON(request),"In Library");
    gtk_widget_set_sensitive(request,FALSE);
   }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
-  gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
+  GtkWidget *actions=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,3);
+  gtk_box_pack_end(GTK_BOX(actions),request,TRUE,TRUE,0);
+  GtkWidget *tracks=music_icon_button("view-list-symbolic","View album songs");
+  gtk_widget_set_name(tracks,"music-discover-tracks");
+  g_object_set_data_full(G_OBJECT(tracks),"music-album-tracks-id",g_strdup(id),g_free);
+  g_object_set_data_full(G_OBJECT(tracks),"music-album-tracks-title",g_strdup(title),g_free);
+  g_signal_connect(tracks,"clicked",G_CALLBACK(music_album_tracks_clicked),view);
+  gtk_box_pack_start(GTK_BOX(actions),tracks,FALSE,FALSE,0);
+  gtk_box_pack_end(GTK_BOX(card),actions,FALSE,FALSE,0);
   g_hash_table_replace(view->album_buttons,g_strdup(id),request);
+ }else if(is_track){
+  GtkWidget *request=gtk_button_new_with_label("Add Song");
+  gtk_widget_set_name(request,"music-discover-add");
+  gtk_style_context_add_class(gtk_widget_get_style_context(request),"now-action");
+  g_object_set_data_full(G_OBJECT(request),"music-request-track",g_strdup(id),g_free);
+  g_object_set_data_full(G_OBJECT(request),"music-request-track-title",g_strdup(title),g_free);
+  g_object_set_data_full(G_OBJECT(request),"music-request-track-artist",g_strdup(artist),g_free);
+  g_object_set_data_full(G_OBJECT(request),"music-request-track-album",g_strdup(album?album:""),g_free);
+  if(view->album_tracks_active && cover && g_str_has_prefix(cover,"dn-album:"))
+   g_object_set_data_full(G_OBJECT(request),"music-request-track-rg",
+                          g_strdup(cover+9),g_free);
+  g_signal_connect(request,"clicked",G_CALLBACK(music_request_track),view);
+  gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
  }else{
   GtkWidget *explore=gtk_button_new_with_label("Explore artist");
   gtk_widget_set_name(explore,"music-discover-explore");
@@ -1377,6 +1413,7 @@ static void music_catalog_card(MusicView *view,const char *kind,
   g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
   gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
  }
+ g_free(description);
  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
  music_card_art_start(view,cover,art);
 }
@@ -1385,7 +1422,7 @@ static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
  if(view->grid_mode && g_str_has_prefix(kind,"catalog_")){
-  music_catalog_card(view,kind,id,title,artist,cover);
+  music_catalog_card(view,kind,id,title,artist,cover,album);
   return;
  }
  if(!g_strcmp0(kind,"album_meta")){
@@ -1612,7 +1649,7 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
       (!strcmp(kind,"album") || !strcmp(kind,"song") ||
        !strcmp(kind,"artist") || !strcmp(kind,"playlist") ||
        !strcmp(kind,"catalog_album") || !strcmp(kind,"catalog_artist") ||
-       !strcmp(kind,"album_meta") || !strcmp(kind,"section"))){
+       !strcmp(kind,"catalog_track") || !strcmp(kind,"album_meta") || !strcmp(kind,"section"))){
     music_add_item(view,kind,id,title,artist,cover,album,!strcmp(liked,"1"));
     if(strcmp(kind,"album_meta"))++count;
    }

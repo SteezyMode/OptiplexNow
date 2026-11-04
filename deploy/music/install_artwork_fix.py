@@ -28,8 +28,9 @@ import time
 CONTAINER = "droppedneedle"
 ROUTER = "/app/api/compat/subsonic/router.py"
 RESOLVER = "/app/services/compat/bruiser_cover_resolver.py"
+FALLBACK = "/app/services/compat/bruiser_cover_fallback.py"
 COMPOSE = Path.home() / "music-vpn/compose.json"
-VERSION = "bruiser-artwork-v2"
+VERSION = "bruiser-artwork-v3"
 
 EXACT_ORIGINAL = """        if await c.services.view.get_album(internal, user=c.user) is None:
             raise SubsonicError(70, "Album not found")
@@ -132,6 +133,8 @@ def install() -> None:
     root = Path(__file__).resolve().parent
     resolver = (root / "bruiser_cover_resolver.py").read_text(encoding="utf-8")
     ast.parse(resolver, filename=RESOLVER)
+    fallback = (root / "bruiser_cover_fallback.py").read_text(encoding="utf-8")
+    ast.parse(fallback, filename=FALLBACK)
     run("docker", "compose", "-f", str(COMPOSE), "config", "--quiet")
     original = load_compose()
     old_image = original["services"][CONTAINER]["image"]
@@ -144,10 +147,11 @@ def install() -> None:
         raise InstallError("Running image differs from Compose configuration")
     fix_label = (info["Config"].get("Labels") or {}).get("io.bruiser.fix")
     if old_image.startswith("bruiser/droppedneedle-artwork:"):
-        if old_image.endswith("-v2") and fix_label == VERSION:
+        if old_image.endswith("-v3") and fix_label == VERSION:
             print(f"ALREADY INSTALLED: {old_image}")
             return
-        if not old_image.endswith("-v1") or fix_label != "bruiser-artwork-v1":
+        if not ((old_image.endswith("-v1") and fix_label == "bruiser-artwork-v1")
+                or (old_image.endswith("-v2") and fix_label == "bruiser-artwork-v2")):
             raise InstallError("Unknown artwork patch; refusing unsafe upgrade")
     elif not old_image.startswith("bruiser/droppedneedle-discover:"):
         raise InstallError("Expected approved Discover patched base; refusing to replace unknown image")
@@ -168,7 +172,7 @@ def install() -> None:
     patched_router = patch_router(original_router)
     image_id = source_image.split(":",1)[1][:12]
     base = f"bruiser/droppedneedle-artbase:{image_id}"
-    image = f"bruiser/droppedneedle-artwork:{image_id}-v2"
+    image = f"bruiser/droppedneedle-artwork:{image_id}-v3"
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     directory = Path.home() / "bruiser-repairs" / ("artwork-persistent-" + stamp)
     directory.mkdir(parents=True,mode=0o700,exist_ok=False)
@@ -176,16 +180,19 @@ def install() -> None:
     (directory/"original_router.py").write_text(original_router)
     (directory/"router.py").write_text(patched_router)
     (directory/"bruiser_cover_resolver.py").write_text(resolver)
+    (directory/"bruiser_cover_fallback.py").write_text(fallback)
     (directory/".dockerignore").write_text(
-        "*\n!Dockerfile\n!router.py\n!bruiser_cover_resolver.py\n")
+        "*\n!Dockerfile\n!router.py\n!bruiser_cover_resolver.py\n!bruiser_cover_fallback.py\n")
     (directory/"Dockerfile").write_text(
         f"FROM {base}\n"
         f"COPY --chown=1000:1000 router.py {ROUTER}\n"
         f"COPY --chown=1000:1000 bruiser_cover_resolver.py {RESOLVER}\n"
+        f"COPY --chown=1000:1000 bruiser_cover_fallback.py {FALLBACK}\n"
         f'LABEL io.bruiser.fix="{VERSION}"\n'
         "RUN python -c \"import ast; ast.parse(open('"
         + ROUTER + "').read()); ast.parse(open('"
-        + RESOLVER + "').read())\"\n"
+        + RESOLVER + "').read()); ast.parse(open('"
+        + FALLBACK + "').read())\"\n"
     )
     (directory/"manifest.json").write_text(json.dumps({
         "version":VERSION,
@@ -193,6 +200,7 @@ def install() -> None:
         "router_before_sha256":hashlib.sha256(original_router.encode()).hexdigest(),
         "router_after_sha256":hashlib.sha256(patched_router.encode()).hexdigest(),
         "resolver_sha256":hashlib.sha256(resolver.encode()).hexdigest(),
+        "fallback_sha256":hashlib.sha256(fallback.encode()).hexdigest(),
     },indent=2)+"\n")
     for item in directory.iterdir():
         if item.is_file():
@@ -223,6 +231,10 @@ def install() -> None:
                         "/bin/cat", RESOLVER, output=True)
         if installed != resolver:
             raise InstallError("Installed artwork resolver differs from source")
+        installed_fallback = run("docker", "exec", CONTAINER,
+                                 "/bin/cat", FALLBACK, output=True)
+        if installed_fallback != fallback:
+            raise InstallError("Installed AudioDB artwork fallback differs from source")
     except Exception:
         if changed:
             print("Deployment error: rolling back original image...",file=sys.stderr,flush=True)
@@ -234,7 +246,7 @@ def install() -> None:
                 print(f"ROLLBACK FAILED: {exc}; restore from {directory}",
                       file=sys.stderr)
         raise
-    print("SUCCESS: persistent artwork resolver v2 installed.")
+    print("SUCCESS: persistent artwork resolver v3 installed.")
     print(f"Image: {image}")
     print(f"Compose: {COMPOSE}")
     print(f"Backup: {directory}")

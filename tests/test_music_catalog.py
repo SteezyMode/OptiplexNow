@@ -72,7 +72,7 @@ class MusicCatalogTests(unittest.TestCase):
              patch.object(music.sys,"stdout",out):
             rc=music.main([self.base,"catalog","dream pop","--format=rows"])
         self.assertEqual(rc,0)
-        self.assertGreaterEqual(len(out.getvalue().splitlines()),2)
+        self.assertEqual(len(out.getvalue().splitlines()),1)
 
     def test_search_uses_exact_upstream_route_and_no_secret(self):
         FakeCatalog.observed.clear()
@@ -95,12 +95,12 @@ class MusicCatalogTests(unittest.TestCase):
         }).splitlines()
         decoded=[[base64.b64decode(field).decode() for field in row.split("\t")]
                  for row in rows]
-        self.assertEqual(len(decoded),3)
+        self.assertEqual(len(decoded),2)
         self.assertEqual(decoded[0][0],"song")
-        self.assertEqual(decoded[1][0],"catalog_artist")
-        self.assertEqual(decoded[2][0],"catalog_album")
+        self.assertEqual(decoded[1][0],"catalog_album")
+        self.assertNotIn("catalog_artist",str(decoded))
         self.assertNotIn("Owned Album",str(decoded))
-        self.assertIn("Not in library",decoded[2][3])
+        self.assertIn("Not in library",decoded[1][3])
 
     def test_discovery_network_failure_never_forwards_app_credentials(self):
         import io

@@ -1,6 +1,6 @@
 # Bruiser Music: standard desktop player UI and contextual acquisition
 
-**Decision (2026-11-02): replicate the established Spotify desktop information architecture and interaction conventions.** Do not invent a new navigation paradigm. Use original Bruiser colors, names, graphics, icons, and code—not Spotify brand assets or proprietary implementation. The reference is Spotify's desktop Home / Search / Your Library / Now Playing model, including left library panel, album and playlist content views, and a persistent bottom player. Primary official reference: https://newsroom.spotify.com/2023-06-20/spotify-desktop-experience-redesign-your-library-now-playing-views-customize/
+**Decision (2026-11-04): use familiar Spotify-like desktop player conventions, but open directly to working Discover content; hide an empty Home.** Do not invent a new navigation paradigm. Use original Bruiser colors, names, graphics, icons, and code—not Spotify brand assets or proprietary implementation. The reference is Spotify's desktop Search / Your Library / Now Playing conventions, including left library panel, album and playlist content views, and a persistent bottom player. Primary official reference: https://newsroom.spotify.com/2023-06-20/spotify-desktop-experience-redesign-your-library-now-playing-views-customize/
 
 ## Scope / application shell
 
@@ -8,8 +8,8 @@ NOW remains the overarching Dashboard / Games / Downloads / Video / Music / Sett
 
 | Region | Exact behavior |
 |---|---|
-| Left navigation | Home and Search at top; Your Library below, with Playlists / Artists / Albums / Liked filters and quick library search. The filters are familiar pills or text nav, not an independent sprawling admin form. Pinned/recent lists can follow after actual playlist support. |
-| Central content | Real Home sections (recently played, new additions, discovery when backed by a working API), familiar album-art grid/cards, artist and album headers with primary Play button, track-list rows, and search results grouped by owned versus discoverable content. Keep sorting, pagination and a back button standard. |
+| Left navigation | Discover at top, selected on launch and following a successful device-keyring lookup; Your Library below, with Playlists / Artists / Albums / Liked filters. The toolbar provides search on Discover and library views. Home is intentionally hidden until it has reliable, useful content. The filters are familiar pills or text nav, not an independent sprawling admin form. Pinned/recent lists can follow after actual playlist support. |
+| Central content | Working Discover categories and suggestions on entry; familiar album-art grid/cards, artist and album headers with primary Play button, track-list rows, and search results grouped by owned versus discoverable content. Keep sorting, pagination and a back button standard. |
 | Bottom Now Playing | Album art, title/artist, previous/play-pause/next, seek/duration, queue, volume and shuffle/repeat when supported. A real, independently working local player. The bottom bar persists while listening across Music subviews, not replicated on each page. No decorative, dead controls. |
 | Optional right panel | Queue or Now Playing details only if it actually helps; collapsed at small sizes. No permanently visible debug/admin panel. |
 | Compact 640×500 / 1024×768 | Collapse or scroll left rail; preserve readable central content and access to the player. Never force the main NOW window taller just because Music has more destinations. |
@@ -39,7 +39,7 @@ The existing **Downloads** top-level tab stays for the already-working qBittorre
 
 The previously working device-authorized Music stack stays in place. This pass is deliberately limited to Music client UI, OpenSubsonic player/library interactions and an opt-in, **read-only** metadata report.
 
-- **Your Library is clickable** and opens the **All songs** view. The child filters remain Playlists, Artists, Albums and Liked Songs; Home, Search and Discover stay separately identifiable. An active navigation destination has a visible selection state.
+- **Your Library is clickable** and opens the **All songs** view. The child filters remain Playlists, Artists, Albums and Liked Songs; Discover is the default Music destination; Search stays in the toolbar and Library remains separate. Do not add a Home button that leads to an empty page. An active navigation destination has a visible selection state.
 - **All songs** uses the existing DroppedNeedle OpenSubsonic `search3` empty-query contract and explicit 200-track pagination. **Shuffle all** queries `getRandomSongs`; the current queue uses an independent randomized sequence with no repeats until exhausted. No pretend shuffling of a ten-song list.
 - **Album and song rows** use larger text and targets. Album headers show the album/artist, with simple Play and Like icons. Individual songs show title plus artist/album and expose real **Like/Unlike** and **Add to playlist** actions. The playlist chooser fetches existing playlists and can create one using OpenSubsonic's existing endpoints. These operations are asynchronous and never put playback credentials in command-line arguments.
 - **Now playing** shows album art, title, artist/album, icon Shuffle/Previous/Play-Pause/Next/Stop, seek and device-local volume; transport and tray actions control the current local session only.

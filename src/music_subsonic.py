@@ -266,6 +266,7 @@ def _rows(operation: str, result: dict[str, Any]) -> str:
                 (item.get("artist") or "") +
                 (" · Requested" if item.get("requested") else " · Not in library")
             ),
+            "coverArt": "dn-" + kind + ":" + str(item.get("musicbrainz_id") or ""),
         }) for kind in ("artist", "album")
             for item in items(catalog.get(kind + "s"))
             if item.get("in_library") is not True][:1000]

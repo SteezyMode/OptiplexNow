@@ -32,14 +32,33 @@ static MusicTrack *track_copy(const MusicTrack *source){
  return t;
 }
 typedef struct {
+ char *kind, *id, *title, *artist, *cover;
+ int category;
+} MusicDiscoverEntry;
+static void music_discover_entry_free(gpointer data){
+ MusicDiscoverEntry *entry=data;
+ if(!entry)return;
+ g_free(entry->kind);g_free(entry->id);g_free(entry->title);
+ g_free(entry->artist);g_free(entry->cover);g_free(entry);
+}
+typedef struct {
+ char *title, *description;
+} MusicDiscoverShelf;
+static void music_discover_shelf_free(gpointer data){
+ MusicDiscoverShelf *shelf=data;
+ if(!shelf)return;
+ g_free(shelf->title);g_free(shelf->description);g_free(shelf);
+}
+
+typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
  GtkWidget *hero_row, *hero_art, *hero_title, *hero_subtitle, *hero_play, *hero_shuffle, *hero_like, *playing_art, *shuffle_all;
- GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav;
+ GtkWidget *cards, *cards_scroll, *list_scroll, *active_nav, *discover_back;
  GtkWidget *library_revealer, *library_arrow, *library_button;
  GQueue *pending_art;
  guint art_inflight;
- GPtrArray *visible_tracks, *queue;
+ GPtrArray *visible_tracks, *queue, *discover_entries, *discover_shelves;
  GHashTable *album_buttons; /* Borrowed GTK pointers, cleared before each view refresh */
  NowMusicPlayback *playback;
  int queue_index, album_offset, song_offset, volume;
@@ -48,7 +67,7 @@ typedef struct {
  char *playing_caption;
  guint64 hero_art_serial, playing_art_serial, card_art_serial;
  guint card_art_count;
- gboolean grid_mode, shuffle_enabled;
+ gboolean grid_mode, shuffle_enabled, discover_active;
  GArray *shuffle_order;
  guint shuffle_cursor;
  void (*tray_changed)(void);
@@ -56,6 +75,7 @@ typedef struct {
  gboolean busy, closing, vault_busy, remember_pending;
  gboolean song_has_more, album_has_more;
  guint page_idle;
+ int discover_category;
  gboolean auto_enroll_busy, auto_enroll_attempted;
  void (*open_url)(const char *);
  void (*open_settings)(void *, void *);
@@ -86,6 +106,7 @@ static void music_card_queue_pump(MusicView *view);
 static void music_schedule_next_page(MusicView *view);
 static void music_show_search(MusicView *view,gboolean open);
 static gboolean music_status_tick(gpointer data);
+static void music_discover_show_landing(MusicView *view);
 
 static void wipe_free(char *value){
  if(!value)return;
@@ -139,6 +160,8 @@ static void music_view_free(gpointer data){
  g_free(view->playing_caption);
  if(view->visible_tracks)g_ptr_array_unref(view->visible_tracks);
  if(view->queue)g_ptr_array_unref(view->queue);
+ if(view->discover_entries)g_ptr_array_unref(view->discover_entries);
+ if(view->discover_shelves)g_ptr_array_unref(view->discover_shelves);
  if(view->shuffle_order)g_array_unref(view->shuffle_order);
  if(view->album_buttons)g_hash_table_destroy(view->album_buttons);
  if(view->pending_art)g_queue_free_full(view->pending_art,music_pending_free);
@@ -530,7 +553,7 @@ typedef struct {
  GCancellable *cancel;
  guint deadline;
  guint64 serial;
- gboolean playing;
+ gboolean playing, catalog;
  GtkWidget *card_target; /* reference; old cards are ignored after navigation */
  char *server_url;
  char *input; /* wipe after the worker completes */
@@ -561,7 +584,7 @@ static void music_art_complete(GObject *unused,GAsyncResult *result,gpointer dat
  GError *error=NULL;
  gboolean ok=g_subprocess_communicate_finish(job->process,result,&output,NULL,&error);
  if(view && !view->closing &&
-    g_strcmp0(job->server_url,view->bound_url)==0 &&
+    (job->catalog || g_strcmp0(job->server_url,view->bound_url)==0) &&
     g_strcmp0(job->server_url,cfg[6])==0 &&
     job->serial==(job->card_target?view->card_art_serial:
         (job->playing?view->playing_art_serial:view->hero_art_serial)) &&
@@ -648,29 +671,49 @@ static void music_art_start(MusicView *view,const char *cover_id,gboolean playin
  * No artwork requests are made for cards the user never reaches. */
 static void music_card_art_launch(MusicView *view,const char *cover_id,
                                   GtkWidget *image){
- if(view->closing || !view->app_password || !view->bound_url ||
-    g_strcmp0(cfg[6],view->bound_url)!=0)return;
+ if(view->closing || !cover_id || !*cover_id || !*cfg[6])return;
+ const gboolean catalog=g_str_has_prefix(cover_id,"dn-album:") ||
+                        g_str_has_prefix(cover_id,"dn-artist:");
+ if(!catalog && (!view->app_password || !view->bound_url ||
+    g_strcmp0(cfg[6],view->bound_url)!=0))return;
  char *helper=helper_path();
+ if(catalog){
+  /* Unowned catalog art requires the scoped DN bearer, never a playback key.
+   * The Python helper validates the MBID and fixed, same-host API route. */
+  char *dir=g_path_get_dirname(helper);
+  g_free(helper);
+  helper=g_build_filename(dir,"music_rest.py",NULL);
+  g_free(dir);
+ }
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){g_free(helper);return;}
- const char *argv[]={"/usr/bin/python3",helper,view->bound_url,
-                     "art",cover_id,"--auth-format=form",NULL};
+ char *cover_arg=catalog?g_strdup(cover_id+3):g_strdup(cover_id);
+ const gchar *argv_catalog[]={"/usr/bin/python3",helper,cfg[6],
+                              "cover",cover_arg,NULL};
+ const gchar *argv_local[]={"/usr/bin/python3",helper,view->bound_url,
+                            "art",cover_arg,"--auth-format=form",NULL};
  GError *error=NULL;
- GSubprocess *proc=g_subprocess_newv(argv,
+ GSubprocess *proc=g_subprocess_newv(catalog?argv_catalog:argv_local,
      G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|
      G_SUBPROCESS_FLAGS_STDERR_SILENCE,&error);
+ g_free(cover_arg);
  g_free(helper);
  if(!proc){g_clear_error(&error);return;}
  MusicArtJob *job=g_new0(MusicArtJob,1);
  job->process=proc;
  job->root=g_object_ref(view->root);
  job->card_target=g_object_ref(image);
+ job->catalog=catalog;
  job->cancel=g_cancellable_new();
  job->serial=view->card_art_serial;
- job->server_url=g_strdup(view->bound_url);
- char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
- char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
- job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
- wipe_free(key);g_free(name);
+ job->server_url=g_strdup(cfg[6]);
+ if(catalog){
+  job->input=g_strdup("");
+ }else{
+  char *key=g_uri_escape_string(view->app_password,NULL,FALSE);
+  char *name=g_uri_escape_string(view->username?view->username:"",NULL,FALSE);
+  job->input=g_strdup_printf("api_key=%s&username=%s",key,name);
+  wipe_free(key);g_free(name);
+ }
  GBytes *sent=g_bytes_new(job->input,strlen(job->input));
  job->deadline=g_timeout_add_seconds(25,music_art_timeout,job);
  view->art_inflight++;
@@ -692,7 +735,7 @@ static void music_card_art_start(MusicView *view,const char *cover_id,
 }
 static void music_card_queue_pump(MusicView *view){
  if(view->closing || !view->pending_art || !view->cards ||
-    !view->cards_scroll || !view->app_password)return;
+    !view->cards_scroll)return;
  GtkAdjustment *adjustment=gtk_scrolled_window_get_vadjustment(
                                   GTK_SCROLLED_WINDOW(view->cards_scroll));
  double top=gtk_adjustment_get_value(adjustment);
@@ -1207,9 +1250,72 @@ static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  if(view && id)music_action_start(view,"playlist_options",NULL,button,id);
 }
 
+static void music_catalog_artist_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ const char *artist=g_object_get_data(G_OBJECT(button),"music-artist-query");
+ if(!view || view->closing || view->busy || !artist || !*artist)return;
+ view->discover_active=TRUE;
+ query_start(view,"catalog",artist,"Discover artist");
+}
+static void music_catalog_card(MusicView *view,const char *kind,
+                               const char *id,const char *title,
+                               const char *artist,const char *cover){
+ /* Compact image-led cards. Catalog covers come from the separate scoped
+  * bearer; local OpenSubsonic artwork is never used for unowned albums. */
+ GtkWidget *card=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+ gtk_widget_set_name(card,"music-catalog-card");
+ gtk_container_set_border_width(GTK_CONTAINER(card),7);
+ gtk_widget_set_size_request(card,168,-1);
+ GtkWidget *art=gtk_image_new_from_icon_name("audio-x-generic",GTK_ICON_SIZE_DIALOG);
+ gtk_widget_set_size_request(art,148,148);
+ gtk_box_pack_start(GTK_BOX(card),art,FALSE,FALSE,0);
+ GtkWidget *name=gtk_label_new(title);
+ gtk_widget_set_name(name,"music-card-title");
+ gtk_label_set_xalign(GTK_LABEL(name),0);
+ gtk_label_set_max_width_chars(GTK_LABEL(name),22);
+ gtk_label_set_line_wrap(GTK_LABEL(name),TRUE);
+ gtk_label_set_lines(GTK_LABEL(name),2);
+ gtk_label_set_ellipsize(GTK_LABEL(name),PANGO_ELLIPSIZE_END);
+ gtk_widget_set_tooltip_text(name,title);
+ gtk_box_pack_start(GTK_BOX(card),name,FALSE,FALSE,0);
+ gboolean is_album=!g_strcmp0(kind,"catalog_album");
+ const char *status=artist?artist:"";
+ GtkWidget *subtitle=gtk_label_new(status);
+ gtk_widget_set_name(subtitle,"music-card-subtitle");
+ gtk_label_set_xalign(GTK_LABEL(subtitle),0);
+ gtk_label_set_max_width_chars(GTK_LABEL(subtitle),22);
+ gtk_label_set_ellipsize(GTK_LABEL(subtitle),PANGO_ELLIPSIZE_END);
+ gtk_box_pack_start(GTK_BOX(card),subtitle,FALSE,FALSE,0);
+ if(is_album){
+  GtkWidget *request=gtk_button_new_with_label("Add to Library");
+  gtk_widget_set_name(request,"music-discover-add");
+  gtk_style_context_add_class(gtk_widget_get_style_context(request),"now-action");
+  g_object_set_data_full(G_OBJECT(request),"music-request-mbid",g_strdup(id),g_free);
+  if(g_str_has_suffix(status," · Requested")){
+   gtk_button_set_label(GTK_BUTTON(request),"Requested");
+   gtk_widget_set_sensitive(request,FALSE);
+  }else g_signal_connect(request,"clicked",G_CALLBACK(music_request_album),view);
+  gtk_box_pack_end(GTK_BOX(card),request,FALSE,FALSE,0);
+  g_hash_table_replace(view->album_buttons,g_strdup(id),request);
+ }else{
+  GtkWidget *explore=gtk_button_new_with_label("Explore artist");
+  gtk_widget_set_name(explore,"music-discover-explore");
+  gtk_style_context_add_class(gtk_widget_get_style_context(explore),"now-action");
+  g_object_set_data_full(G_OBJECT(explore),"music-artist-query",g_strdup(title),g_free);
+  g_signal_connect(explore,"clicked",G_CALLBACK(music_catalog_artist_clicked),view);
+  gtk_box_pack_end(GTK_BOX(card),explore,FALSE,FALSE,0);
+ }
+ gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),card,-1);
+ music_card_art_start(view,cover,art);
+}
+
 static void music_add_item(MusicView *view,const char *kind,const char *id,
                            const char *title,const char *artist,
                            const char *cover,const char *album,gboolean liked){
+ if(view->grid_mode && g_str_has_prefix(kind,"catalog_")){
+  music_catalog_card(view,kind,id,title,artist,cover);
+  return;
+ }
  if(!g_strcmp0(kind,"album_meta")){
   if(view->hero_title && title && *title){
    gtk_label_set_text(GTK_LABEL(view->hero_title),title);
@@ -1450,6 +1556,240 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
  return count;
 }
 
+/* Discover landing is deliberately a small set of click-through shelves, not
+ * a vertical dump of the upstream 13+ recommendation sections. Actual items
+ * are cached only for this view and remain suggestion-only until Add is clicked. */
+enum { DISC_FOR_YOU, DISC_NEW_ARTISTS, DISC_FRESH, DISC_GENRES,
+       DISC_EXPLORE, DISC_TRENDING, DISC_GROUPS, DISC_DYNAMIC_START=DISC_GROUPS,
+       DISC_MAX_DYNAMIC=4 };
+static const char *const discover_names[DISC_GROUPS]={
+ "For You","New Artists","Fresh Releases","Your Genres","Explore","Trending"
+};
+static const char *const discover_descriptions[DISC_GROUPS]={
+ "Based on your listening","Artists worth discovering","New and noteworthy",
+ "Beyond your usual genres","Something different","Popular elsewhere"
+};
+static const char *const discover_styles[DISC_GROUPS]={
+ "music-discover-personal","music-discover-artists",
+ "music-discover-fresh","music-discover-genres",
+ "music-discover-explore","music-discover-trending"
+};
+
+static int music_discover_group_for(const char *key){
+ if(!key)return DISC_EXPLORE;
+ if(g_str_has_prefix(key,"because_you_listen_") ||
+    !g_strcmp0(key,"top_picks") ||
+    !g_strcmp0(key,"listeners_like_you") ||
+    !g_strcmp0(key,"new_from_followed") ||
+    !g_strcmp0(key,"rediscover"))return DISC_FOR_YOU;
+ if(!g_strcmp0(key,"artists_you_might_like"))return DISC_NEW_ARTISTS;
+ if(!g_strcmp0(key,"fresh_releases") ||
+    !g_strcmp0(key,"missing_essentials") ||
+    !g_strcmp0(key,"anniversaries"))return DISC_FRESH;
+ if(!g_strcmp0(key,"popular_in_your_genres") ||
+    !g_strcmp0(key,"unexplored_genres") ||
+    g_str_has_prefix(key,"daily_mixes_") ||
+    g_str_has_prefix(key,"radio_sections_"))return DISC_GENRES;
+ if(!g_strcmp0(key,"globally_trending") ||
+    !g_strcmp0(key,"lastfm_weekly_artist_chart") ||
+    !g_strcmp0(key,"lastfm_weekly_album_chart"))return DISC_TRENDING;
+ return DISC_EXPLORE;
+}
+
+static const char *music_discover_title(MusicView *view,int group){
+ if(group>=DISC_DYNAMIC_START){
+  guint idx=(guint)(group-DISC_DYNAMIC_START);
+  if(idx<view->discover_shelves->len){
+   MusicDiscoverShelf *shelf=g_ptr_array_index(view->discover_shelves,idx);
+   return shelf->title;
+  }
+  return "Discover";
+ }
+ return group>=0 && group<DISC_GROUPS?discover_names[group]:"Discover";
+}
+static const char *music_discover_description(MusicView *view,int group){
+ if(group>=DISC_DYNAMIC_START){
+  guint idx=(guint)(group-DISC_DYNAMIC_START);
+  if(idx<view->discover_shelves->len){
+   MusicDiscoverShelf *shelf=g_ptr_array_index(view->discover_shelves,idx);
+   return shelf->description;
+  }
+  return "Personal picks";
+ }
+ return group>=0 && group<DISC_GROUPS?discover_descriptions[group]:"Explore";
+}
+
+static void music_discover_show_category(MusicView *view,int group){
+ if(!view || view->closing || view->busy || group<0 ||
+    group>=DISC_GROUPS+(int)view->discover_shelves->len)return;
+ view->discover_active=TRUE;
+ view->discover_category=group;
+ view->grid_mode=TRUE;
+ render_rows(view,"",FALSE);
+ for(guint i=0;i<view->discover_entries->len;i++){
+  MusicDiscoverEntry *entry=g_ptr_array_index(view->discover_entries,i);
+  if(entry->category!=group)continue;
+  music_add_item(view,entry->kind,entry->id,entry->title,
+                 entry->artist,entry->cover,"",FALSE);
+ }
+ gtk_label_set_text(GTK_LABEL(view->heading),music_discover_title(view,group));
+ if(view->discover_back)gtk_widget_show(view->discover_back);
+ music_show_search(view,FALSE);
+ gtk_widget_show_all(view->cards);
+ gtk_widget_show(view->cards_scroll);
+ gtk_widget_hide(view->list_scroll);
+ music_card_queue_pump(view);
+}
+static void music_discover_tile_clicked(GtkWidget *button,gpointer data){
+ MusicView *view=data;
+ int group=GPOINTER_TO_INT(
+     g_object_get_data(G_OBJECT(button),"music-discover-group"))-1;
+ music_discover_show_category(view,group);
+}
+
+static void music_discover_show_landing(MusicView *view){
+ if(!view || view->closing)return;
+ view->discover_active=TRUE;
+ view->discover_category=-1;
+ view->grid_mode=TRUE;
+ render_rows(view,"",FALSE);
+ const guint dynamic_count=view->discover_shelves->len;
+ for(int position=0;position<DISC_GROUPS+(int)dynamic_count;position++){
+  /* Stable For You entry point; truly personalized mixes change underneath
+   * it as the user's recent listening and likes change. Trending stays last. */
+  int group=position==0?DISC_FOR_YOU:
+    (position<=(int)dynamic_count
+      ? DISC_DYNAMIC_START+position-1
+      : position-(int)dynamic_count);
+  guint count=0;
+  const char *cover=NULL;
+  for(guint i=0;i<view->discover_entries->len;i++){
+   MusicDiscoverEntry *entry=g_ptr_array_index(view->discover_entries,i);
+   if(entry->category!=group)continue;
+   count++;
+   if(!cover && entry->cover && *entry->cover)cover=entry->cover;
+  }
+  /* Empty categories disappear rather than becoming dead decorative tiles. */
+  if(!count)continue;
+  GtkWidget *button=gtk_button_new();
+  gtk_widget_set_name(button,"music-discover-tile");
+  GtkStyleContext *style=gtk_widget_get_style_context(button);
+  gtk_style_context_add_class(style,"now-action");
+  gtk_style_context_add_class(style,group>=DISC_DYNAMIC_START?
+                                "music-discover-dynamic":discover_styles[group]);
+  gtk_widget_set_size_request(button,168,220);
+  GtkWidget *content=gtk_box_new(GTK_ORIENTATION_VERTICAL,5);
+  gtk_container_set_border_width(GTK_CONTAINER(content),7);
+  GtkWidget *image=gtk_image_new_from_icon_name("audio-x-generic",
+                                                GTK_ICON_SIZE_DIALOG);
+  gtk_widget_set_size_request(image,148,148);
+  gtk_box_pack_start(GTK_BOX(content),image,FALSE,FALSE,0);
+  GtkWidget *label=gtk_label_new(music_discover_title(view,group));
+  gtk_widget_set_name(label,"music-discover-tile-title");
+  gtk_label_set_xalign(GTK_LABEL(label),0);
+  gtk_label_set_max_width_chars(GTK_LABEL(label),22);
+  gtk_label_set_line_wrap(GTK_LABEL(label),TRUE);
+  gtk_label_set_lines(GTK_LABEL(label),2);
+  gtk_label_set_ellipsize(GTK_LABEL(label),PANGO_ELLIPSIZE_END);
+  gtk_widget_set_tooltip_text(label,music_discover_title(view,group));
+  gtk_box_pack_start(GTK_BOX(content),label,FALSE,FALSE,0);
+  char *description=g_strdup_printf("%u picks · %s",count,
+                                   music_discover_description(view,group));
+  GtkWidget *detail=gtk_label_new(description);
+  g_free(description);
+  gtk_widget_set_name(detail,"music-discover-tile-subtitle");
+  gtk_label_set_xalign(GTK_LABEL(detail),0);
+  gtk_label_set_max_width_chars(GTK_LABEL(detail),22);
+  gtk_label_set_ellipsize(GTK_LABEL(detail),PANGO_ELLIPSIZE_END);
+  gtk_box_pack_start(GTK_BOX(content),detail,FALSE,FALSE,0);
+  gtk_container_add(GTK_CONTAINER(button),content);
+  g_object_set_data(G_OBJECT(button),"music-discover-group",
+                    GINT_TO_POINTER(group+1));
+  g_signal_connect(button,"clicked",
+                   G_CALLBACK(music_discover_tile_clicked),view);
+  gtk_flow_box_insert(GTK_FLOW_BOX(view->cards),button,-1);
+  if(cover)music_card_art_start(view,cover,image);
+ }
+ gtk_widget_show_all(view->cards);
+ gtk_widget_show(view->cards_scroll);
+ gtk_widget_hide(view->list_scroll);
+ if(view->discover_back)gtk_widget_hide(view->discover_back);
+ gtk_label_set_text(GTK_LABEL(view->heading),"Discover");
+ gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
+                               "Search music beyond your library");
+ gtk_entry_set_text(GTK_ENTRY(view->search),"");
+ music_show_search(view,TRUE);
+ music_card_queue_pump(view);
+}
+static void music_discover_back_clicked(GtkWidget *unused,gpointer data){
+ (void)unused;
+ MusicView *view=data;
+ if(!view || view->busy || view->closing)return;
+ music_discover_show_landing(view);
+}
+static int music_discover_collect(MusicView *view,const char *output){
+ g_ptr_array_set_size(view->discover_entries,0);
+ g_ptr_array_set_size(view->discover_shelves,0);
+ char **lines=g_strsplit(output?output:"","\n",-1);
+ int category=-1;
+ int count=0;
+ guint personal_shelves=0, mix_shelves=0;
+ for(int i=0;lines[i] && i<300 && count<180;i++){
+  char **parts=g_strsplit(lines[i],"\t",6);
+  if(g_strv_length(parts)==5){
+   char *kind=decode_field(parts[0]);
+   char *id=decode_field(parts[1]);
+   char *title=decode_field(parts[2]);
+   char *artist=decode_field(parts[3]);
+   char *cover=decode_field(parts[4]);
+   if(kind && id && title && artist && cover){
+    if(!g_strcmp0(kind,"section")){
+     category=music_discover_group_for(id);
+     /* These tiles are generated from actual personalized recommendation
+      * sections. A new artist or mix title can replace yesterday's; no
+      * generic static 'Hip-Hop Mix' cards or empty placeholders. */
+     gboolean personal=g_str_has_prefix(id,"because_you_listen_");
+     gboolean mix=g_str_has_prefix(id,"daily_mixes_") ||
+                  g_str_has_prefix(id,"radio_sections_");
+     /* Reserve room for variety: a rich listening history should not
+      * displace every genre/mixtape tile with four nearly identical artists. */
+     gboolean dynamic=(personal && personal_shelves<2) ||
+                      (mix && mix_shelves<2);
+     if(dynamic && *title &&
+        view->discover_shelves->len<DISC_MAX_DYNAMIC){
+      MusicDiscoverShelf *shelf=g_new0(MusicDiscoverShelf,1);
+      shelf->title=g_strdup(title);
+      shelf->description=g_strdup(personal?
+             "Inspired by your listening":"A tailored selection");
+      category=DISC_DYNAMIC_START+(int)view->discover_shelves->len;
+      g_ptr_array_add(view->discover_shelves,shelf);
+      if(personal)personal_shelves++;
+      else mix_shelves++;
+     }
+    }else if(category>=0 &&
+         (!g_strcmp0(kind,"catalog_album") ||
+          !g_strcmp0(kind,"catalog_artist")) &&
+         strlen(id)==36 && *title){
+     MusicDiscoverEntry *entry=g_new0(MusicDiscoverEntry,1);
+     entry->kind=g_strdup(kind);
+     entry->id=g_strdup(id);
+     entry->title=g_strdup(title);
+     entry->artist=g_strdup(artist);
+     entry->cover=g_strdup(cover);
+     entry->category=category;
+     g_ptr_array_add(view->discover_entries,entry);
+     count++;
+    }
+   }
+   g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
+  }
+  g_strfreev(parts);
+ }
+ g_strfreev(lines);
+ music_discover_show_landing(view);
+ return count;
+}
+
 static void music_show_empty(MusicView *view,const char *operation){
  const char *message="No items found. Try another search or browse your library.";
  if(!g_strcmp0(operation,"home"))
@@ -1520,8 +1860,14 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
                     !g_strcmp0(job->operation,"recent") ||
                     !g_strcmp0(job->operation,"new") ||
                     !g_strcmp0(job->operation,"artists") ||
-                    !g_strcmp0(job->operation,"playlists"));
-   int count=render_rows(view,output,job->append_albums || job->append_songs);
+                    !g_strcmp0(job->operation,"playlists") ||
+                    !g_strcmp0(job->operation,"catalog") ||
+                    !g_strcmp0(job->operation,"discover"));
+   int count=!g_strcmp0(job->operation,"discover")
+     ?music_discover_collect(view,output)
+     :render_rows(view,output,job->append_albums || job->append_songs);
+   if(!g_strcmp0(job->operation,"catalog") && view->discover_active &&
+      view->discover_back)gtk_widget_show(view->discover_back);
    if(view->grid_mode){
     gtk_widget_show(view->cards_scroll);
     gtk_widget_hide(view->list_scroll);
@@ -1607,6 +1953,11 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
 static void query_start(MusicView *view,const char *operation,
                         const char *value,const char *heading){
  if(view->busy || view->closing)return;
+ if(g_strcmp0(operation,"discover") && g_strcmp0(operation,"catalog")){
+  view->discover_active=FALSE;
+  view->discover_category=-1;
+  if(view->discover_back)gtk_widget_hide(view->discover_back);
+ }
  /* Browse/detail navigation restores the inline library header.
   * Searching itself keeps the input open for quick query refinement. */
  if(g_strcmp0(operation,"search") && g_strcmp0(operation,"catalog"))
@@ -2020,6 +2371,7 @@ static void music_nav(GtkWidget *button,gpointer data){
   music_nav_selected(view,button);
   view->hero_art_serial++;
   if(view->hero_row)gtk_widget_hide(view->hero_row);
+  view->discover_active=!g_strcmp0(operation,"discover");
   query_start(view,operation,NULL,heading);
   if(!g_strcmp0(operation,"discover")){
    gtk_entry_set_placeholder_text(GTK_ENTRY(view->search),
@@ -2187,6 +2539,9 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->tray_changed=tray_changed;
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
+ view->discover_entries=g_ptr_array_new_with_free_func(music_discover_entry_free);
+ view->discover_shelves=g_ptr_array_new_with_free_func(music_discover_shelf_free);
+ view->discover_category=-1;
  view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
  view->pending_art=g_queue_new();
  view->queue_index=-1;
@@ -2353,6 +2708,13 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  GtkWidget *header_row=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4);
  gtk_widget_set_name(header_row,"music-header-row");
  gtk_box_pack_start(GTK_BOX(maincol),header_row,FALSE,FALSE,0);
+ view->discover_back=music_icon_button("go-previous-symbolic","Back to Discover");
+ gtk_widget_set_name(view->discover_back,"music-discover-back");
+ gtk_widget_set_size_request(view->discover_back,28,28);
+ gtk_widget_set_no_show_all(view->discover_back,TRUE);
+ g_signal_connect(view->discover_back,"clicked",
+                  G_CALLBACK(music_discover_back_clicked),view);
+ gtk_box_pack_start(GTK_BOX(header_row),view->discover_back,FALSE,FALSE,0);
  view->header_stack=gtk_stack_new();
  gtk_stack_set_transition_type(GTK_STACK(view->header_stack),
                                 GTK_STACK_TRANSITION_TYPE_NONE);
@@ -2593,6 +2955,7 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->status_timer=g_timeout_add_seconds(15,music_status_tick,view);
  gtk_widget_show_all(view->root);
  gtk_widget_hide(view->hero_row);
+ gtk_widget_hide(view->discover_back);
  gtk_widget_hide(view->cards_scroll);
  gtk_widget_hide(view->player_bar);
  gtk_widget_hide(view->shuffle_all);

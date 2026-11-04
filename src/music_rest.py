@@ -262,8 +262,10 @@ def _album_tracks_rows(result: dict[str,Any], album_id: str) -> str:
     artist=result.get("artist_name") or ""
     if not isinstance(title,str) or not isinstance(artist,str):
         raise MusicRESTError("Album metadata is missing.")
+    status=("In library" if result.get("in_library") is True else
+            "Requested" if result.get("requested") is True else "Not in library")
     rows=[_encode_row("catalog_album",album_id,title[:512],
-                      artist[:256]+" · Not in library","dn-album:"+album_id)]
+                      artist[:200]+" · "+status,"dn-album:"+album_id)]
     tracks=result.get("tracks",[])
     if not isinstance(tracks,list):
         return "\n".join(rows)+"\n"
@@ -290,7 +292,7 @@ def _song_search_rows(text: str) -> str:
     accompany this public lookup. Limit one request and 15 results per search.
     """
     query=_bounded_text(text,"song search",MAX_QUERY)
-    cleaned=" ".join(re.findall(r"[\\w-]+",query,flags=re.UNICODE))
+    cleaned=" ".join(re.findall(r"[\w-]+",query,flags=re.UNICODE))
     if len(cleaned)<2:
         raise MusicRESTError("Enter a song title to search.")
     url="https://musicbrainz.org/ws/2/recording/?" + urlencode({

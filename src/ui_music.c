@@ -1086,27 +1086,38 @@ static void music_action_complete(GObject *unused,GAsyncResult *result,gpointer 
   }else if(!strcmp(job->operation,"playlist_options")){
    music_playlist_dialog(view,job->song_id,output,job->button);
   }else if(!strcmp(job->operation,"like") ||
-           !strcmp(job->operation,"unlike")){
-   gboolean liked=!strcmp(job->operation,"like");
+           !strcmp(job->operation,"unlike") ||
+           !strcmp(job->operation,"like_album") ||
+           !strcmp(job->operation,"unlike_album") ||
+           !strcmp(job->operation,"like_artist") ||
+           !strcmp(job->operation,"unlike_artist")){
+   gboolean liked=g_str_has_prefix(job->operation,"like");
    if(job->button && gtk_widget_get_parent(job->button) &&
       !g_strcmp0(g_object_get_data(G_OBJECT(job->button),"music-id"),
                  job->song_id)){
     gtk_button_set_image(GTK_BUTTON(job->button),
       music_heart_image(liked));
-    gtk_widget_set_tooltip_text(job->button,liked?"Unlike song":"Like song");
+    gtk_widget_set_tooltip_text(job->button,
+        !g_strcmp0(job->kind,"album")?(liked?"Unlike album":"Like album"):
+        !g_strcmp0(job->kind,"artist")?(liked?"Unlike artist":"Like artist"):
+        (liked?"Unlike song":"Like song"));
     g_object_set_data(G_OBJECT(job->button),"music-liked",
                       GINT_TO_POINTER(liked?2:1));
    }
-   for(guint i=0;i<view->visible_tracks->len;i++){
-    MusicTrack *t=g_ptr_array_index(view->visible_tracks,i);
-    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
-   }
-   for(guint i=0;i<view->queue->len;i++){
-    MusicTrack *t=g_ptr_array_index(view->queue,i);
-    if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+   /* Favoriting an album/artist does not favorite all its songs. */
+   if(g_strcmp0(job->kind,"album") && g_strcmp0(job->kind,"artist")){
+    for(guint i=0;i<view->visible_tracks->len;i++){
+     MusicTrack *t=g_ptr_array_index(view->visible_tracks,i);
+     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+    }
+    for(guint i=0;i<view->queue->len;i++){
+     MusicTrack *t=g_ptr_array_index(view->queue,i);
+     if(!g_strcmp0(t->id,job->song_id))t->liked=liked;
+    }
    }
    const char *kind=job->kind;
-   if(view->playing_like && view->queue_index>=0 &&
+   if(g_strcmp0(kind,"album") && g_strcmp0(kind,"artist") &&
+      view->playing_like && view->queue_index>=0 &&
       view->queue_index<(int)view->queue->len &&
       !g_strcmp0(((MusicTrack*)g_ptr_array_index(
        view->queue,view->queue_index))->id,job->song_id))
@@ -1173,7 +1184,15 @@ static void music_like_clicked(GtkWidget *unused,gpointer data){
  MusicView *view=g_object_get_data(G_OBJECT(button),"music-view");
  const char *id=g_object_get_data(G_OBJECT(button),"music-id");
  gboolean liked=GPOINTER_TO_INT(g_object_get_data(G_OBJECT(button),"music-liked"))==2;
- if(view && id)music_action_start(view,liked?"unlike":"like",id,button,id);
+ if(view && id){
+  const char *kind=g_object_get_data(G_OBJECT(button),"music-kind");
+  const char *operation=!g_strcmp0(kind,"album")?
+      (liked?"unlike_album":"like_album"):
+      !g_strcmp0(kind,"artist")?
+      (liked?"unlike_artist":"like_artist"):
+      (liked?"unlike":"like");
+  music_action_start(view,operation,id,button,id);
+ }
 }
 static void music_playlist_clicked(GtkWidget *unused,gpointer data){
  (void)unused;

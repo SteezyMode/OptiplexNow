@@ -346,7 +346,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 from music_rest import (
                     get_session, request as rest_request, _discover_rows,
-                    _favorite_artist_signals, MusicRESTError,
+                    _favorite_artist_signals, _favorite_genre_signals, MusicRESTError,
                 )
                 try:
                     result = rest_request(args.base_url, "discover",
@@ -359,15 +359,18 @@ def main(argv: list[str] | None = None) -> int:
                 # the already-fetched suggestions. Failure is non-fatal.
                 # No scrobble, follow, request, or download call occurs here.
                 favorites = None
+                genres = None
                 if args.format == "rows":
                     optional_auth = _auth_from_stdin(args.auth_format, optional=True)
                     if optional_auth is not None:
                         try:
                             starred = query(args.base_url, "getStarred2", optional_auth)
                             favorites = _favorite_artist_signals(starred.get("starred2"))
+                            genres = _favorite_genre_signals(starred.get("starred2"))
                         except MusicTransportError:
                             pass
-                rows = _discover_rows(result, favorite_artists=favorites)
+                rows = _discover_rows(result, favorite_artists=favorites,
+                                      favorite_genres=genres)
             if args.format == "rows":
                 sys.stdout.write(rows)
             else:

@@ -9,6 +9,7 @@ on:
     branches:
       - main
     paths:
+      - 'docs/releases/v1.22.1.md'
       - 'docs/releases/v1.22.0.md'
       - 'docs/releases/v1.21.19.md'
       - 'docs/releases/v1.21.18.md'
@@ -22,7 +23,7 @@ concurrency:
 
 jobs:
   release:
-    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, '[publish-v1.21.18]') || contains(github.event.head_commit.message, '[publish-v1.21.19]') || contains(github.event.head_commit.message, '[publish-v1.22.0]'))) }}
+    if: ${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && (contains(github.event.head_commit.message, '[publish-v1.21.18]') || contains(github.event.head_commit.message, '[publish-v1.21.19]') || contains(github.event.head_commit.message, '[publish-v1.22.0]') || contains(github.event.head_commit.message, '[publish-v1.22.1]'))) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -41,6 +42,8 @@ jobs:
           set -euo pipefail
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             version="${GITHUB_REF_NAME#v}"
+          elif [[ "$COMMIT_MESSAGE" == *"[publish-v1.22.1]"* ]]; then
+            version="1.22.1"
           elif [[ "$COMMIT_MESSAGE" == *"[publish-v1.22.0]"* ]]; then
             version="1.22.0"
           elif [[ "$COMMIT_MESSAGE" == *"[publish-v1.21.19]"* ]]; then

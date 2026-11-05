@@ -1989,8 +1989,10 @@ static void query_complete(GObject *unused,GAsyncResult *result,gpointer data){
    view->album_has_more=FALSE;
    view->hero_art_serial++;
    if(view->hero_row)gtk_widget_hide(view->hero_row);
-   status_set(view,(!g_strcmp0(job->operation,"catalog") ||
-                    !g_strcmp0(job->operation,"discover"))
+   status_set(view,!g_strcmp0(job->operation,"catalog_tracks")
+      ? "Could not load album tracks from Discover. Try again."
+      : (!g_strcmp0(job->operation,"catalog") ||
+         !g_strcmp0(job->operation,"discover"))
       ? "Discover and requests need an approved device connection."
       : "Music library unavailable. Check server access and Music connection.");
   }else{
@@ -2176,7 +2178,12 @@ static void query_start(MusicView *view,const char *operation,
  /* Avoid a NULL gap (the helper needs no arbitrary value for browse calls). */
  const gchar *without_value[]={"/usr/bin/python3",helper,server_url,operation,
                               "--format=rows","--auth-format=form",NULL};
- const gchar *const *command=value && *value?argv:without_value;
+ /* Catalog tracks use the REST helper: it accepts --format but does not
+  * accept --auth-format. This route must not receive playback credentials. */
+ const gchar *rest_argv[]={"/usr/bin/python3",helper,server_url,operation,
+                          value,"--format=rows",NULL};
+ const gchar *const *command=!g_strcmp0(operation,"catalog_tracks")?
+     rest_argv:(value && *value?argv:without_value);
  GError *error=NULL;
  GSubprocess *process=g_subprocess_newv(command,
     G_SUBPROCESS_FLAGS_STDIN_PIPE|G_SUBPROCESS_FLAGS_STDOUT_PIPE|

@@ -71,6 +71,47 @@ class TrackRequestTests(unittest.TestCase):
             with self.subTest(value=value),self.assertRaises(rest.MusicRESTError):
                 rest.request(BASE,"request_track",token=TOKEN,value=value)
 
+    def test_track_listing_cli_matches_actual_rest_helper_options(self):
+        # Regression: GTK once sent --auth-format=form to music_rest.py,
+        # which rejected argparse before fetching any album tracks.
+        import io
+        class ForbiddenStdin:
+            @property
+            def buffer(self):
+                raise AssertionError("Catalog track reads must not use playback passwords")
+        result={"tracks":[{"recording_id":R,"title":"Song One"}],
+                "artist":"Circa Survive","album":"Blue Sky Noise",
+                "release_group_mbid":A}
+        with patch.object(rest,"get_session",return_value=TOKEN) as session, \
+             patch.object(rest,"request",return_value=result) as request, \
+             patch.object(rest.sys,"stdout",io.StringIO()) as output, \
+             patch.object(rest.sys,"stdin",ForbiddenStdin()):
+            rc=rest.main([BASE,"catalog_tracks",
+                          encoded(A,"Circa Survive","Blue Sky Noise"),
+                          "--format=rows"])
+        self.assertEqual(rc,0)
+        rows=[[base64.b64decode(x).decode() for x in line.split("\t")]
+              for line in output.getvalue().splitlines()]
+        self.assertEqual(rows[0][:4],
+                         ["catalog_track",R,"Song One","Circa Survive"])
+        self.assertEqual(rows[0][5],"Blue Sky Noise")
+        session.assert_called_once_with(BASE)
+        request.assert_called_once_with(BASE,"catalog_tracks",token=TOKEN,
+                        value=encoded(A,"Circa Survive","Blue Sky Noise"))
+
+    def test_native_ui_rest_invocation_does_not_pass_subsonic_flags(self):
+        code=(ROOT/"src/ui_music.c").read_text()
+        start=code.index("static void query_start(MusicView *view,const char *operation,\n",
+                         code.index("static gboolean music_discover_retry("))
+        end=code.index("g_subprocess_newv(command,",start)
+        invocation=code[start:end]
+        self.assertIn('helper=g_build_filename(dir,"music_rest.py",NULL);',invocation)
+        self.assertIn('const gchar *rest_argv[]=',invocation)
+        self.assertIn('value,"--format=rows",NULL};',invocation)
+        self.assertIn('!g_strcmp0(operation,"catalog_tracks")?',invocation)
+        self.assertIn('rest_argv:(value && *value?argv:without_value)',invocation)
+        self.assertNotIn('value,"--format=rows","--auth-format=form",NULL};',invocation)
+
     def test_native_ui_contains_explicit_non_autonomous_song_action(self):
         code=(ROOT/"src/ui_music.c").read_text()
         self.assertIn('gtk_button_new_with_label("Add Song")',code)

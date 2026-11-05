@@ -82,15 +82,15 @@ class TrackRequestTests(unittest.TestCase):
         result={"tracks":[{"recording_id":R,"title":"Song One"}],
                 "artist":"Circa Survive","album":"Blue Sky Noise",
                 "release_group_mbid":A}
-        with patch.object(rest,"get_session",return_value=TOKEN) as session, \\
-             patch.object(rest,"request",return_value=result) as request, \\
-             patch.object(rest.sys,"stdout",io.StringIO()) as output, \\
+        with patch.object(rest,"get_session",return_value=TOKEN) as session, \
+             patch.object(rest,"request",return_value=result) as request, \
+             patch.object(rest.sys,"stdout",io.StringIO()) as output, \
              patch.object(rest.sys,"stdin",ForbiddenStdin()):
             rc=rest.main([BASE,"catalog_tracks",
                           encoded(A,"Circa Survive","Blue Sky Noise"),
                           "--format=rows"])
         self.assertEqual(rc,0)
-        rows=[[base64.b64decode(x).decode() for x in line.split("\\t")]
+        rows=[[base64.b64decode(x).decode() for x in line.split("\t")]
               for line in output.getvalue().splitlines()]
         self.assertEqual(rows[0][:4],
                          ["catalog_track",R,"Song One","Circa Survive"])
@@ -101,7 +101,7 @@ class TrackRequestTests(unittest.TestCase):
 
     def test_native_ui_rest_invocation_does_not_pass_subsonic_flags(self):
         code=(ROOT/"src/ui_music.c").read_text()
-        start=code.index("static void query_start(MusicView *view,const char *operation,\\n",
+        start=code.index("static void query_start(MusicView *view,const char *operation,\n",
                          code.index("static gboolean music_discover_retry("))
         end=code.index("g_subprocess_newv(command,",start)
         invocation=code[start:end]

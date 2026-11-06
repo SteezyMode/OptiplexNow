@@ -38,10 +38,10 @@ class VisualCoherenceTests(unittest.TestCase):
         self.assertIn("#tile:hover label,#tile:active label {color:#101111;}", APP_CSS)
 
     def test_focus_states_and_balanced_type(self):
-        self.assertIn("#navtab:focus", MAIN)
-        self.assertIn("#tile:focus", MAIN)
-        self.assertIn("#setupaction:focus", MAIN)
-        self.assertIn("font-size:28px;font-weight:900", MAIN)
+        self.assertIn("#navtab:focus", APP_CSS)
+        self.assertIn("#tile:focus", APP_CSS)
+        self.assertIn("#setupaction:focus", APP_CSS)
+        self.assertIn("font-size:28px;font-weight:900", APP_CSS)
         self.assertIn("#modalheading {font-size:16px", APP_CSS)
         self.assertIn("font-size:11px", THEME)
 

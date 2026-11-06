@@ -31,6 +31,7 @@ shutil.copy2(root/'src/music_player.py',pkg/'usr/lib/optiplex-now/music_player.p
 shutil.copy2(root/'src/music_http_stream.py',pkg/'usr/lib/optiplex-now/music_http_stream.py')
 shutil.copy2(root/'src/music_rest.py',pkg/'usr/lib/optiplex-now/music_rest.py')
 shutil.copy2(root/'src/music_device_client.py',pkg/'usr/lib/optiplex-now/music_device_client.py')
+# Restricted per-device Games SSH transport; never an ordinary host-admin key.
 shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
 # Shared theme used by main GTK UI and owner/host Python dialogs.
 shutil.copy2(root/'src/now-theme.css',pkg/'usr/lib/optiplex-now/now-theme.css')
@@ -58,9 +59,7 @@ shutil.copy2(root/'src/host-jellyfin-new-ui.py', pkg/'usr/lib/optiplex-now/host-
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)
 shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-client.py')
-# Restricted per-device Games SSH transport. This is NOT a host admin key. Host enrollment and authorization
-# remain explicit owner actions.
-shutil.copy2(root/'src/owner-games-client.py',pkg/'usr/lib/optiplex-now/owner-games-client.py')
+# Host enrollment and authorization remain explicit owner actions.
 # Client-side owner GPU power window, with host-local LACT bridge streamed over
 # existing owner-admin SSH. Installing the .deb makes no changes to the host.
 for name in ('gpu-power-ui.py', 'gpu_power_host.py'):

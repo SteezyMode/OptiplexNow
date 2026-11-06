@@ -10,10 +10,10 @@
 
 ## Private-alpha phase lock (November 3, 2026)
 
-- **Official current release:** [v1.21.16](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.21.16), source commit `45e140e7bf2faa1067779ec38e6e11597dc1443c`. It is the owner-verified household baseline, not a promise of support for unconfigured consumer hosts.
+- **Official current release (November 6):** [v1.22.1](https://github.com/SteezyMode/OptiplexNow/releases/tag/v1.22.1), source commit `73fd7c80983c4b9f9b268b22f591588a339ad099`, with successful validation/publication CI. The **v1.21.16 reference deployment** remains the documented owner-verified three-pillar phase-entry baseline; later Music refinements were owner-tested on existing clients, but the v1.22.1 Discover Tracks fix still requires an installed-client acceptance record. No published release is proof of clean-host product acceptance.
 - **Feature freeze:** do not redesign Downloads search/queue/file picker, expand the Games/Media/Music feature set, or make SubHub/subtitle translation a release dependency. Security bugs, real regressions and the minimum onboarding/recovery changes needed to ship remain in scope.
 - **Exit target:** an unfamiliar person should be able to use the graphical installer on a supported disposable Linux host and fresh client, authorize the device, install/adopt selected services, stream a real game, watch a real video, manage an approved VPN-isolated download, recover from expected failures and never need to manually create a list of backend service accounts. Report real device evidence and negative authorization results.
-- **Engineering constraint:** modularize risky monolithic UI and service code in small, behavior-preserving changes when delivering these gates. [#185](https://github.com/SteezyMode/OptiplexNow/issues/185) owns code structure; no standalone rewrite and no arbitrary file-size target.
+- **Engineering constraint:** an explicitly approved, bounded simplification milestone may precede further host/client productization. Inventory duplication and coupling, then use small behavior-preserving PRs with review, tests and rollback. [#185](https://github.com/SteezyMode/OptiplexNow/issues/185) tracks the effort; no wholesale rewrite or arbitrary file-size target. The formal physical/security acceptance gates remain unchanged.
 - **Success vocabulary:** *phase active* = configured household can use it today; *feature locked* = user accepts a current flow; *Private Alpha 1 accepted* = every required physical clean-host/client and safety check in this document passes. Only the first two statements are true today.
 
 ## What "private alpha" means here
@@ -24,7 +24,7 @@
 - A user may choose which services they want enabled, but all **three pillars must be demonstrated** and signed off for this release.
 - Ordinary setup must not require terminal, SSH commands, editing Compose/TOML, manual Steam symlinks, entering a Jellyfin URL, or hand-installing a Docker stack. Advanced diagnostics may exist.
 - The approximately 15-minute target is measured from starting NOW setup on two OS-ready supported computers to the first authenticated game stream; it excludes OS setup, game downloads, media import, and acquiring VPN credentials. It does **not** imply fully configuring three services in 15 minutes.
-- The commercial brand is undecided. OptiPlex NOW is a development codename; no Dell relationship is represented or implied.
+- Bruiser is the chosen working product name. OptiPlex NOW remains the legacy repository/package name pending a compatibility-safe rebrand; no Dell relationship is represented or implied.
 
 ## Pillar 1: independent games
 

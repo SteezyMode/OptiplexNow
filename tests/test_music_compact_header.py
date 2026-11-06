@@ -5,6 +5,7 @@ import unittest
 ROOT=Path(__file__).resolve().parents[1]
 UI=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
 CSS=(ROOT/"src/main.c").read_text(encoding="utf-8")
+TRAY_MENU=(ROOT/"src/tray_menu.c").read_text(encoding="utf-8")
 
 
 class CompactMusicHeaderTests(unittest.TestCase):
@@ -89,9 +90,13 @@ class CompactMusicHeaderTests(unittest.TestCase):
         self.assertIn("tray_show_window();",callback)
         self.assertNotIn("now_music_next()",callback)
         self.assertNotIn("now_music_toggle_pause()",callback)
-        self.assertIn('g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL)',CSS)
-        self.assertIn('gtk_widget_set_tooltip_text(playing,caption)',CSS)
-        self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)",CSS)
+        # Main retains the real window/navigation action; the extracted
+        # presenter only owns GTK widget construction and callback wiring.
+        self.assertIn('model.on_music_open_current=G_CALLBACK(tray_music_open_current);', CSS)
+        self.assertIn('model->on_music_open_current', TRAY_MENU)
+        self.assertIn('GtkWidget *playing = append_music_action(menu, short_title, TRUE,', TRAY_MENU)
+        self.assertIn('gtk_widget_set_tooltip_text(playing, caption);', TRAY_MENU)
+        self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)", TRAY_MENU)
 
     def test_compact_now_playing_with_one_line_title(self):
         a=UI.index("GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4)")

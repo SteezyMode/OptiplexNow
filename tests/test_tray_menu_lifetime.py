@@ -12,14 +12,25 @@ import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
 MAIN=(ROOT/"src/main.c").read_text(encoding="utf-8")
+TRAY=(ROOT/"src/tray_menu.c").read_text(encoding="utf-8")
 
 
 class TrayMenuLifetimeTests(unittest.TestCase):
     def test_main_uses_owned_reference_on_every_rebuild(self):
         self.assertIn('#include "tray_menu_lifetime.h"',MAIN)
-        self.assertIn("tray_menu=now_tray_menu_owned_new();",MAIN)
-        self.assertIn("now_tray_menu_owned_destroy(old);",MAIN)
-        self.assertNotIn("if(old)gtk_widget_destroy(old);",MAIN)
+        # The presenter creates the strong GTK root, while main.c owns
+        # publishing and teardown. AppIndicator must release its previous
+        # reference BEFORE the app destroys the old menu.
+        self.assertIn("GtkWidget *menu = now_tray_menu_owned_new();",TRAY)
+        self.assertNotIn("GtkWidget *menu = gtk_menu_new();",TRAY)
+        body=MAIN.split("static void tray_build_menu(void){",1)[1].split(
+            "static void tray_initialize(void){",1)[0]
+        self.assertIn("GtkWidget *old=tray_menu;",body)
+        self.assertIn("tray_menu=replacement;",body)
+        self.assertIn("now_tray_menu_owned_destroy(old);",body)
+        self.assertLess(body.index("app_indicator_set_menu_fn(app_indicator,tray_menu);"),
+                        body.index("now_tray_menu_owned_destroy(old);"))
+        self.assertNotIn("if(old)gtk_widget_destroy(old);",body)
         for action in ("tray_music_previous","tray_music_pause","tray_music_next"):
             self.assertIn("G_CALLBACK("+action+")",MAIN)
 

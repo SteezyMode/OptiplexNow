@@ -10,6 +10,7 @@ MAIN = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 COMPOSE = (ROOT / "deploy" / "music" / "compose.yaml").read_text(encoding="utf-8")
 README = (ROOT / "deploy" / "music" / "README.md").read_text(encoding="utf-8")
 UI_MUSIC = (ROOT / "src" / "ui_music.c").read_text(encoding="utf-8")
+TRAY_MENU = (ROOT / "src" / "tray_menu.c").read_text(encoding="utf-8")
 
 
 class OptionalMusicContract(unittest.TestCase):
@@ -38,11 +39,12 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("now_music_playback_start(view->playback", UI_MUSIC)
         self.assertIn("gtk_widget_set_no_show_all(view->player_bar,TRUE);", UI_MUSIC)
         self.assertIn('now_music_is_playing_session()', MAIN)
-        self.assertIn('now_music_is_paused()?"▶  Play":"⏸  Pause"', MAIN)
+        self.assertIn('model.music_paused=now_music_is_paused();', MAIN)
+        self.assertIn('model->music_paused ? "▶  Play" : "⏸  Pause"', TRAY_MENU)
         self.assertIn('now_music_can_next()', MAIN)
-        self.assertIn('G_CALLBACK(tray_music_previous)', MAIN)
-        self.assertIn('G_CALLBACK(tray_music_pause)', MAIN)
-        self.assertIn('G_CALLBACK(tray_music_next)', MAIN)
+        self.assertIn('model.on_music_previous=G_CALLBACK(tray_music_previous)', MAIN)
+        self.assertIn('model.on_music_toggle_pause=G_CALLBACK(tray_music_pause)', MAIN)
+        self.assertIn('model.on_music_next=G_CALLBACK(tray_music_next)', MAIN)
         self.assertIn('shutil.copy2(root/' + "'src/music_player.py'", (ROOT / "package.py").read_text())
         self.assertIn('mpv, gnome-keyring', (ROOT / "package.py").read_text())
         self.assertIn('music_vault_begin(view,"lookup",NULL)', UI_MUSIC)
@@ -261,9 +263,11 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"#music-library #music-row-title', MAIN)
         self.assertIn('"#music-sidebar button#music-library-root', MAIN)
         self.assertIn('"#music-player button.music-transport', MAIN)
-        self.assertIn('tray_menu_item("Quit",NOW_TRAY_QUIT)', MAIN)
-        self.assertLess(MAIN.index('tray_menu_item("Quit",NOW_TRAY_QUIT)'),
-                        MAIN.index('GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous")'))
+        self.assertIn('append_action(menu, "Quit", NOW_TRAY_QUIT, model->on_action);', TRAY_MENU)
+        self.assertLess(TRAY_MENU.index('append_action(menu, "Quit", NOW_TRAY_QUIT, model->on_action);'),
+                        TRAY_MENU.index('append_music_action(menu, "⏮  Previous", TRUE,'))
+        self.assertIn('model.on_music_open_current=G_CALLBACK(tray_music_open_current);', MAIN)
+        self.assertIn('gtk_widget_set_tooltip_text(playing, caption);', TRAY_MENU)
         self.assertIn("'src/music_art_audit.py'",(ROOT/"package.py").read_text())
 
     def test_approved_owner_music_auto_enrollment_is_noninteractive(self):

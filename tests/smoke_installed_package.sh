@@ -30,6 +30,30 @@ test -x /usr/lib/optiplex-now/now-ssh-askpass
 test -r /usr/lib/optiplex-now/ssh-authorize.py
 test -r /usr/lib/optiplex-now/now-theme.css
 test -r /usr/lib/optiplex-now/now_theme.py
+# Downloads clients must resolve their shared helper FROM the actual installed
+# package directory, not from a source-tree PYTHONPATH or a developer checkout.
+# Invalid CLI invocations exit before touching SSH, accounts or host services.
+test -r /usr/lib/optiplex-now/download_owner_transport.py
+/usr/bin/python3 - <<'PY'
+from pathlib import Path
+import subprocess
+
+directory = Path("/usr/lib/optiplex-now")
+for filename, message in (
+    ("download-search-client.py", "Search unavailable."),
+    ("download-queue-client.py", "Queue unavailable."),
+    ("download-operations-client.py", "Owner download request unavailable."),
+):
+    program = directory / filename
+    assert program.is_file(), filename
+    child = subprocess.run(["/usr/bin/python3", str(program)],
+                           capture_output=True, text=True,
+                           check=False, timeout=6)
+    assert child.returncode == 1, (filename, child.returncode)
+    assert message in (child.stdout + child.stderr), (
+        filename, child.stdout, child.stderr)
+    assert "ModuleNotFoundError" not in child.stderr, filename
+PY
 python3 -c 'from pathlib import Path; f=Path("/usr/lib/optiplex-now/now_theme.py"); compile(f.read_text(), str(f), "exec")'
 test -x /usr/lib/optiplex-now/now-host-setup
 test -r /usr/lib/optiplex-now/host_preflight.py

@@ -3,11 +3,13 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 spec=importlib.util.spec_from_file_location("now_download_ops",
                     ROOT/"src"/"download-operations-client.py")
 mod=importlib.util.module_from_spec(spec)

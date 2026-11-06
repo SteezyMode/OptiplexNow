@@ -108,6 +108,8 @@ for name in ('owner_enrollment.py','owner_games_enroll.py',
 # Existing hosts explicitly opt in from NOW Host Setup once.
 
 shutil.copy2(root/'src/media-discover.py',pkg/'usr/lib/optiplex-now/media-discover.py')
+# Installed next to all three Downloads clients for ordinary Python imports.
+shutil.copy2(root/'src/download_owner_transport.py',pkg/'usr/lib/optiplex-now/download_owner_transport.py')
 shutil.copy2(root/'src/download-queue-client.py',pkg/'usr/lib/optiplex-now/download-queue-client.py')
 shutil.copy2(root/'src/download-search-client.py',pkg/'usr/lib/optiplex-now/download-search-client.py')
 # Ship the reviewed search-provider source and an operator-only migration tool.

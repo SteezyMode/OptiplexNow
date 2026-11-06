@@ -10,6 +10,8 @@ import re
 import subprocess
 import sys
 
+from download_owner_transport import restricted_ssh_argv
+
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 ROOT = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
 HOST = re.compile(r"[A-Za-z0-9.:-]{1,253}\Z")
@@ -178,10 +180,7 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
     payload=(json.dumps(request,ensure_ascii=False,separators=(",",":"))+"\n").encode()
     if len(payload)>2047:
         raise ValueError("Request too large")
-    argv=["ssh","-F","/dev/null","-T","-i",str(KEY),
-          "-o","IdentitiesOnly=yes","-o","BatchMode=yes",
-          "-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=6",
-          f"{user}@{host}"]
+    argv=restricted_ssh_argv(host,user,KEY)
     output=runner(argv,input=payload,stdout=subprocess.PIPE,
                   stderr=subprocess.DEVNULL,timeout=25,check=False)
     if (output.returncode or not isinstance(output.stdout,bytes) or

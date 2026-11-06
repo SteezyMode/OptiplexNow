@@ -10,6 +10,7 @@ class DashboardGpuShortcutTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.source = (ROOT / "src/main.c").read_text(encoding="utf-8")
+        cls.style = (ROOT / "src/ui_theme.c").read_text(encoding="utf-8")
 
     def test_exact_existing_label_styling_and_transparent_hit_target(self):
         source = self.source
@@ -19,7 +20,7 @@ class DashboardGpuShortcutTests(unittest.TestCase):
         self.assertIn('gtk_grid_attach(GTK_GRID(metrics),gpu_hitbox,1,0,1,1);', source)
         self.assertIn('g_signal_connect(gpu_hitbox,"button-press-event",', source)
         self.assertNotIn('gtk_grid_attach(GTK_GRID(metrics),metric_gpu,1,0,1,1);', source)
-        self.assertIn('"#metric {background:', source)
+        self.assertIn('"#metric {background:', self.style)
 
     def test_gpu_cap_label_is_explicit_and_consumption_is_not_on_dashboard(self):
         source = self.source

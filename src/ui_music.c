@@ -7,6 +7,7 @@
 #include "ui_music.h"
 #include "config.h"
 #include "music_playback.h"
+#include "music_helper_paths.h"
 #include "music_queue_order.h"
 #include <gio/gio.h>
 #include <string.h>
@@ -188,20 +189,8 @@ static void status_set(MusicView *view,const char *message){
 }
 
 static char *helper_path(void){
- /* The package ships its own exact, tested helper; do not execute an
-  * arbitrary relative file on a deployed client. Source checkouts may use
-  * the local module for developer builds only. */
- gchar *exe=g_file_read_link("/proc/self/exe",NULL);
- if(exe && g_str_has_prefix(exe,"/usr/bin/")){
-  g_free(exe);
-  return g_strdup("/usr/lib/optiplex-now/music_subsonic.py");
- }
- g_free(exe);
- if(g_file_test("src/music_subsonic.py",G_FILE_TEST_IS_REGULAR))
-  return g_strdup("src/music_subsonic.py");
- return g_strdup("/usr/lib/optiplex-now/music_subsonic.py");
+ return now_music_helper_path(NOW_MUSIC_HELPER_SUBSONIC);
 }
-
 static char *decode_field(const char *encoded){
  if(!encoded || strlen(encoded)>16384)return NULL;
  gsize len=0;

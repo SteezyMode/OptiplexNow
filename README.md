@@ -6,13 +6,13 @@
 
 ## Download Bruiser — Active Private Alpha
 
-**[Download current owner-tested Private Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
+**[Download current Private Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
 
 For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, and install with your normal package installer. No compiling or GitHub Actions required.
 
 [Release details and checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest)
 
-**Status: ACTIVE, owner-validated private alpha.** The owner reports working daily household use on the reference OptiPlex, Linux Mint MacBook and Pop!_OS Mac mini. **v1.21.19 is the owner-tested integrated Music baseline** (including functioning Discover and album artwork). **v1.22.0 is the published Private Alpha milestone**, with Discover as Music's default screen and the empty Home removed. The current installer must still be accepted on each target device. The formal Private Alpha 1 exit criteria are still open: supported fresh host/client installation, security/failure testing and independent reproducibility have not been accepted. This download currently targets owner-approved devices accessing an **already configured** Linux server, not new consumers or a general-purpose host installer.
+**Status: ACTIVE, owner-validated private alpha.** The owner reports working daily household use on the reference OptiPlex, Linux Mint MacBook and Pop!_OS Mac mini. **v1.21.19 remains the owner-tested integrated Music baseline** (including functioning Discover and album artwork). **v1.22.0 made Discover the Music landing screen**, removing the empty Home. **v1.22.1 is the latest published Private Alpha**, fixing Discover's Tracks/View Tracks helper invocation; its source/package tests passed, but post-install real-device acceptance of that patch remains to be recorded. The current installer must still be accepted on each target device. The formal Private Alpha 1 exit criteria are still open: supported fresh host/client installation, security/failure testing and independent reproducibility have not been accepted. This download currently targets owner-approved devices accessing an **already configured** Linux server, not new consumers or a general-purpose host installer.
 
 ## What it does
 
@@ -33,7 +33,7 @@ For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, a
 
 ## Project status
 
-**Current phase: distribute v1.22.0 to the owner-operated Private Alpha and validate it on real hardware.** Freeze new feature expansion and Downloads UI redesign; prioritize graphical zero-prerequisite host setup, internal account/credential provisioning, fresh device approvals, security/recovery checks, and disposable clean-host tests. Extract risky monolithic UI/service code **incrementally where it blocks reliable changes**, with regression tests—no rewrite. Optional Music works on the owner's configured server; SubHub/subtitle localization is independent and not an alpha exit gate.
+**Current phase: validate published v1.22.1 on approved devices, then undertake a bounded, regression-tested simplification milestone before wider host/client onboarding.** Freeze new entertainment features and Downloads UI redesign. Audit shared transport, GUI ownership, packaging and host provisioning, then make small behavior-preserving changes with independent review and rollback—not a rewrite. The following productization gates remain next: graphical zero-prerequisite host setup, internal account/credential provisioning, fresh device approvals, security/recovery checks, and disposable clean-host tests. Optional Music works on the owner's configured server; SubHub/subtitle localization is independent and not an alpha exit gate.
 
 - [Product roadmap](docs/PRODUCT.md) — scope and delivery order
 - [Current status](docs/CURRENT-STATUS.md) — implemented versus physically verified

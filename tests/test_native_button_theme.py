@@ -12,7 +12,7 @@ SRC = ROOT / "src"
 
 class NativeActionThemeTests(unittest.TestCase):
     def test_shared_theme_has_contrast_and_interaction_states(self):
-        css = (SRC / "main.c").read_text()
+        css = (SRC / "ui_theme.c").read_text()
         for selector in (
             "button.now-action {background:#222724;color:#ece8e0",
             "button.now-action:hover",
@@ -33,8 +33,8 @@ class NativeActionThemeTests(unittest.TestCase):
         self.assertIn('gtk_widget_set_size_request(video_browser,-1,56)', src)
         self.assertIn('gtk_widget_set_name(play,"tile")', games)
         self.assertIn('gtk_widget_set_size_request(play,-1,56)', games)
-        self.assertIn('"#tile {background:#1e211f', src)
-        self.assertIn('"#tile:hover {background:#b96b5e', src)
+        self.assertIn('"#tile {background:#1e211f', (SRC / "ui_theme.c").read_text())
+        self.assertIn('"#tile:hover {background:#b96b5e', (SRC / "ui_theme.c").read_text())
         self.assertNotIn('gtk_style_context_add_class(gtk_widget_get_style_context(video_browser),"now-primary")', src)
 
     def test_downloads_toolbar_search_and_queue(self):

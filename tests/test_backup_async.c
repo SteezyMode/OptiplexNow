@@ -60,7 +60,10 @@ static int run_case(const char *helper, const char *path, const char *mode,
      * Remove that source before the stack-based fixture goes out of scope. */
     if (g_main_context_find_source_by_id(NULL, idle))
         g_source_remove(idle);
-    int ok = run.done && (run.responsive || !success) &&
+    /* A fast successful child can finish before the scheduled idle runs.
+     * Only the deliberately slow fixture must prove main-loop responsiveness. */
+    gboolean must_prove_idle = g_strcmp0(mode, "slow") == 0;
+    int ok = run.done && (!must_prove_idle || run.responsive) &&
              run.success == success &&
              (success ? run.error == NULL :
               g_error_matches(run.error, G_IO_ERROR, err));

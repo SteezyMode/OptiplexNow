@@ -10,6 +10,7 @@ MAIN = (ROOT / "src" / "main.c").read_text(encoding="utf-8")
 COMPOSE = (ROOT / "deploy" / "music" / "compose.yaml").read_text(encoding="utf-8")
 README = (ROOT / "deploy" / "music" / "README.md").read_text(encoding="utf-8")
 UI_MUSIC = (ROOT / "src" / "ui_music.c").read_text(encoding="utf-8")
+APP_CSS = (ROOT / "src" / "ui_theme.c").read_text(encoding="utf-8")
 
 
 class OptionalMusicContract(unittest.TestCase):
@@ -79,7 +80,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('gtk_menu_item_new_with_label("Forget this device")', UI_MUSIC)
         self.assertNotIn('gtk_box_pack_end(GTK_BOX(sidebar),forget', UI_MUSIC)
         self.assertNotIn('gtk_box_pack_end(GTK_BOX(sidebar),settings', UI_MUSIC)
-        self.assertIn('"#music-library-filters', MAIN)
+        self.assertIn('"#music-library-filters', APP_CSS)
         contract = (ROOT / "docs" / "MUSIC-UX.md").read_text(encoding="utf-8")
         self.assertIn("Your Library", contract)
         self.assertIn("Downloads", contract)
@@ -112,8 +113,8 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('gtk_widget_set_name(sidebar,"music-sidebar");', UI_MUSIC)
         self.assertIn('gtk_widget_set_name(view->player_bar,"music-player");', UI_MUSIC)
         self.assertIn('gtk_widget_set_name(view->list,"music-library");', UI_MUSIC)
-        self.assertIn('"#music-sidebar button#music-nav.now-action', MAIN)
-        self.assertIn('"#music-player {background:', MAIN)
+        self.assertIn('"#music-sidebar button#music-nav.now-action', APP_CSS)
+        self.assertIn('"#music-player {background:', APP_CSS)
         self.assertIn('"getStarred2"', transport)
         self.assertIn('"getAlbumList2"', transport)
         self.assertIn('"newest"', transport)
@@ -258,9 +259,9 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn('"createPlaylist"', transport)
         self.assertIn('SONG_PAGE_SIZE = 200', transport)
         self.assertIn('g_object_set_data(G_OBJECT(discover_button),"music-heading",(gpointer)"Discover")', UI_MUSIC)
-        self.assertIn('"#music-library #music-row-title', MAIN)
-        self.assertIn('"#music-sidebar button#music-library-root', MAIN)
-        self.assertIn('"#music-player button.music-transport', MAIN)
+        self.assertIn('"#music-library #music-row-title', APP_CSS)
+        self.assertIn('"#music-sidebar button#music-library-root', APP_CSS)
+        self.assertIn('"#music-player button.music-transport', APP_CSS)
         self.assertIn('tray_menu_item("Quit",NOW_TRAY_QUIT)', MAIN)
         self.assertLess(MAIN.index('tray_menu_item("Quit",NOW_TRAY_QUIT)'),
                         MAIN.index('GtkWidget *prev=gtk_menu_item_new_with_label("⏮  Previous")'))
@@ -306,7 +307,7 @@ class OptionalMusicContract(unittest.TestCase):
         self.assertIn("gtk_widget_show(view->list_scroll);", UI_MUSIC)
         self.assertIn("gtk_widget_set_no_show_all(view->cards_scroll,TRUE)", UI_MUSIC)
         self.assertIn("gtk_list_box_insert(GTK_LIST_BOX(view->list),row,-1)", UI_MUSIC)
-        self.assertIn('"#music-card-grid', MAIN)
+        self.assertIn('"#music-card-grid', APP_CSS)
 
     def test_services_are_optional_and_not_publicly_listening(self):
         self.assertIn('127.0.0.1:8688:8688', COMPOSE)

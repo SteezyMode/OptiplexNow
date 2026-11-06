@@ -4,6 +4,7 @@
  * Passwords never appear in subprocess argv, URLs, persistent files, or mpv.
  */
 #include "music_playback.h"
+#include "music_helper_paths.h"
 #include <gio/gio.h>
 #include <string.h>
 #include <stdio.h>
@@ -139,15 +140,7 @@ static void wait_finished(GObject *source,GAsyncResult *result,gpointer user){
  job_unref(j);
 }
 static char *helper_path(void){
- char *exe=g_file_read_link("/proc/self/exe",NULL);
- if(exe && g_str_has_prefix(exe,"/usr/bin/")){
-  g_free(exe);
-  return g_strdup("/usr/lib/optiplex-now/music_player.py");
- }
- g_free(exe);
- if(g_file_test("src/music_player.py",G_FILE_TEST_IS_REGULAR))
-  return g_strdup("src/music_player.py");
- return g_strdup("/usr/lib/optiplex-now/music_player.py");
+ return now_music_helper_path(NOW_MUSIC_HELPER_PLAYER);
 }
 NowMusicPlayback *now_music_playback_new(NowMusicPlaybackEvent cb,void *data){
  /* GLib before 2.82 does not suppress SIGPIPE for GSubprocess pipes.

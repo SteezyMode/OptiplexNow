@@ -82,9 +82,9 @@ class DiscoverTileTests(unittest.TestCase):
         ids={row[1]:row[2] for row in parsed if row[0]=="catalog_album"}
         self.assertEqual(ids[A],"Downtown Battle Mountain II")
         self.assertEqual(ids[B],"Actual new release")
-        c=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
-        start=c.index("static int music_discover_group_for(")
-        end=c.index("static const char *music_discover_title(",start)
+        c=(ROOT/"src/music_discover_model.c").read_text(encoding="utf-8")
+        start=c.index("int now_music_discover_group_for(")
+        end=c.index("int now_music_discover_parse(",start)
         routing=c[start:end]
         self.assertIn('if(!g_strcmp0(key,"fresh_releases"))return DISC_FRESH;',routing)
         self.assertIn('if(!g_strcmp0(key,"missing_essentials"))return DISC_FOR_YOU;',routing)
@@ -153,8 +153,7 @@ class DiscoverTileTests(unittest.TestCase):
 
     def test_gtk_has_clickable_personal_tiles_and_back(self):
         ui=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
-        for text in ('"Because You Listen to "','"because_you_listen_"',
-                     '"daily_mixes_"','"music-discover-tile"',
+        for text in ('"Because You Listen to "','"music-discover-tile"',
                      'G_CALLBACK(music_discover_tile_clicked)',
                      'G_CALLBACK(music_discover_back_clicked)',
                      'music_discover_show_category(view,group)',
@@ -164,7 +163,10 @@ class DiscoverTileTests(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(text,ui if text!='"Because You Listen to "' else
                               (ROOT/"src/music_rest.py").read_text())
-        self.assertIn('view->discover_shelves->len<DISC_MAX_DYNAMIC',ui)
+        parser=(ROOT/"src/music_discover_model.c").read_text(encoding="utf-8")
+        self.assertIn('shelves->len<DISC_MAX_DYNAMIC',parser)
+        self.assertIn('"because_you_listen_"',parser)
+        self.assertIn('"daily_mixes_"',parser)
         self.assertIn('!count)continue;',ui)
         self.assertIn('"cover",cover_arg,NULL',ui)
         self.assertIn('g_strdup("")',ui)

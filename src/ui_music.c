@@ -9,6 +9,7 @@
 #include "music_playback.h"
 #include "music_helper_paths.h"
 #include "music_queue_order.h"
+#include "music_discover_model.h"
 #include <gio/gio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -33,25 +34,6 @@ static MusicTrack *track_copy(const MusicTrack *source){
  t->cover_id=g_strdup(source->cover_id);
  return t;
 }
-typedef struct {
- char *kind, *id, *title, *artist, *cover;
- int category;
-} MusicDiscoverEntry;
-static void music_discover_entry_free(gpointer data){
- MusicDiscoverEntry *entry=data;
- if(!entry)return;
- g_free(entry->kind);g_free(entry->id);g_free(entry->title);
- g_free(entry->artist);g_free(entry->cover);g_free(entry);
-}
-typedef struct {
- char *title, *description;
-} MusicDiscoverShelf;
-static void music_discover_shelf_free(gpointer data){
- MusicDiscoverShelf *shelf=data;
- if(!shelf)return;
- g_free(shelf->title);g_free(shelf->description);g_free(shelf);
-}
-
 typedef struct {
  GtkWidget *root, *status, *heading, *list, *password, *search, *search_toggle, *header_stack, *connect_panel;
  GtkWidget *player_bar, *playing_label, *playing_artist_label, *playing_like, *playing_add, *pause_button, *previous_button, *next_button, *shuffle_button, *volume_slider, *seek_slider, *seek_caption;
@@ -192,20 +174,7 @@ static char *helper_path(void){
  return now_music_helper_path(NOW_MUSIC_HELPER_SUBSONIC);
 }
 static char *decode_field(const char *encoded){
- if(!encoded || strlen(encoded)>16384)return NULL;
- gsize len=0;
- guchar *decoded=g_base64_decode(encoded,&len);
- if(!decoded || len>4096 || memchr(decoded,0,len)){
-  g_free(decoded);
-  return NULL;
- }
- if(!g_utf8_validate((char*)decoded,(gssize)len,NULL)){
-  g_free(decoded);
-  return NULL;
- }
- char *answer=g_strndup((char*)decoded,len);
- g_free(decoded);
- return answer;
+ return now_music_discover_decode_field(encoded);
 }
 
 static void query_start(MusicView *view,const char *operation,
@@ -1633,9 +1602,6 @@ static int render_rows(MusicView *view,const char *output,gboolean append){
 /* Discover landing is deliberately a small set of click-through shelves, not
  * a vertical dump of the upstream 13+ recommendation sections. Actual items
  * are cached only for this view and remain suggestion-only until Add is clicked. */
-enum { DISC_FOR_YOU, DISC_NEW_ARTISTS, DISC_FRESH, DISC_GENRES,
-       DISC_EXPLORE, DISC_TRENDING, DISC_GROUPS, DISC_DYNAMIC_START=DISC_GROUPS,
-       DISC_MAX_DYNAMIC=4 };
 static const char *const discover_names[DISC_GROUPS]={
  "For You","New Artists","Fresh Releases","Your Genres","Explore","Trending"
 };
@@ -1648,30 +1614,6 @@ static const char *const discover_styles[DISC_GROUPS]={
  "music-discover-fresh","music-discover-genres",
  "music-discover-explore","music-discover-trending"
 };
-
-static int music_discover_group_for(const char *key){
- if(!key)return DISC_EXPLORE;
- if(g_str_has_prefix(key,"because_you_listen_") ||
-    !g_strcmp0(key,"top_picks") ||
-    !g_strcmp0(key,"listeners_like_you") ||
-    !g_strcmp0(key,"new_from_followed") ||
-    !g_strcmp0(key,"rediscover"))return DISC_FOR_YOU;
- if(!g_strcmp0(key,"artists_you_might_like"))return DISC_NEW_ARTISTS;
- /* Only ListenBrainz's time-bounded fresh-releases feed is fresh.
-  * Missing Essentials is a personalized back-catalog recommendation, and
-  * anniversaries are older catalog history. They are never new releases. */
- if(!g_strcmp0(key,"fresh_releases"))return DISC_FRESH;
- if(!g_strcmp0(key,"missing_essentials"))return DISC_FOR_YOU;
- if(!g_strcmp0(key,"anniversaries"))return DISC_EXPLORE;
- if(!g_strcmp0(key,"popular_in_your_genres") ||
-    !g_strcmp0(key,"unexplored_genres") ||
-    g_str_has_prefix(key,"daily_mixes_") ||
-    g_str_has_prefix(key,"radio_sections_"))return DISC_GENRES;
- if(!g_strcmp0(key,"globally_trending") ||
-    !g_strcmp0(key,"lastfm_weekly_artist_chart") ||
-    !g_strcmp0(key,"lastfm_weekly_album_chart"))return DISC_TRENDING;
- return DISC_EXPLORE;
-}
 
 static const char *music_discover_title(MusicView *view,int group){
  if(group>=DISC_DYNAMIC_START){
@@ -1804,69 +1746,12 @@ static void music_discover_back_clicked(GtkWidget *unused,gpointer data){
  if(!view || view->busy || view->closing)return;
  music_discover_show_landing(view);
 }
+/* Parsing is a bounded GLib-only data concern. Only the GTK presenter
+ * decides when to render the newly committed Discover model. */
 static int music_discover_collect(MusicView *view,const char *output){
- view->discover_building=FALSE;
- g_ptr_array_set_size(view->discover_entries,0);
- g_ptr_array_set_size(view->discover_shelves,0);
- char **lines=g_strsplit(output?output:"","\n",-1);
- int category=-1;
- int count=0;
- guint personal_shelves=0, mix_shelves=0;
- for(int i=0;lines[i] && i<300 && count<180;i++){
-  char **parts=g_strsplit(lines[i],"\t",6);
-  if(g_strv_length(parts)==5){
-   char *kind=decode_field(parts[0]);
-   char *id=decode_field(parts[1]);
-   char *title=decode_field(parts[2]);
-   char *artist=decode_field(parts[3]);
-   char *cover=decode_field(parts[4]);
-   if(kind && id && title && artist && cover){
-    if(!g_strcmp0(kind,"section")){
-     if(!g_strcmp0(id,"__refreshing")){
-      view->discover_building=TRUE;
-      category=-1;
-     }else category=music_discover_group_for(id);
-     /* These tiles are generated from actual personalized recommendation
-      * sections. A new artist or mix title can replace yesterday's; no
-      * generic static 'Hip-Hop Mix' cards or empty placeholders. */
-     gboolean personal=g_str_has_prefix(id,"because_you_listen_");
-     gboolean mix=g_str_has_prefix(id,"daily_mixes_") ||
-                  g_str_has_prefix(id,"radio_sections_");
-     /* Reserve room for variety: a rich listening history should not
-      * displace every genre/mixtape tile with four nearly identical artists. */
-     gboolean dynamic=(personal && personal_shelves<2) ||
-                      (mix && mix_shelves<2);
-     if(dynamic && *title &&
-        view->discover_shelves->len<DISC_MAX_DYNAMIC){
-      MusicDiscoverShelf *shelf=g_new0(MusicDiscoverShelf,1);
-      shelf->title=g_strdup(title);
-      shelf->description=g_strdup(personal?
-             "Inspired by your listening":"A tailored selection");
-      category=DISC_DYNAMIC_START+(int)view->discover_shelves->len;
-      g_ptr_array_add(view->discover_shelves,shelf);
-      if(personal)personal_shelves++;
-      else mix_shelves++;
-     }
-    }else if(category>=0 &&
-         (!g_strcmp0(kind,"catalog_album") ||
-          !g_strcmp0(kind,"catalog_artist")) &&
-         strlen(id)==36 && *title){
-     MusicDiscoverEntry *entry=g_new0(MusicDiscoverEntry,1);
-     entry->kind=g_strdup(kind);
-     entry->id=g_strdup(id);
-     entry->title=g_strdup(title);
-     entry->artist=g_strdup(artist);
-     entry->cover=g_strdup(cover);
-     entry->category=category;
-     g_ptr_array_add(view->discover_entries,entry);
-     count++;
-    }
-   }
-   g_free(kind);g_free(id);g_free(title);g_free(artist);g_free(cover);
-  }
-  g_strfreev(parts);
- }
- g_strfreev(lines);
+ int count=now_music_discover_parse(output,view->discover_entries,
+                                   view->discover_shelves,
+                                   &view->discover_building);
  music_discover_show_landing(view);
  return count;
 }
@@ -2695,8 +2580,8 @@ GtkWidget *now_music_build(void (*open_url)(const char *),
  view->tray_changed=tray_changed;
  view->visible_tracks=g_ptr_array_new_with_free_func(track_free);
  view->queue=g_ptr_array_new_with_free_func(track_free);
- view->discover_entries=g_ptr_array_new_with_free_func(music_discover_entry_free);
- view->discover_shelves=g_ptr_array_new_with_free_func(music_discover_shelf_free);
+ view->discover_entries=g_ptr_array_new_with_free_func(now_music_discover_entry_free);
+ view->discover_shelves=g_ptr_array_new_with_free_func(now_music_discover_shelf_free);
  view->discover_category=-1;
  view->album_buttons=g_hash_table_new_full(g_str_hash,g_str_equal,g_free,NULL);
  view->pending_art=g_queue_new();

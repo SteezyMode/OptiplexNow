@@ -50,6 +50,14 @@ static void open_current(GtkWidget *unused, gpointer data)
     ++open_calls;
 }
 
+/* Count actual finalization of production-built menus, rather than merely
+ * calling destroy/unref and assuming the old references were released. */
+static void menu_finalized(gpointer data, GObject *object)
+{
+    (void)object;
+    ++*(unsigned *)data;
+}
+
 static GtkWidget *item_at(GtkWidget *menu, int index)
 {
     GList *children = gtk_container_get_children(GTK_CONTAINER(menu));
@@ -157,17 +165,23 @@ int main(int argc, char **argv)
     CHECK(open_calls == 2);
 
     /* Model AppIndicator releasing its old reference before the app invokes
-     * its final widget destruction, repeated across music state changes. */
+     * its final widget destruction, repeated across music state changes.
+     * Every old production menu must actually finalize after the app lets go. */
+    unsigned finalized = 0;
+    g_object_weak_ref(G_OBJECT(menu), menu_finalized, &finalized);
     for (int i = 0; i < 40; ++i) {
         GtkWidget *replacement = now_tray_menu_new(&model);
         CHECK(replacement != NULL);
         CHECK(!g_object_is_floating(G_OBJECT(replacement)));
+        g_object_weak_ref(G_OBJECT(replacement), menu_finalized, &finalized);
         g_object_ref(menu);
         g_object_unref(menu);
         now_tray_menu_owned_destroy(menu);
+        CHECK(finalized == (unsigned)i + 1);
         menu = replacement;
     }
     now_tray_menu_owned_destroy(menu);
+    CHECK(finalized == 41);
 
     /* Multibyte Japanese titles truncate by Unicode code point, never a
      * byte offset, and preserve full text for the clickable tooltip. */

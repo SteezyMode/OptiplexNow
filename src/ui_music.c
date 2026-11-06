@@ -7,6 +7,7 @@
 #include "ui_music.h"
 #include "config.h"
 #include "music_playback.h"
+#include "music_queue_order.h"
 #include <gio/gio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -224,39 +225,23 @@ static void music_vault_begin(MusicView *view,const char *action,
                               const char *input);
 static void music_auto_enroll(MusicView *view);
 
-/* Shuffle is a permutation of the current queue, without repeats. */
+/* Index/order rules are GLib-only and independently tested.
+ * The native UI continues owning queue lifetime and callback sequencing. */
 static void music_shuffle_reset(MusicView *view,int start){
- if(!view->shuffle_order)view->shuffle_order=g_array_new(FALSE,FALSE,sizeof(guint));
- g_array_set_size(view->shuffle_order,0);
- if(start<0 || start>=(int)view->queue->len)return;
- guint first=(guint)start;
- g_array_append_val(view->shuffle_order,first);
- for(guint i=0;i<view->queue->len;i++){
-  if(i!=first)g_array_append_val(view->shuffle_order,i);
- }
- if(view->shuffle_enabled){
-  for(guint i=view->shuffle_order->len;i>2;i--){
-   guint pick=g_random_int_range(1,i);
-   guint tmp=g_array_index(view->shuffle_order,guint,i-1);
-   g_array_index(view->shuffle_order,guint,i-1)=g_array_index(view->shuffle_order,guint,pick);
-   g_array_index(view->shuffle_order,guint,pick)=tmp;
-  }
- }
- view->shuffle_cursor=0;
+ now_music_queue_order_reset(&view->shuffle_order,view->queue->len,start,
+                             view->shuffle_enabled,&view->shuffle_cursor);
 }
 static int music_next_queue_index(MusicView *view){
  if(!view->queue || view->queue_index<0)return -1;
- if(view->shuffle_enabled){
-  if(!view->shuffle_order || view->shuffle_cursor+1>=view->shuffle_order->len)return -1;
-  return (int)g_array_index(view->shuffle_order,guint,view->shuffle_cursor+1);
- }
- return view->queue_index+1<(int)view->queue->len?view->queue_index+1:-1;
+ return now_music_queue_order_next(view->queue->len,view->queue_index,
+                                   view->shuffle_enabled,view->shuffle_order,
+                                   view->shuffle_cursor);
 }
 static int music_previous_queue_index(MusicView *view){
- if(view->queue_index<0)return -1;
- if(view->shuffle_enabled && view->shuffle_order && view->shuffle_cursor>0)
-  return (int)g_array_index(view->shuffle_order,guint,view->shuffle_cursor-1);
- return MAX(0,view->queue_index-1);
+ return now_music_queue_order_previous(view->queue_index,
+                                       view->shuffle_enabled,
+                                       view->shuffle_order,
+                                       view->shuffle_cursor);
 }
 static GtkWidget *music_icon_button(const char *icon,const char *tooltip){
  GtkWidget *button=gtk_button_new_from_icon_name(icon,GTK_ICON_SIZE_BUTTON);

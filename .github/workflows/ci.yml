@@ -75,6 +75,7 @@ jobs:
           make check-tray-prefs
           make check-tray-actions
           make check-music-queue-order
+          make check-music-helper-paths
           make check-desktop-autostart
           make check-moonlight-install
           make check-wizard-network

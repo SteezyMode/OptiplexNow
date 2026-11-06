@@ -49,7 +49,8 @@ int main(void) {
             program.write_text(code)
             compile=subprocess.run(
                 ["cc","-Wall","-Wextra","-Werror",f"-I{SRC}",
-                 str(program),str(SRC/"music_playback.c"),"-o",str(executable),*flags],
+                 str(program),str(SRC/"music_playback.c"),
+                 str(SRC/"music_helper_paths.c"),"-o",str(executable),*flags],
                 capture_output=True,text=True,timeout=45)
             self.assertEqual(compile.returncode,0,compile.stderr[-5000:])
             run=subprocess.run([str(executable)],capture_output=True,timeout=10)

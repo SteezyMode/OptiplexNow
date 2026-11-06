@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 
+from download_owner_transport import restricted_ssh_argv
+
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 
 def valid_host(s):
@@ -17,10 +19,7 @@ def valid_user(s):
 def fetch(host, user, runner=subprocess.run, include_port=False, native=False):
     if not valid_host(host) or not valid_user(user) or not KEY.is_file():
         raise ValueError("Approved NOW host or device key unavailable")
-    cmd = ["ssh", "-F", "/dev/null", "-T", "-i", str(KEY),
-           "-o", "IdentitiesOnly=yes", "-o", "BatchMode=yes",
-           "-o", "StrictHostKeyChecking=yes", "-o", "ConnectTimeout=6",
-           f"{user}@{host}"]
+    cmd=restricted_ssh_argv(host,user,KEY)
     p = runner(cmd, input=b'{"version":1,"action":"downloads_queue"}\n',
                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                timeout=12, check=False)

@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 
+from download_owner_transport import restricted_ssh_argv
+
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 MAX_RESPONSE = 262144
 MAX_RESULTS = 100
@@ -107,10 +109,7 @@ def fetch(host, user, query, *, category="all", full=False, runner=subprocess.ru
                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
-    cmd=["ssh","-F","/dev/null","-T","-i",str(KEY),
-         "-o","IdentitiesOnly=yes","-o","BatchMode=yes",
-         "-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=6",
-         f"{user}@{host}"]
+    cmd=restricted_ssh_argv(host,user,KEY)
     response=runner(cmd,input=request,stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,timeout=65,check=False)
     if (response.returncode or not isinstance(response.stdout,bytes)
@@ -144,10 +143,7 @@ def stream_fetch(host, user, query, *, category="all", popen=subprocess.Popen):
                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
-    cmd=["ssh","-F","/dev/null","-T","-i",str(KEY),
-         "-o","IdentitiesOnly=yes","-o","BatchMode=yes",
-         "-o","StrictHostKeyChecking=yes","-o","ConnectTimeout=6",
-         f"{user}@{host}"]
+    cmd=restricted_ssh_argv(host,user,KEY)
     proc=popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
                stderr=subprocess.DEVNULL)
     count=0

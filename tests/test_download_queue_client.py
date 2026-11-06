@@ -3,11 +3,13 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "src"))
 spec = importlib.util.spec_from_file_location("now_queue_client", ROOT / "src" / "download-queue-client.py")
 mod = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(mod)

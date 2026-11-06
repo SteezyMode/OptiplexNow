@@ -9,6 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MAIN = (ROOT / "src/main.c").read_text(encoding="utf-8")
 SETTINGS = (ROOT / "src/ui_settings.c").read_text(encoding="utf-8")
 GAMES = (ROOT / "src/ui_games.c").read_text(encoding="utf-8")
+STYLE = (ROOT / "src/ui_theme.c").read_text(encoding="utf-8")
 
 
 class CompactUiTests(unittest.TestCase):
@@ -53,7 +54,7 @@ class CompactUiTests(unittest.TestCase):
         self.assertIn('settings_menu_button(home_menu,"SYSTEM INFO  ›")', SETTINGS)
         self.assertIn('settings_menu_link(home_menu,stack,"HOST GPU  ›","gpu")', SETTINGS)
         self.assertIn('settings_menu_link(home_menu,stack,"CONNECTIONS & SERVER  ›","connection")', SETTINGS)
-        self.assertIn('"#settingscard {background:#222724', MAIN)
+        self.assertIn('"#settingscard {background:#222724', STYLE)
         self.assertIn('gtk_widget_set_halign(b,GTK_ALIGN_FILL)', SETTINGS)
 
     def test_downloads_vpn_inline_with_refresh_at_minimum_width(self):

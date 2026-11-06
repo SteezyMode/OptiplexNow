@@ -4,7 +4,8 @@ import unittest
 
 ROOT=Path(__file__).resolve().parents[1]
 UI=(ROOT/"src/ui_music.c").read_text(encoding="utf-8")
-CSS=(ROOT/"src/main.c").read_text(encoding="utf-8")
+CSS=(ROOT/"src/ui_theme.c").read_text(encoding="utf-8")
+MAIN=(ROOT/"src/main.c").read_text(encoding="utf-8")
 
 
 class CompactMusicHeaderTests(unittest.TestCase):
@@ -81,17 +82,17 @@ class CompactMusicHeaderTests(unittest.TestCase):
             self.assertNotIn(old,section)
 
     def test_tray_current_song_activates_music_and_restores_window(self):
-        a=CSS.index("static void tray_music_open_current(")
-        b=CSS.index("static guint music_tray_rebuild_pending",a)
-        callback=CSS[a:b]
+        a=MAIN.index("static void tray_music_open_current(")
+        b=MAIN.index("static guint music_tray_rebuild_pending",a)
+        callback=MAIN[a:b]
         self.assertIn("if(!now_music_is_playing_session())return;",callback)
         self.assertIn("on_music_tab(NULL,NULL);",callback)
         self.assertIn("tray_show_window();",callback)
         self.assertNotIn("now_music_next()",callback)
         self.assertNotIn("now_music_toggle_pause()",callback)
-        self.assertIn('g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL)',CSS)
-        self.assertIn('gtk_widget_set_tooltip_text(playing,caption)',CSS)
-        self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)",CSS)
+        self.assertIn('g_signal_connect(playing,"activate",G_CALLBACK(tray_music_open_current),NULL)',MAIN)
+        self.assertIn('gtk_widget_set_tooltip_text(playing,caption)',MAIN)
+        self.assertNotIn("gtk_widget_set_sensitive(playing,FALSE)",MAIN)
 
     def test_compact_now_playing_with_one_line_title(self):
         a=UI.index("GtkWidget *track_info=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,4)")

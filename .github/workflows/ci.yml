@@ -33,7 +33,9 @@ jobs:
 
   build-and-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    # Ubuntu mirrors have repeatedly taken >20 min to deliver unrelated
+    # recommended packages. Preserve full tests without false CI timeouts.
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -41,7 +43,10 @@ jobs:
       - name: Install build and test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential binutils curl mpv python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11 desktop-file-utils openssh-client
+          # Install explicitly required tools first, without unrelated
+          # recommended drivers/desktop extras. The installed-.deb smoke below
+          # still uses default apt behavior and checks actual package deps.
+          sudo apt-get install -y --no-install-recommends build-essential binutils curl mpv python3-pil python3-cryptography libssl-dev libgtk-3-dev libfontconfig1-dev gvfs-backends xvfb xauth x11-utils dbus-x11 desktop-file-utils openssh-client
       # Closed-beta test builds must not impersonate the last published .deb.
       - name: Stamp unreleased PR package version
         if: github.event_name == 'pull_request'

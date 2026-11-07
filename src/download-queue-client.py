@@ -6,7 +6,7 @@ import re
 import subprocess
 import sys
 
-from download_owner_transport import restricted_ssh_argv
+from download_owner_transport import downloads_transport_argv, is_local_owner_target
 
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 
@@ -17,9 +17,9 @@ def valid_user(s):
     return bool(re.fullmatch(r"[a-zA-Z_][a-zA-Z0-9_-]{0,31}", s))
 
 def fetch(host, user, runner=subprocess.run, include_port=False, native=False):
-    if not valid_host(host) or not valid_user(user) or not KEY.is_file():
+    if not valid_host(host) or not valid_user(user) or (not KEY.is_file() and not is_local_owner_target(host,user)):
         raise ValueError("Approved NOW host or device key unavailable")
-    cmd=restricted_ssh_argv(host,user,KEY)
+    cmd=downloads_transport_argv(host,user,KEY)
     p = runner(cmd, input=b'{"version":1,"action":"downloads_queue"}\n',
                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                timeout=12, check=False)

@@ -92,38 +92,12 @@ def _validated_request(request):
     return action
 
 
-def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
-                               host_video_caps=None, host_approved=False,
-                               host_writer_check=None, search_emitter=None):
-    """Handle one narrow request from a *separately authenticated* host caller.
+def handle_download_request(action, request, *, search_emitter=None):
+    """Handle a validated Downloads request after trusted transport authorization.
 
-    verified_client_id MUST be bound to the requesting credential by trusted
-    host configuration. The request cannot select or impersonate it.
-
-    host_approved and host_video_caps are host configuration, NOT fields the
-    remote client can send. host_writer_check is a privileged, host-side
-    preflight callback that MUST re-evaluate Steam processes and legacy
-    writable profile aliases on every start; client booleans are never trusted.
+    Local owner calls and restricted-SSH calls share exactly the same
+    bounded downloader operations. No Games or Wolf authority is implied.
     """
-    action = _validated_request(request)
-    if not _valid_client_id(verified_client_id):
-        raise PolicyError("Invalid host-authenticated owner Games device")
-    if not isinstance(store, OwnerStore) or not callable(wolf_api):
-        raise PolicyError("Trusted host Games authority unavailable")
-
-    # Resolve device entitlement server-side before exposing status or making
-    # any state-changing API call. The lease and policy use the same state lock.
-    with store.locked() as fd:
-        policy = store.read(fd)
-        if policy is None:
-            raise PolicyError("Owner Games policy is not initialized")
-        paired = wolf_api("GET", "/api/v1/clients")
-        binding = resolve_games(policy, verified_client_id, paired)
-        lease = read_lease(fd)
-        profile_id = binding["wolf_profile_id"]
-        if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
-            raise PolicyError("Owner Steam lease/workspace mismatch")
-
     if action == "downloads_roots":
         try:
             return {"success": True, "service": "qbittorrent",
@@ -211,6 +185,44 @@ def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
             return {"success": True, **inspect_download_topology()}
         except InventoryError:
             return {"success": False, "status": "inventory_unavailable"}
+
+    raise PolicyError("Unsupported Downloads action")
+
+
+def handle_owner_games_request(request, *, verified_client_id, store, wolf_api,
+                               host_video_caps=None, host_approved=False,
+                               host_writer_check=None, search_emitter=None):
+    """Handle one narrow request from a *separately authenticated* host caller.
+
+    verified_client_id MUST be bound to the requesting credential by trusted
+    host configuration. The request cannot select or impersonate it.
+
+    host_approved and host_video_caps are host configuration, NOT fields the
+    remote client can send. host_writer_check is a privileged, host-side
+    preflight callback that MUST re-evaluate Steam processes and legacy
+    writable profile aliases on every start; client booleans are never trusted.
+    """
+    action = _validated_request(request)
+    if not _valid_client_id(verified_client_id):
+        raise PolicyError("Invalid host-authenticated owner Games device")
+    if not isinstance(store, OwnerStore) or not callable(wolf_api):
+        raise PolicyError("Trusted host Games authority unavailable")
+
+    # Resolve device entitlement server-side before exposing status or making
+    # any state-changing API call. The lease and policy use the same state lock.
+    with store.locked() as fd:
+        policy = store.read(fd)
+        if policy is None:
+            raise PolicyError("Owner Games policy is not initialized")
+        paired = wolf_api("GET", "/api/v1/clients")
+        binding = resolve_games(policy, verified_client_id, paired)
+        lease = read_lease(fd)
+        profile_id = binding["wolf_profile_id"]
+        if lease is not None and lease["workspace_id"] != binding["workspace_id"]:
+            raise PolicyError("Owner Steam lease/workspace mismatch")
+
+    if action.startswith("downloads_"):
+        return handle_download_request(action, request, search_emitter=search_emitter)
 
     if action == "media":
         return {"success": True, **inspect_local_jellyfin()}

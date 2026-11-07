@@ -10,7 +10,7 @@ import re
 import subprocess
 import sys
 
-from download_owner_transport import restricted_ssh_argv
+from download_owner_transport import downloads_transport_argv, is_local_owner_target
 
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 ROOT = re.compile(r"[a-z][a-z0-9_-]{0,31}\Z")
@@ -127,7 +127,7 @@ def present(action,data):
 def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.run):
     if (not isinstance(host,str) or not HOST.fullmatch(host) or
         host.startswith("-") or not isinstance(user,str) or
-        not USER.fullmatch(user) or not KEY.is_file()):
+        not USER.fullmatch(user) or (not KEY.is_file() and not is_local_owner_target(host,user))):
         raise ValueError("Not an enrolled NOW owner device")
     request={"version":1,"action":{
         "roots":"downloads_roots","browse":"downloads_browse",
@@ -180,7 +180,7 @@ def fetch(host,user,action,root=None,path=None,magnet=None,*,runner=subprocess.r
     payload=(json.dumps(request,ensure_ascii=False,separators=(",",":"))+"\n").encode()
     if len(payload)>2047:
         raise ValueError("Request too large")
-    argv=restricted_ssh_argv(host,user,KEY)
+    argv=downloads_transport_argv(host,user,KEY)
     output=runner(argv,input=payload,stdout=subprocess.PIPE,
                   stderr=subprocess.DEVNULL,timeout=25,check=False)
     if (output.returncode or not isinstance(output.stdout,bytes) or

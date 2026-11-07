@@ -8,8 +8,6 @@ authority. No Wolf identity is invented or enrolled.
 import json
 import os
 from pathlib import Path
-import pwd
-import stat
 import sys
 
 BASE = Path(__file__).resolve().parents[1]
@@ -26,8 +24,7 @@ MAX_INPUT = 2048
 def main():
     # An owner already has normal shell access to the same local downloader.
     # Never turn this into a root, setuid, or another-account access path.
-    if (os.getuid() == 0 or os.getuid() != os.geteuid()
-            or pwd.getpwuid(os.getuid()).pw_name != "optiplex"):
+    if os.getuid() == 0 or os.getuid() != os.geteuid():
         raise PolicyError("Local owner account required")
     config = _read_private_config()
     if config.get("enabled") is not True or config.get("legacy_links_reviewed") is not True:

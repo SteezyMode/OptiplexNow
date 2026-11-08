@@ -121,7 +121,7 @@ jobs:
       # One-off release of the owner-approved Downloads fix. Build/test and
       # native sanitizers must both pass before the new Latest is published.
       - name: Stage v1.22.2 release files
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')
+        if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')"
         shell: bash
         run: |
           set -euo pipefail
@@ -130,7 +130,7 @@ jobs:
           cp dist/OptiPlex-Now_1.22.2_amd64.deb dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum OptiPlex-Now_1.22.2_amd64.deb OptiPlex-Now_amd64.deb > SHA256SUMS)
       - name: Upload v1.22.2 release candidate
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')
+        if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')"
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: optiplex-now-release-v1.22.2-${{ github.run_number }}
@@ -143,7 +143,7 @@ jobs:
 
   release-v1-22-2:
     name: Publish verified owner Downloads update
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'release: OptiPlex NOW v1.22.2')"
     needs: [native-sanitizers, build-and-test]
     runs-on: ubuntu-24.04
     permissions:

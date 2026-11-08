@@ -23,8 +23,8 @@ static void test_queue_items(void){
 static void test_transfer_tabs_track_work_without_completed_clutter(void){
  GtkWidget *view=now_downloads_queue_view_new();
  const char *wire=
-  "ITEM\\t25.0\\tdownloading\\tThe Shining\\t" HASH_A "\\t100\\t120\\t3\\n"
-  "ITEM\\t100.0\\tstalledUP\\tCompleted Sunny\\t" HASH_B "\\t0\\t-1\\t0";
+  "ITEM\t25.0\tdownloading\tThe Shining\t" HASH_A "\t100\t120\t3\n"
+  "ITEM\t100.0\tstalledUP\tCompleted Sunny\t" HASH_B "\t0\t-1\t0";
  g_assert_true(now_downloads_queue_view_update(view,wire));
  GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
  GtkWidget *active=g_object_get_data(G_OBJECT(view),"now-filter-button-0");

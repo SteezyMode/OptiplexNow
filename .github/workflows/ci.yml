@@ -125,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(sed -nE 's/^DEFAULT_VERSION = "([^"]+)"$/\\1/p' package.py)" = "1.22.2"
+          grep -Fx 'DEFAULT_VERSION = "1.22.2"' package.py
           test -s dist/OptiPlex-Now_1.22.2_amd64.deb
           cp dist/OptiPlex-Now_1.22.2_amd64.deb dist/OptiPlex-Now_amd64.deb
           (cd dist && sha256sum OptiPlex-Now_1.22.2_amd64.deb OptiPlex-Now_amd64.deb > SHA256SUMS)

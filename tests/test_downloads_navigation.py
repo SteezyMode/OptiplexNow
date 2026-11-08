@@ -102,26 +102,29 @@ class DownloadsNavigationContract(unittest.TestCase):
         self.assertIn('"View files"',transfers)
         self.assertIn("DELETE TORRENT AND FILES",transfers)
 
-    def test_standard_gtk_remote_folder_chooser_replaces_custom_picker_flow(self):
+    def test_downloads_selection_uses_verified_host_mounts_not_sftp_uri(self):
         picker=(ROOT/"src/downloads_destination_view.c").read_text()
         host=(ROOT/"server/download_destinations.py").read_text()
         ops=(ROOT/"src/download-operations-client.py").read_text()
         request=(ROOT/"server/owner_games_request.py").read_text()
-        self.assertIn("gtk_file_chooser_dialog_new(",picker)
-        self.assertIn("GTK_FILE_CHOOSER_ACTION_SELECT_FOLDER",picker)
-        self.assertIn("gtk_file_chooser_set_local_only",picker)
-        self.assertIn("sftp://%s@%s/",picker)
-        self.assertIn("gtk_file_chooser_get_uri",picker)
-        self.assertIn("native_uri_host_path(",picker)
-        self.assertIn("gtk_file_chooser_set_create_folders",picker)
-        self.assertIn('"addpath":"downloads_add_path"',ops)
+        # The GTK SFTP picker rejected valid server folders when mount aliases
+        # or username URI formatting differed. Reuse approved mount browser.
+        self.assertNotIn("gtk_file_chooser_dialog_new(",picker)
+        self.assertNotIn("native_uri_host_path(",picker)
+        self.assertIn("start(s,'r');",picker)
+        self.assertIn("start(s,'b');",picker)
+        self.assertIn("start(s,'a');",picker)
+        self.assertIn("read_response(s,job->action,out)",picker)
+        self.assertIn("approved OptiPlex",picker)
+        # Keep broker's existing addpath compatibility for old clients.
         self.assertIn("def add_magnet_host_path(",host)
         self.assertIn("add_magnet_host_path(request",request)
-        self.assertIn("now_downloads_destination_view_select(destination_view,magnet);",FLOW)
+        self.assertIn('"addpath":"downloads_add_path"',ops)
+        self.assertIn("now_downloads_destination_view_select(destination_view,magnet)",FLOW)
         callback=FLOW.split("static void on_search_result(",1)[1].split(
                          "static void on_download_submitted(",1)[0]
-        self.assertNotIn('gtk_stack_set_visible_child_name(',callback)
-        self.assertNotIn('gtk_widget_queue_resize(',callback)
+        self.assertIn('"destination"',callback)
+        self.assertIn("picker_scroll_pending=TRUE",callback)
 
     def test_one_bounded_readonly_retry_after_transient_first_open_failure(self):
         self.assertIn("static gboolean reconnect_once(gpointer unused)", FLOW)

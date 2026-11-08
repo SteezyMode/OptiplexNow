@@ -61,6 +61,7 @@ static void apply_queue_filter(GtkWidget *view){
  NowQueueFilter selected=(NowQueueFilter)GPOINTER_TO_INT(
      g_object_get_data(G_OBJECT(view),"now-filter"));
  guint counts[4]={0,0,0,0},visible=0;
+ gboolean has_message=FALSE;
  GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
  for(GList *it=rows;it;it=it->next){
    GtkWidget *row=GTK_WIDGET(it->data);
@@ -69,7 +70,12 @@ static void apply_queue_filter(GtkWidget *view){
        g_object_get_data(G_OBJECT(body),"now-torrent-state"):NULL;
    const gchar *progress_text=body?
        g_object_get_data(G_OBJECT(body),"now-torrent-percent"):NULL;
-   if(!state || !progress_text)continue;
+   if(!state || !progress_text){
+     /* The queue's empty/unavailable diagnostic is not a torrent. */
+     has_message=TRUE;
+     gtk_widget_show(row);
+     continue;
+   }
    double percent=g_ascii_strtod(progress_text,NULL);
    for(guint i=0;i<4;i++)
      if(matches_filter((NowQueueFilter)i,state,percent))counts[i]++;
@@ -94,7 +100,7 @@ static void apply_queue_filter(GtkWidget *view){
    gtk_label_set_text(GTK_LABEL(empty),counts[3]==0?
       "No torrents in the queue." :
       "No torrents in this category. Choose another tab to view them.");
-   gtk_widget_set_visible(empty,visible==0);
+   gtk_widget_set_visible(empty,visible==0 && !has_message);
  }
 }
 static gboolean valid_state(const char *value){
@@ -249,6 +255,9 @@ GtkWidget *now_downloads_queue_view_new(void){
 void now_downloads_queue_view_message(GtkWidget *view,const char *message){
  GtkWidget *list=list_for(view);
  if(list)show_message(list,message ? message : "Queue unavailable.");
+ GtkWidget *empty=view?
+   g_object_get_data(G_OBJECT(view),"now-queue-empty-filter"):NULL;
+ if(empty)gtk_widget_hide(empty);
 }
 gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
  GtkWidget *list=list_for(view);
@@ -282,8 +291,7 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
  if(!valid){g_strfreev(lines);return FALSE;}
  clear_list(list);
  if(empty){
-   /* The filter-specific empty hint handles this state. */
-   gtk_widget_show(list);
+   show_message(list,"No downloads in queue.");
  }else{
    for(guint i=0;lines[i];i++){
      gchar **parts=g_strsplit(lines[i],"\t",-1);

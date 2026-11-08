@@ -622,10 +622,14 @@ static void on_destination_cancel(gpointer unused){
 static void on_search_result(const char *magnet,gpointer unused){
  (void)unused;
  if(!destination_view)return;
- /* Transmission-style native file chooser opens as a system dialog.
-  * Keep search results in place rather than navigating to a second
-  * proprietary folder-browser page. Cancel simply closes the dialog. */
- now_downloads_destination_view_select(destination_view,magnet);
+ /* Keep the entire download flow in one window and use the approved
+  * qBittorrent-mounted drives. No GVfs/SFTP connection is required. */
+ if(now_downloads_destination_view_select(destination_view,magnet) &&
+    search_workspace){
+   gtk_stack_set_visible_child_name(GTK_STACK(search_workspace),"destination");
+   picker_scroll_pending=TRUE;
+   gtk_widget_queue_resize(search_workspace);
+ }
 }
 static void on_download_submitted(gpointer unused){
  (void)unused;

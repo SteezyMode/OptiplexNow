@@ -7,6 +7,18 @@ typedef struct {
  NowDownloadQueueAction callback;
  gpointer user_data;
 } QueueContext;
+typedef enum {
+ NOW_FILTER_ACTIVE, NOW_FILTER_STALLED, NOW_FILTER_COMPLETED, NOW_FILTER_ALL
+} NowQueueFilter;
+static const char *const filter_names[]={"Active","Stalled","Completed","All"};
+static void apply_queue_filter(GtkWidget *view);
+static void on_filter_clicked(GtkToggleButton *button,gpointer data){
+ if(!gtk_toggle_button_get_active(button))return;
+ GtkWidget *view=GTK_WIDGET(data);
+ g_object_set_data(G_OBJECT(view),"now-filter",
+                   g_object_get_data(G_OBJECT(button),"now-filter-value"));
+ apply_queue_filter(view);
+}
 static GtkWidget *list_for(GtkWidget *view){
  return view ? g_object_get_data(G_OBJECT(view),"now-download-list") : NULL;
 }
@@ -30,6 +42,60 @@ static void show_message(GtkWidget *list,const char *message){
  gtk_widget_set_margin_top(label,12);
  gtk_container_add(GTK_CONTAINER(list),label);
  gtk_widget_show_all(list);
+}
+static gboolean stalled_state(const gchar *state){
+ return state && g_str_has_prefix(state,"stalled");
+}
+static gboolean matches_filter(NowQueueFilter filter,const gchar *state,
+                               double progress){
+ switch(filter){
+  case NOW_FILTER_ACTIVE: return progress<100.0;
+  case NOW_FILTER_STALLED: return stalled_state(state);
+  case NOW_FILTER_COMPLETED: return progress>=100.0;
+  default: return TRUE;
+ }
+}
+static void apply_queue_filter(GtkWidget *view){
+ GtkWidget *list=list_for(view);
+ if(!list)return;
+ NowQueueFilter selected=(NowQueueFilter)GPOINTER_TO_INT(
+     g_object_get_data(G_OBJECT(view),"now-filter"));
+ guint counts[4]={0,0,0,0},visible=0;
+ GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
+ for(GList *it=rows;it;it=it->next){
+   GtkWidget *row=GTK_WIDGET(it->data);
+   GtkWidget *body=GTK_IS_BIN(row)?gtk_bin_get_child(GTK_BIN(row)):NULL;
+   const gchar *state=body?
+       g_object_get_data(G_OBJECT(body),"now-torrent-state"):NULL;
+   const gchar *progress_text=body?
+       g_object_get_data(G_OBJECT(body),"now-torrent-percent"):NULL;
+   if(!state || !progress_text)continue;
+   double percent=g_ascii_strtod(progress_text,NULL);
+   for(guint i=0;i<4;i++)
+     if(matches_filter((NowQueueFilter)i,state,percent))counts[i]++;
+   gboolean match=matches_filter(selected,state,percent);
+   gtk_widget_set_visible(row,match);
+   if(match)visible++;
+ }
+ g_list_free(rows);
+ GtkWidget *buttons[4];
+ for(guint i=0;i<4;i++){
+   gchar *key=g_strdup_printf("now-filter-button-%u",i);
+   buttons[i]=g_object_get_data(G_OBJECT(view),key);
+   g_free(key);
+   if(buttons[i]){
+     gchar *label=g_strdup_printf("%s (%u)",filter_names[i],counts[i]);
+     gtk_button_set_label(GTK_BUTTON(buttons[i]),label);
+     g_free(label);
+   }
+ }
+ GtkWidget *empty=g_object_get_data(G_OBJECT(view),"now-queue-empty-filter");
+ if(empty){
+   gtk_label_set_text(GTK_LABEL(empty),counts[3]==0?
+      "No torrents in the queue." :
+      "No torrents in this category. Choose another tab to view them.");
+   gtk_widget_set_visible(empty,visible==0);
+ }
 }
 static gboolean valid_state(const char *value){
  if(!value || !*value || strlen(value)>48)return FALSE;
@@ -149,12 +215,34 @@ void now_downloads_queue_view_on_action(GtkWidget *view,
 GtkWidget *now_downloads_queue_view_new(void){
  /* The parent Downloads page owns vertical scrolling. A nested Transfers
   * scroller trapped the wheel and stranded toolbar/picker controls. */
- GtkWidget *scroll=gtk_box_new(GTK_ORIENTATION_VERTICAL,0);
+ GtkWidget *scroll=gtk_box_new(GTK_ORIENTATION_VERTICAL,7);
+ GtkWidget *filters=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,5);
+ GtkWidget *previous=NULL;
+ for(guint i=0;i<4;i++){
+   GtkWidget *button=gtk_radio_button_new_with_label_from_widget(
+       previous?GTK_RADIO_BUTTON(previous):NULL,filter_names[i]);
+   if(!previous)previous=button;
+   g_object_set_data(G_OBJECT(button),"now-filter-value",
+                     GINT_TO_POINTER((gint)i));
+   gchar *key=g_strdup_printf("now-filter-button-%u",i);
+   g_object_set_data(G_OBJECT(scroll),key,button);
+   g_free(key);
+   g_signal_connect(button,"toggled",G_CALLBACK(on_filter_clicked),scroll);
+   gtk_box_pack_start(GTK_BOX(filters),button,FALSE,FALSE,0);
+   if(i==0)gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(button),TRUE);
+ }
+ gtk_box_pack_start(GTK_BOX(scroll),filters,FALSE,FALSE,0);
  GtkWidget *list=gtk_list_box_new();
  gtk_widget_set_name(list,"nowqueuelist");
  gtk_list_box_set_selection_mode(GTK_LIST_BOX(list),GTK_SELECTION_NONE);
- gtk_container_add(GTK_CONTAINER(scroll),list);
+ gtk_box_pack_start(GTK_BOX(scroll),list,FALSE,FALSE,0);
  g_object_set_data(G_OBJECT(scroll),"now-download-list",list);
+ GtkWidget *empty=gtk_label_new("");
+ gtk_label_set_xalign(GTK_LABEL(empty),0);
+ gtk_widget_set_margin_start(empty,8);
+ g_object_set_data(G_OBJECT(scroll),"now-queue-empty-filter",empty);
+ gtk_box_pack_start(GTK_BOX(scroll),empty,FALSE,FALSE,0);
+ /* Show only after the first queue response. The early placeholder is useful. */
  show_message(list,"Open Downloads to view the approved host queue.");
  return scroll;
 }
@@ -194,7 +282,8 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
  if(!valid){g_strfreev(lines);return FALSE;}
  clear_list(list);
  if(empty){
-   show_message(list,"No downloads in queue.");
+   /* The filter-specific empty hint handles this state. */
+   gtk_widget_show(list);
  }else{
    for(guint i=0;lines[i];i++){
      gchar **parts=g_strsplit(lines[i],"\t",-1);
@@ -239,6 +328,8 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
                             g_strdup(parts[3]),g_free);
      g_object_set_data_full(G_OBJECT(event_box),"now-torrent-state",
                             g_strdup(parts[2]),g_free);
+     g_object_set_data_full(G_OBJECT(event_box),"now-torrent-percent",
+                            g_strdup(parts[1]),g_free);
      gtk_container_add(GTK_CONTAINER(event_box),row);
      g_signal_connect(event_box,"button-press-event",
                       G_CALLBACK(transfer_button_press),view);
@@ -249,6 +340,7 @@ gboolean now_downloads_queue_view_update(GtkWidget *view,const char *wire){
    }
    gtk_widget_show_all(list);
  }
+ apply_queue_filter(view);
  g_strfreev(lines);
  return TRUE;
 }

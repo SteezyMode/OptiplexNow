@@ -20,6 +20,45 @@ static void test_queue_items(void){
  g_list_free(rows);
  gtk_widget_destroy(view);
 }
+static void test_transfer_tabs_track_work_without_completed_clutter(void){
+ GtkWidget *view=now_downloads_queue_view_new();
+ const char *wire=
+  "ITEM\\t25.0\\tdownloading\\tThe Shining\\t" HASH_A "\\t100\\t120\\t3\\n"
+  "ITEM\\t100.0\\tstalledUP\\tCompleted Sunny\\t" HASH_B "\\t0\\t-1\\t0";
+ g_assert_true(now_downloads_queue_view_update(view,wire));
+ GtkWidget *list=g_object_get_data(G_OBJECT(view),"now-download-list");
+ GtkWidget *active=g_object_get_data(G_OBJECT(view),"now-filter-button-0");
+ GtkWidget *stalled=g_object_get_data(G_OBJECT(view),"now-filter-button-1");
+ GtkWidget *completed=g_object_get_data(G_OBJECT(view),"now-filter-button-2");
+ GtkWidget *all=g_object_get_data(G_OBJECT(view),"now-filter-button-3");
+ g_assert_nonnull(active);g_assert_nonnull(stalled);
+ g_assert_nonnull(completed);g_assert_nonnull(all);
+ g_assert_cmpstr(gtk_button_get_label(GTK_BUTTON(active)),==,"Active (1)");
+ g_assert_cmpstr(gtk_button_get_label(GTK_BUTTON(stalled)),==,"Stalled (1)");
+ g_assert_cmpstr(gtk_button_get_label(GTK_BUTTON(completed)),==,"Completed (1)");
+ GList *rows=gtk_container_get_children(GTK_CONTAINER(list));
+ GtkWidget *first=GTK_WIDGET(rows->data),*second=GTK_WIDGET(rows->next->data);
+ g_assert_true(gtk_widget_get_visible(first));
+ g_assert_false(gtk_widget_get_visible(second));
+ gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(stalled),TRUE);
+ g_assert_false(gtk_widget_get_visible(first));
+ g_assert_true(gtk_widget_get_visible(second));
+ gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(completed),TRUE);
+ g_assert_false(gtk_widget_get_visible(first));
+ g_assert_true(gtk_widget_get_visible(second));
+ gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(all),TRUE);
+ g_assert_true(gtk_widget_get_visible(first));
+ g_assert_true(gtk_widget_get_visible(second));
+ g_list_free(rows);
+ /* An ordinary refresh must retain the selected category. */
+ g_assert_true(now_downloads_queue_view_update(view,wire));
+ rows=gtk_container_get_children(GTK_CONTAINER(list));
+ g_assert_true(gtk_widget_get_visible(GTK_WIDGET(rows->data)));
+ g_assert_true(gtk_widget_get_visible(GTK_WIDGET(rows->next->data)));
+ g_list_free(rows);
+ gtk_widget_destroy(view);
+}
+
 static void test_compact_context_menu_rows(void){
  GtkWidget *view=now_downloads_queue_view_new();
  const char *wire=
@@ -98,6 +137,7 @@ int main(int argc,char **argv){
  gtk_init(&argc,&argv);
  g_test_init(&argc,&argv,NULL);
  g_test_add_func("/native-downloads/items",test_queue_items);
+  g_test_add_func("/native-downloads/transfer-tabs",test_transfer_tabs_track_work_without_completed_clutter);
  g_test_add_func("/native-downloads/context-menu-rows",test_compact_context_menu_rows);
  g_test_add_func("/native-downloads/malformed",test_malformed_refused);
  g_test_add_func("/native-downloads/files",test_files_dialog_wire_validation);

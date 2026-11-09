@@ -2461,6 +2461,7 @@ typedef struct {
     NowWizardView view;
     char staged[CONFIG_COUNT][512];
     int preset_loaded, closing, references;
+    gboolean first_run_auto_discovery_attempted;
     guint tailscale_poll_id;
     NowWizardNetwork *network;
 } Wizard;
@@ -2496,6 +2497,8 @@ static void wizard_save(Wizard*c){
 }
 static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
                                   const char *reply, const GError *error);
+
+static void find_server(Wizard *wizard);
 
 static gboolean wizard_tailscale_poll(gpointer data)
 {
@@ -2553,8 +2556,18 @@ static void wizard_network_result(gpointer context, NowWizardNetworkKind kind,
         } else if (!error && reply) {
             char *status = g_strstrip(g_strdup(reply));
             if (g_strcmp0(status, "CONNECTED") == 0) {
-                message = "TAILSCALE CONNECTED — CONTINUE TO SERVER";
+                message = "TAILSCALE CONNECTED — FINDING YOUR SERVER";
                 action = "TAILSCALE CONNECTED";
+                /* Fresh Tailscale-connected clients should not press Find
+                 * Server manually. Enumerate once; selecting the host is
+                 * still explicit, and network access is not authorization. */
+                if (first_run && !wizard->first_run_auto_discovery_attempted &&
+                    !*gtk_entry_get_text(GTK_ENTRY(wizard->view.host))) {
+                    wizard->first_run_auto_discovery_attempted = TRUE;
+                    gtk_assistant_set_current_page(
+                        GTK_ASSISTANT(wizard->view.assistant), 1);
+                    find_server(wizard);
+                }
             } else if (g_strcmp0(status, "NOT_INSTALLED") == 0) {
                 message = "TAILSCALE NOT INSTALLED — INSTALL TO CONTINUE";
                 action = "INSTALL TAILSCALE";

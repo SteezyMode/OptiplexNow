@@ -54,7 +54,7 @@ GtkWidget *now_wizard_view_build(
  view->ts_state=label("CHECKING TAILSCALE","gameshint");add(one,view->ts_state,0);
  view->tailscale_button=wizard_button(view,one,"CONNECT TAILSCALE","w_ts",on_action,context);
  wizard_button(view,one,"NEW TO TAILSCALE? CREATE ACCOUNT ↗","w_ts_signup",on_action,context);
- add(one,label("Connection status updates automatically after sign-in.","helper"),0);
+ add(one,label("If already signed in, NOW checks Tailscale and finds your server automatically.","helper"),0);
  wizard_button(view,one,"IMPORT MY OPTIPLEX","w_import",on_action,context);
  wizard_button(view,one,"RESTORE FULL BACKUP (TRUSTED PC)","w_restore",on_action,context);
  view->preset_notice=label("","helper");add(one,view->preset_notice,0);

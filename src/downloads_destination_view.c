@@ -834,7 +834,12 @@ gboolean now_downloads_destination_view_select(GtkWidget *view,const char *magne
  clear_folder_buttons(s);
  gtk_label_set_text(GTK_LABEL(s->path),"Choose a drive");
  gtk_label_set_text(GTK_LABEL(s->status),"Reading approved OptiPlex drives...");
- gtk_widget_show(s->view);
+ /* The picker is excluded from the page's initial show_all.
+  * Show its children on every activation, not only the outer box;
+  * otherwise a fresh app process can display a blank destination step. */
+ gtk_widget_set_no_show_all(s->view,FALSE);
+ gtk_widget_show_all(s->view);
+ gtk_widget_set_no_show_all(s->view,TRUE);
  start(s,'r');
  return s->running;
 }

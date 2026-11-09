@@ -4,7 +4,7 @@ import os, re, shutil, subprocess
 
 # Tagged releases use the committed version. PR validation can supply a
 # distinct Debian version so installation is not confused with a release.
-DEFAULT_VERSION = "1.22.2"
+DEFAULT_VERSION = "1.22.3"
 version = os.environ.get("NOW_PACKAGE_VERSION", DEFAULT_VERSION)
 if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+(?:\+pr[0-9]+\.[0-9]+)?", version):
     raise SystemExit("Invalid NOW_PACKAGE_VERSION")
@@ -81,7 +81,7 @@ for name in ('owner_access.py','wolf_docker_adapter.py','wolf_socket_adapter.py'
 # adoption, normal package upgrades also upgrade Games/Media/Downloads host code.
 for name in ('owner_lobby.py', 'owner_launch.py', 'owner_host_pilot.py'):
  shutil.copy2(root/'src'/name, bridge/'src'/name)
-for name in ('owner_games_ssh.py', 'owner_games_request.py',
+for name in ('owner_games_ssh.py', 'owner_games_request.py', 'owner_downloads_local.py',
              'owner_games_enroll.py', 'owner_music_ssh.py',
              'music_device_provision.py', 'music_device_ledger.py',
              'music_owner_bootstrap.py', 'music_link_existing.py',

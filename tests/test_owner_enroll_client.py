@@ -165,7 +165,10 @@ class EnrollmentClientTests(unittest.TestCase):
         self.assertIn("WOLF PAIRING IS INDEPENDENT.", main)
         self.assertIn("NO STEAM FALLBACK", main)
         downloads = (ROOT / "src/downloads_flow.c").read_text()
-        self.assertIn("Wolf pairing separately permits access to Wolf-published apps", downloads)
+        # Owner device approval still gates remote restricted services, but
+        # a host-local Downloads session must not require the Games key.
+        self.assertNotIn("owner_device_key_exists()", downloads)
+        self.assertIn("Downloads access is checked by the helper/host", downloads)
         self.assertIn("self.qr_box.hide()", client_ui)
         self.assertIn("APPROVE THIS DEVICE (OWNER QR)", main)
         self.assertNotIn('wizard_button(c,four,"REQUEST OWNER DEVICE APPROVAL"', main)

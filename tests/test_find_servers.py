@@ -59,6 +59,31 @@ class DiscoveryTests(unittest.TestCase):
             module.candidates({"BackendState": "Running", "Peer": ["wrong"]},
                               probe=lambda host: False)
 
+    def test_connected_first_run_launches_one_discovery_without_a_games_grant(self):
+        main = (Path(__file__).resolve().parents[1] / "src/main.c").read_text()
+        wizard = (Path(__file__).resolve().parents[1] / "src/ui_wizard.c").read_text()
+        result = main.split('if (g_strcmp0(status, "CONNECTED") == 0)', 1)[1].split(
+            '} else if (g_strcmp0(status, "NOT_INSTALLED")', 1)[0]
+        self.assertIn('first_run && !wizard->first_run_auto_discovery_attempted', result)
+        self.assertIn('!*gtk_entry_get_text(GTK_ENTRY(wizard->view.host))', result)
+        self.assertIn('wizard->first_run_auto_discovery_attempted = TRUE;', result)
+        self.assertIn('gtk_assistant_set_current_page(', result)
+        self.assertIn('find_server(wizard);', result)
+        self.assertNotIn('pair_wolf(', result)
+        self.assertNotIn('owner_enrollment', result)
+        self.assertIn('find_button', wizard)
+        self.assertIn('finds your server automatically', wizard)
+        self.assertIn('browser_open("http://100.100.100.100/")', main)
+
+    def test_empty_discovery_exits_normally_to_show_no_server_message(self):
+        from unittest import mock
+        with mock.patch.object(module.subprocess, "run") as runner:
+            runner.return_value.returncode = 0
+            runner.return_value.stdout = (
+                '{"BackendState":"Running","Self":{"TailscaleIPs":["100.70.0.1"]},"Peer":{}}'
+            )
+            self.assertEqual(module.main(), 0)
+
     def test_empty_peers_is_not_an_error(self):
         self.assertEqual(module.candidates({"BackendState": "Running", "Peer": {}},
                                             probe=lambda host: False), [])

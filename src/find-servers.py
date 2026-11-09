@@ -68,7 +68,9 @@ def main():
             raise ValueError('Tailscale is unavailable. Check that it is running and signed in.')
         rows = candidates(json.loads(result.stdout))
         if not rows:
-            raise ValueError('No other Tailscale devices found. You can still enter a server address manually.')
+            # Empty is a normal discovery outcome, not a broken Tailscale
+            # installation. The wizard can give a useful no-server message.
+            return 0
         for address, label in rows:
             print(address + '\t' + label)
         return 0

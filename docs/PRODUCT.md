@@ -4,6 +4,12 @@
 
 **Name:** Bruiser is the owner's chosen working product name; OptiPlex NOW is the legacy repository/package codename. Coordinate any eventual package/desktop/host rename without breaking existing upgrades, paths, services or credentials; **not a current alpha acceptance dependency**.
 
+## November 9, 2026: household alpha simplification (latest owner direction)
+
+**This is personal household software, not a startup, commercial launch or investor-facing project.** For the next six months or longer, prioritize the owner's existing OptiPlex and devices (and household partner) over imagined external customers or feature expansion. The authoritative end-to-end goal is **install Bruiser → recognize an already signed-in Tailscale installation → find the OptiPlex → previously authorized Games, Jellyfin, SFTP/Files, Music and Downloads are immediately usable**. Wolf pairing should be invisible to users; independently authorize services on the host rather than using Wolf as a global enrollment gate. Do not invent another login, SMTP service, MonumentRisk.com portal, or shared-cloud state. Other Tailscale accounts may use Tailscale's native single-machine sharing with independently limited service permissions. Preserve the current working host and client state; no account sharing requirement is assumed.
+
+**Implementation and test contract (do not duplicate):** see [Tailscale-first household onboarding](TAILSCALE-FIRST-HOUSEHOLD.md). PRs [#296](https://github.com/SteezyMode/OptiplexNow/pull/296), [#297](https://github.com/SteezyMode/OptiplexNow/pull/297), [#298](https://github.com/SteezyMode/OptiplexNow/pull/298) were merged into `main` after CI. These are an owner-host Downloads UI gate correction, fresh-client Tailscale peer discovery and a **disabled** owner-only automatic Moonlight pairing helper respectively—not full autonomous new-device provisioning. A real Tailscale owner broker `prepare` call was verified on the reference OptiPlex without modifying any existing pairing. Issue [#295](https://github.com/SteezyMode/OptiplexNow/issues/295) tracks the remaining physical new-device handshake and independent service authority. Earlier speculative startup/commercial statements elsewhere in this long document do not override the latest personal-alpha direction.
+
 ## The promise
 
 **Make your own entertainment server, without becoming a server administrator.**

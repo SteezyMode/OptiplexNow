@@ -228,6 +228,13 @@ static void test_picker_activation_reveals_all_children(void){
  g_assert_true(gtk_widget_get_visible(s->add));
  g_assert_true(gtk_widget_get_visible(s->status));
  g_assert_false(s->folder_valid); /* No default download path or enqueue. */
+ /* The fake read-only roots request exits immediately. Drain its async
+  * completion before destroying child labels; callbacks own a view ref. */
+ for(guint i=0;i<1000 && s->running;i++){
+   while(g_main_context_pending(NULL))g_main_context_iteration(NULL,FALSE);
+   if(s->running)g_usleep(10000);
+ }
+ g_assert_false(s->running);
  gtk_widget_destroy(window);
 }
 

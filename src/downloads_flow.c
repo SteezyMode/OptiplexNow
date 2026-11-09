@@ -48,16 +48,8 @@ static gboolean reconnect_once(gpointer unused){
  return G_SOURCE_REMOVE;
 }
 
-/* Local credential presence is not server authorization; it is a quick,
- * no-network diagnostic for fresh Linux accounts. The trusted host still
- * checks the restricted key and its owner-device grant on every request. */
-static gboolean owner_device_key_exists(void){
- gchar *path=g_build_filename(g_get_home_dir(),".local","share",
-   "optiplex-now","games-client","id_ed25519",NULL);
- gboolean present=g_file_test(path,G_FILE_TEST_IS_REGULAR);
- g_free(path);
- return present;
-}
+/* Downloads access is checked by the helper/host (local owner or approved
+ * restricted remote SSH key). A Games credential must not gate this page. */
 
 typedef struct {
  GSubprocess *proc;
@@ -141,8 +133,7 @@ static void vpn_finished(GObject *source,GAsyncResult *res,gpointer data){
 }
 static void vpn_refresh(void){
  if(vpn_inflight || !vpn_button || !last_host || !last_user ||
-    !now_valid_host(last_host) || !now_valid_user(last_user) ||
-    !owner_device_key_exists())return;
+    !now_valid_host(last_host) || !now_valid_user(last_user))return;
  gchar *queue_helper=helper_path();
  gchar *parent=g_path_get_dirname(queue_helper);
  gchar *operations_helper=g_build_filename(parent,"download-operations-client.py",NULL);
@@ -282,13 +273,8 @@ void now_downloads_refresh(const char *host,const char *user){
    if(status_label)gtk_label_set_text(GTK_LABEL(status_label),"SERVER NOT CONFIGURED");
    return;
  }
- if(!owner_device_key_exists()){
-   gtk_label_set_text(GTK_LABEL(queue_label),
-     "This Linux profile lacks a restricted NOW owner-service key. NOW-managed Games and protected Downloads require host approval. Wolf pairing separately permits access to Wolf-published apps; it does not grant NOW host-service access.");
-   if(status_label)gtk_label_set_text(GTK_LABEL(status_label),
-     "OWNER DEVICE NOT ENROLLED — SEE DETAILS BELOW");
-   return;
- }
+ /* Let the broker establish whether the caller is the local host owner
+  * or has a restricted remote service credential. No Games key preflight. */
  char *helper=helper_path();
  if(!g_file_test(helper,G_FILE_TEST_IS_REGULAR)){
    gtk_label_set_text(GTK_LABEL(queue_label),"Downloads helper missing.");
@@ -395,10 +381,9 @@ void now_downloads_open(const char *host,const char *user,const char *webui_url)
    gchar *parent=g_path_get_dirname(queue_helper);
    gchar *search_helper=g_build_filename(parent,"download-search-client.py",NULL);
    gchar *operations_helper=g_build_filename(parent,"download-operations-client.py",NULL);
-   gboolean enrolled=now_valid_host(host) && now_valid_user(user) &&
-                     owner_device_key_exists();
-   gboolean search_ready=enrolled && g_file_test(search_helper,G_FILE_TEST_IS_REGULAR);
-   gboolean picker_ready=enrolled && g_file_test(operations_helper,G_FILE_TEST_IS_REGULAR);
+   gboolean target_ready=now_valid_host(host) && now_valid_user(user);
+   gboolean search_ready=target_ready && g_file_test(search_helper,G_FILE_TEST_IS_REGULAR);
+   gboolean picker_ready=target_ready && g_file_test(operations_helper,G_FILE_TEST_IS_REGULAR);
    now_downloads_search_view_configure(search_view,
        search_ready?host:NULL,search_ready?user:NULL,
        search_ready?search_helper:NULL);
@@ -541,7 +526,7 @@ static void on_transfer_action(const char *operation,const char *torrent_hash,
  (void)unused;
  if(manage_running || !last_host || !last_user ||
     !now_valid_host(last_host) || !now_valid_user(last_user) ||
-    !owner_device_key_exists() || !operation || !torrent_hash)return;
+    !operation || !torrent_hash)return;
  if(!strcmp(operation,"files")){
    on_torrent_files(torrent_hash,name);
    return;

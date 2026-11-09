@@ -34,7 +34,11 @@ class NativeDownloadsQueueTests(unittest.TestCase):
         self.assertNotIn("ssh",src.lower())
         self.assertIn('"--native"',flow)
         self.assertIn('g_subprocess_communicate_utf8_async',flow)
-        self.assertIn("owner_device_key_exists()",flow)
+        # Authorization belongs to the broker rather than a Games-key
+        # preflight that blocks the local host owner.
+        self.assertNotIn("owner_device_key_exists()",flow)
+        self.assertIn("gboolean target_ready=now_valid_host(host)",flow)
+        self.assertIn('"download-queue-client.py"',flow)
         self.assertNotIn("now_downloads_webview_new(target,job->host)",flow)
 
 

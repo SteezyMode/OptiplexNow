@@ -7,7 +7,7 @@ import re
 import subprocess
 import sys
 
-from download_owner_transport import restricted_ssh_argv
+from download_owner_transport import downloads_transport_argv, is_local_owner_target
 
 KEY = Path.home() / ".local/share/optiplex-now/games-client/id_ed25519"
 MAX_RESPONSE = 262144
@@ -95,7 +95,7 @@ def fetch(host, user, query, *, category="all", full=False, runner=subprocess.ru
     if type(full) is not bool:
         raise ValueError("Invalid search depth")
     category=checked_category(category)
-    if not valid_host(host) or not valid_user(user) or not KEY.is_file():
+    if not valid_host(host) or not valid_user(user) or (not KEY.is_file() and not is_local_owner_target(host,user)):
         raise ValueError("Approved NOW host or device unavailable")
     if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
             or any(ord(c)<32 or ord(c)==127 for c in query)):
@@ -109,7 +109,7 @@ def fetch(host, user, query, *, category="all", full=False, runner=subprocess.ru
                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
-    cmd=restricted_ssh_argv(host,user,KEY)
+    cmd=downloads_transport_argv(host,user,KEY)
     response=runner(cmd,input=request,stdout=subprocess.PIPE,
                     stderr=subprocess.DEVNULL,timeout=65,check=False)
     if (response.returncode or not isinstance(response.stdout,bytes)
@@ -128,7 +128,7 @@ def stream_fetch(host, user, query, *, category="all", popen=subprocess.Popen):
     responsible for authentication and search-job lifecycle. Do not expose
     private endpoints, cookies, or unvalidated upstream JSON to GTK.
     """
-    if not valid_host(host) or not valid_user(user) or not KEY.is_file():
+    if not valid_host(host) or not valid_user(user) or (not KEY.is_file() and not is_local_owner_target(host,user)):
         raise ValueError("Approved NOW host or device unavailable")
     category=checked_category(category)
     if (not isinstance(query,str) or not 2 <= len(query.strip()) <= 96
@@ -143,7 +143,7 @@ def stream_fetch(host, user, query, *, category="all", popen=subprocess.Popen):
                         ensure_ascii=False,separators=(",",":"))+"\n").encode("utf-8")
     if len(request)>767:
         raise ValueError("Oversized search request")
-    cmd=restricted_ssh_argv(host,user,KEY)
+    cmd=downloads_transport_argv(host,user,KEY)
     proc=popen(cmd,stdin=subprocess.PIPE,stdout=subprocess.PIPE,
                stderr=subprocess.DEVNULL)
     count=0

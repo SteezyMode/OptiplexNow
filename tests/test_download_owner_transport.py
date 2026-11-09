@@ -9,6 +9,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
+from unittest.mock import patch
+import download_owner_transport as transport
 from download_owner_transport import restricted_ssh_argv
 
 
@@ -38,11 +40,37 @@ class RestrictedDownloadsTransport(unittest.TestCase):
             with self.subTest(name=name):
                 data = (ROOT / "src" / name).read_text(encoding="utf-8")
                 self.assertEqual(
-                    data.count("restricted_ssh_argv(host,user,KEY)"), count)
+                    data.count("downloads_transport_argv(host,user,KEY)"), count)
                 self.assertNotIn('"ssh","-F","/dev/null","-T","-i",str(KEY)', data)
         package = (ROOT / "package.py").read_text(encoding="utf-8")
         self.assertEqual(package.count(
             "shutil.copy2(root/'src/download_owner_transport.py'"), 1)
+
+
+    def test_local_owner_transport_and_remote_fallback(self):
+        key = Path("/tmp/client-only-key")
+        with patch.object(transport, "is_local_owner_target", return_value=True):
+            self.assertEqual(transport.downloads_transport_argv(
+                "100.121.156.34", "optiplex", key),
+                ["/usr/bin/python3", transport.LOCAL_HELPER])
+        with patch.object(transport, "is_local_owner_target", return_value=False):
+            self.assertEqual(transport.downloads_transport_argv(
+                "100.121.156.34", "optiplex", key),
+                restricted_ssh_argv("100.121.156.34", "optiplex", key))
+
+    def test_local_bypass_denied_for_root_and_other_user(self):
+        with patch.object(transport.os, "getuid", return_value=0):
+            self.assertFalse(transport.is_local_owner_target("127.0.0.1", "root"))
+        with patch.object(transport.os, "getuid", return_value=1001), \
+             patch.object(transport.pwd, "getpwuid") as pw:
+            pw.return_value.pw_name = "owner"
+            self.assertFalse(transport.is_local_owner_target("127.0.0.1", "not-owner"))
+
+    def test_local_helper_is_packaged_only_under_owner_bridge(self):
+        package = (ROOT / "package.py").read_text(encoding="utf-8")
+        self.assertIn("'owner_downloads_local.py'", package)
+        self.assertIn("server/owner_downloads_local.py", 
+                      str(ROOT / "server/owner_downloads_local.py"))
 
 
 if __name__ == "__main__":

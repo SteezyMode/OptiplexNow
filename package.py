@@ -59,6 +59,10 @@ shutil.copy2(root/'src/host-jellyfin-new-ui.py', pkg/'usr/lib/optiplex-now/host-
 shutil.copy2(root/'build/now-ssh-askpass',pkg/'usr/lib/optiplex-now/now-ssh-askpass')
 (pkg/'usr/lib/optiplex-now/now-ssh-askpass').chmod(0o755)
 shutil.copy2(root/'src/wolf-pair-client.py',pkg/'usr/lib/optiplex-now/wolf-pair-client.py')
+# Inert owner-only Moonlight pairing coordinator (explicit CLI pilot only).
+# Never started during install, login, Games launch or service setup.
+shutil.copy2(root/'src/moonlight-auto-pair.py',pkg/'usr/lib/optiplex-now/moonlight-auto-pair.py')
+(pkg/'usr/lib/optiplex-now/moonlight-auto-pair.py').chmod(0o755)
 # Host enrollment and authorization remain explicit owner actions.
 # Client-side owner GPU power window, with host-local LACT bridge streamed over
 # existing owner-admin SSH. Installing the .deb makes no changes to the host.

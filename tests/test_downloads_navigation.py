@@ -136,24 +136,33 @@ class DownloadsNavigationContract(unittest.TestCase):
         # Recovery must reuse the fixed read-only queue helper, not start a
         # Steam or download mutation or circumvent owner authorization.
         cb = FLOW.split("static gboolean reconnect_once(", 1)[1].split(
-            "/* Local credential presence", 1)[0]
+            "/* Downloads access is checked by the helper/host", 1)[0]
         self.assertIn("now_downloads_open(last_host,last_user,last_override);", cb)
         self.assertNotIn("ssh-copy-id", FLOW)
         self.assertNotIn("games_start", cb)
 
-    def test_fresh_linux_profile_explains_missing_owner_enrollment(self):
-        # Diagnostics must be specific and stop BEFORE any SSH/Docker request.
+    def test_downloads_does_not_gate_own_service_on_games_key(self):
+        # The OptiPlex host itself has no reason to pair as its own Wolf client.
+        # Owner access is decided inside the installed broker/transport, never
+        # by GTK's check for a Games key that may not exist on the host.
         first = FLOW.split("void now_downloads_refresh(", 1)[1].split(
-            "static void show_web(", 1)[0]
-        self.assertIn("owner_device_key_exists()", first)
-        self.assertLess(first.index("owner_device_key_exists()"),
-                        first.index("g_subprocess_newv("))
-        self.assertIn("NOW-managed Games and protected Downloads require host approval", first)
-        self.assertIn("Wolf pairing separately permits access to Wolf-published apps", first)
-        self.assertIn("it does not grant NOW host-service access", first)
-        self.assertIn("OWNER DEVICE NOT ENROLLED", first)
+            "static void refresh_visible_transfers(", 1)[0]
+        opening = FLOW.split("void now_downloads_open(", 1)[1].split(
+            "typedef struct {", 1)[0]
+        self.assertNotIn("owner_device_key_exists", FLOW)
+        self.assertIn("g_subprocess_newv(argv", first)
+        self.assertIn("gboolean target_ready=now_valid_host(host)", opening)
+        self.assertIn("search_ready=target_ready &&", opening)
+        self.assertIn("picker_ready=target_ready &&", opening)
         self.assertIn("DOWNLOADS NOT AVAILABLE", FLOW)
-        self.assertNotIn('Queue unavailable. Check server connection.', FLOW)
+        transport = (ROOT / "src/download_owner_transport.py").read_text(encoding="utf-8")
+        self.assertIn("def is_local_owner_target(", transport)
+        self.assertIn("return restricted_ssh_argv(host, user, key)", transport)
+        for name in ("download-operations-client.py", "download-queue-client.py",
+                     "download-search-client.py"):
+            helper = (ROOT / "src" / name).read_text(encoding="utf-8")
+            self.assertIn("is_local_owner_target(host,user)", helper)
+            self.assertIn("downloads_transport_argv(host,user,KEY)", helper)
 
     def test_wizard_does_not_misrepresent_owner_access_as_game_pairing(self):
         wizard = WIZARD_VIEW.split("GtkWidget *now_wizard_view_build(", 1)[1]

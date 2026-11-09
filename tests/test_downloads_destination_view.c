@@ -208,6 +208,29 @@ static void test_picker_requests_approved_roots_not_sftp(void){
  g_assert_false(gtk_widget_get_sensitive(s->add));
  gtk_widget_destroy(view);
 }
+/* A cold-start picker must reveal the actual folder pane and Add button.
+ * The application root initially excludes this widget from show_all. */
+static void test_picker_activation_reveals_all_children(void){
+ GtkWidget *window=gtk_window_new(GTK_WINDOW_TOPLEVEL);
+ GtkWidget *view=now_downloads_destination_view_new();
+ gtk_container_add(GTK_CONTAINER(window),view);
+ gtk_widget_show_all(window);
+ Picker *s=state(view);
+ g_assert_nonnull(s);
+ g_assert_false(gtk_widget_get_visible(s->folder_scroll));
+ now_downloads_destination_view_configure(view,"127.0.0.1","owner",
+                                          "/missing-owner-helper-for-test");
+ gboolean started=now_downloads_destination_view_select(
+   view,"magnet:?xt=urn:btih:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa");
+ g_assert_true(started);
+ g_assert_true(gtk_widget_get_visible(view));
+ g_assert_true(gtk_widget_get_visible(s->folder_scroll));
+ g_assert_true(gtk_widget_get_visible(s->add));
+ g_assert_true(gtk_widget_get_visible(s->status));
+ g_assert_false(s->folder_valid); /* No default download path or enqueue. */
+ gtk_widget_destroy(window);
+}
+
 static guint cancels_seen=0;
 static void canceled(gpointer unused){
  (void)unused;
@@ -321,6 +344,7 @@ int main(int argc,char **argv){
  g_test_add_func("/destination/recent-only-on-add",test_recents_only_after_successful_download);
  g_test_add_func("/destination/cancel-keeps-torrent-unsubmitted",test_cancel_does_not_submit);
  g_test_add_func("/destination/approved-root-picker",test_picker_requests_approved_roots_not_sftp);
+ g_test_add_func("/destination/activation-children-visible",test_picker_activation_reveals_all_children);
  g_test_add_func("/destination/responsive-drilldown",test_responsive_focused_step_mapping);
  return g_test_run();
 }

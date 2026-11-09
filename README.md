@@ -4,6 +4,8 @@
 
 **Play games, watch Jellyfin, manage VPN-isolated downloads, and play music from your own Linux server.** One desktop client; the server and its content remain yours.
 
+**Household alpha development direction:** [Tailscale-first onboarding and automatic background Wolf pairing](docs/TAILSCALE-FIRST-HOUSEHOLD.md). The owner wants existing Tailscale sign-in to be enough to find an authorized OptiPlex without a second account or manual Games enrollment. This is an ongoing practical acceptance goal; no new device hardware test has yet been performed. Future changes must reuse merged #296/#297/#298 rather than reimplementing them.
+
 ## Download Bruiser — Active Private Alpha
 
 **[Download current Private Alpha (.deb)](https://github.com/SteezyMode/OptiplexNow/releases/latest/download/OptiPlex-Now_amd64.deb)**
@@ -12,7 +14,7 @@ For 64-bit Linux Mint, Ubuntu and Pop!_OS. Download the file, double-click it, a
 
 [Release details and checksum](https://github.com/SteezyMode/OptiplexNow/releases/latest)
 
-**Status: ACTIVE, owner-validated private alpha.** The owner reports working daily household use on the reference OptiPlex, Linux Mint MacBook and Pop!_OS Mac mini. **v1.21.19 remains the owner-tested integrated Music baseline** (including functioning Discover and album artwork). **v1.22.0 made Discover the Music landing screen**, removing the empty Home. **v1.22.1 is the latest published Private Alpha**, fixing Discover's Tracks/View Tracks helper invocation; its source/package tests passed, but post-install real-device acceptance of that patch remains to be recorded. The current installer must still be accepted on each target device. The formal Private Alpha 1 exit criteria are still open: supported fresh host/client installation, security/failure testing and independent reproducibility have not been accepted. This download currently targets owner-approved devices accessing an **already configured** Linux server, not new consumers or a general-purpose host installer.
+**Status: ACTIVE, owner-validated private alpha.** The owner reports working daily household use on the reference OptiPlex, Linux Mint MacBook and Pop!_OS Mac mini. **v1.21.19 remains the owner-tested integrated Music baseline** (including functioning Discover and album artwork). **v1.22.0 made Discover the Music landing screen**, removing the empty Home. **v1.22.4 packages the Tailscale-first household baseline**: owner-local Downloads no longer requires a Games key, fresh signed-in clients automatically search Tailscale for a server, and an inert owner-only automatic Wolf PIN helper is available for later physical validation. It does not yet grant new devices access or run automatic pairing from the Games UI. The current installer must still be accepted on each target device. The formal Private Alpha 1 exit criteria are still open: supported fresh host/client installation, security/failure testing and independent reproducibility have not been accepted. This download currently targets owner-approved devices accessing an **already configured** Linux server, not new consumers or a general-purpose host installer.
 
 ## What it does
 

@@ -81,6 +81,7 @@ jobs:
           make check-tray-actions
           make check-music-queue-order
           make check-music-helper-paths
+          make check-music-discover-model
           make check-desktop-autostart
           make check-moonlight-install
           make check-wizard-network

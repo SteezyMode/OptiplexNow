@@ -30,7 +30,11 @@ class CompactUiTests(unittest.TestCase):
 
     def test_two_column_dashboard_metrics_and_power_reflow(self):
         self.assertIn('int metric_cols=width>=720?3:2;', MAIN)
-        self.assertIn('int pcols=width>=560?4:2;', MAIN)
+        self.assertIn('int pcols=width>=560?3:2;', MAIN)
+        self.assertIn('const char*pow_names[]={"ON","RESTART","OFF"};', MAIN)
+        self.assertIn('const int pow_action_ids[]={0,2,3};', MAIN)
+        self.assertIn('for(int i=0;i<3;i++){g_object_ref(powers[i]);', MAIN)
+        self.assertNotIn('"WAKE","SLEEP","RESTART","SHUTDOWN"', MAIN)
         self.assertIn('gtk_grid_attach(GTK_GRID(metrics),storage,0,2,2,1)', MAIN)
         self.assertIn('gtk_grid_attach(GTK_GRID(metrics),storage,2,0,1,2)', MAIN)
         self.assertIn('g_object_ref(storage)', MAIN)

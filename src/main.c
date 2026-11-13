@@ -126,7 +126,7 @@ static void tray_show_window(void);
 static void videos_status_message(const char *message);
 static void on_system_info(void*w,void*p);
 static void settings_discard(GtkWidget*w,gpointer unused);
-static GtkWidget *tiles[9],*powers[4],*extras_grid;
+static GtkWidget *tiles[9],*powers[3],*extras_grid;
 static int last_columns=0, last_power_columns=0, status_inflight=0, power_inflight=0;
 #define ALL_SERVICES_MASK 255u
 #define NEW_INSTALL_FEATURED_MASK 207u
@@ -2000,9 +2000,9 @@ static void on_tile(void*widget,void*data){(void)widget;int n=(int)(long)data;
 static void reflow(int width) {
  static int last_metric_columns=0;
  int cols=width>=600?4:2;
- int pcols=width>=560?4:2;
+ int pcols=width>=560?3:2;
  /* Two core-metric columns and full-width storage below 720px. The
-  * existing power controls still switch to a 2×2 grid below 560px. */
+  * three power controls use at most two columns below 560px. */
  int metric_cols=width>=720?3:2;
  if(cols==last_columns && pcols==last_power_columns &&
     metric_cols==last_metric_columns)return;
@@ -2044,8 +2044,8 @@ static void reflow(int width) {
  }
  if(pcols!=last_power_columns){
    last_power_columns=pcols;
-   for(int i=0;i<4;i++){g_object_ref(powers[i]);if(gtk_widget_get_parent(powers[i]))gtk_container_remove(GTK_CONTAINER(power_grid),powers[i]);}
-   for(int i=0;i<4;i++){gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1);g_object_unref(powers[i]);}
+   for(int i=0;i<3;i++){g_object_ref(powers[i]);if(gtk_widget_get_parent(powers[i]))gtk_container_remove(GTK_CONTAINER(power_grid),powers[i]);}
+   for(int i=0;i<3;i++){gtk_grid_attach(GTK_GRID(power_grid),powers[i],i%pcols,i/pcols,1,1);g_object_unref(powers[i]);}
    gtk_widget_show_all(power_grid);
  }
 }
@@ -3256,8 +3256,9 @@ int main(int argc,char**argv) {
  GtkWidget*sec=gtk_box_new(GTK_ORIENTATION_HORIZONTAL,6);add(sec,label("SERVER POWER","section"),1);add(body,sec,0);
  power_grid=gtk_grid_new();gtk_grid_set_column_spacing(GTK_GRID(power_grid),7);gtk_grid_set_row_spacing(GTK_GRID(power_grid),7);
  gtk_grid_set_column_homogeneous(GTK_GRID(power_grid),1);add(body,power_grid,0);
- const char*pow_names[]={"WAKE","SLEEP","RESTART","SHUTDOWN"};
- for(int i=0;i<4;i++){powers[i]=button(pow_names[i],i==3?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)i,NULL,0);}
+ const char*pow_names[]={"ON","RESTART","OFF"};
+ const int pow_action_ids[]={0,2,3}; /* Keep the existing wake, restart and shutdown paths. */
+ for(int i=0;i<3;i++){powers[i]=button(pow_names[i],i==2?"danger":"power");g_signal_connect_data(powers[i],"clicked",(GCallback)on_power,(void*)(long)pow_action_ids[i],NULL,0);}
  footer=label("","footer");add(body,footer,0);
  reflow(initial_width);
  /* Downloads is shown during stack construction for its fallback page.

@@ -8,6 +8,8 @@
 
 **Authorized v1.21.16 exception (PR #253):** The owner physically tested the dual-index Downloads build on the OptiPlex host and both Linux clients, declared the Downloads UI locked for now, and explicitly requested promotion to the official main `.deb`. Permit one marked `main` release merge containing `docs/releases/v1.21.16.md`, declaring `DEFAULT_VERSION = "1.21.16"` and including `[publish-v1.21.16]` in its merge commit. The workflow rebuilds the package, verifies all tests and creates immutable v1.21.16 assets with the `OptiPlex-Now_amd64.deb` Latest alias. An ordinary commit cannot publish it. The already published v1.21.15 tag remains unchanged.
 
+**Authorized v1.22.5 exception (November 13, 2026):** The owner explicitly requested a new main .deb for the OptiPlex host, Mac mini and trip MacBook after merging the three-button power UI (#300). One exact main-merge commit containing `docs/releases/v1.22.5.md`, `DEFAULT_VERSION = "1.22.5"`, and `[publish-v1.22.5]` may create `v1.22.5` after the GitHub release workflow rebuilds and checks its artifact. The existing v1.22.4 release is immutable. Published and installed are separate states; this is not a claim of remote wake-from-shutdown hardware acceptance.
+
 ## Validation and publication
 
 1. Choose the exact code to ship. Update the Debian package version in `package.py`, release notes, and any current-status references.

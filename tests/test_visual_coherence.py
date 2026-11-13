@@ -59,7 +59,7 @@ class VisualCoherenceTests(unittest.TestCase):
         self.assertIn('video_browser=button("OPEN VIDEO LIBRARY  ↗","tile")', MAIN)
         self.assertIn('gtk_widget_set_size_request(video_browser,-1,56);', MAIN)
         self.assertIn('gtk_event_box_set_visible_window(GTK_EVENT_BOX(gpu_hitbox),FALSE);', MAIN)
-        self.assertIn('int pcols=width>=560?4:2;', MAIN)
+        self.assertIn('int pcols=width>=560?3:2;', MAIN)
 
 
 if __name__ == "__main__":
